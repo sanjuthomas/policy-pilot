@@ -56,14 +56,21 @@
 // (:Instruction)-[:HAS_VERSION]->(:InstructionVersion)
 //   Logical instruction to each point-in-time version.
 //
+// (:Instruction)-[:CURRENT]->(:InstructionVersion)
+//   Points to the highest version_number seen so far.
+//   Only advances forward — never overwritten by older events.
+//
 // (:InstructionVersion)-[:SUPERSEDES]->(:InstructionVersion)
-//   Newer version replaces the previous version_number - 1.
+//   Newer version (N) links to previous version (N-1) when both exist in graph.
 //
 // (:InstructionVersion)-[:OWNED_BY]->(:ProfitCenter)
 //   Maps instruction.owning_lob to a profit center node.
 //
 // (:User)-[:CREATED]->(:InstructionVersion)
 //   From instruction.created_by on the version payload.
+//
+// (:User)-[:SUBMITTED]->(:InstructionVersion)
+//   The actor of a successful SUBMIT event.
 //
 // (:User)-[:APPROVED]->(:InstructionVersion)
 //   From instruction.approved_by when present.
@@ -72,7 +79,7 @@
 //   From instruction.rejected_by when present.
 //
 // (:User)-[:REPORTS_TO]->(:User)
-//   From actor/creator supervisor_id hierarchy.
+//   From actor/creator/approver/rejector supervisor_id.
 //
 // (:User)-[:ACTED_AS]->(:SecurityEvent)
 //   Security event actor (subject who performed the action).

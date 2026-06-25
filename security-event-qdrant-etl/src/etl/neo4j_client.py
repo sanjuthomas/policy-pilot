@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,12 @@ from etl.config import settings
 from etl.enrichment import EnrichedSecurityEventDocument
 
 logger = logging.getLogger(__name__)
+
+
+def _roles_json(roles: list | None) -> str | None:
+    if not roles:
+        return None
+    return json.dumps(roles)
 
 
 class Neo4jGraphWriter:
@@ -65,193 +72,311 @@ class Neo4jGraphWriter:
         created_by = instruction.get("created_by") or {}
         approved_by = instruction.get("approved_by") or {}
         rejected_by = instruction.get("rejected_by") or {}
+
         version_number = document.version_number or instruction.get("version_number")
         version_key = (
             f"{document.instruction_id}:{version_number}"
             if document.instruction_id and version_number is not None
             else None
         )
+        prev_version_key = (
+            f"{document.instruction_id}:{version_number - 1}"
+            if document.instruction_id and version_number and version_number > 1
+            else None
+        )
+
         owning_lob = merged.get("owning_lob") or resource.get("owning_lob")
         wire_scope = merged.get("wire_scope")
         instruction_type = merged.get("instruction_type")
         currency = merged.get("currency")
+        action = event_ctx.get("action")
+        outcome = event_ctx.get("outcome")
 
+        # All writes in a single transaction for atomicity
         async with self._driver.session() as session:
-            await session.run(
-                """
-                MERGE (e:SecurityEvent {event_id: $event_id})
-                SET e.timestamp = $timestamp,
-                    e.severity = $severity,
-                    e.message = $message,
-                    e.action = $action,
-                    e.outcome = $outcome,
-                    e.reason = $reason,
-                    e.source_application = $source_application,
-                    e.wire_scope = $wire_scope,
-                    e.instruction_type = $instruction_type,
-                    e.owning_lob = $owning_lob
-                """,
-                event_id=document.event_id,
-                timestamp=event.get("timestamp"),
-                severity=event.get("severity"),
-                message=event.get("message"),
-                action=event_ctx.get("action"),
-                outcome=event_ctx.get("outcome"),
-                reason=event_ctx.get("reason"),
-                source_application=source.get("application"),
-                wire_scope=wire_scope,
-                instruction_type=instruction_type,
-                owning_lob=owning_lob,
-            )
+            async with session.begin_transaction() as tx:
 
-            if actor.get("user_id"):
-                await session.run(
+                # --- SecurityEvent node ---
+                await tx.run(
                     """
-                    MERGE (u:User {user_id: $user_id})
-                    SET u.title = coalesce($title, u.title),
-                        u.lob = coalesce($lob, u.lob)
-                    WITH u
-                    MATCH (e:SecurityEvent {event_id: $event_id})
-                    MERGE (u)-[:ACTED_AS]->(e)
+                    MERGE (e:SecurityEvent {event_id: $event_id})
+                    SET e.timestamp        = $timestamp,
+                        e.severity         = $severity,
+                        e.message          = $message,
+                        e.action           = $action,
+                        e.outcome          = $outcome,
+                        e.reason           = $reason,
+                        e.event_type       = $event_type,
+                        e.source_application = $source_application,
+                        e.source_version   = $source_version,
+                        e.wire_scope       = $wire_scope,
+                        e.instruction_type = $instruction_type,
+                        e.owning_lob       = $owning_lob
                     """,
-                    user_id=actor["user_id"],
-                    title=actor.get("title"),
-                    lob=actor.get("lob"),
                     event_id=document.event_id,
-                )
-
-            if document.instruction_id:
-                await session.run(
-                    """
-                    MERGE (i:Instruction {instruction_id: $instruction_id})
-                    WITH i
-                    MATCH (e:SecurityEvent {event_id: $event_id})
-                    MERGE (e)-[:TARGETS]->(i)
-                    """,
-                    instruction_id=document.instruction_id,
-                    event_id=document.event_id,
-                )
-
-            if version_key and document.instruction_id:
-                status = merged.get("status") or instruction.get("status")
-                await session.run(
-                    """
-                    MERGE (i:Instruction {instruction_id: $instruction_id})
-                    MERGE (v:InstructionVersion {version_key: $version_key})
-                    SET v.instruction_id = $instruction_id,
-                        v.version_number = $version_number,
-                        v.status = $status,
-                        v.instruction_type = $instruction_type,
-                        v.wire_scope = $wire_scope,
-                        v.owning_lob = $owning_lob,
-                        v.currency = $currency,
-                        v.creator_user_id = $creator_user_id,
-                        v.approver_user_id = $approver_user_id,
-                        v.rejector_user_id = $rejector_user_id
-                    MERGE (i)-[:HAS_VERSION]->(v)
-                    """,
-                    instruction_id=document.instruction_id,
-                    version_key=version_key,
-                    version_number=version_number,
-                    status=status,
-                    instruction_type=instruction_type,
+                    timestamp=event.get("timestamp"),
+                    severity=event.get("severity"),
+                    message=event.get("message"),
+                    action=action,
+                    outcome=outcome,
+                    reason=event_ctx.get("reason"),
+                    event_type=json.dumps(event.get("event_type") or []),
+                    source_application=source.get("application"),
+                    source_version=source.get("version"),
                     wire_scope=wire_scope,
+                    instruction_type=instruction_type,
                     owning_lob=owning_lob,
-                    currency=currency,
-                    creator_user_id=merged.get("creator_user_id"),
-                    approver_user_id=merged.get("approver_user_id"),
-                    rejector_user_id=merged.get("rejector_user_id"),
-                )
-                await session.run(
-                    """
-                    MATCH (i:Instruction {instruction_id: $instruction_id})-[r:CURRENT]->()
-                    DELETE r
-                    WITH i
-                    MATCH (v:InstructionVersion {version_key: $version_key})
-                    MERGE (i)-[:CURRENT]->(v)
-                    """,
-                    instruction_id=document.instruction_id,
-                    version_key=version_key,
-                )
-                await session.run(
-                    """
-                    MATCH (e:SecurityEvent {event_id: $event_id})
-                    MATCH (v:InstructionVersion {version_key: $version_key})
-                    MERGE (e)-[:TARGETS_VERSION]->(v)
-                    """,
-                    event_id=document.event_id,
-                    version_key=version_key,
                 )
 
-                if created_by.get("user_id"):
-                    await session.run(
+                # --- Actor User node + ACTED_AS ---
+                if actor.get("user_id"):
+                    await tx.run(
                         """
                         MERGE (u:User {user_id: $user_id})
-                        SET u.title = coalesce($title, u.title)
+                        SET u.title         = coalesce($title, u.title),
+                            u.lob           = coalesce($lob, u.lob),
+                            u.roles         = coalesce($roles, u.roles),
+                            u.supervisor_id = coalesce($supervisor_id, u.supervisor_id)
                         WITH u
-                        MATCH (v:InstructionVersion {version_key: $version_key})
-                        MERGE (u)-[:CREATED]->(v)
-                        """,
-                        user_id=created_by["user_id"],
-                        title=created_by.get("title"),
-                        version_key=version_key,
-                    )
-
-                if approved_by.get("user_id"):
-                    await session.run(
-                        """
-                        MERGE (u:User {user_id: $user_id})
-                        SET u.title = coalesce($title, u.title),
-                            u.lob = coalesce($lob, u.lob)
-                        WITH u
-                        MATCH (v:InstructionVersion {version_key: $version_key})
-                        MERGE (u)-[:APPROVED]->(v)
-                        """,
-                        user_id=approved_by["user_id"],
-                        title=approved_by.get("title"),
-                        lob=approved_by.get("lob"),
-                        version_key=version_key,
-                    )
-
-                if rejected_by.get("user_id"):
-                    await session.run(
-                        """
-                        MERGE (u:User {user_id: $user_id})
-                        SET u.title = coalesce($title, u.title),
-                            u.lob = coalesce($lob, u.lob)
-                        WITH u
-                        MATCH (v:InstructionVersion {version_key: $version_key})
-                        MERGE (u)-[:REJECTED]->(v)
-                        """,
-                        user_id=rejected_by["user_id"],
-                        title=rejected_by.get("title"),
-                        lob=rejected_by.get("lob"),
-                        version_key=version_key,
-                    )
-
-                action = event_ctx.get("action")
-                outcome = event_ctx.get("outcome")
-                if actor.get("user_id") and action == "SUBMIT" and outcome == "success":
-                    await session.run(
-                        """
-                        MATCH (u:User {user_id: $user_id})
-                        MATCH (v:InstructionVersion {version_key: $version_key})
-                        MERGE (u)-[:SUBMITTED]->(v)
+                        MATCH (e:SecurityEvent {event_id: $event_id})
+                        MERGE (u)-[:ACTED_AS]->(e)
                         """,
                         user_id=actor["user_id"],
+                        title=actor.get("title"),
+                        lob=actor.get("lob"),
+                        roles=_roles_json(actor.get("roles")),
+                        supervisor_id=actor.get("supervisor_id"),
+                        event_id=document.event_id,
+                    )
+
+                    # REPORTS_TO for actor
+                    if actor.get("supervisor_id"):
+                        await tx.run(
+                            """
+                            MERGE (u:User {user_id: $user_id})
+                            MERGE (s:User {user_id: $supervisor_id})
+                            MERGE (u)-[:REPORTS_TO]->(s)
+                            """,
+                            user_id=actor["user_id"],
+                            supervisor_id=actor["supervisor_id"],
+                        )
+
+                # --- Instruction node + TARGETS ---
+                if document.instruction_id:
+                    await tx.run(
+                        """
+                        MERGE (i:Instruction {instruction_id: $instruction_id})
+                        WITH i
+                        MATCH (e:SecurityEvent {event_id: $event_id})
+                        MERGE (e)-[:TARGETS]->(i)
+                        """,
+                        instruction_id=document.instruction_id,
+                        event_id=document.event_id,
+                    )
+
+                # --- InstructionVersion node + relationships ---
+                if version_key and document.instruction_id:
+                    await tx.run(
+                        """
+                        MERGE (i:Instruction {instruction_id: $instruction_id})
+                        MERGE (v:InstructionVersion {version_key: $version_key})
+                        SET v.instruction_id  = $instruction_id,
+                            v.version_number  = $version_number,
+                            v.status          = $status,
+                            v.instruction_type = $instruction_type,
+                            v.wire_scope      = $wire_scope,
+                            v.owning_lob      = $owning_lob,
+                            v.currency        = $currency,
+                            v.effective_date  = $effective_date,
+                            v.end_date        = $end_date,
+                            v.usage_count     = $usage_count,
+                            v.creator_user_id  = $creator_user_id,
+                            v.approver_user_id = $approver_user_id,
+                            v.rejector_user_id = $rejector_user_id
+                        MERGE (i)-[:HAS_VERSION]->(v)
+                        """,
+                        instruction_id=document.instruction_id,
+                        version_key=version_key,
+                        version_number=version_number,
+                        status=merged.get("status") or instruction.get("status"),
+                        instruction_type=instruction_type,
+                        wire_scope=wire_scope,
+                        owning_lob=owning_lob,
+                        currency=currency,
+                        effective_date=merged.get("effective_date"),
+                        end_date=merged.get("end_date"),
+                        usage_count=merged.get("usage_count"),
+                        creator_user_id=merged.get("creator_user_id"),
+                        approver_user_id=merged.get("approver_user_id"),
+                        rejector_user_id=merged.get("rejector_user_id"),
+                    )
+
+                    # CURRENT — only advance if this version is newer
+                    await tx.run(
+                        """
+                        MATCH (i:Instruction {instruction_id: $instruction_id})
+                        MATCH (v:InstructionVersion {version_key: $version_key})
+                        OPTIONAL MATCH (i)-[:CURRENT]->(cur:InstructionVersion)
+                        WITH i, v, cur,
+                             coalesce(cur.version_number, -1) AS cur_num
+                        WHERE $version_number > cur_num
+                        FOREACH (_ IN CASE WHEN cur IS NOT NULL THEN [1] ELSE [] END |
+                            MATCH (i)-[r:CURRENT]->(cur) DELETE r
+                        )
+                        MERGE (i)-[:CURRENT]->(v)
+                        """,
+                        instruction_id=document.instruction_id,
+                        version_key=version_key,
+                        version_number=version_number,
+                    )
+
+                    # TARGETS_VERSION
+                    await tx.run(
+                        """
+                        MATCH (e:SecurityEvent {event_id: $event_id})
+                        MATCH (v:InstructionVersion {version_key: $version_key})
+                        MERGE (e)-[:TARGETS_VERSION]->(v)
+                        """,
+                        event_id=document.event_id,
                         version_key=version_key,
                     )
 
-            if owning_lob:
-                await session.run(
-                    """
-                    MATCH (e:SecurityEvent {event_id: $event_id})
-                    MERGE (p:ProfitCenter {lob: $owning_lob})
-                    MERGE (e)-[:INVOLVES_LOB]->(p)
-                    """,
-                    event_id=document.event_id,
-                    owning_lob=owning_lob,
-                )
+                    # SUPERSEDES — link to previous version if it exists
+                    if prev_version_key:
+                        await tx.run(
+                            """
+                            MATCH (v:InstructionVersion {version_key: $version_key})
+                            MATCH (prev:InstructionVersion {version_key: $prev_version_key})
+                            MERGE (v)-[:SUPERSEDES]->(prev)
+                            """,
+                            version_key=version_key,
+                            prev_version_key=prev_version_key,
+                        )
+
+                    # OWNED_BY — InstructionVersion → ProfitCenter
+                    if owning_lob:
+                        await tx.run(
+                            """
+                            MATCH (v:InstructionVersion {version_key: $version_key})
+                            MERGE (p:ProfitCenter {lob: $owning_lob})
+                            MERGE (v)-[:OWNED_BY]->(p)
+                            """,
+                            version_key=version_key,
+                            owning_lob=owning_lob,
+                        )
+
+                    # Creator User + CREATED
+                    if created_by.get("user_id"):
+                        await tx.run(
+                            """
+                            MERGE (u:User {user_id: $user_id})
+                            SET u.title         = coalesce($title, u.title),
+                                u.lob           = coalesce($lob, u.lob),
+                                u.supervisor_id = coalesce($supervisor_id, u.supervisor_id)
+                            WITH u
+                            MATCH (v:InstructionVersion {version_key: $version_key})
+                            MERGE (u)-[:CREATED]->(v)
+                            """,
+                            user_id=created_by["user_id"],
+                            title=created_by.get("title"),
+                            lob=created_by.get("lob"),
+                            supervisor_id=created_by.get("supervisor_id"),
+                            version_key=version_key,
+                        )
+                        if created_by.get("supervisor_id"):
+                            await tx.run(
+                                """
+                                MERGE (u:User {user_id: $user_id})
+                                MERGE (s:User {user_id: $supervisor_id})
+                                MERGE (u)-[:REPORTS_TO]->(s)
+                                """,
+                                user_id=created_by["user_id"],
+                                supervisor_id=created_by["supervisor_id"],
+                            )
+
+                    # Approver User + APPROVED
+                    if approved_by.get("user_id"):
+                        await tx.run(
+                            """
+                            MERGE (u:User {user_id: $user_id})
+                            SET u.title         = coalesce($title, u.title),
+                                u.lob           = coalesce($lob, u.lob),
+                                u.supervisor_id = coalesce($supervisor_id, u.supervisor_id)
+                            WITH u
+                            MATCH (v:InstructionVersion {version_key: $version_key})
+                            MERGE (u)-[:APPROVED]->(v)
+                            """,
+                            user_id=approved_by["user_id"],
+                            title=approved_by.get("title"),
+                            lob=approved_by.get("lob"),
+                            supervisor_id=approved_by.get("supervisor_id"),
+                            version_key=version_key,
+                        )
+                        if approved_by.get("supervisor_id"):
+                            await tx.run(
+                                """
+                                MERGE (u:User {user_id: $user_id})
+                                MERGE (s:User {user_id: $supervisor_id})
+                                MERGE (u)-[:REPORTS_TO]->(s)
+                                """,
+                                user_id=approved_by["user_id"],
+                                supervisor_id=approved_by["supervisor_id"],
+                            )
+
+                    # Rejector User + REJECTED
+                    if rejected_by.get("user_id"):
+                        await tx.run(
+                            """
+                            MERGE (u:User {user_id: $user_id})
+                            SET u.title         = coalesce($title, u.title),
+                                u.lob           = coalesce($lob, u.lob),
+                                u.supervisor_id = coalesce($supervisor_id, u.supervisor_id)
+                            WITH u
+                            MATCH (v:InstructionVersion {version_key: $version_key})
+                            MERGE (u)-[:REJECTED]->(v)
+                            """,
+                            user_id=rejected_by["user_id"],
+                            title=rejected_by.get("title"),
+                            lob=rejected_by.get("lob"),
+                            supervisor_id=rejected_by.get("supervisor_id"),
+                            version_key=version_key,
+                        )
+                        if rejected_by.get("supervisor_id"):
+                            await tx.run(
+                                """
+                                MERGE (u:User {user_id: $user_id})
+                                MERGE (s:User {user_id: $supervisor_id})
+                                MERGE (u)-[:REPORTS_TO]->(s)
+                                """,
+                                user_id=rejected_by["user_id"],
+                                supervisor_id=rejected_by["supervisor_id"],
+                            )
+
+                    # Submitter — SUBMITTED
+                    if actor.get("user_id") and action == "SUBMIT" and outcome == "success":
+                        await tx.run(
+                            """
+                            MATCH (u:User {user_id: $user_id})
+                            MATCH (v:InstructionVersion {version_key: $version_key})
+                            MERGE (u)-[:SUBMITTED]->(v)
+                            """,
+                            user_id=actor["user_id"],
+                            version_key=version_key,
+                        )
+
+                # --- SecurityEvent → ProfitCenter (INVOLVES_LOB) ---
+                if owning_lob:
+                    await tx.run(
+                        """
+                        MATCH (e:SecurityEvent {event_id: $event_id})
+                        MERGE (p:ProfitCenter {lob: $owning_lob})
+                        MERGE (e)-[:INVOLVES_LOB]->(p)
+                        """,
+                        event_id=document.event_id,
+                        owning_lob=owning_lob,
+                    )
+
+                await tx.commit()
 
     async def graph_stats(self) -> dict[str, int]:
         if self._driver is None:
@@ -294,8 +419,7 @@ class Neo4jGraphWriter:
         async with self._driver.session() as session:
             result = await session.run(query, text=text, action=action, limit=limit)
             async for record in result:
-                node = record["e"]
-                events.append(dict(node))
+                events.append(dict(record["e"]))
         return events
 
     async def get_event_subgraph(self, event_id: str) -> dict[str, Any] | None:
@@ -309,12 +433,18 @@ class Neo4jGraphWriter:
         OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
         OPTIONAL MATCH (e)-[:INVOLVES_LOB]->(p:ProfitCenter)
         OPTIONAL MATCH (creator:User)-[:CREATED]->(v)
+        OPTIONAL MATCH (approver:User)-[:APPROVED]->(v)
+        OPTIONAL MATCH (rejector:User)-[:REJECTED]->(v)
+        OPTIONAL MATCH (submitter:User)-[:SUBMITTED]->(v)
         RETURN e,
-               collect(DISTINCT actor) AS actors,
+               collect(DISTINCT actor)    AS actors,
                i,
                v,
                p,
-               collect(DISTINCT creator) AS creators
+               collect(DISTINCT creator)   AS creators,
+               collect(DISTINCT approver)  AS approvers,
+               collect(DISTINCT rejector)  AS rejectors,
+               collect(DISTINCT submitter) AS submitters
         """
         async with self._driver.session() as session:
             result = await session.run(query, event_id=event_id)
@@ -323,12 +453,15 @@ class Neo4jGraphWriter:
                 return None
 
             return {
-                "event": dict(record["e"]),
-                "actors": [dict(node) for node in record["actors"] if node],
-                "instruction": dict(record["i"]) if record["i"] else None,
-                "version": dict(record["v"]) if record["v"] else None,
-                "profit_center": dict(record["p"]) if record["p"] else None,
-                "creators": [dict(node) for node in record["creators"] if node],
+                "event":      dict(record["e"]),
+                "actors":     [dict(n) for n in record["actors"]    if n],
+                "instruction": dict(record["i"]) if record["i"]     else None,
+                "version":    dict(record["v"]) if record["v"]      else None,
+                "profit_center": dict(record["p"]) if record["p"]   else None,
+                "creators":   [dict(n) for n in record["creators"]  if n],
+                "approvers":  [dict(n) for n in record["approvers"] if n],
+                "rejectors":  [dict(n) for n in record["rejectors"] if n],
+                "submitters": [dict(n) for n in record["submitters"] if n],
             }
 
     async def get_instruction_subgraph(self, instruction_id: str) -> dict[str, Any] | None:
@@ -339,11 +472,15 @@ class Neo4jGraphWriter:
         MATCH (i:Instruction {instruction_id: $instruction_id})
         OPTIONAL MATCH (i)-[:HAS_VERSION]->(v:InstructionVersion)
         OPTIONAL MATCH (creator:User)-[:CREATED]->(v)
+        OPTIONAL MATCH (approver:User)-[:APPROVED]->(v)
+        OPTIONAL MATCH (rejector:User)-[:REJECTED]->(v)
         OPTIONAL MATCH (e:SecurityEvent)-[:TARGETS]->(i)
         RETURN i,
-               collect(DISTINCT v) AS versions,
-               collect(DISTINCT creator) AS creators,
-               collect(DISTINCT e) AS events
+               collect(DISTINCT v)        AS versions,
+               collect(DISTINCT creator)  AS creators,
+               collect(DISTINCT approver) AS approvers,
+               collect(DISTINCT rejector) AS rejectors,
+               collect(DISTINCT e)        AS events
         """
         async with self._driver.session() as session:
             result = await session.run(query, instruction_id=instruction_id)
@@ -353,7 +490,9 @@ class Neo4jGraphWriter:
 
             return {
                 "instruction": dict(record["i"]),
-                "versions": [dict(node) for node in record["versions"] if node],
-                "creators": [dict(node) for node in record["creators"] if node],
-                "events": [dict(node) for node in record["events"] if node],
+                "versions":  [dict(n) for n in record["versions"]  if n],
+                "creators":  [dict(n) for n in record["creators"]  if n],
+                "approvers": [dict(n) for n in record["approvers"] if n],
+                "rejectors": [dict(n) for n in record["rejectors"] if n],
+                "events":    [dict(n) for n in record["events"]    if n],
             }

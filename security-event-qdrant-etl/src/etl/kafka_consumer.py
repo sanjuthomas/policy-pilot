@@ -28,7 +28,7 @@ class SecurityEventKafkaConsumer:
             settings.kafka_security_events_topic,
             bootstrap_servers=settings.kafka_bootstrap_servers,
             group_id=settings.kafka_consumer_group,
-            enable_auto_commit=True,
+            enable_auto_commit=False,
             auto_offset_reset="earliest",
             value_deserializer=lambda value: json.loads(value.decode("utf-8")),
         )
@@ -59,10 +59,12 @@ class SecurityEventKafkaConsumer:
             async for message in self._consumer:
                 try:
                     await self._handle_message(message.value)
+                    await self._consumer.commit()
                 except Exception:
                     logger.exception(
-                        "failed to process Kafka message offset=%s",
+                        "failed to process Kafka message offset=%s partition=%s — skipping",
                         message.offset,
+                        message.partition,
                     )
         except asyncio.CancelledError:
             raise

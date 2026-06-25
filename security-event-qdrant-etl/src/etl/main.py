@@ -75,8 +75,15 @@ async def index() -> FileResponse:
 
 
 @app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "UP"}
+async def health() -> dict:
+    components = await component_status(
+        kafka_consumer=kafka_consumer,
+        qdrant_store=qdrant_store,
+        neo4j_writer=neo4j_writer,
+        ollama_client=ollama_client,
+    )
+    overall = "UP" if all(c["ok"] for c in components.values()) else "DEGRADED"
+    return {"status": overall, "components": components}
 
 
 @app.get("/api/stats")

@@ -36,6 +36,7 @@ class SecurityEventPipeline:
     async def close(self) -> None:
         await self.instruction_store.close()
         await self.neo4j_writer.close()
+        await self.ollama_client.close()
         self.qdrant_store.close()
 
     async def process_security_event(self, security_event: dict[str, Any]) -> None:

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
 from typing import Any
 
 import httpx
@@ -15,6 +14,7 @@ logger = logging.getLogger(__name__)
 class OllamaEmbeddingClient:
     def __init__(self) -> None:
         self._dimension: int | None = None
+        self._http: httpx.AsyncClient | None = None
 
     @property
     def dimension(self) -> int:
@@ -22,21 +22,27 @@ class OllamaEmbeddingClient:
             raise RuntimeError("Ollama embedding dimension not initialized")
         return self._dimension
 
+    async def _client(self) -> httpx.AsyncClient:
+        if self._http is None or self._http.is_closed:
+            self._http = httpx.AsyncClient(timeout=settings.ollama_timeout_seconds)
+        return self._http
+
+    async def close(self) -> None:
+        if self._http is not None and not self._http.is_closed:
+            await self._http.aclose()
+        self._http = None
+
     async def embed(self, text: str) -> list[float]:
         if not text.strip():
             raise ValueError("cannot embed empty text")
 
-        payload = {
-            "model": settings.ollama_embedding_model,
-            "input": text,
-        }
-        async with httpx.AsyncClient(timeout=settings.ollama_timeout_seconds) as client:
-            response = await client.post(
-                f"{settings.ollama_url.rstrip('/')}/api/embed",
-                json=payload,
-            )
-            response.raise_for_status()
-            body = response.json()
+        client = await self._client()
+        response = await client.post(
+            f"{settings.ollama_url.rstrip('/')}/api/embed",
+            json={"model": settings.ollama_embedding_model, "input": text},
+        )
+        response.raise_for_status()
+        body = response.json()
 
         embeddings = body.get("embeddings")
         if isinstance(embeddings, list) and embeddings:
@@ -48,7 +54,7 @@ class OllamaEmbeddingClient:
             raise RuntimeError(f"unexpected Ollama embed response: {json.dumps(body)[:300]}")
 
         self._dimension = len(vector)
-        return [float(value) for value in vector]
+        return [float(v) for v in vector]
 
     async def warmup(self) -> None:
         await self.embed("warmup")

@@ -8,10 +8,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    security_events_database: str = "security_events"
-    security_events_collection: str = "instruction-lifecycle-manager"
-    initial_event_limit: int = 200
-    poll_interval_seconds: float = 2.0
     host: str = "0.0.0.0"
     port: int = 8090
 
