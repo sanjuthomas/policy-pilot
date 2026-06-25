@@ -47,8 +47,10 @@ class SeedUser(BaseModel):
     family_name: str
     title: str
     roles: list[str] = Field(min_length=1)
+    groups: list[str] = Field(default_factory=list)
     lob: str | None = None
     supervisor_id: str | None = None
+    covering_lobs: list[str] = Field(default_factory=list)
 
     @field_validator("roles")
     @classmethod
@@ -191,11 +193,14 @@ def _metadata_entries(user: SeedUser) -> list[dict[str, str]]:
         "family_name": user.family_name,
         "title": user.title,
         "roles": json.dumps(user.roles, separators=(",", ":")),
+        "groups": json.dumps(user.groups, separators=(",", ":")),
     }
     if user.lob is not None:
         entries["lob"] = user.lob
     if user.supervisor_id is not None:
         entries["supervisor_id"] = user.supervisor_id
+    if user.covering_lobs:
+        entries["covering_lobs"] = json.dumps(user.covering_lobs, separators=(",", ":"))
     return [{"key": key, "value": _b64(value)} for key, value in entries.items()]
 
 
@@ -223,7 +228,9 @@ def seed_users(
         print(
             f"[{action}] {user.user_id}: {user.given_name} {user.family_name} "
             f"({user.title}) roles={','.join(user.roles)}"
+            + (f" groups={','.join(user.groups)}" if user.groups else "")
             + (f" lob={user.lob}" if user.lob else "")
+            + (f" covering_lobs={','.join(user.covering_lobs)}" if user.covering_lobs else "")
             + (f" supervisor={user.supervisor_id}" if user.supervisor_id else "")
         )
 
