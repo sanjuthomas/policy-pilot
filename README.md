@@ -6,14 +6,28 @@ The domain is **Security Settlement Instructions** in a capital-markets middle-o
 
 ## Demo questions
 
-Ask the chat interface things like:
+The chat is designed to surface **fraud patterns, compliance violations, and collusion signals** — questions that go beyond what a standard application status screen can answer.
 
+**Collusion and mutual approval:**
 - _Are there any instances of approving each other's instructions?_
-- _Who created the instruction that Michael rejected?_
-- _How many instructions were created today?_
-- _How many ALERT events today for international instructions?_
-- _Are there instructions created today still waiting for approval?_
+- _Has any user attempted to approve an instruction they originally created?_
+
+**Inversion of control — segregation of duties:**
+- _Are there any instructions approved by someone who directly reports to the instruction's creator?_
+
+> Banks enforce a hierarchy rule: a subordinate must not approve their manager's instruction. This is an inversion of control violation — the approval authority flows the wrong way up the reporting chain.
+
+**Compliance investigation:**
+- _Who created the instruction that Michael Torres rejected?_
+- _Show me all ALERT events for FICC instructions in the last 7 days._
+- _Which users triggered the most policy denial alerts this week?_
+
+**Duplicate and conflicting routes:**
+- _Are there active instructions sharing the same creditor account and currency — potential duplicate settlement routes?_
+
+**Exact event and instruction lookup:**
 - _Can you show me the instruction associated with security event id `<uuid>`?_
+- _Can you show me the full lifecycle timeline of instruction `<uuid>`?_
 
 ---
 
