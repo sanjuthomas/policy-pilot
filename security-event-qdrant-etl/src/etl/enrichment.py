@@ -29,7 +29,9 @@ def build_merged_context(
     actor = security_event.get("actor") or {}
     resource = security_event.get("resource") or {}
     event_ctx = security_event.get("event") or {}
-    instr = instruction or {}
+    # Prefer the embedded instruction_snapshot (fact-event model); fall back to
+    # a separately fetched instruction dict for backward compatibility.
+    instr = security_event.get("instruction_snapshot") or instruction or {}
 
     created_by = instr.get("created_by") or {}
     approved_by = instr.get("approved_by") or {}

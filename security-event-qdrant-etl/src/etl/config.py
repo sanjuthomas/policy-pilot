@@ -1,7 +1,5 @@
 from pathlib import Path
-from typing import Self
 
-from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,16 +13,8 @@ class Settings(BaseSettings):
     kafka_bootstrap_servers: str = "kafka:9092"
     kafka_security_events_topic: str = "instruction-security-events"
     kafka_consumer_group: str = "security-event-qdrant-etl"
-
-    ilm_url: str = "http://instruction-lifecycle-manager:8000"
-    ilm_api_prefix: str = "/api/v1"
-
-    zitadel_url: str = "http://zitadel-proxy"
-    zitadel_host_header: str = "localhost"
-    zitadel_service_pat: str = ""
-    zitadel_service_pat_file: Path | None = None
-    etl_reader_login: str = "etl-reader@ssi.local"
-    etl_reader_password: str = "Password1!"
+    kafka_instruction_topic: str = "ssi-instructions"
+    kafka_instruction_consumer_group: str = "ssi-instruction-etl"
 
     neo4j_uri: str = "bolt://neo4j:7687"
     neo4j_user: str = "neo4j"
@@ -41,15 +31,6 @@ class Settings(BaseSettings):
     ollama_embedding_model: str = "bge-m3:latest"
     ollama_timeout_seconds: float = 300.0
     search_default_limit: int = 10
-
-    @model_validator(mode="after")
-    def load_service_pat_from_file(self) -> Self:
-        if self.zitadel_service_pat or not self.zitadel_service_pat_file:
-            return self
-        path = self.zitadel_service_pat_file
-        if path.is_file():
-            self.zitadel_service_pat = path.read_text(encoding="utf-8").strip()
-        return self
 
     @property
     def graph_model_dir_path(self) -> Path:

@@ -22,6 +22,8 @@ from ilm.models.instruction import (
     LifecycleEvent,
     UserReference,
 )
+from ilm.kafka_publisher import kafka_publisher
+from ilm.models.instruction_fact import InstructionFact
 from ilm.models.security_event import SecurityEvent
 from ilm.opa import OpaClient, PolicyDeniedError
 from ilm.repository import InstructionRepository
@@ -248,6 +250,14 @@ class InstructionService:
 
         if security_event_doc is not None:
             await self.security_events.publish(security_event_doc)
+
+            fact = InstructionFact.from_instruction(
+                action,
+                subject,
+                saved.instruction,
+                version_number=saved.version_number,
+            )
+            await kafka_publisher.publish_instruction_fact(fact.model_dump(mode="json"))
 
         return saved
 

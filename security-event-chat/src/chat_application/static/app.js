@@ -59,17 +59,25 @@ function renderMeta(data) {
   });
 }
 
+function getSelectedMode() {
+  const checked = document.querySelector('input[name="mode"]:checked');
+  return checked ? checked.value : "events";
+}
+
 async function sendMessage(text) {
+  const mode = getSelectedMode();
   sendBtn.disabled = true;
   sendBtn.textContent = "Thinking…";
-  appendMessage("user", text);
+
+  const modeLabel = { events: "🔍 Events", instructions: "📋 Instructions", both: "🔀 Both" }[mode] || mode;
+  appendMessage("user", `[${modeLabel}] ${text}`);
   history.push({ role: "user", content: text });
 
   try {
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text, history: history.slice(0, -1) }),
+      body: JSON.stringify({ message: text, history: history.slice(0, -1), mode }),
     });
     const payload = await response.json();
     if (!response.ok) {

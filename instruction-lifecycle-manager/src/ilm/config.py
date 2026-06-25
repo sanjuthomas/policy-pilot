@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     kafka_enabled: bool = True
     kafka_bootstrap_servers: str = "kafka:9092"
     kafka_security_events_topic: str = "instruction-security-events"
+    kafka_instruction_topic: str = "ssi-instructions"
     security_event_excluded_user_ids: str = "etl-reader"
 
     @property

@@ -4,7 +4,6 @@ import logging
 from typing import Any
 
 from etl.enrichment import enrich_document
-from etl.instruction_client import InstructionClient
 from etl.neo4j_client import Neo4jGraphWriter
 from etl.ollama_client import OllamaEmbeddingClient
 from etl.qdrant_store import QdrantHybridStore
@@ -13,40 +12,26 @@ logger = logging.getLogger(__name__)
 
 
 class SecurityEventPipeline:
+    """Processes security event facts from the instruction-security-events topic.
+
+    Each event is self-contained (instruction_snapshot embedded) — no API calls.
+    """
+
     def __init__(
         self,
         *,
-        instruction_store: InstructionClient,
         neo4j_writer: Neo4jGraphWriter,
         ollama_client: OllamaEmbeddingClient,
         qdrant_store: QdrantHybridStore,
     ) -> None:
-        self.instruction_store = instruction_store
         self.neo4j_writer = neo4j_writer
         self.ollama_client = ollama_client
         self.qdrant_store = qdrant_store
         self._qdrant_ready = False
 
-    async def start(self) -> None:
-        await self.instruction_store.connect()
-        await self.neo4j_writer.connect()
-        self.qdrant_store.connect()
-        logger.info("security event ETL pipeline ready (Ollama/Qdrant init on first event)")
-
-    async def close(self) -> None:
-        await self.instruction_store.close()
-        await self.neo4j_writer.close()
-        await self.ollama_client.close()
-        self.qdrant_store.close()
-
     async def process_security_event(self, security_event: dict[str, Any]) -> None:
-        resource = security_event.get("resource") or {}
-        instruction_id = resource.get("id")
-
-        instruction = None
-        if instruction_id:
-            instruction = await self.instruction_store.fetch_instruction(instruction_id)
-
+        # instruction_snapshot is embedded in the event — no API call needed
+        instruction = security_event.get("instruction_snapshot")
         document = enrich_document(security_event, instruction)
 
         await self.neo4j_writer.upsert(document)
@@ -60,7 +45,7 @@ class SecurityEventPipeline:
         self.qdrant_store.upsert(document, dense_vector=dense_vector)
 
         logger.info(
-            "processed event_id=%s instruction_id=%s",
+            "processed security event event_id=%s instruction_id=%s",
             document.event_id,
             document.instruction_id,
         )

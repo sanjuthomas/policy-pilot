@@ -35,6 +35,21 @@
         </div>
 
         <form id="chat-form" class="chat-form">
+          <div class="mode-selector" role="group" aria-label="Search mode">
+            <span class="mode-label">Mode:</span>
+            <label class="mode-option">
+              <input type="radio" name="mode" value="events" checked />
+              <span class="mode-pill">Security Events</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="mode" value="instructions" />
+              <span class="mode-pill">Instructions</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="mode" value="both" />
+              <span class="mode-pill">Both</span>
+            </label>
+          </div>
           <label class="sr-only" for="chat-input">Your question</label>
           <textarea
             id="chat-input"

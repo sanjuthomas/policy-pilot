@@ -595,3 +595,260 @@ class Neo4jGraphWriter:
                 "rejectors": [dict(n) for n in record["rejectors"] if n],
                 "events":    [dict(n) for n in record["events"]    if n],
             }
+
+    async def upsert_instruction_fact(self, fact: dict[str, Any]) -> None:
+        """Upsert instruction state from an InstructionFact event (ssi-instructions topic).
+
+        Maintains:
+          • Instruction node (with is_expired flag from dates)
+          • InstructionVersion node (with status, financial details, expiry)
+          • CURRENT relationship on the latest version
+          • Creator, approver, rejector User nodes + CREATED/APPROVED/REJECTED rels
+          • LOB / ProfitCenter node + OWNED_BY, BELONGS_TO rels
+          • Actor User node + mutation relationship
+          • CONFLICTS_WITH and APPROVED_FOR cross-instruction rels
+        """
+        if self._driver is None:
+            raise RuntimeError("Neo4j writer not connected")
+
+        snap = fact.get("instruction_snapshot") or {}
+        instruction_id = fact.get("instruction_id") or snap.get("instruction_id")
+        if not instruction_id:
+            return
+
+        version_number = fact.get("version_number", 0)
+        action = fact.get("action", "")
+        timestamp = fact.get("timestamp")
+
+        owning_lob = snap.get("owning_lob") or ""
+        status = snap.get("status") or ""
+        instruction_type = snap.get("instruction_type") or ""
+        wire_scope = snap.get("wire_scope") or ""
+        currency = snap.get("currency") or ""
+        effective_date = snap.get("effective_date") or ""
+        end_date = snap.get("end_date") or ""
+
+        creditor = snap.get("creditor") or {}
+        creditor_account = snap.get("creditor_account") or {}
+        creditor_agent_fi = (snap.get("creditor_agent") or {}).get("financial_institution") or {}
+        debtor = snap.get("debtor") or {}
+        debtor_account = snap.get("debtor_account") or {}
+        debtor_agent_fi = (snap.get("debtor_agent") or {}).get("financial_institution") or {}
+
+        created_by = snap.get("created_by") or {}
+        approved_by = snap.get("approved_by") or {}
+        rejected_by = snap.get("rejected_by") or {}
+
+        creator_user_id = created_by.get("user_id")
+        approver_user_id = approved_by.get("user_id")
+        rejector_user_id = rejected_by.get("user_id")
+
+        actor_user_id = fact.get("actor_user_id")
+
+        query = """
+        // ── Instruction root node ────────────────────────────────────────────────
+        MERGE (i:Instruction {instruction_id: $instruction_id})
+        SET   i.owning_lob       = $owning_lob,
+              i.instruction_type = $instruction_type,
+              i.wire_scope       = $wire_scope,
+              i.currency         = $currency
+
+        // ── InstructionVersion node ──────────────────────────────────────────────
+        MERGE (v:InstructionVersion {
+            instruction_id: $instruction_id,
+            version_number: $version_number
+        })
+        SET   v.status             = $status,
+              v.action             = $action,
+              v.timestamp          = $timestamp,
+              v.wire_scope         = $wire_scope,
+              v.currency           = $currency,
+              v.effective_date     = $effective_date,
+              v.end_date           = $end_date,
+              v.creditor_name      = $creditor_name,
+              v.creditor_account   = $creditor_account,
+              v.creditor_scheme    = $creditor_scheme,
+              v.creditor_bic       = $creditor_bic,
+              v.debtor_name        = $debtor_name,
+              v.debtor_account     = $debtor_account,
+              v.debtor_bic         = $debtor_bic,
+              v.creator_user_id    = $creator_user_id,
+              v.approver_user_id   = $approver_user_id,
+              v.rejector_user_id   = $rejector_user_id,
+              v.is_expired         = (
+                  $end_date IS NOT NULL AND $end_date <> '' AND
+                  date(substring($end_date, 0, 10)) < date()
+              )
+        MERGE (i)-[:HAS_VERSION]->(v)
+
+        // ── Mark CURRENT version (only advance, never go back) ──────────────────
+        WITH i, v
+        OPTIONAL MATCH (i)-[:CURRENT]->(existing:InstructionVersion)
+        WITH i, v, existing
+        WHERE existing IS NULL OR v.version_number >= existing.version_number
+        OPTIONAL MATCH (i)-[old:CURRENT]->(:InstructionVersion)
+        DELETE old
+        MERGE  (i)-[:CURRENT]->(v)
+
+        // ── LOB / ProfitCenter ──────────────────────────────────────────────────
+        WITH i, v
+        MERGE (lob:ProfitCenter {name: $owning_lob})
+        MERGE (i)-[:OWNED_BY]->(lob)
+        MERGE (v)-[:BELONGS_TO]->(lob)
+
+        // ── Creator user ─────────────────────────────────────────────────────────
+        WITH i, v, lob
+        FOREACH (_ IN CASE WHEN $creator_user_id IS NOT NULL THEN [1] ELSE [] END |
+            MERGE (cu:User {user_id: $creator_user_id})
+            SET   cu.given_name    = coalesce($creator_given_name,    cu.given_name),
+                  cu.family_name   = coalesce($creator_family_name,   cu.family_name),
+                  cu.display_name  = coalesce(
+                      CASE WHEN $creator_family_name IS NOT NULL AND $creator_given_name IS NOT NULL
+                           THEN $creator_family_name + ', ' + $creator_given_name + ' (' + $creator_user_id + ')'
+                           ELSE null END,
+                      cu.display_name),
+                  cu.title         = coalesce($creator_title,   cu.title),
+                  cu.lob           = coalesce($creator_lob,     cu.lob),
+                  cu.roles         = coalesce($creator_roles,   cu.roles),
+                  cu.supervisor_id = coalesce($creator_supervisor_id, cu.supervisor_id)
+            MERGE (cu)-[:CREATED]->(v)
+        )
+
+        // ── Approver user ────────────────────────────────────────────────────────
+        WITH i, v, lob
+        FOREACH (_ IN CASE WHEN $approver_user_id IS NOT NULL THEN [1] ELSE [] END |
+            MERGE (au:User {user_id: $approver_user_id})
+            SET   au.given_name    = coalesce($approver_given_name,    au.given_name),
+                  au.family_name   = coalesce($approver_family_name,   au.family_name),
+                  au.display_name  = coalesce(
+                      CASE WHEN $approver_family_name IS NOT NULL AND $approver_given_name IS NOT NULL
+                           THEN $approver_family_name + ', ' + $approver_given_name + ' (' + $approver_user_id + ')'
+                           ELSE null END,
+                      au.display_name),
+                  au.title         = coalesce($approver_title,   au.title),
+                  au.lob           = coalesce($approver_lob,     au.lob),
+                  au.roles         = coalesce($approver_roles,   au.roles),
+                  au.supervisor_id = coalesce($approver_supervisor_id, au.supervisor_id)
+            MERGE (au)-[:APPROVED]->(v)
+            MERGE (au)-[:APPROVED_FOR]->(i)
+        )
+
+        // ── Rejector user ────────────────────────────────────────────────────────
+        WITH i, v, lob
+        FOREACH (_ IN CASE WHEN $rejector_user_id IS NOT NULL THEN [1] ELSE [] END |
+            MERGE (ru:User {user_id: $rejector_user_id})
+            SET   ru.given_name    = coalesce($rejector_given_name,    ru.given_name),
+                  ru.family_name   = coalesce($rejector_family_name,   ru.family_name),
+                  ru.display_name  = coalesce(
+                      CASE WHEN $rejector_family_name IS NOT NULL AND $rejector_given_name IS NOT NULL
+                           THEN $rejector_family_name + ', ' + $rejector_given_name + ' (' + $rejector_user_id + ')'
+                           ELSE null END,
+                      ru.display_name),
+                  ru.title         = coalesce($rejector_title,   ru.title),
+                  ru.lob           = coalesce($rejector_lob,     ru.lob),
+                  ru.roles         = coalesce($rejector_roles,   ru.roles),
+                  ru.supervisor_id = coalesce($rejector_supervisor_id, ru.supervisor_id)
+            MERGE (ru)-[:REJECTED]->(v)
+        )
+
+        // ── Actor (the user who performed this mutation) ─────────────────────────
+        WITH i, v, lob
+        FOREACH (_ IN CASE WHEN $actor_user_id IS NOT NULL THEN [1] ELSE [] END |
+            MERGE (actor:User {user_id: $actor_user_id})
+            SET   actor.given_name    = coalesce($actor_given_name,    actor.given_name),
+                  actor.family_name   = coalesce($actor_family_name,   actor.family_name),
+                  actor.display_name  = coalesce(
+                      CASE WHEN $actor_family_name IS NOT NULL AND $actor_given_name IS NOT NULL
+                           THEN $actor_family_name + ', ' + $actor_given_name + ' (' + $actor_user_id + ')'
+                           ELSE null END,
+                      actor.display_name),
+                  actor.title         = coalesce($actor_title,   actor.title),
+                  actor.lob           = coalesce($actor_lob,     actor.lob),
+                  actor.roles         = coalesce($actor_roles,   actor.roles),
+                  actor.supervisor_id = coalesce($actor_supervisor_id, actor.supervisor_id)
+            MERGE (actor)-[:MUTATED {action: $action, timestamp: $timestamp}]->(v)
+        )
+        """
+
+        params: dict[str, Any] = {
+            "instruction_id": instruction_id,
+            "version_number": version_number,
+            "action": action,
+            "timestamp": timestamp,
+            "owning_lob": owning_lob,
+            "status": status,
+            "instruction_type": instruction_type,
+            "wire_scope": wire_scope,
+            "currency": currency,
+            "effective_date": effective_date,
+            "end_date": end_date,
+            "creditor_name": creditor.get("name"),
+            "creditor_account": creditor_account.get("identification"),
+            "creditor_scheme": creditor_account.get("identification_scheme"),
+            "creditor_bic": creditor_agent_fi.get("identification"),
+            "debtor_name": debtor.get("name"),
+            "debtor_account": debtor_account.get("identification"),
+            "debtor_bic": debtor_agent_fi.get("identification"),
+            "creator_user_id": creator_user_id,
+            "creator_given_name": created_by.get("given_name"),
+            "creator_family_name": created_by.get("family_name"),
+            "creator_title": created_by.get("title"),
+            "creator_lob": created_by.get("lob"),
+            "creator_roles": _roles_json(created_by.get("roles")),
+            "creator_supervisor_id": created_by.get("supervisor_id"),
+            "approver_user_id": approver_user_id,
+            "approver_given_name": approved_by.get("given_name"),
+            "approver_family_name": approved_by.get("family_name"),
+            "approver_title": approved_by.get("title"),
+            "approver_lob": approved_by.get("lob"),
+            "approver_roles": _roles_json(approved_by.get("roles")),
+            "approver_supervisor_id": approved_by.get("supervisor_id"),
+            "rejector_user_id": rejector_user_id,
+            "rejector_given_name": rejected_by.get("given_name"),
+            "rejector_family_name": rejected_by.get("family_name"),
+            "rejector_title": rejected_by.get("title"),
+            "rejector_lob": rejected_by.get("lob"),
+            "rejector_roles": _roles_json(rejected_by.get("roles")),
+            "rejector_supervisor_id": rejected_by.get("supervisor_id"),
+            "actor_user_id": actor_user_id,
+            "actor_given_name": fact.get("actor_given_name"),
+            "actor_family_name": fact.get("actor_family_name"),
+            "actor_title": fact.get("actor_title"),
+            "actor_lob": fact.get("actor_lob"),
+            "actor_roles": _roles_json(fact.get("actor_roles")),
+            "actor_supervisor_id": fact.get("actor_supervisor_id"),
+        }
+
+        async with self._driver.session() as session:
+            await session.run(query, **params)
+
+        # ── CONFLICTS_WITH: same creditor_account + currency across instructions ──
+        if creditor_account.get("identification") and currency:
+            conflict_query = """
+            MATCH (v1:InstructionVersion {
+                creditor_account: $creditor_account,
+                currency:         $currency
+            })
+            WHERE v1.instruction_id <> $instruction_id
+            MATCH (i1:Instruction {instruction_id: $instruction_id})-[:CURRENT]->(cv1:InstructionVersion)
+            MATCH (i2:Instruction)-[:CURRENT]->(v1)
+            WHERE i2.instruction_id <> $instruction_id
+              AND cv1.status IN ['STANDING', 'SUBMITTED', 'PENDING_APPROVAL']
+              AND v1.status  IN ['STANDING', 'SUBMITTED', 'PENDING_APPROVAL']
+            MERGE (i1)-[:CONFLICTS_WITH]->(i2)
+            MERGE (i2)-[:CONFLICTS_WITH]->(i1)
+            """
+            async with self._driver.session() as session:
+                await session.run(
+                    conflict_query,
+                    creditor_account=creditor_account["identification"],
+                    currency=currency,
+                    instruction_id=instruction_id,
+                )
+
+        logger.debug(
+            "upserted instruction fact instruction_id=%s action=%s version=%s",
+            instruction_id,
+            action,
+            version_number,
+        )

@@ -8,7 +8,7 @@ from typing import Any
 
 from chat_application.config import settings
 from chat_application.cypher import extract_uuids, load_graph_schema
-from chat_application.models import ChatMessage, ChatResponse, SourceHit
+from chat_application.models import ChatMessage, ChatResponse, SearchMode, SourceHit
 from chat_application.neo4j import Neo4jClient
 from chat_application.ollama import OllamaClient
 from chat_application.qdrant import QdrantSearchClient
@@ -30,18 +30,43 @@ class RagService:
         self.neo4j = neo4j
         self._schema = load_graph_schema()
 
-    async def ask(self, message: str, history: list[ChatMessage]) -> ChatResponse:
+    async def ask(
+        self,
+        message: str,
+        history: list[ChatMessage],
+        *,
+        mode: SearchMode = "events",
+    ) -> ChatResponse:
+        """Run the full RAG pipeline.
+
+        mode="events"       — searches only security_event points in Qdrant
+        mode="instructions" — searches only instruction_state points in Qdrant
+        mode="both"         — searches all points (no source filter)
+        """
         started = time.perf_counter()
         limit = settings.retrieval_limit
 
+        # Map mode to Qdrant source filter tag
+        qdrant_source: str | None
+        if mode == "events":
+            qdrant_source = "security_event"
+        elif mode == "instructions":
+            qdrant_source = "instruction_state"
+        else:
+            qdrant_source = None  # no filter — search everything
+
         event_ids = extract_uuids(message)
 
-        vector_task = asyncio.create_task(self._search_vector(message, limit))
-        bm25_task = asyncio.create_task(asyncio.to_thread(self._search_bm25, message, limit))
-        cypher_task = asyncio.create_task(self._search_graph(message))
+        vector_task = asyncio.create_task(
+            self._search_vector(message, limit, source=qdrant_source)
+        )
+        bm25_task = asyncio.create_task(
+            asyncio.to_thread(self._search_bm25, message, limit, qdrant_source)
+        )
+        cypher_task = asyncio.create_task(self._search_graph(message, mode=mode))
         exact_task = (
             asyncio.create_task(self._lookup_exact_event_ids(event_ids))
-            if event_ids
+            if event_ids and mode != "instructions"
             else None
         )
 
@@ -72,11 +97,12 @@ class RagService:
             graph_result["rows"],
             graph_result.get("cypher"),
             graph_unavailable=graph_result.get("graph_unavailable", False),
+            mode=mode,
         )
         chat_history = [{"role": m.role, "content": m.content} for m in history[-8:]]
 
         gen_started = time.perf_counter()
-        answer = await self.ollama.synthesize_answer(message, context, chat_history)
+        answer = await self.ollama.synthesize_answer(message, context, chat_history, mode=mode)
         generation_ms = (time.perf_counter() - gen_started) * 1000
 
         return ChatResponse(
@@ -88,17 +114,23 @@ class RagService:
             generation_ms=round(generation_ms, 1),
         )
 
-    async def _search_vector(self, query: str, limit: int) -> list[dict[str, Any]]:
+    async def _search_vector(
+        self, query: str, limit: int, source: str | None = None
+    ) -> list[dict[str, Any]]:
         try:
             vector = await self.ollama.embed(query)
-            return await asyncio.to_thread(self.qdrant.search_vector, vector, limit=limit)
+            return await asyncio.to_thread(
+                self.qdrant.search_vector, vector, limit=limit, source=source
+            )
         except Exception as exc:
             logger.warning("vector search failed: %s", exc)
             return []
 
-    def _search_bm25(self, query: str, limit: int) -> list[dict[str, Any]]:
+    def _search_bm25(
+        self, query: str, limit: int, source: str | None = None
+    ) -> list[dict[str, Any]]:
         try:
-            return self.qdrant.search_bm25(query, limit=limit)
+            return self.qdrant.search_bm25(query, limit=limit, source=source)
         except Exception as exc:
             logger.warning("BM25 search failed: %s", exc)
             return []
@@ -142,15 +174,15 @@ class RagService:
         remainder = [hit for hit in merged if hit.key not in pinned_keys]
         return (exact_ranked + remainder)[: settings.max_context_hits]
 
-    async def _search_graph(self, question: str) -> dict[str, Any]:
+    async def _search_graph(
+        self, question: str, *, mode: SearchMode = "events"
+    ) -> dict[str, Any]:
         cypher: str | None = None
         try:
-            cypher = await self.ollama.generate_cypher(question, self._schema)
+            cypher = await self.ollama.generate_cypher(question, self._schema, mode=mode)
             rows = await self.neo4j.run_cypher(cypher)
             return {"cypher": cypher, "rows": rows}
         except ValueError as exc:
-            # Log the rejected query for auditability but do NOT surface it
-            # upward — the caller will still use vector and BM25 results.
             logger.warning(
                 "Cypher validation rejected LLM query — %s | query=%r", exc, cypher
             )
@@ -166,8 +198,16 @@ class RagService:
         cypher: str | None,
         *,
         graph_unavailable: bool = False,
+        mode: SearchMode = "events",
     ) -> str:
         sections: list[str] = []
+
+        if mode == "instructions":
+            sections.append("Search mode: INSTRUCTIONS (instruction master graph — independent of security events)")
+        elif mode == "both":
+            sections.append("Search mode: BOTH (security events + instruction state)")
+        else:
+            sections.append("Search mode: EVENTS (security event log)")
 
         if graph_unavailable:
             sections.append(
@@ -185,34 +225,47 @@ class RagService:
             )
 
         if hits:
-            event_lines: list[str] = []
+            lines: list[str] = []
             for index, hit in enumerate(hits, start=1):
-                merged = hit.merged or {}
-                instruction_block = ""
-                if hit.instruction:
-                    instr = hit.instruction
-                    instruction_block = (
-                        f"\n  instruction: id={instr.get('instruction_id')} "
-                        f"type={instr.get('instruction_type')} "
-                        f"currency={instr.get('currency')} "
-                        f"status={instr.get('status')} "
-                        f"wire_scope={instr.get('wire_scope')} "
-                        f"owning_lob={instr.get('owning_lob')}"
+                payload = hit.merged or {}
+                snap = payload.get("instruction_snapshot") or {}
+                src = payload.get("source") or (sorted(hit.sources)[0] if hit.sources else "?")
+
+                if src == "instruction_state":
+                    lines.append(
+                        f"[{index}] INSTRUCTION instruction_id={hit.instruction_id} "
+                        f"score={hit.score:.4f}\n"
+                        f"  status={snap.get('status')} type={snap.get('instruction_type')} "
+                        f"lob={snap.get('owning_lob')} currency={snap.get('currency')} "
+                        f"scope={snap.get('wire_scope')}\n"
+                        f"  creditor={snap.get('creditor_name')} "
+                        f"creditor_acct={snap.get('creditor_account_id')}\n"
+                        f"  creator={payload.get('creator_display')} "
+                        f"approver={payload.get('approver_display')}\n"
+                        f"  effective={snap.get('effective_date')} end={snap.get('end_date')} "
+                        f"expired={snap.get('is_expired', False)}"
                     )
-                event_lines.append(
-                    f"[{index}] event_id={hit.event_id} instruction_id={hit.instruction_id} "
-                    f"sources={sorted(hit.sources)} score={hit.score:.4f}\n"
-                    f"  action={merged.get('action')} severity={merged.get('severity')} "
-                    f"actor={merged.get('actor_user_id')} creator={merged.get('creator_user_id')} "
-                    f"approver={merged.get('approver_user_id')} rejector={merged.get('rejector_user_id')}\n"
-                    f"  wire_scope={merged.get('wire_scope')} instruction_type={merged.get('instruction_type')} "
-                    f"owning_lob={merged.get('owning_lob')} status={merged.get('status')}\n"
-                    f"  summary: {hit.summary}{instruction_block}"
-                )
-            sections.append("Retrieved security events (merged vector + BM25 + graph):\n" + "\n".join(event_lines))
+                else:
+                    merged = hit.merged or {}
+                    lines.append(
+                        f"[{index}] EVENT event_id={hit.event_id} instruction_id={hit.instruction_id} "
+                        f"sources={sorted(hit.sources)} score={hit.score:.4f}\n"
+                        f"  action={merged.get('action')} severity={merged.get('severity')} "
+                        f"actor={merged.get('actor_display', merged.get('actor_user_id'))} "
+                        f"lob={merged.get('owning_lob')}\n"
+                        f"  creator={merged.get('creator_display', merged.get('creator_user_id'))} "
+                        f"approver={merged.get('approver_display', merged.get('approver_user_id'))}\n"
+                        f"  summary: {hit.summary}"
+                    )
+            label = {
+                "events": "Retrieved security events",
+                "instructions": "Retrieved instruction states",
+                "both": "Retrieved results",
+            }.get(mode, "Retrieved results")
+            sections.append(f"{label} (vector + BM25 + graph):\n" + "\n".join(lines))
 
         if not sections:
-            return "No indexed security events or graph results were found."
+            return "No indexed data was found."
         return "\n\n".join(sections)
 
     @staticmethod

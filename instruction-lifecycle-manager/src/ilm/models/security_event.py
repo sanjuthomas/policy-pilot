@@ -17,6 +17,8 @@ from ilm.models.instruction import CashSettlementInstruction
 
 class SecurityEventActor(BaseModel):
     user_id: str
+    given_name: str | None = None
+    family_name: str | None = None
     title: str
     roles: list[str]
     lob: str | None = None
@@ -61,11 +63,17 @@ class SecurityEvent(BaseModel):
     resource: SecurityEventResource
     source: SecurityEventSource
     details: dict[str, Any] = Field(default_factory=dict)
+    instruction_snapshot: dict[str, Any] | None = Field(
+        default=None,
+        description="Full instruction state at the time of this event — carried in the Kafka fact event so ETL needs no API callback",
+    )
 
     @classmethod
     def _actor_from_subject(cls, subject: Subject) -> SecurityEventActor:
         return SecurityEventActor(
             user_id=subject.user_id,
+            given_name=subject.given_name,
+            family_name=subject.family_name,
             title=subject.title,
             roles=subject.roles,
             lob=subject.lob,
@@ -134,6 +142,7 @@ class SecurityEvent(BaseModel):
             resource=resource,
             source=cls._source(),
             details=details or {},
+            instruction_snapshot=instruction.model_dump(mode="json"),
         )
 
     @classmethod
@@ -166,4 +175,5 @@ class SecurityEvent(BaseModel):
             resource=resource,
             source=cls._source(),
             details=event_details,
+            instruction_snapshot=instruction.model_dump(mode="json"),
         )

@@ -82,7 +82,11 @@ async def chat(request: ChatRequest) -> ChatResponse:
     if rag_service is None:
         raise HTTPException(status_code=503, detail="RAG service not ready")
     try:
-        return await rag_service.ask(request.message.strip(), request.history)
+        return await rag_service.ask(
+            request.message.strip(),
+            request.history,
+            mode=request.mode,
+        )
     except Exception as exc:
         logger.exception("chat failed")
         raise HTTPException(status_code=503, detail=str(exc)) from exc

@@ -160,6 +160,7 @@ class QdrantHybridStore:
 
         point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, document.event_id))
         payload = document.model_dump(mode="json")
+        payload["source"] = "security_event"
 
         self._client.upsert(
             collection_name=settings.qdrant_collection,
@@ -170,6 +171,40 @@ class QdrantHybridStore:
                         settings.qdrant_dense_vector_name: dense_vector,
                         settings.qdrant_bm25_vector_name: models.Document(
                             text=document.search_text,
+                            model=settings.qdrant_bm25_model,
+                        ),
+                    },
+                    payload=payload,
+                )
+            ],
+        )
+
+    def upsert_instruction_state(
+        self,
+        instruction_id: str,
+        search_text: str,
+        payload: dict,
+        *,
+        dense_vector: list[float],
+    ) -> None:
+        """Upsert a single instruction-state point (one per instruction, keyed by instruction_id)."""
+        if self._client is None:
+            raise RuntimeError("Qdrant client not connected")
+
+        point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"instruction:{instruction_id}"))
+        payload = dict(payload)
+        payload["source"] = "instruction_state"
+        payload["instruction_id"] = instruction_id
+
+        self._client.upsert(
+            collection_name=settings.qdrant_collection,
+            points=[
+                models.PointStruct(
+                    id=point_id,
+                    vector={
+                        settings.qdrant_dense_vector_name: dense_vector,
+                        settings.qdrant_bm25_vector_name: models.Document(
+                            text=search_text,
                             model=settings.qdrant_bm25_model,
                         ),
                     },

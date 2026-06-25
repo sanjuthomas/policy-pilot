@@ -53,5 +53,22 @@ class SecurityEventKafkaPublisher:
         except Exception:
             logger.exception("failed to publish security event %s to Kafka", event_id)
 
+    async def publish_instruction_fact(self, fact: dict[str, Any]) -> None:
+        if self._producer is None:
+            return
+
+        actor_user_id = fact.get("actor_user_id", "")
+        try:
+            await self._producer.send_and_wait(
+                settings.kafka_instruction_topic,
+                value=fact,
+                key=actor_user_id or None,
+            )
+        except Exception:
+            logger.exception(
+                "failed to publish instruction fact %s to Kafka",
+                fact.get("instruction_id", ""),
+            )
+
 
 kafka_publisher = SecurityEventKafkaPublisher()

@@ -491,7 +491,3 @@ Each service reads configuration from environment variables (see its own README 
 Each application directory has its own README.
 
 ---
-
-## Chat demo
-
-![Security Event Chat — cross-approval and LOB queries](docs/chat-demo.png)

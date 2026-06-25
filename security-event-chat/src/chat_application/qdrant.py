@@ -45,7 +45,26 @@ class QdrantSearchClient:
             "payload": payload,
         }
 
-    def search_vector(self, query_vector: list[float], *, limit: int) -> list[dict[str, Any]]:
+    def _source_filter(self, source: str | None) -> models.Filter | None:
+        """Build a Qdrant filter to restrict by point source tag."""
+        if source is None:
+            return None
+        return models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="source",
+                    match=models.MatchValue(value=source),
+                )
+            ]
+        )
+
+    def search_vector(
+        self,
+        query_vector: list[float],
+        *,
+        limit: int,
+        source: str | None = None,
+    ) -> list[dict[str, Any]]:
         if self._client is None or not self.has_collection():
             return []
         response = self._client.query_points(
@@ -54,6 +73,7 @@ class QdrantSearchClient:
             using=settings.qdrant_dense_vector_name,
             limit=limit,
             with_payload=True,
+            query_filter=self._source_filter(source),
         )
         return [self._to_hit(point, "vector") for point in response.points]
 
@@ -86,7 +106,13 @@ class QdrantSearchClient:
             "payload": payload,
         }
 
-    def search_bm25(self, query_text: str, *, limit: int) -> list[dict[str, Any]]:
+    def search_bm25(
+        self,
+        query_text: str,
+        *,
+        limit: int,
+        source: str | None = None,
+    ) -> list[dict[str, Any]]:
         if self._client is None or not self.has_collection():
             return []
         response = self._client.query_points(
@@ -95,5 +121,6 @@ class QdrantSearchClient:
             using=settings.qdrant_bm25_vector_name,
             limit=limit,
             with_payload=True,
+            query_filter=self._source_filter(source),
         )
         return [self._to_hit(point, "bm25") for point in response.points]

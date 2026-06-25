@@ -11,30 +11,37 @@ from pydantic import BaseModel, Field
 
 from etl.config import settings
 from etl.health import component_status
-from etl.instruction_client import InstructionClient
+from etl.instruction_consumer import InstructionKafkaConsumer
+from etl.instruction_pipeline import InstructionPipeline
 from etl.kafka_consumer import SecurityEventKafkaConsumer
 from etl.neo4j_client import Neo4jGraphWriter
 from etl.ollama_client import OllamaEmbeddingClient
 from etl.pipeline import SecurityEventPipeline
 from etl.qdrant_store import QdrantHybridStore
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 logger = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
-instruction_store = InstructionClient()
 neo4j_writer = Neo4jGraphWriter()
 ollama_client = OllamaEmbeddingClient()
 qdrant_store = QdrantHybridStore()
-pipeline = SecurityEventPipeline(
-    instruction_store=instruction_store,
+
+security_event_pipeline = SecurityEventPipeline(
     neo4j_writer=neo4j_writer,
     ollama_client=ollama_client,
     qdrant_store=qdrant_store,
 )
-kafka_consumer = SecurityEventKafkaConsumer(pipeline)
+instruction_pipeline = InstructionPipeline(
+    neo4j_writer=neo4j_writer,
+    ollama_client=ollama_client,
+    qdrant_store=qdrant_store,
+)
+
+security_event_consumer = SecurityEventKafkaConsumer(security_event_pipeline)
+instruction_consumer = InstructionKafkaConsumer(instruction_pipeline)
 
 
 class SearchRequest(BaseModel):
@@ -45,18 +52,27 @@ class SearchRequest(BaseModel):
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     logging.basicConfig(level=logging.INFO)
-    await pipeline.start()
-    await kafka_consumer.start()
+    await neo4j_writer.connect()
+    qdrant_store.connect()
+
+    await security_event_consumer.start()
+    await instruction_consumer.start()
+
     try:
         await ollama_client.warmup()
         if qdrant_store.has_collection():
             qdrant_store.ensure_collection(ollama_client.dimension)
     except Exception as exc:
         logger.warning("search backends not fully warmed up yet: %s", exc)
-    logger.info("security event ETL and search console started")
+
+    logger.info("security-event-qdrant-etl started (dual consumers)")
     yield
-    await kafka_consumer.close()
-    await pipeline.close()
+
+    await security_event_consumer.close()
+    await instruction_consumer.close()
+    await neo4j_writer.close()
+    await ollama_client.close()
+    qdrant_store.close()
 
 
 app = FastAPI(
@@ -77,7 +93,7 @@ async def index() -> FileResponse:
 @app.get("/health")
 async def health() -> dict:
     components = await component_status(
-        kafka_consumer=kafka_consumer,
+        kafka_consumer=security_event_consumer,
         qdrant_store=qdrant_store,
         neo4j_writer=neo4j_writer,
         ollama_client=ollama_client,
@@ -89,7 +105,7 @@ async def health() -> dict:
 @app.get("/api/stats")
 async def stats() -> dict:
     components = await component_status(
-        kafka_consumer=kafka_consumer,
+        kafka_consumer=security_event_consumer,
         qdrant_store=qdrant_store,
         neo4j_writer=neo4j_writer,
         ollama_client=ollama_client,
@@ -103,7 +119,7 @@ async def stats() -> dict:
 @app.get("/api/components")
 async def components() -> dict:
     return await component_status(
-        kafka_consumer=kafka_consumer,
+        kafka_consumer=security_event_consumer,
         qdrant_store=qdrant_store,
         neo4j_writer=neo4j_writer,
         ollama_client=ollama_client,

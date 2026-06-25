@@ -226,6 +226,88 @@ ORDER BY v.end_date ASC
 LIMIT 50
 """
 
+INSTRUCTION_CYPHER_SYSTEM_PROMPT = """You translate natural-language questions about \
+standing settlement instructions (SSI) into read-only Neo4j Cypher.
+
+This mode targets the INSTRUCTION master graph — instruction state independent of security events.
+
+Rules:
+- Output ONLY a single Cypher query. No markdown fences, no explanation.
+- READ-ONLY: use MATCH, OPTIONAL MATCH, WITH, WHERE, RETURN, ORDER BY, LIMIT, UNWIND, count(), collect().
+- Never use CREATE, MERGE, SET, DELETE, REMOVE, DROP, CALL db.* write procedures.
+- Always return rows not just aggregate scalars.
+- The primary node is Instruction (i) and InstructionVersion (v) linked by (i)-[:CURRENT]->(v).
+- InstructionVersion fields: instruction_id, version_number, status, action, currency, wire_scope,
+  instruction_type, owning_lob, effective_date, end_date, is_expired, creditor_name,
+  creditor_account, creditor_scheme, creditor_bic, debtor_name, debtor_account, debtor_bic,
+  creator_user_id, approver_user_id, rejector_user_id.
+- User nodes have display_name in "FamilyName, GivenName (user_id)" form.
+- LOB node is ProfitCenter, linked by (i)-[:OWNED_BY]->(lob:ProfitCenter).
+- (i)-[:CONFLICTS_WITH]->(j:Instruction) means same creditor account + currency = potential duplicate route.
+- Standard patterns:
+    OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
+    OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
+    OPTIONAL MATCH (rejectorUser:User {user_id: v.rejector_user_id})
+- instruction status values: DRAFT, PENDING_APPROVAL, STANDING, REJECTED, SUSPENDED, DELETED.
+
+Example — active STANDING instructions for LOB FICC:
+MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion {status: 'STANDING', owning_lob: 'FICC'})
+OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
+OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
+RETURN v.instruction_id, v.status, v.currency, v.wire_scope,
+       v.creditor_name, v.creditor_account, v.end_date, v.is_expired,
+       coalesce(creatorUser.display_name, v.creator_user_id, '') AS creator_display,
+       coalesce(approverUser.display_name, v.approver_user_id, '') AS approver_display
+ORDER BY v.end_date ASC
+LIMIT 50
+
+Example — duplicate settlement routes (same creditor account + currency):
+MATCH (i1:Instruction)-[:CONFLICTS_WITH]->(i2:Instruction)
+MATCH (i1)-[:CURRENT]->(v1:InstructionVersion)
+MATCH (i2)-[:CURRENT]->(v2:InstructionVersion)
+OPTIONAL MATCH (c1:User {user_id: v1.creator_user_id})
+OPTIONAL MATCH (c2:User {user_id: v2.creator_user_id})
+RETURN v1.instruction_id AS instruction_1, v1.creditor_account, v1.currency,
+       coalesce(c1.display_name, v1.creator_user_id, '') AS creator_1,
+       v2.instruction_id AS instruction_2,
+       coalesce(c2.display_name, v2.creator_user_id, '') AS creator_2
+LIMIT 50
+
+Example — mutual approval (A approved B's instruction AND B approved A's instruction):
+MATCH (a:User)-[:APPROVED]->(va:InstructionVersion)<-[:CREATED]-(b:User)
+MATCH (b)-[:APPROVED]->(vb:InstructionVersion)<-[:CREATED]-(a)
+WHERE a.user_id <> b.user_id
+RETURN a.display_name AS user_a, b.display_name AS user_b,
+       va.instruction_id AS instruction_approved_by_a,
+       vb.instruction_id AS instruction_approved_by_b
+LIMIT 50
+
+Example — subordinate approved supervisor's instruction (inversion of control):
+MATCH (supervisor:User)-[:CREATED]->(v:InstructionVersion)
+MATCH (subordinate:User)-[:APPROVED]->(v)
+WHERE subordinate.supervisor_id = supervisor.user_id
+RETURN supervisor.display_name AS supervisor, subordinate.display_name AS subordinate,
+       v.instruction_id, v.status, v.owning_lob
+LIMIT 50
+"""
+
+INSTRUCTION_ANSWER_SYSTEM_PROMPT = """You are a compliance and risk analyst assistant for \
+standing settlement instructions (SSI) at a large bank.
+
+Answer the user's question using ONLY the provided context (instruction state graph results and retrieved points).
+- Be concise and factual.
+- When listing instructions, enumerate each one clearly with:
+  instruction_id, status, currency, creditor, creator, approver, effective/end dates.
+- Use the display_name "FamilyName, GivenName (user_id)" format for all users when available.
+- For CONFLICTS_WITH results (duplicate routes), explain both instructions share the same creditor account
+  and currency — potential duplicate settlement risk.
+- For mutual approval / inversion-of-control results, clearly name both parties and the instructions involved.
+- For expired instructions, highlight the end_date that has passed.
+- Cite instruction_ids when relevant.
+- If context is insufficient, say what is missing.
+- Do not invent users, amounts, or instructions not present in the context.
+"""
+
 ANSWER_SYSTEM_PROMPT = """You are a security operations analyst assistant for cash settlement instruction \
 lifecycle events.
 
@@ -310,7 +392,10 @@ class OllamaClient:
             raise RuntimeError(f"unexpected chat response: {json.dumps(body)[:300]}")
         return str(content).strip()
 
-    async def generate_cypher(self, question: str, schema: str) -> str:
+    async def generate_cypher(
+        self, question: str, schema: str, *, mode: str = "events"
+    ) -> str:
+        system = INSTRUCTION_CYPHER_SYSTEM_PROMPT if mode == "instructions" else CYPHER_SYSTEM_PROMPT
         user_prompt = f"""Graph schema documentation:
 
 {schema}
@@ -318,7 +403,7 @@ class OllamaClient:
 Question: {question}
 
 Cypher:"""
-        raw = await self.chat(system=CYPHER_SYSTEM_PROMPT, user=user_prompt)
+        raw = await self.chat(system=system, user=user_prompt)
         return _extract_cypher(raw)
 
     async def synthesize_answer(
@@ -326,14 +411,17 @@ Cypher:"""
         question: str,
         context: str,
         history: list[dict[str, str]] | None = None,
+        *,
+        mode: str = "events",
     ) -> str:
+        system = INSTRUCTION_ANSWER_SYSTEM_PROMPT if mode == "instructions" else ANSWER_SYSTEM_PROMPT
         user_prompt = f"""Context:
 
 {context}
 
 Question: {question}"""
         return await self.chat(
-            system=ANSWER_SYSTEM_PROMPT,
+            system=system,
             user=user_prompt,
             history=history,
         )
