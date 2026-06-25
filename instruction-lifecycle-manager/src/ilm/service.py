@@ -17,12 +17,12 @@ from ilm.models.enums import (
     InstructionType,
     LifecycleAction,
 )
+from ilm.kafka_publisher import kafka_publisher
 from ilm.models.instruction import (
     CashSettlementInstruction,
     LifecycleEvent,
     UserReference,
 )
-from ilm.kafka_publisher import kafka_publisher
 from ilm.models.instruction_fact import InstructionFact
 from ilm.models.security_event import SecurityEvent
 from ilm.opa import OpaClient, PolicyDeniedError

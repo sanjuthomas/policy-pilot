@@ -14,9 +14,9 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
+from ilm.models.api import Subject
 from ilm.models.enums import LifecycleAction
 from ilm.models.instruction import CashSettlementInstruction
-from ilm.models.api import Subject
 
 
 class InstructionFact(BaseModel):
