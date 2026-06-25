@@ -13,6 +13,7 @@ Ask the chat interface things like:
 - _How many ALERT events today for international instructions?_
 - _Are there instructions created today still waiting for approval?_
 - _Show me the instruction associated with security event id `<uuid>`._
+- _Are there any instances of approving each other's instructions?_
 
 ---
 
