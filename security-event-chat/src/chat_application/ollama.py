@@ -18,8 +18,12 @@ Rules:
 - Output ONLY a single Cypher query. No markdown fences, no explanation.
 - READ-ONLY: use MATCH, OPTIONAL MATCH, WITH, WHERE, RETURN, ORDER BY, LIMIT, UNWIND, count(), collect().
 - Never use CREATE, MERGE, SET, DELETE, REMOVE, DROP, CALL db.* write procedures.
-- Prefer returning SecurityEvent nodes as `e` plus related User/Instruction fields when listing events.
-- For counts/aggregations, RETURN named scalars (e.g. total, count).
+- Always return individual event rows — NEVER return only an aggregate scalar like count(...) AS total.
+  The answer model will count the rows itself. This ensures event_id, instruction_id, and timestamp
+  are available in every answer.
+- Every RETURN must include: e.event_id, e.timestamp, and the linked instruction_id when available.
+  Get instruction_id via: OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+  then include coalesce(v.instruction_id, '') AS instruction_id in RETURN.
 - User ids are lowercase codes like mo-100, ficc-201, ficc-300 (not display names).
 - "Today" means date(datetime(e.timestamp)) = date().
 - severity ALERT means policy denial; outcome failure on APPROVE/REJECT etc. means failed attempt.
@@ -34,22 +38,35 @@ InstructionVersion has instruction_id as a property.
 Prefer TARGETS_VERSION and return v.instruction_id, or TARGETS and return i.instruction_id. \
 Do not chain HAS_VERSION after TARGETS_VERSION.
 
-Example — instruction for a specific security event:
-MATCH (e:SecurityEvent {event_id: '00000000-0000-0000-0000-000000000001'})
-MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
-RETURN e.event_id, v.instruction_id AS instruction_id
-LIMIT 1
+Example — ALERT events today (always return rows, not just a count):
+MATCH (e:SecurityEvent {severity: 'ALERT'})
+WHERE date(datetime(e.timestamp)) = date()
+OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+RETURN e.event_id, e.timestamp, e.action, e.message,
+       coalesce(v.instruction_id, '') AS instruction_id
+ORDER BY e.timestamp DESC
+LIMIT 50
 
 Example — instructions created today:
 MATCH (e:SecurityEvent {action: 'CREATE', outcome: 'success'})
 WHERE date(datetime(e.timestamp)) = date()
-RETURN count(DISTINCT e) AS total
+OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+RETURN e.event_id, e.timestamp, e.action,
+       coalesce(v.instruction_id, '') AS instruction_id
+ORDER BY e.timestamp DESC
+LIMIT 50
+
+Example — instruction for a specific security event:
+MATCH (e:SecurityEvent {event_id: '00000000-0000-0000-0000-000000000001'})
+OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+RETURN e.event_id, e.timestamp, coalesce(v.instruction_id, '') AS instruction_id
+LIMIT 1
 
 Example — who created instructions rejected by a user:
 MATCH (u:User {user_id: 'ficc-201'})-[:ACTED_AS]->(e:SecurityEvent {action: 'REJECT'})
 MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
-MATCH (creator:User)-[:CREATED]->(v)
-RETURN e.event_id, e.timestamp, creator.user_id AS creator_user_id, v.instruction_id
+OPTIONAL MATCH (creator:User)-[:CREATED]->(v)
+RETURN e.event_id, e.timestamp, creator.user_id AS creator_user_id, v.instruction_id AS instruction_id
 ORDER BY e.timestamp DESC
 LIMIT 20
 """
@@ -59,8 +76,10 @@ lifecycle events.
 
 Answer the user's question using ONLY the provided context (retrieved events and graph query results).
 - Be concise and factual.
+- When the answer involves a list of events (e.g. "how many ALERT events"), always enumerate each one
+  with its event_id, instruction_id, and timestamp. Derive the count from the number of rows listed.
+- Format event details as: event_id=<id> instruction_id=<id> time=<timestamp> action=<action>
 - Cite event ids or instruction ids when relevant.
-- If graph results include aggregate counts, use those numbers directly.
 - When graph results or retrieved events include instruction_id for a named event_id, use that linkage.
 - If context is insufficient, say what is missing.
 - Do not invent users, amounts, or events not present in the context.
