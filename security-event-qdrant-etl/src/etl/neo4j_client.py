@@ -661,6 +661,8 @@ class Neo4jGraphWriter:
         SET   v.status             = $status,
               v.action             = $action,
               v.timestamp          = $timestamp,
+              v.owning_lob         = $owning_lob,
+              v.instruction_type   = $instruction_type,
               v.wire_scope         = $wire_scope,
               v.currency           = $currency,
               v.effective_date     = $effective_date,
