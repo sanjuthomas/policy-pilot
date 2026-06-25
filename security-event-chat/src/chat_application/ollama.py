@@ -235,7 +235,10 @@ Rules:
 - Output ONLY a single Cypher query. No markdown fences, no explanation.
 - READ-ONLY: use MATCH, OPTIONAL MATCH, WITH, WHERE, RETURN, ORDER BY, LIMIT, UNWIND, count(), collect().
 - Never use CREATE, MERGE, SET, DELETE, REMOVE, DROP, CALL db.* write procedures.
-- Always return rows not just aggregate scalars.
+- EVERY query MUST end with a LIMIT clause — without exception. Add LIMIT 1 to pure aggregates.
+- When the question asks "how many", return BOTH the count AND the instruction rows:
+    RETURN count(i) AS total, collect(v.instruction_id)[..10] AS instruction_ids LIMIT 1
+  Or alternatively return individual rows with a high LIMIT so the answer model can count them.
 - The primary node is Instruction (i) and InstructionVersion (v) linked by (i)-[:CURRENT]->(v).
 - InstructionVersion fields: instruction_id, version_number, status, action, currency, wire_scope,
   instruction_type, owning_lob, effective_date, end_date, is_expired, creditor_name,
@@ -288,6 +291,27 @@ MATCH (subordinate:User)-[:APPROVED]->(v)
 WHERE subordinate.supervisor_id = supervisor.user_id
 RETURN supervisor.display_name AS supervisor, subordinate.display_name AS subordinate,
        v.instruction_id, v.status, v.owning_lob
+LIMIT 50
+
+Example — how many STANDING instructions for LOB FX:
+MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion {status: 'STANDING', owning_lob: 'FX'})
+RETURN count(i) AS total, collect(v.instruction_id)[..20] AS instruction_ids
+LIMIT 1
+
+Example — count by status for a LOB:
+MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion {owning_lob: 'FICC'})
+RETURN v.status AS status, count(i) AS total
+ORDER BY total DESC
+LIMIT 20
+
+Example — list all PENDING_APPROVAL instructions:
+MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion {status: 'PENDING_APPROVAL'})
+OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
+OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
+RETURN v.instruction_id, v.owning_lob, v.currency, v.wire_scope,
+       coalesce(creatorUser.display_name, v.creator_user_id, '') AS creator_display,
+       coalesce(approverUser.display_name, v.approver_user_id, '') AS approver_display
+ORDER BY v.owning_lob
 LIMIT 50
 """
 
