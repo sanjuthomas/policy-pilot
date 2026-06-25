@@ -587,4 +587,4 @@ Each application directory has its own README.
 
 ## Demo
 
-![Screen capture](docs/secreen-capture.gif)
+![Screen capture](docs/screen-capture.gif)
