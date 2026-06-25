@@ -94,7 +94,8 @@ class Neo4jGraphWriter:
 
         # All writes in a single transaction for atomicity
         async with self._driver.session() as session:
-            async with session.begin_transaction() as tx:
+            tx = await session.begin_transaction()
+            try:
 
                 # --- SecurityEvent node ---
                 await tx.run(
@@ -128,7 +129,7 @@ class Neo4jGraphWriter:
                     owning_lob=owning_lob,
                 )
 
-                # --- Actor User node + ACTED_AS ---
+                # --- Actor User node + ACTED_AS + BELONGS_TO ---
                 if actor.get("user_id"):
                     await tx.run(
                         """
@@ -140,6 +141,10 @@ class Neo4jGraphWriter:
                         WITH u
                         MATCH (e:SecurityEvent {event_id: $event_id})
                         MERGE (u)-[:ACTED_AS]->(e)
+                        WITH u
+                        WHERE u.lob IS NOT NULL
+                        MERGE (p:ProfitCenter {lob: u.lob})
+                        MERGE (u)-[:BELONGS_TO]->(p)
                         """,
                         user_id=actor["user_id"],
                         title=actor.get("title"),
@@ -176,23 +181,32 @@ class Neo4jGraphWriter:
 
                 # --- InstructionVersion node + relationships ---
                 if version_key and document.instruction_id:
+                    end_date = merged.get("end_date")
                     await tx.run(
                         """
                         MERGE (i:Instruction {instruction_id: $instruction_id})
                         MERGE (v:InstructionVersion {version_key: $version_key})
-                        SET v.instruction_id  = $instruction_id,
-                            v.version_number  = $version_number,
-                            v.status          = $status,
-                            v.instruction_type = $instruction_type,
-                            v.wire_scope      = $wire_scope,
-                            v.owning_lob      = $owning_lob,
-                            v.currency        = $currency,
-                            v.effective_date  = $effective_date,
-                            v.end_date        = $end_date,
-                            v.usage_count     = $usage_count,
-                            v.creator_user_id  = $creator_user_id,
-                            v.approver_user_id = $approver_user_id,
-                            v.rejector_user_id = $rejector_user_id
+                        SET v.instruction_id      = $instruction_id,
+                            v.version_number      = $version_number,
+                            v.status              = $status,
+                            v.instruction_type    = $instruction_type,
+                            v.wire_scope          = $wire_scope,
+                            v.owning_lob          = $owning_lob,
+                            v.currency            = $currency,
+                            v.effective_date      = $effective_date,
+                            v.end_date            = $end_date,
+                            v.usage_count         = $usage_count,
+                            v.creator_user_id     = $creator_user_id,
+                            v.approver_user_id    = $approver_user_id,
+                            v.rejector_user_id    = $rejector_user_id,
+                            v.creditor_name       = $creditor_name,
+                            v.creditor_account_id = $creditor_account_id,
+                            v.debtor_name         = $debtor_name,
+                            v.debtor_account_id   = $debtor_account_id,
+                            v.creditor_agent_bic  = $creditor_agent_bic,
+                            v.is_expired          = CASE
+                                WHEN $end_date IS NOT NULL AND datetime($end_date) < datetime()
+                                THEN true ELSE false END
                         MERGE (i)-[:HAS_VERSION]->(v)
                         """,
                         instruction_id=document.instruction_id,
@@ -204,11 +218,16 @@ class Neo4jGraphWriter:
                         owning_lob=owning_lob,
                         currency=currency,
                         effective_date=merged.get("effective_date"),
-                        end_date=merged.get("end_date"),
+                        end_date=end_date,
                         usage_count=merged.get("usage_count"),
                         creator_user_id=merged.get("creator_user_id"),
                         approver_user_id=merged.get("approver_user_id"),
                         rejector_user_id=merged.get("rejector_user_id"),
+                        creditor_name=merged.get("creditor_name"),
+                        creditor_account_id=merged.get("creditor_account_id"),
+                        debtor_name=merged.get("debtor_name"),
+                        debtor_account_id=merged.get("debtor_account_id"),
+                        creditor_agent_bic=merged.get("creditor_agent_bic"),
                     )
 
                     # CURRENT — only advance if this version is newer
@@ -216,13 +235,12 @@ class Neo4jGraphWriter:
                         """
                         MATCH (i:Instruction {instruction_id: $instruction_id})
                         MATCH (v:InstructionVersion {version_key: $version_key})
-                        OPTIONAL MATCH (i)-[:CURRENT]->(cur:InstructionVersion)
-                        WITH i, v, cur,
+                        OPTIONAL MATCH (i)-[r:CURRENT]->(cur:InstructionVersion)
+                        WITH i, v, r, cur,
                              coalesce(cur.version_number, -1) AS cur_num
                         WHERE $version_number > cur_num
-                        FOREACH (_ IN CASE WHEN cur IS NOT NULL THEN [1] ELSE [] END |
-                            MATCH (i)-[r:CURRENT]->(cur) DELETE r
-                        )
+                        DELETE r
+                        WITH i, v
                         MERGE (i)-[:CURRENT]->(v)
                         """,
                         instruction_id=document.instruction_id,
@@ -265,7 +283,26 @@ class Neo4jGraphWriter:
                             owning_lob=owning_lob,
                         )
 
-                    # Creator User + CREATED
+                    # CONFLICTS_WITH — versions sharing same creditor account + currency
+                    if merged.get("creditor_account_id") and currency:
+                        await tx.run(
+                            """
+                            MATCH (v:InstructionVersion {version_key: $version_key})
+                            MATCH (other:InstructionVersion)
+                            WHERE other.creditor_account_id = $creditor_account_id
+                              AND other.currency = $currency
+                              AND other.instruction_id <> $instruction_id
+                              AND other.status IN ['STANDING', 'SINGLE_USE', 'PENDING']
+                            MERGE (v)-[:CONFLICTS_WITH]->(other)
+                            MERGE (other)-[:CONFLICTS_WITH]->(v)
+                            """,
+                            version_key=version_key,
+                            creditor_account_id=merged["creditor_account_id"],
+                            currency=currency,
+                            instruction_id=document.instruction_id,
+                        )
+
+                    # Creator User + CREATED + BELONGS_TO
                     if created_by.get("user_id"):
                         await tx.run(
                             """
@@ -276,6 +313,10 @@ class Neo4jGraphWriter:
                             WITH u
                             MATCH (v:InstructionVersion {version_key: $version_key})
                             MERGE (u)-[:CREATED]->(v)
+                            WITH u
+                            WHERE u.lob IS NOT NULL
+                            MERGE (p:ProfitCenter {lob: u.lob})
+                            MERGE (u)-[:BELONGS_TO]->(p)
                             """,
                             user_id=created_by["user_id"],
                             title=created_by.get("title"),
@@ -294,7 +335,7 @@ class Neo4jGraphWriter:
                                 supervisor_id=created_by["supervisor_id"],
                             )
 
-                    # Approver User + APPROVED
+                    # Approver User + APPROVED + APPROVED_FOR + BELONGS_TO
                     if approved_by.get("user_id"):
                         await tx.run(
                             """
@@ -305,6 +346,10 @@ class Neo4jGraphWriter:
                             WITH u
                             MATCH (v:InstructionVersion {version_key: $version_key})
                             MERGE (u)-[:APPROVED]->(v)
+                            WITH u
+                            WHERE u.lob IS NOT NULL
+                            MERGE (p:ProfitCenter {lob: u.lob})
+                            MERGE (u)-[:BELONGS_TO]->(p)
                             """,
                             user_id=approved_by["user_id"],
                             title=approved_by.get("title"),
@@ -322,8 +367,19 @@ class Neo4jGraphWriter:
                                 user_id=approved_by["user_id"],
                                 supervisor_id=approved_by["supervisor_id"],
                             )
+                        # APPROVED_FOR — approver → creator (cross-approval detection)
+                        if created_by.get("user_id") and approved_by["user_id"] != created_by["user_id"]:
+                            await tx.run(
+                                """
+                                MATCH (approver:User {user_id: $approver_id})
+                                MATCH (creator:User {user_id: $creator_id})
+                                MERGE (approver)-[:APPROVED_FOR]->(creator)
+                                """,
+                                approver_id=approved_by["user_id"],
+                                creator_id=created_by["user_id"],
+                            )
 
-                    # Rejector User + REJECTED
+                    # Rejector User + REJECTED + BELONGS_TO
                     if rejected_by.get("user_id"):
                         await tx.run(
                             """
@@ -334,6 +390,10 @@ class Neo4jGraphWriter:
                             WITH u
                             MATCH (v:InstructionVersion {version_key: $version_key})
                             MERGE (u)-[:REJECTED]->(v)
+                            WITH u
+                            WHERE u.lob IS NOT NULL
+                            MERGE (p:ProfitCenter {lob: u.lob})
+                            MERGE (u)-[:BELONGS_TO]->(p)
                             """,
                             user_id=rejected_by["user_id"],
                             title=rejected_by.get("title"),
@@ -377,6 +437,9 @@ class Neo4jGraphWriter:
                     )
 
                 await tx.commit()
+            except Exception:
+                await tx.rollback()
+                raise
 
     async def graph_stats(self) -> dict[str, int]:
         if self._driver is None:

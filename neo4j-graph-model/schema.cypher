@@ -32,3 +32,21 @@ FOR (e:SecurityEvent) ON (e.action);
 
 CREATE INDEX user_lob IF NOT EXISTS
 FOR (u:User) ON (u.lob);
+
+CREATE INDEX instruction_version_creditor_account IF NOT EXISTS
+FOR (v:InstructionVersion) ON (v.creditor_account_id);
+
+CREATE INDEX instruction_version_debtor_account IF NOT EXISTS
+FOR (v:InstructionVersion) ON (v.debtor_account_id);
+
+CREATE INDEX instruction_version_currency IF NOT EXISTS
+FOR (v:InstructionVersion) ON (v.currency);
+
+CREATE INDEX instruction_version_is_expired IF NOT EXISTS
+FOR (v:InstructionVersion) ON (v.is_expired);
+
+CREATE INDEX instruction_version_effective_date IF NOT EXISTS
+FOR (v:InstructionVersion) ON (v.effective_date);
+
+CREATE INDEX instruction_version_end_date IF NOT EXISTS
+FOR (v:InstructionVersion) ON (v.end_date);

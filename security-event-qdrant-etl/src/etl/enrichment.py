@@ -35,6 +35,12 @@ def build_merged_context(
     approved_by = instr.get("approved_by") or {}
     rejected_by = instr.get("rejected_by") or {}
 
+    creditor_account = instr.get("creditor_account") or {}
+    debtor_account = instr.get("debtor_account") or {}
+    creditor = instr.get("creditor") or {}
+    debtor = instr.get("debtor") or {}
+    creditor_agent_fi = (instr.get("creditor_agent") or {}).get("financial_institution") or {}
+
     return {
         "timestamp": security_event.get("timestamp"),
         "severity": security_event.get("severity"),
@@ -59,6 +65,13 @@ def build_merged_context(
         "effective_date": instr.get("effective_date"),
         "end_date": instr.get("end_date"),
         "usage_count": instr.get("usage_count"),
+        # Counterparty details — creditor and debtor for duplicate-route and conflict detection
+        "creditor_name": creditor.get("name"),
+        "creditor_account_id": creditor_account.get("identification"),
+        "creditor_account_scheme": creditor_account.get("identification_scheme"),
+        "debtor_name": debtor.get("name"),
+        "debtor_account_id": debtor_account.get("identification"),
+        "creditor_agent_bic": creditor_agent_fi.get("identification"),
         # Instruction parties (full detail for graph traversal queries)
         "creator_user_id": created_by.get("user_id"),
         "creator_title": created_by.get("title"),
@@ -97,6 +110,11 @@ def build_search_text(
         ctx.get("instruction_type") or "",
         ctx.get("wire_scope", ""),
         ctx.get("currency", ""),
+        ctx.get("creditor_name") or "",
+        ctx.get("creditor_account_id") or "",
+        ctx.get("debtor_name") or "",
+        ctx.get("debtor_account_id") or "",
+        ctx.get("creditor_agent_bic") or "",
         ctx.get("creator_user_id", ""),
         ctx.get("creator_title", ""),
         ctx.get("creator_lob") or "",

@@ -19,11 +19,21 @@ Rules:
 - READ-ONLY: use MATCH, OPTIONAL MATCH, WITH, WHERE, RETURN, ORDER BY, LIMIT, UNWIND, count(), collect().
 - Never use CREATE, MERGE, SET, DELETE, REMOVE, DROP, CALL db.* write procedures.
 - Always return individual event rows — NEVER return only an aggregate scalar like count(...) AS total.
-  The answer model will count the rows itself. This ensures event_id, instruction_id, and timestamp
-  are available in every answer.
-- Every RETURN must include: e.event_id, e.timestamp, and the linked instruction_id when available.
-  Get instruction_id via: OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
-  then include coalesce(v.instruction_id, '') AS instruction_id in RETURN.
+  The answer model will count the rows itself. This ensures all detail fields are available per row.
+- Every RETURN that involves a SecurityEvent (e) MUST include ALL of the following columns:
+    e.event_id
+    e.timestamp
+    e.action
+    e.message
+    coalesce(v.instruction_id, '') AS instruction_id
+    coalesce(e.owning_lob, v.owning_lob, '') AS lob
+    actor.user_id AS actor_user_id
+    coalesce(v.creator_user_id, '') AS creator_user_id
+    coalesce(v.approver_user_id, '') AS approver_user_id
+  To populate actor.user_id always add:
+    OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
+  To populate instruction_id, lob, creator, approver always add:
+    OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
 - User ids are lowercase codes like mo-100, ficc-201, ficc-300 (not display names).
 - "Today" means date(datetime(e.timestamp)) = date().
 - severity ALERT means policy denial; outcome failure on APPROVE/REJECT etc. means failed attempt.
@@ -42,8 +52,13 @@ Example — ALERT events today (always return rows, not just a count):
 MATCH (e:SecurityEvent {severity: 'ALERT'})
 WHERE date(datetime(e.timestamp)) = date()
 OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
 RETURN e.event_id, e.timestamp, e.action, e.message,
-       coalesce(v.instruction_id, '') AS instruction_id
+       coalesce(v.instruction_id, '') AS instruction_id,
+       coalesce(e.owning_lob, v.owning_lob, '') AS lob,
+       actor.user_id AS actor_user_id,
+       coalesce(v.creator_user_id, '') AS creator_user_id,
+       coalesce(v.approver_user_id, '') AS approver_user_id
 ORDER BY e.timestamp DESC
 LIMIT 50
 
@@ -51,26 +66,123 @@ Example — instructions created today:
 MATCH (e:SecurityEvent {action: 'CREATE', outcome: 'success'})
 WHERE date(datetime(e.timestamp)) = date()
 OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
 RETURN e.event_id, e.timestamp, e.action, e.message,
-       coalesce(v.instruction_id, '') AS instruction_id
+       coalesce(v.instruction_id, '') AS instruction_id,
+       coalesce(e.owning_lob, v.owning_lob, '') AS lob,
+       actor.user_id AS actor_user_id,
+       coalesce(v.creator_user_id, '') AS creator_user_id,
+       coalesce(v.approver_user_id, '') AS approver_user_id
 ORDER BY e.timestamp DESC
 LIMIT 50
 
 Example — instruction for a specific security event:
 MATCH (e:SecurityEvent {event_id: '00000000-0000-0000-0000-000000000001'})
 OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
-RETURN e.event_id, e.timestamp, e.message,
-       coalesce(v.instruction_id, '') AS instruction_id
+OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
+RETURN e.event_id, e.timestamp, e.action, e.message,
+       coalesce(v.instruction_id, '') AS instruction_id,
+       coalesce(e.owning_lob, v.owning_lob, '') AS lob,
+       actor.user_id AS actor_user_id,
+       coalesce(v.creator_user_id, '') AS creator_user_id,
+       coalesce(v.approver_user_id, '') AS approver_user_id
 LIMIT 1
 
 Example — who created instructions rejected by a user:
 MATCH (u:User {user_id: 'ficc-201'})-[:ACTED_AS]->(e:SecurityEvent {action: 'REJECT'})
-MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
-OPTIONAL MATCH (creator:User)-[:CREATED]->(v)
-RETURN e.event_id, e.timestamp, e.message, creator.user_id AS creator_user_id,
-       v.instruction_id AS instruction_id
+OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
+RETURN e.event_id, e.timestamp, e.action, e.message,
+       coalesce(v.instruction_id, '') AS instruction_id,
+       coalesce(e.owning_lob, v.owning_lob, '') AS lob,
+       actor.user_id AS actor_user_id,
+       coalesce(v.creator_user_id, '') AS creator_user_id,
+       coalesce(v.approver_user_id, '') AS approver_user_id
 ORDER BY e.timestamp DESC
 LIMIT 20
+
+Example — cross-approval conflict (users who approved each other's instructions):
+MATCH (approver:User)-[:APPROVED]->(v1:InstructionVersion)<-[:CREATED]-(creator:User)
+MATCH (creator)-[:APPROVED]->(v2:InstructionVersion)<-[:CREATED]-(approver)
+WHERE approver.user_id <> creator.user_id
+OPTIONAL MATCH (e1:SecurityEvent)-[:TARGETS_VERSION]->(v1) WHERE e1.action = 'APPROVE'
+OPTIONAL MATCH (e2:SecurityEvent)-[:TARGETS_VERSION]->(v2) WHERE e2.action = 'APPROVE'
+RETURN approver.user_id AS approver_user_id, creator.user_id AS creator_user_id,
+       v1.instruction_id AS instruction_approved, v1.owning_lob AS lob,
+       e1.event_id, e1.timestamp AS approved_at, e1.message,
+       v2.instruction_id AS reciprocal_instruction, e2.timestamp AS reciprocal_at
+ORDER BY e1.timestamp DESC
+LIMIT 20
+
+Example — instructions sharing the same creditor account (potential duplicate routes / CONFLICTS_WITH):
+MATCH (v1:InstructionVersion)-[:CONFLICTS_WITH]->(v2:InstructionVersion)
+WHERE v1.version_key < v2.version_key
+OPTIONAL MATCH (e:SecurityEvent)-[:TARGETS_VERSION]->(v1)
+OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
+RETURN v1.instruction_id AS instruction_a, v2.instruction_id AS instruction_b,
+       v1.creditor_account_id AS shared_creditor_account,
+       v1.currency AS currency, v1.status AS status_a, v2.status AS status_b,
+       coalesce(v1.owning_lob, '') AS lob,
+       e.event_id, e.timestamp, e.message,
+       actor.user_id AS actor_user_id,
+       coalesce(v1.creator_user_id, '') AS creator_user_id,
+       coalesce(v1.approver_user_id, '') AS approver_user_id
+ORDER BY e.timestamp DESC
+LIMIT 20
+
+Example — full lifecycle timeline of a specific instruction (replace UUID):
+MATCH (e:SecurityEvent)-[:TARGETS]->(i:Instruction {instruction_id: '00000000-0000-0000-0000-000000000001'})
+OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
+RETURN e.event_id, e.timestamp, e.action, e.outcome, e.message,
+       coalesce(v.instruction_id, '') AS instruction_id,
+       coalesce(e.owning_lob, v.owning_lob, '') AS lob,
+       actor.user_id AS actor_user_id,
+       coalesce(v.creator_user_id, '') AS creator_user_id,
+       coalesce(v.approver_user_id, '') AS approver_user_id
+ORDER BY e.timestamp ASC
+LIMIT 50
+
+Example — all actions by a specific user this week:
+MATCH (u:User {user_id: 'fx-201'})-[:ACTED_AS]->(e:SecurityEvent)
+WHERE datetime(e.timestamp) > datetime() - duration({days: 7})
+OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
+RETURN e.event_id, e.timestamp, e.action, e.outcome, e.message,
+       coalesce(v.instruction_id, '') AS instruction_id,
+       coalesce(e.owning_lob, v.owning_lob, '') AS lob,
+       actor.user_id AS actor_user_id,
+       coalesce(v.creator_user_id, '') AS creator_user_id,
+       coalesce(v.approver_user_id, '') AS approver_user_id
+ORDER BY e.timestamp DESC
+LIMIT 50
+
+Example — PENDING instructions by LOB / profit center:
+MATCH (v:InstructionVersion {status: 'PENDING'})
+OPTIONAL MATCH (e:SecurityEvent)-[:TARGETS_VERSION]->(v) WHERE e.action = 'SUBMIT'
+OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
+RETURN v.instruction_id AS instruction_id, v.owning_lob AS lob,
+       v.currency AS currency, v.wire_scope AS wire_scope,
+       e.event_id, e.timestamp, e.message,
+       actor.user_id AS actor_user_id,
+       coalesce(v.creator_user_id, '') AS creator_user_id,
+       coalesce(v.approver_user_id, '') AS approver_user_id
+ORDER BY v.owning_lob, e.timestamp DESC
+LIMIT 50
+
+Example — expired instructions (end_date in the past):
+MATCH (v:InstructionVersion {is_expired: true})
+WHERE v.status NOT IN ['DELETED', 'REJECTED', 'USED']
+OPTIONAL MATCH (e:SecurityEvent)-[:TARGETS_VERSION]->(v)
+OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
+RETURN v.instruction_id AS instruction_id, v.owning_lob AS lob,
+       v.status AS status, v.end_date AS end_date,
+       e.event_id, e.timestamp, e.message,
+       actor.user_id AS actor_user_id,
+       coalesce(v.creator_user_id, '') AS creator_user_id,
+       coalesce(v.approver_user_id, '') AS approver_user_id
+ORDER BY v.end_date ASC
+LIMIT 50
 """
 
 ANSWER_SYSTEM_PROMPT = """You are a security operations analyst assistant for cash settlement instruction \
@@ -78,12 +190,21 @@ lifecycle events.
 
 Answer the user's question using ONLY the provided context (retrieved events and graph query results).
 - Be concise and factual.
-- When the answer involves a list of events (e.g. "how many ALERT events"), always enumerate each one
-  with its message, event_id, instruction_id, and timestamp. Derive the count from the number of rows.
-- Format each event as: "<message>" (event_id=<id> instruction_id=<id> time=<timestamp>)
-  Example: "Policy denied VIEW on instruction 18016bb9-... by fx-201" (event_id=abc... instruction_id=18016bb9-... time=2026-06-24T10:32:00)
+- When the answer involves a list of events, always enumerate each one. Derive the count from the number of rows.
+- Format each event as:
+  "<message>" (event_id=<id> instruction_id=<id> time=<timestamp> actor=<actor_user_id> lob=<lob> creator=<creator_user_id> approver=<approver_user_id>)
+  Omit a field only if it is genuinely absent (empty string or null) in the context — never invent values.
+  Example:
+  "Policy denied VIEW on instruction 18016bb9-... by fx-201"
+  (event_id=abc... instruction_id=18016bb9-... time=2026-06-24T10:32:00 actor=fx-201 lob=FX creator=mo-100 approver=ficc-201)
 - Cite event ids or instruction ids when relevant.
 - When graph results or retrieved events include instruction_id for a named event_id, use that linkage.
+- For cross-approval conflicts, clearly name both parties and both instructions involved.
+- For CONFLICTS_WITH results, explain that two instructions share the same creditor account and currency,
+  which may indicate duplicate settlement routes.
+- For lifecycle/timeline results, present events in chronological order with actor and action.
+- For LOB summaries, group results by owning_lob when multiple LOBs appear.
+- For expired instructions, note the end_date that has passed.
 - If context is insufficient, say what is missing.
 - Do not invent users, amounts, or events not present in the context.
 """
