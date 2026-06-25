@@ -3,7 +3,7 @@ FROM python:3.12-slim
 WORKDIR /app
 
 COPY pyproject.toml .
-COPY security_event_chat ./security_event_chat
+COPY src ./src
 
 RUN pip install --no-cache-dir .
 

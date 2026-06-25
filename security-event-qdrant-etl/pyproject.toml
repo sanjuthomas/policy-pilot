@@ -15,12 +15,12 @@ dependencies = [
 ]
 
 [project.scripts]
-security-event-search = "security_event_qdrant_etl.main:run"
-security-event-monitor = "security_event_qdrant_etl.main:run"
+security-event-search = "etl.main:run"
+security-event-monitor = "etl.main:run"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["security_event_qdrant_etl"]
+packages = ["src/etl"]
