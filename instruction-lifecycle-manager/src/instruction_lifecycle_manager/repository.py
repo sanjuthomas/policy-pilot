@@ -1,6 +1,8 @@
 from datetime import datetime
 from typing import Any
 
+from motor.motor_asyncio import AsyncIOMotorClientSession
+
 from instruction_lifecycle_manager.database import get_database
 from instruction_lifecycle_manager.models.instruction import CashSettlementInstruction
 from instruction_lifecycle_manager.storage import (
@@ -22,7 +24,10 @@ class InstructionRepository:
         return get_database()[self.collection_name]
 
     async def insert_initial(
-        self, instruction: CashSettlementInstruction
+        self,
+        instruction: CashSettlementInstruction,
+        *,
+        session: AsyncIOMotorClientSession | None = None,
     ) -> VersionedInstruction:
         now = datetime.utcnow()
         document = versioned_instruction_to_document(
@@ -30,15 +35,19 @@ class InstructionRepository:
             version_number=1,
             valid_in=now,
         )
-        await self.collection.insert_one(document)
+        await self.collection.insert_one(document, session=session)
         return document_to_versioned_instruction(document)
 
     async def append_version(
-        self, instruction: CashSettlementInstruction
+        self,
+        instruction: CashSettlementInstruction,
+        *,
+        session: AsyncIOMotorClientSession | None = None,
     ) -> VersionedInstruction:
         now = datetime.utcnow()
         current = await self.collection.find_one(
-            {"instruction_id": instruction.instruction_id, "out": None}
+            {"instruction_id": instruction.instruction_id, "out": None},
+            session=session,
         )
         if current is None:
             raise InstructionNotFoundError(instruction.instruction_id)
@@ -48,6 +57,7 @@ class InstructionRepository:
         await self.collection.update_one(
             {"_id": current["_id"]},
             {"$set": {"out": now.isoformat() + "Z"}},
+            session=session,
         )
 
         document = versioned_instruction_to_document(
@@ -55,7 +65,7 @@ class InstructionRepository:
             version_number=next_version,
             valid_in=now,
         )
-        await self.collection.insert_one(document)
+        await self.collection.insert_one(document, session=session)
         return document_to_versioned_instruction(document)
 
     async def get_current(self, instruction_id: str) -> VersionedInstruction:

@@ -1,4 +1,8 @@
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
+
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorClientSession, AsyncIOMotorDatabase
+from pymongo import ReadPreference
 
 from instruction_lifecycle_manager.config import settings
 
@@ -18,6 +22,15 @@ def get_database() -> AsyncIOMotorDatabase:
 
 def get_security_events_database() -> AsyncIOMotorDatabase:
     return get_client()[settings.security_events_database]
+
+
+@asynccontextmanager
+async def mongo_transaction() -> AsyncIterator[AsyncIOMotorClientSession]:
+    """Multi-document transaction (requires MongoDB replica set)."""
+    client = get_client()
+    async with await client.start_session() as session:
+        async with session.start_transaction(read_preference=ReadPreference.PRIMARY):
+            yield session
 
 
 async def connect() -> None:

@@ -1,5 +1,7 @@
 from typing import Any
 
+from motor.motor_asyncio import AsyncIOMotorClientSession
+
 from instruction_lifecycle_manager.config import settings
 from instruction_lifecycle_manager.database import get_security_events_database
 from instruction_lifecycle_manager.models.api import Subject
@@ -18,10 +20,22 @@ class SecurityEventRepository:
     def collection(self):
         return get_security_events_database()[self.collection_name]
 
+    async def insert_document(
+        self,
+        document: dict[str, Any],
+        *,
+        session: AsyncIOMotorClientSession | None = None,
+    ) -> dict[str, Any]:
+        await self.collection.insert_one(document, session=session)
+        return document
+
+    async def publish(self, document: dict[str, Any]) -> None:
+        await kafka_publisher.publish(document)
+
     async def insert(self, event: SecurityEvent) -> SecurityEvent:
         document = event.model_dump(mode="json")
-        await self.collection.insert_one(document)
-        await kafka_publisher.publish(document)
+        await self.insert_document(document)
+        await self.publish(document)
         return event
 
     async def record_authorized_action(

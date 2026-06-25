@@ -55,6 +55,8 @@ No `instructed_amount`, `payment_identification`, or remittance fields.
 
 Every authorized create/read/mutation emits a document to MongoDB `security_events.instruction-lifecycle-manager` and publishes to Kafka topic `instruction-security-events`.
 
+**Instruction mutations** (create, update, submit, approve, etc.) write the instruction version and the matching security event in a **single MongoDB transaction** (replica set required). Kafka publish happens only after the transaction commits.
+
 | Outcome | Severity | When |
 |---------|----------|------|
 | Authorized action | `INFO` | OPA allowed |

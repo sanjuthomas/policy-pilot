@@ -21,9 +21,11 @@ from instruction_lifecycle_manager.models.instruction import (
     UserReference,
 )
 from instruction_lifecycle_manager.config import settings
+from instruction_lifecycle_manager.database import mongo_transaction
 from instruction_lifecycle_manager.opa import OpaClient, PolicyDeniedError
 from instruction_lifecycle_manager.repository import InstructionNotFoundError, InstructionRepository
 from instruction_lifecycle_manager.security_event_repository import SecurityEventRepository
+from instruction_lifecycle_manager.models.security_event import SecurityEvent
 from instruction_lifecycle_manager.storage import VersionedInstruction
 
 
@@ -210,6 +212,43 @@ class InstructionService:
             )
         )
 
+    async def _save_instruction_with_security_event(
+        self,
+        instruction: CashSettlementInstruction,
+        action: LifecycleAction,
+        subject: Subject,
+        *,
+        details: dict | None = None,
+        initial: bool = False,
+    ) -> VersionedInstruction:
+        """Persist instruction version and matching security event atomically."""
+        security_event_doc: dict | None = None
+
+        async with mongo_transaction() as session:
+            if initial:
+                saved = await self.repository.insert_initial(instruction, session=session)
+            else:
+                saved = await self.repository.append_version(instruction, session=session)
+
+            if self._should_record_security_event(subject):
+                event = SecurityEvent.authorized_action(
+                    action,
+                    subject,
+                    saved.instruction,
+                    version_number=saved.version_number,
+                    details=details,
+                )
+                security_event_doc = event.model_dump(mode="json")
+                await self.security_events.insert_document(
+                    security_event_doc,
+                    session=session,
+                )
+
+        if security_event_doc is not None:
+            await self.security_events.publish(security_event_doc)
+
+        return saved
+
     async def _persist_new_version(
         self,
         instruction: CashSettlementInstruction,
@@ -228,15 +267,12 @@ class InstructionService:
                 security_event_details=details,
             )
         self._record_event(instruction, action, subject, details)
-        saved = await self.repository.append_version(instruction)
-        await self._record_authorized_action(
+        return await self._save_instruction_with_security_event(
+            instruction,
             action,
             subject,
-            saved.instruction,
-            version_number=saved.version_number,
             details=details,
         )
-        return saved
 
     async def create(
         self, request: CreateInstructionRequest, subject: Subject
@@ -249,12 +285,11 @@ class InstructionService:
             record_security_event=True,
         )
         self._record_event(instruction, LifecycleAction.CREATE, subject)
-        saved = await self.repository.insert_initial(instruction)
-        await self._record_authorized_action(
+        saved = await self._save_instruction_with_security_event(
+            instruction,
             LifecycleAction.CREATE,
             subject,
-            saved.instruction,
-            version_number=saved.version_number,
+            initial=True,
         )
         return _to_response(saved)
 

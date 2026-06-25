@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    mongodb_uri: str = "mongodb://localhost:27017"
+    mongodb_uri: str = "mongodb://localhost:27017/?replicaSet=rs0"
     mongodb_database: str = "ssi_cash_instructions"
     security_events_database: str = "security_events"
     security_events_collection: str = "instruction-lifecycle-manager"
