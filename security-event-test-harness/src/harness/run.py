@@ -5,9 +5,17 @@ import sys
 
 from harness.actions import (
     approve_instructions as approve_action,
+)
+from harness.actions import (
     create_instructions as create_action,
+)
+from harness.actions import (
     reject_instructions as reject_action,
+)
+from harness.actions import (
     run_policy_scenario,
+)
+from harness.actions import (
     submit_instructions as submit_action,
 )
 from harness.config import Settings

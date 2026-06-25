@@ -1,7 +1,11 @@
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorClientSession, AsyncIOMotorDatabase
+from motor.motor_asyncio import (
+    AsyncIOMotorClient,
+    AsyncIOMotorClientSession,
+    AsyncIOMotorDatabase,
+)
 from pymongo import ReadPreference
 
 from ilm.config import settings

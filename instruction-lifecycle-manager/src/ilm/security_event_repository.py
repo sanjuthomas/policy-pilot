@@ -4,10 +4,10 @@ from motor.motor_asyncio import AsyncIOMotorClientSession
 
 from ilm.config import settings
 from ilm.database import get_security_events_database
+from ilm.kafka_publisher import kafka_publisher
 from ilm.models.api import Subject
 from ilm.models.enums import LifecycleAction
 from ilm.models.instruction import CashSettlementInstruction
-from ilm.kafka_publisher import kafka_publisher
 from ilm.models.security_event import SecurityEvent
 
 

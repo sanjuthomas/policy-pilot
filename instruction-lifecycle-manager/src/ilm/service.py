@@ -1,6 +1,8 @@
 from datetime import datetime
 from uuid import uuid4
 
+from ilm.config import settings
+from ilm.database import mongo_transaction
 from ilm.models.api import (
     CreateInstructionRequest,
     DeleteInstructionRequest,
@@ -20,12 +22,10 @@ from ilm.models.instruction import (
     LifecycleEvent,
     UserReference,
 )
-from ilm.config import settings
-from ilm.database import mongo_transaction
-from ilm.opa import OpaClient, PolicyDeniedError
-from ilm.repository import InstructionNotFoundError, InstructionRepository
-from ilm.security_event_repository import SecurityEventRepository
 from ilm.models.security_event import SecurityEvent
+from ilm.opa import OpaClient, PolicyDeniedError
+from ilm.repository import InstructionRepository
+from ilm.security_event_repository import SecurityEventRepository
 from ilm.storage import VersionedInstruction
 
 

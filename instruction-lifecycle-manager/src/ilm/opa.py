@@ -3,9 +3,9 @@ from typing import Any
 import httpx
 
 from ilm.config import settings
+from ilm.models.api import Subject
 from ilm.models.enums import LifecycleAction
 from ilm.models.instruction import CashSettlementInstruction
-from ilm.models.api import Subject
 
 
 class PolicyDeniedError(Exception):

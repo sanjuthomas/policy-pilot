@@ -1,5 +1,4 @@
 import re
-
 from enum import StrEnum
 
 # FICC, FX, or desk codes such as DESK_RATES, DESK_CREDIT

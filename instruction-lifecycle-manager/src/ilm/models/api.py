@@ -2,6 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from ilm.models.enums import InstructionType, WireScope
 from ilm.models.instruction import (
     AgentWithAccount,
     BranchAndFinancialInstitutionIdentification,
@@ -13,7 +14,6 @@ from ilm.models.instruction import (
     PartyIdentification,
     UserReference,
 )
-from ilm.models.enums import InstructionType, WireScope
 
 
 class Subject(BaseModel):

@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from neo4j import AsyncGraphDatabase, AsyncDriver
+from neo4j import AsyncDriver, AsyncGraphDatabase
 
 from etl.config import settings
 from etl.enrichment import EnrichedSecurityEventDocument

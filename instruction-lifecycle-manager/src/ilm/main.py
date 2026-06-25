@@ -16,9 +16,12 @@ from ilm.security_ui_routes import (
     SECURITY_EVENTS_STATIC_DIR,
     security_event_broadcaster,
     security_event_ui_store,
+)
+from ilm.security_ui_routes import (
     router as security_ui_router,
 )
-from ilm.ui_routes import STATIC_DIR, instruction_broadcaster, router as ui_router
+from ilm.ui_routes import STATIC_DIR, instruction_broadcaster
+from ilm.ui_routes import router as ui_router
 from ilm.ui_watcher import InstructionWatcher
 
 UI_STATIC_DIR = STATIC_DIR
