@@ -6,11 +6,15 @@ import logging
 from typing import Any
 
 from aiokafka import AIOKafkaConsumer
+from neo4j.exceptions import TransientError
 
 from etl.config import settings
 from etl.instruction_pipeline import InstructionPipeline
 
 logger = logging.getLogger(__name__)
+
+_MAX_RETRIES = 5
+_RETRY_BASE_DELAY = 0.2  # seconds
 
 
 class InstructionKafkaConsumer:
@@ -59,15 +63,34 @@ class InstructionKafkaConsumer:
         assert self._consumer is not None
         try:
             async for message in self._consumer:
-                try:
-                    await self._handle_message(message.value)
-                    await self._consumer.commit()
-                except Exception:
-                    logger.exception(
-                        "failed to process instruction fact offset=%s partition=%s — skipping",
-                        message.offset,
-                        message.partition,
-                    )
+                for attempt in range(1, _MAX_RETRIES + 1):
+                    try:
+                        await self._handle_message(message.value)
+                        await self._consumer.commit()
+                        break
+                    except TransientError as exc:
+                        if attempt < _MAX_RETRIES:
+                            delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                            logger.warning(
+                                "Neo4j transient error (deadlock) offset=%s partition=%s "
+                                "attempt=%s/%s — retrying in %.2fs: %s",
+                                message.offset, message.partition,
+                                attempt, _MAX_RETRIES, delay, exc,
+                            )
+                            await asyncio.sleep(delay)
+                        else:
+                            logger.exception(
+                                "Neo4j transient error persists after %s retries "
+                                "offset=%s partition=%s — skipping",
+                                _MAX_RETRIES, message.offset, message.partition,
+                            )
+                    except Exception:
+                        logger.exception(
+                            "failed to process instruction fact offset=%s partition=%s — skipping",
+                            message.offset,
+                            message.partition,
+                        )
+                        break
         except asyncio.CancelledError:
             raise
 
