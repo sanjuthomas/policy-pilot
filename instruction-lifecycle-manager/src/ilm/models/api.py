@@ -27,6 +27,13 @@ class Subject(BaseModel):
     roles: list[str] = Field(min_length=1)
     groups: list[str] = Field(default_factory=list)
     supervisor_id: str | None = None
+    # Populated when the request arrives via an On-Behalf-Of delegation
+    # (e.g. payment-service calling ILM on behalf of a human user).
+    delegated_by: str | None = None
+    # Roles held by the delegating service account.  Empty for direct calls.
+    # OPA policies can gate actions on specific service roles (e.g. INSTRUCTION_MARKER)
+    # so that certain operations can ONLY be invoked via trusted service delegation.
+    delegated_by_roles: list[str] = Field(default_factory=list)
 
     def to_opa_subject(self) -> dict:
         payload = {
@@ -39,6 +46,9 @@ class Subject(BaseModel):
             payload["lob"] = self.lob
         if self.supervisor_id is not None:
             payload["supervisor_id"] = self.supervisor_id
+        # Always include delegated_by_roles so OPA can rely on its presence.
+        # It is an empty list for non-OBO calls, which causes role checks to fail.
+        payload["delegated_by_roles"] = self.delegated_by_roles
         return payload
 
 

@@ -4,6 +4,23 @@ has_role(role) if {
     role in input.subject.roles
 }
 
+# ---------------------------------------------------------------------------
+# INSTRUCTION_VIEWER — implicit grant rules
+#
+# A subject has instruction viewer access if they hold any of:
+#   • INSTRUCTION_VIEWER  — explicit read-only grant
+#   • INSTRUCTION_CREATOR — creators can always read instructions
+#   • INSTRUCTION_APPROVER — approvers can always read instructions
+#   • PAYMENT_CREATOR — payment staff must be able to read instructions
+#                       to validate them before creating a payment
+# ---------------------------------------------------------------------------
+
+has_viewer_access if { has_role("INSTRUCTION_VIEWER") }
+has_viewer_access if { has_role("INSTRUCTION_CREATOR") }
+has_viewer_access if { has_role("INSTRUCTION_APPROVER") }
+has_viewer_access if { has_role("PAYMENT_CREATOR") }
+has_viewer_access if { has_role("FUNDING_APPROVER") }
+
 is_middle_office if {
     "MIDDLE_OFFICE" in input.subject.groups
 }

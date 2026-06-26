@@ -7,7 +7,13 @@ import time
 from typing import Any
 
 from chat_application.config import settings
-from chat_application.cypher import extract_uuids, load_graph_schema
+from chat_application.cypher import (
+    extract_uuids,
+    load_graph_schema,
+    normalize_read_only_cypher,
+    plan_graph_queries,
+    validate_read_only_cypher,
+)
 from chat_application.models import ChatMessage, ChatResponse, SearchMode, SourceHit
 from chat_application.neo4j import Neo4jClient
 from chat_application.ollama import OllamaClient
@@ -39,9 +45,10 @@ class RagService:
     ) -> ChatResponse:
         """Run the full RAG pipeline.
 
-        mode="events"       — searches only security_event points in Qdrant
-        mode="instructions" — searches only instruction_state points in Qdrant
-        mode="both"         — searches all points (no source filter)
+        mode="events"       — instruction + payment security events in Qdrant
+        mode="instructions" — instruction_state points only
+        mode="payments"     — payment_fact points only
+        mode="all"          — all points (no source filter)
         """
         started = time.perf_counter()
         limit = settings.retrieval_limit
@@ -49,9 +56,11 @@ class RagService:
         # Map mode to Qdrant source filter tag
         qdrant_source: str | None
         if mode == "events":
-            qdrant_source = "security_event"
+            qdrant_source = "security_events"
         elif mode == "instructions":
             qdrant_source = "instruction_state"
+        elif mode == "payments":
+            qdrant_source = "payment"
         else:
             qdrant_source = None  # no filter — search everything
 
@@ -177,19 +186,47 @@ class RagService:
     async def _search_graph(
         self, question: str, *, mode: SearchMode = "events"
     ) -> dict[str, Any]:
+        planned = plan_graph_queries(question, mode=mode)
+        if planned is not None:
+            try:
+                return await self._run_planned_graph_queries(planned)
+            except Exception as exc:
+                logger.warning("planned graph query failed: %s", exc)
+
         cypher: str | None = None
         try:
             cypher = await self.ollama.generate_cypher(question, self._schema, mode=mode)
+            cypher = normalize_read_only_cypher(cypher)
             rows = await self.neo4j.run_cypher(cypher)
             return {"cypher": cypher, "rows": rows}
         except ValueError as exc:
             logger.warning(
                 "Cypher validation rejected LLM query — %s | query=%r", exc, cypher
             )
-            return {"cypher": None, "rows": [], "graph_unavailable": True}
+            fallback = (
+                plan_graph_queries(question, mode=mode) if planned is None else None
+            )
+            if fallback is not None:
+                try:
+                    return await self._run_planned_graph_queries(fallback)
+                except Exception as fallback_exc:
+                    logger.warning("planned graph fallback failed: %s", fallback_exc)
+            return {"cypher": cypher, "rows": [], "graph_unavailable": True}
         except Exception as exc:
             logger.warning("graph search failed: %s", exc)
             return {"cypher": None, "rows": [], "graph_unavailable": True}
+
+    async def _run_planned_graph_queries(
+        self, planned: list[tuple[str, str]]
+    ) -> dict[str, Any]:
+        cyphers: list[str] = []
+        rows: list[dict[str, Any]] = []
+        for _label, query in planned:
+            normalized = normalize_read_only_cypher(query)
+            validate_read_only_cypher(normalized)
+            cyphers.append(normalized)
+            rows.extend(await self.neo4j.run_cypher(normalized))
+        return {"cypher": "\n\n".join(cyphers), "rows": rows}
 
     @staticmethod
     def _build_context(
@@ -204,25 +241,64 @@ class RagService:
 
         if mode == "instructions":
             sections.append("Search mode: INSTRUCTIONS (instruction master graph — independent of security events)")
-        elif mode == "both":
-            sections.append("Search mode: BOTH (security events + instruction state)")
-        else:
-            sections.append("Search mode: EVENTS (security event log)")
+        elif mode == "all":
+            sections.append(
+                "Search mode: ALL ENTITIES (instructions, payments, and all security events)"
+            )
+        elif mode == "payments":
+            sections.append("Search mode: PAYMENTS (payment records only)")
+        elif mode == "events":
+            sections.append(
+                "Search mode: SECURITY EVENTS (instruction + payment security event log)"
+            )
 
         if graph_unavailable:
-            sections.append(
-                "Note: graph search was unavailable for this question. "
-                "Answer using the retrieved vector and BM25 results below only."
-            )
+            if mode == "instructions":
+                sections.append(
+                    "Note: instruction graph search was unavailable. "
+                    "Do not infer hierarchy or structural relationships from vector/BM25 hits."
+                )
+            else:
+                sections.append(
+                    "Note: graph search was unavailable for this question. "
+                    "Answer using the retrieved vector and BM25 results below only."
+                )
 
         if cypher:
             sections.append(f"Neo4j Cypher executed:\n{cypher}")
 
         if graph_rows:
-            sections.append(
-                "Neo4j graph results:\n"
-                + json.dumps(graph_rows[:20], indent=2, default=str)
+            ranking_rows = [
+                row
+                for row in graph_rows
+                if "alert_count" in row and "actor_display" in row
+            ]
+            if ranking_rows:
+                sections.append(
+                    "Neo4j user ranking by policy alerts (instruction + payment combined):\n"
+                    + json.dumps(ranking_rows[:20], indent=2, default=str)
+                )
+            aggregate = next(
+                (
+                    row
+                    for row in graph_rows
+                    if any(key in row for key in ("total", "count"))
+                    and "alert_count" not in row
+                    and len(row) <= 3
+                ),
+                None,
             )
+            if aggregate is not None:
+                total = aggregate.get("total", aggregate.get("count"))
+                sections.append(f"Neo4j aggregate count: {total}")
+            detail_rows = [
+                row for row in graph_rows if row not in ranking_rows and row is not aggregate
+            ] if ranking_rows or aggregate else graph_rows
+            if detail_rows:
+                sections.append(
+                    "Neo4j graph results:\n"
+                    + json.dumps(detail_rows[:20], indent=2, default=str)
+                )
         elif cypher and not graph_unavailable:
             sections.append(
                 "Neo4j graph results: 0 rows — the graph query found no matching records. "
@@ -252,10 +328,37 @@ class RagService:
                         f"  effective={snap.get('effective_date')} end={snap.get('end_date')} "
                         f"expired={snap.get('is_expired', False)}"
                     )
+                elif src == "payment_fact":
+                    psnap = payload.get("payment_snapshot") or {}
+                    lines.append(
+                        f"[{index}] PAYMENT payment_id={payload.get('payment_id')} "
+                        f"instruction_id={payload.get('instruction_id')} score={hit.score:.4f}\n"
+                        f"  status={payload.get('status', psnap.get('status'))} "
+                        f"amount={payload.get('amount', psnap.get('amount'))} "
+                        f"currency={payload.get('currency', psnap.get('currency'))} "
+                        f"lob={payload.get('owning_lob', psnap.get('owning_lob'))}\n"
+                        f"  value_date={payload.get('value_date', psnap.get('value_date'))}\n"
+                        f"  creator={payload.get('creator_display')} "
+                        f"approver={payload.get('approver_display')}"
+                    )
+                elif src == "payment_security_event":
+                    psnap = payload.get("payment_snapshot") or {}
+                    lines.append(
+                        f"[{index}] PAYMENT SECURITY EVENT event_id={hit.event_id} "
+                        f"payment_id={payload.get('payment_id')} "
+                        f"instruction_id={payload.get('instruction_id')} score={hit.score:.4f}\n"
+                        f"  action={payload.get('action')} severity={payload.get('severity')} "
+                        f"outcome={payload.get('outcome')} actor={payload.get('actor_display')}\n"
+                        f"  amount={payload.get('amount', psnap.get('amount'))} "
+                        f"currency={payload.get('currency', psnap.get('currency'))} "
+                        f"lob={payload.get('owning_lob', psnap.get('owning_lob'))}\n"
+                        f"  message={payload.get('message', hit.summary)}"
+                    )
                 else:
                     merged = hit.merged or {}
                     lines.append(
-                        f"[{index}] EVENT event_id={hit.event_id} instruction_id={hit.instruction_id} "
+                        f"[{index}] INSTRUCTION SECURITY EVENT event_id={hit.event_id} "
+                        f"instruction_id={hit.instruction_id} "
                         f"sources={sorted(hit.sources)} score={hit.score:.4f}\n"
                         f"  action={merged.get('action')} severity={merged.get('severity')} "
                         f"actor={merged.get('actor_display', merged.get('actor_user_id'))} "
@@ -265,9 +368,10 @@ class RagService:
                         f"  summary: {hit.summary}"
                     )
             label = {
-                "events": "Retrieved security events",
+                "events": "Retrieved security events (instruction + payment)",
                 "instructions": "Retrieved instruction states",
-                "both": "Retrieved results",
+                "payments": "Retrieved payment records",
+                "all": "Retrieved results across all entity types",
             }.get(mode, "Retrieved results")
             sections.append(f"{label} (vector + BM25 + graph):\n" + "\n".join(lines))
 

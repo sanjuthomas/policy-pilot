@@ -167,13 +167,31 @@ allow if {
 }
 
 #
-# USE — profit center executes payment
+# USE — mark an instruction as used during payment creation
+#
+# This action is exclusively reserved for authorised service accounts operating
+# via On-Behalf-Of delegation.  Direct calls from human users are always denied
+# because input.subject.delegated_by_roles is an empty list for non-OBO requests.
+#
+# Two independent checks must both pass:
+#
+#   1. SERVICE CHECK — the calling service account must hold the INSTRUCTION_MARKER
+#      role.  Only svc-payment carries this role; no human user does.
+#
+#   2. USER CHECK — the human on whose behalf the service is acting must have
+#      at least read access to the instruction (has_viewer_access).  This ensures
+#      that the payment creator genuinely has the right to read the instruction
+#      they are paying against.
 #
 
 allow if {
     input.action == "USE"
 
-    same_lob_as_instruction
+    # Service-level gate: only a service with INSTRUCTION_MARKER may call this
+    "INSTRUCTION_MARKER" in input.subject.delegated_by_roles
+
+    # User-level gate: the OBO user must be able to read the instruction
+    has_viewer_access
 
     is_valid_profit_center
 
@@ -186,21 +204,18 @@ allow if {
 }
 
 #
-# VIEW — middle office or owning profit center
+# VIEW — any holder of INSTRUCTION_VIEWER, INSTRUCTION_CREATOR,
+#         INSTRUCTION_APPROVER, or PAYMENT_CREATOR
+#
+# The instruction must still belong to a valid profit centre so that
+# subjects cannot enumerate instructions from arbitrary LOBs they have
+# no relationship to.
 #
 
 allow if {
     input.action == "VIEW"
 
-    is_middle_office
-
-    is_valid_profit_center
-}
-
-allow if {
-    input.action == "VIEW"
-
-    same_lob_as_instruction
+    has_viewer_access
 
     is_valid_profit_center
 }

@@ -9,8 +9,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from pydantic import BaseModel, Field
+
 from chat_application import __version__
 from chat_application.config import settings
+from chat_application.cypher import load_graph_schema, normalize_read_only_cypher, validate_read_only_cypher
 from chat_application.models import ChatRequest, ChatResponse
 from chat_application.neo4j import Neo4jClient
 from chat_application.ollama import OllamaClient
@@ -90,6 +93,41 @@ async def chat(request: ChatRequest) -> ChatResponse:
     except Exception as exc:
         logger.exception("chat failed")
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+class CypherGenerateRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=2000)
+    mode: str = Field(default="events", pattern="^(events|instructions|payments)$")
+
+
+@app.post("/api/cypher/generate")
+async def cypher_generate(request: CypherGenerateRequest) -> dict:
+    """Translate a natural-language question to a read-only Cypher query."""
+    schema = load_graph_schema()
+    try:
+        cypher = await ollama_client.generate_cypher(
+            request.question, schema, mode=request.mode
+        )
+        cypher = normalize_read_only_cypher(cypher)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Cypher generation failed: {exc}") from exc
+
+    valid = True
+    error: str | None = None
+    try:
+        validate_read_only_cypher(cypher)
+    except ValueError as exc:
+        valid = False
+        error = str(exc)
+
+    return {
+        "question": request.question,
+        "mode": request.mode,
+        "cypher": cypher,
+        "valid": valid,
+        "error": error,
+        "model": settings.ollama_chat_model,
+    }
 
 
 def run() -> None:

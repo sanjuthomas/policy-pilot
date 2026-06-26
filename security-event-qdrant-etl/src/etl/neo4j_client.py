@@ -854,3 +854,345 @@ class Neo4jGraphWriter:
             action,
             version_number,
         )
+
+    async def upsert_payment_security_event(self, event: dict[str, Any]) -> None:
+        """Write a PaymentSecurityEvent into Neo4j.
+
+        Creates/merges:
+          - SecurityEvent node (with payment_id property)
+          - Payment node (stub — full data comes from ssi-payments)
+          - User actor node + ACTED_AS relationship
+          - (SecurityEvent)-[:TARGETS_PAYMENT]->(Payment)
+          - (SecurityEvent)-[:INVOLVES_LOB]->(ProfitCenter)
+        """
+        if self._driver is None:
+            raise RuntimeError("Neo4j writer not connected")
+
+        actor = event.get("actor") or {}
+        resource = event.get("resource") or {}
+        event_ctx = event.get("event") or {}
+        source = event.get("source") or {}
+
+        event_id = event.get("event_id", "")
+        payment_id = resource.get("id", "")
+        instruction_id = resource.get("instruction_id", "")
+        owning_lob = resource.get("owning_lob", "")
+
+        async with self._driver.session() as session:
+            tx = await session.begin_transaction()
+            try:
+                # SecurityEvent node
+                await tx.run(
+                    """
+                    MERGE (e:SecurityEvent {event_id: $event_id})
+                    SET e.timestamp        = $timestamp,
+                        e.severity         = $severity,
+                        e.message          = $message,
+                        e.action           = $action,
+                        e.outcome          = $outcome,
+                        e.reason           = $reason,
+                        e.payment_id       = $payment_id,
+                        e.source_application = $source_application,
+                        e.source_version   = $source_version,
+                        e.owning_lob       = $owning_lob
+                    """,
+                    event_id=event_id,
+                    timestamp=event.get("timestamp"),
+                    severity=event.get("severity"),
+                    message=event.get("message"),
+                    action=event_ctx.get("action"),
+                    outcome=event_ctx.get("outcome"),
+                    reason=event_ctx.get("reason"),
+                    payment_id=payment_id,
+                    source_application=source.get("application"),
+                    source_version=source.get("version"),
+                    owning_lob=owning_lob,
+                )
+
+                # Actor + ACTED_AS
+                if actor.get("user_id"):
+                    await tx.run(
+                        """
+                        MERGE (u:User {user_id: $user_id})
+                        SET u.given_name    = coalesce($given_name, u.given_name),
+                            u.family_name   = coalesce($family_name, u.family_name),
+                            u.display_name  = coalesce(
+                                CASE WHEN $family_name IS NOT NULL AND $given_name IS NOT NULL
+                                     THEN $family_name + ', ' + $given_name + ' (' + $user_id + ')'
+                                     ELSE null END,
+                                u.display_name),
+                            u.title         = coalesce($title, u.title),
+                            u.lob           = coalesce($lob, u.lob),
+                            u.roles         = coalesce($roles, u.roles),
+                            u.supervisor_id = coalesce($supervisor_id, u.supervisor_id)
+                        WITH u
+                        MATCH (e:SecurityEvent {event_id: $event_id})
+                        MERGE (u)-[:ACTED_AS]->(e)
+                        """,
+                        user_id=actor["user_id"],
+                        given_name=actor.get("given_name"),
+                        family_name=actor.get("family_name"),
+                        title=actor.get("title"),
+                        lob=actor.get("lob"),
+                        roles=_roles_json(actor.get("roles")),
+                        supervisor_id=actor.get("supervisor_id"),
+                        event_id=event_id,
+                    )
+                    if actor.get("supervisor_id"):
+                        await tx.run(
+                            """
+                            MERGE (u:User {user_id: $user_id})
+                            MERGE (s:User {user_id: $supervisor_id})
+                            MERGE (u)-[:REPORTS_TO]->(s)
+                            """,
+                            user_id=actor["user_id"],
+                            supervisor_id=actor["supervisor_id"],
+                        )
+
+                # Payment stub + TARGETS_PAYMENT
+                if payment_id:
+                    await tx.run(
+                        """
+                        MERGE (p:Payment {payment_id: $payment_id})
+                        ON CREATE SET p.instruction_id = $instruction_id,
+                                      p.owning_lob     = $owning_lob
+                        WITH p
+                        MATCH (e:SecurityEvent {event_id: $event_id})
+                        MERGE (e)-[:TARGETS_PAYMENT]->(p)
+                        """,
+                        payment_id=payment_id,
+                        instruction_id=instruction_id,
+                        owning_lob=owning_lob,
+                        event_id=event_id,
+                    )
+
+                # INVOLVES_LOB
+                if owning_lob:
+                    await tx.run(
+                        """
+                        MATCH (e:SecurityEvent {event_id: $event_id})
+                        MERGE (pc:ProfitCenter {lob: $owning_lob})
+                        MERGE (e)-[:INVOLVES_LOB]->(pc)
+                        """,
+                        event_id=event_id,
+                        owning_lob=owning_lob,
+                    )
+
+                await tx.commit()
+            except Exception:
+                await tx.rollback()
+                raise
+
+    async def upsert_payment_fact(self, fact: dict[str, Any]) -> None:
+        """Write a Payment fact (from ssi-payments topic) into Neo4j.
+
+        Creates/merges:
+          - Payment node with all fields
+          - (Instruction)-[:HAS_PAYMENT]->(Payment)
+          - (User creator)-[:CREATED_PAYMENT]->(Payment)
+          - (User approver)-[:APPROVED_PAYMENT]->(Payment)   when present
+          - (User rejector)-[:REJECTED_PAYMENT]->(Payment)   when present
+        """
+        if self._driver is None:
+            raise RuntimeError("Neo4j writer not connected")
+
+        payment_id = fact.get("payment_id", "")
+        if not payment_id:
+            return
+
+        instruction_id = fact.get("instruction_id", "")
+        created_by = fact.get("created_by") or {}
+        approved_by = fact.get("approved_by") or {}
+        rejected_by = fact.get("rejected_by") or {}
+
+        async with self._driver.session() as session:
+            tx = await session.begin_transaction()
+            try:
+                # Payment node
+                await tx.run(
+                    """
+                    MERGE (p:Payment {payment_id: $payment_id})
+                    SET p.instruction_id   = $instruction_id,
+                        p.status           = $status,
+                        p.amount           = $amount,
+                        p.currency         = $currency,
+                        p.value_date       = $value_date,
+                        p.owning_lob       = $owning_lob,
+                        p.instruction_type = $instruction_type,
+                        p.creator_user_id  = $creator_user_id,
+                        p.approver_user_id = $approver_user_id,
+                        p.rejector_user_id = $rejector_user_id,
+                        p.created_at       = $created_at,
+                        p.updated_at       = $updated_at
+                    """,
+                    payment_id=payment_id,
+                    instruction_id=instruction_id,
+                    status=fact.get("status"),
+                    amount=fact.get("amount"),
+                    currency=fact.get("currency"),
+                    value_date=fact.get("value_date"),
+                    owning_lob=fact.get("owning_lob"),
+                    instruction_type=fact.get("instruction_type"),
+                    creator_user_id=created_by.get("user_id"),
+                    approver_user_id=approved_by.get("user_id") if approved_by else None,
+                    rejector_user_id=rejected_by.get("user_id") if rejected_by else None,
+                    created_at=fact.get("created_at"),
+                    updated_at=fact.get("updated_at"),
+                )
+
+                # HAS_PAYMENT — Instruction → Payment
+                if instruction_id:
+                    await tx.run(
+                        """
+                        MERGE (i:Instruction {instruction_id: $instruction_id})
+                        WITH i
+                        MATCH (p:Payment {payment_id: $payment_id})
+                        MERGE (i)-[:HAS_PAYMENT]->(p)
+                        """,
+                        instruction_id=instruction_id,
+                        payment_id=payment_id,
+                    )
+
+                # Creator User + CREATED_PAYMENT
+                if created_by.get("user_id"):
+                    await tx.run(
+                        """
+                        MERGE (u:User {user_id: $user_id})
+                        SET u.given_name    = coalesce($given_name, u.given_name),
+                            u.family_name   = coalesce($family_name, u.family_name),
+                            u.display_name  = coalesce(
+                                CASE WHEN $family_name IS NOT NULL AND $given_name IS NOT NULL
+                                     THEN $family_name + ', ' + $given_name + ' (' + $user_id + ')'
+                                     ELSE null END,
+                                u.display_name),
+                            u.title         = coalesce($title, u.title),
+                            u.lob           = coalesce($lob, u.lob),
+                            u.supervisor_id = coalesce($supervisor_id, u.supervisor_id)
+                        WITH u
+                        MATCH (p:Payment {payment_id: $payment_id})
+                        MERGE (u)-[:CREATED_PAYMENT]->(p)
+                        """,
+                        user_id=created_by["user_id"],
+                        given_name=created_by.get("given_name"),
+                        family_name=created_by.get("family_name"),
+                        title=created_by.get("title"),
+                        lob=created_by.get("lob"),
+                        supervisor_id=created_by.get("supervisor_id"),
+                        payment_id=payment_id,
+                    )
+                    if created_by.get("supervisor_id"):
+                        await tx.run(
+                            """
+                            MERGE (u:User {user_id: $user_id})
+                            MERGE (s:User {user_id: $supervisor_id})
+                            MERGE (u)-[:REPORTS_TO]->(s)
+                            """,
+                            user_id=created_by["user_id"],
+                            supervisor_id=created_by["supervisor_id"],
+                        )
+
+                # Approver User + APPROVED_PAYMENT
+                if approved_by.get("user_id"):
+                    await tx.run(
+                        """
+                        MERGE (u:User {user_id: $user_id})
+                        SET u.given_name    = coalesce($given_name, u.given_name),
+                            u.family_name   = coalesce($family_name, u.family_name),
+                            u.display_name  = coalesce(
+                                CASE WHEN $family_name IS NOT NULL AND $given_name IS NOT NULL
+                                     THEN $family_name + ', ' + $given_name + ' (' + $user_id + ')'
+                                     ELSE null END,
+                                u.display_name),
+                            u.title         = coalesce($title, u.title),
+                            u.lob           = coalesce($lob, u.lob),
+                            u.supervisor_id = coalesce($supervisor_id, u.supervisor_id)
+                        WITH u
+                        MATCH (p:Payment {payment_id: $payment_id})
+                        MERGE (u)-[:APPROVED_PAYMENT]->(p)
+                        """,
+                        user_id=approved_by["user_id"],
+                        given_name=approved_by.get("given_name"),
+                        family_name=approved_by.get("family_name"),
+                        title=approved_by.get("title"),
+                        lob=approved_by.get("lob"),
+                        supervisor_id=approved_by.get("supervisor_id"),
+                        payment_id=payment_id,
+                    )
+                    if approved_by.get("supervisor_id"):
+                        await tx.run(
+                            """
+                            MERGE (u:User {user_id: $user_id})
+                            MERGE (s:User {user_id: $supervisor_id})
+                            MERGE (u)-[:REPORTS_TO]->(s)
+                            """,
+                            user_id=approved_by["user_id"],
+                            supervisor_id=approved_by["supervisor_id"],
+                        )
+
+                # Rejector User + REJECTED_PAYMENT
+                if rejected_by.get("user_id"):
+                    await tx.run(
+                        """
+                        MERGE (u:User {user_id: $user_id})
+                        SET u.given_name    = coalesce($given_name, u.given_name),
+                            u.family_name   = coalesce($family_name, u.family_name),
+                            u.display_name  = coalesce(
+                                CASE WHEN $family_name IS NOT NULL AND $given_name IS NOT NULL
+                                     THEN $family_name + ', ' + $given_name + ' (' + $user_id + ')'
+                                     ELSE null END,
+                                u.display_name),
+                            u.title         = coalesce($title, u.title),
+                            u.lob           = coalesce($lob, u.lob),
+                            u.supervisor_id = coalesce($supervisor_id, u.supervisor_id)
+                        WITH u
+                        MATCH (p:Payment {payment_id: $payment_id})
+                        MERGE (u)-[:REJECTED_PAYMENT]->(p)
+                        """,
+                        user_id=rejected_by["user_id"],
+                        given_name=rejected_by.get("given_name"),
+                        family_name=rejected_by.get("family_name"),
+                        title=rejected_by.get("title"),
+                        lob=rejected_by.get("lob"),
+                        supervisor_id=rejected_by.get("supervisor_id"),
+                        payment_id=payment_id,
+                    )
+
+                await tx.commit()
+            except Exception:
+                await tx.rollback()
+                raise
+
+        logger.debug(
+            "upserted payment fact payment_id=%s status=%s",
+            payment_id,
+            fact.get("status"),
+        )
+
+    async def run_read_cypher(self, cypher: str) -> list[dict[str, Any]]:
+        """Execute a validated read-only Cypher query and return rows as plain dicts.
+
+        The caller is responsible for pre-validating the query with
+        ``validate_read_only_cypher`` before passing it here.  This method opens
+        a read-access session so the database layer also enforces read-only mode.
+        """
+        if self._driver is None:
+            raise RuntimeError("Neo4j writer not connected")
+
+        rows: list[dict[str, Any]] = []
+        async with self._driver.session(default_access_mode="READ") as session:
+            result = await session.run(cypher)
+            async for record in result:
+                row: dict[str, Any] = {}
+                for key in record.keys():
+                    value = record[key]
+                    if hasattr(value, "items"):
+                        row[key] = dict(value.items())
+                    elif isinstance(value, list):
+                        row[key] = [
+                            dict(item.items()) if hasattr(item, "items") else item
+                            for item in value
+                        ]
+                    else:
+                        row[key] = value
+                rows.append(row)
+        return rows

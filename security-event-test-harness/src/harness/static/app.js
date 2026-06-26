@@ -1,8 +1,11 @@
 const logOutput = document.getElementById("log-output");
 const patStatus = document.getElementById("pat-status");
 const statInstructions = document.getElementById("stat-instructions");
+const statPayments = document.getElementById("stat-payments");
 const statEvents = document.getElementById("stat-events");
+const statPaymentEvents = document.getElementById("stat-payment-events");
 const actionGrid = document.getElementById("action-grid");
+const paymentActionGrid = document.getElementById("payment-action-grid");
 const clearLogButton = document.getElementById("clear-log");
 
 let busy = false;
@@ -16,8 +19,12 @@ function appendLog(text, { error = false } = {}) {
 
 function setBusy(nextBusy) {
   busy = nextBusy;
-  actionGrid.querySelectorAll("button").forEach((button) => {
-    button.disabled = nextBusy;
+  [actionGrid, paymentActionGrid].forEach((grid) => {
+    if (grid) {
+      grid.querySelectorAll("button").forEach((button) => {
+        button.disabled = nextBusy;
+      });
+    }
   });
 }
 
@@ -45,8 +52,25 @@ async function refreshStatus() {
       ? `${data.instruction_total} (${parts.join(", ")})`
       : String(data.instruction_total ?? 0);
 
+    const pCounts = data.payment_counts || {};
+    const pParts = Object.entries(pCounts)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([status, count]) => `${status}: ${count}`);
+    if (statPayments) {
+      statPayments.textContent = pParts.length
+        ? `${data.payment_total} (${pParts.join(", ")})`
+        : String(data.payment_total ?? 0);
+    }
+
     statEvents.textContent =
       data.security_event_count >= 0 ? String(data.security_event_count) : "—";
+
+    if (statPaymentEvents) {
+      statPaymentEvents.textContent =
+        data.payment_security_event_count >= 0
+          ? String(data.payment_security_event_count)
+          : "—";
+    }
   } catch (error) {
     patStatus.textContent = "Status unavailable";
     patStatus.className = "status-pill status-error";
@@ -92,7 +116,7 @@ async function runAction(action, count) {
   }
 }
 
-actionGrid.addEventListener("click", (event) => {
+function handleGridClick(event) {
   const button = event.target.closest("button");
   if (!button || button.disabled) {
     return;
@@ -113,7 +137,12 @@ actionGrid.addEventListener("click", (event) => {
   }
 
   void runAction(action, count);
-});
+}
+
+actionGrid.addEventListener("click", handleGridClick);
+if (paymentActionGrid) {
+  paymentActionGrid.addEventListener("click", handleGridClick);
+}
 
 clearLogButton.addEventListener("click", () => {
   logOutput.textContent = "";

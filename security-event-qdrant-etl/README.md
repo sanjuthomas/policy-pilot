@@ -1,6 +1,6 @@
 # Security Event Qdrant ETL
 
-Kafka consumer that enriches security events with the **current instruction** from ILM, then indexes the composite into **Qdrant** (dense + BM25) and **Neo4j** (graph projection).
+Kafka consumers that index instruction and payment facts into **Qdrant** (dense + BM25 hybrid) and **Neo4j** (graph projection).
 
 Also exposes a **Search Console** UI for manual vector / BM25 / hybrid / Neo4j queries.
 
@@ -8,36 +8,51 @@ Also exposes a **Search Console** UI for manual vector / BM25 / hybrid / Neo4j q
 
 http://localhost:8090
 
-## Pipeline
+## Pipelines
+
+Four independent consumers run in the same process. Every Kafka message carries a **full snapshot** — the ETL makes no API calls to ILM or the payment service.
 
 ```mermaid
-flowchart LR
-    K[Kafka instruction-security-events] --> ETL[ETL consumer]
-    ETL -->|GET /api/v1/instructions/id| ILM[ILM API]
-    ETL --> ENR[enrich_document]
-    ENR --> NEO[Neo4j upsert]
-    ENR --> OLL[Ollama embed]
-    OLL --> QD[Qdrant upsert]
+flowchart TB
+    K1[instruction-security-events] --> P1[SecurityEventPipeline]
+    K2[ssi-instructions] --> P2[InstructionPipeline]
+    K3[payment-security-events] --> P3[PaymentSecurityEventPipeline]
+    K4[ssi-payments] --> P4[PaymentFactPipeline]
+    P1 --> NEO[Neo4j upsert]
+    P2 --> NEO
+    P3 --> NEO
+    P4 --> NEO
+    P1 --> OLL[Ollama embed]
+    P2 --> OLL
+    P3 --> OLL
+    P4 --> OLL
+    OLL --> QD[Qdrant ssi_search_index]
 ```
 
-For each Kafka message:
+| Pipeline | Kafka topic | Consumer group | Qdrant `source` tag |
+|----------|-------------|----------------|---------------------|
+| `SecurityEventPipeline` | `instruction-security-events` | `security-event-qdrant-etl` | `security_event` |
+| `InstructionPipeline` | `ssi-instructions` | `ssi-instruction-etl` | `instruction_state` |
+| `PaymentSecurityEventPipeline` | `payment-security-events` | `payment-security-event-etl` | `payment_security_event` |
+| `PaymentFactPipeline` | `ssi-payments` | `payment-fact-etl` | `payment_fact` |
 
-1. Parse security event (`actor`, `resource`, `event`, …).
-2. Authenticate as **`etl-reader@ssi.local`** (ZITADEL) and fetch current instruction from ILM.
-3. Build **`merged`** context (actor + creator/approver/rejector + wire scope, etc.).
-4. Upsert Neo4j nodes/relationships (see `neo4j-graph-model/`).
-5. Embed `search_text` with Ollama **`bge-m3:latest`** → upsert Qdrant hybrid point.
+For each message:
 
-## Enriched document shape
+1. Parse the fact event (security event or state snapshot).
+2. Upsert Neo4j nodes/relationships (see `neo4j-graph-model/`). User upserts also write `REPORTS_TO` from `supervisor_id`.
+3. Embed `search_text` with Ollama **`bge-m3:latest`** → upsert Qdrant hybrid point.
+
+## Enriched document shape (instruction security events)
 
 Stored in Qdrant payload (and used for search text):
 
 | Field | Content |
 |-------|---------|
-| `security_event` | Full Kafka/Mongo event |
-| `instruction` | Full ILM `InstructionResponse` |
+| `security_event` | Full Kafka/Mongo event (includes `instruction_snapshot`) |
+| `instruction` | Instruction snapshot from the event |
 | `merged` | Denormalized join (actor, creator, action, wire_scope, …) |
 | `search_text` | Flattened string for embedding + BM25 |
+| `source` | `security_event`, `instruction_state`, `payment_security_event`, or `payment_fact` |
 
 ## Search Console
 
@@ -55,10 +70,11 @@ Component status bar shows Kafka, Qdrant, Neo4j, and Ollama health.
 | Variable | Default |
 |----------|---------|
 | `KAFKA_SECURITY_EVENTS_TOPIC` | `instruction-security-events` |
-| `ILM_URL` | `http://instruction-lifecycle-manager:8000` |
-| `ETL_READER_LOGIN` | `etl-reader@ssi.local` |
+| `KAFKA_INSTRUCTION_TOPIC` | `ssi-instructions` |
+| `KAFKA_PAYMENT_SECURITY_EVENTS_TOPIC` | `payment-security-events` |
+| `KAFKA_PAYMENTS_TOPIC` | `ssi-payments` |
 | `OLLAMA_EMBEDDING_MODEL` | `bge-m3:latest` |
-| `QDRANT_COLLECTION` | `instruction_security_events` |
+| `QDRANT_COLLECTION` | `ssi_search_index` |
 | `NEO4J_URI` | `bolt://neo4j:7687` |
 
 Requires **host Ollama** (`OLLAMA_URL=http://host.docker.internal:11434`).
@@ -84,14 +100,25 @@ security-event-search   # serves on :8090
 
 ## Reset consumer offsets
 
-If Qdrant/Neo4j are empty but Kafka has messages:
+If Qdrant/Neo4j are empty but Kafka has messages, reset each consumer group:
 
 ```bash
 docker compose stop security-event-qdrant-etl
-docker exec kafka /opt/kafka/bin/kafka-consumer-groups.sh \
-  --bootstrap-server localhost:9092 \
-  --group security-event-qdrant-etl \
-  --reset-offsets --to-earliest \
-  --topic instruction-security-events --execute
+
+for TOPIC_GROUP in \
+  "instruction-security-events:security-event-qdrant-etl" \
+  "ssi-instructions:ssi-instruction-etl" \
+  "payment-security-events:payment-security-event-etl" \
+  "ssi-payments:payment-fact-etl"
+do
+  TOPIC="${TOPIC_GROUP%%:*}"
+  GROUP="${TOPIC_GROUP##*:}"
+  docker exec kafka /opt/kafka/bin/kafka-consumer-groups.sh \
+    --bootstrap-server localhost:9092 \
+    --group "$GROUP" \
+    --reset-offsets --to-earliest \
+    --topic "$TOPIC" --execute
+done
+
 docker compose up -d security-event-qdrant-etl
 ```

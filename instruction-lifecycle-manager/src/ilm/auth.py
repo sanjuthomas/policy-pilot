@@ -246,3 +246,49 @@ def subject_from_bearer_token(access_token: str, *, session_id: str | None = Non
             ) from exc
 
     raise HTTPException(status_code=401, detail="invalid access token")
+
+
+def subject_from_obo_call(
+    service_token: str,
+    user_token: str,
+    *,
+    service_session_id: str | None = None,
+    user_session_id: str | None = None,
+) -> Subject:
+    """Resolve a delegated On-Behalf-Of call.
+
+    1. Validate the service token (+ session_id) → establish service identity.
+    2. Validate the user token → establish user identity with their roles.
+    3. Return the user's Subject with ``delegated_by`` set to the service's user_id
+       so security events are logged for the user but clearly annotated with
+       the calling service.
+
+    Authorization is evaluated against the user's roles, not the service's.
+    """
+    # Resolve service identity — validates the token and session are legitimate
+    try:
+        service_subject = subject_from_bearer_token(
+            service_token, session_id=service_session_id
+        )
+    except HTTPException as exc:
+        raise HTTPException(
+            status_code=401,
+            detail=f"OBO service token invalid: {exc.detail}",
+        ) from exc
+
+    # Resolve user identity from the OBO token
+    try:
+        user_subject = subject_from_bearer_token(user_token, session_id=user_session_id)
+    except HTTPException as exc:
+        raise HTTPException(
+            status_code=401,
+            detail=f"OBO user token invalid: {exc.detail}",
+        ) from exc
+
+    # Return user Subject annotated with the service identity and its roles.
+    # OPA policies use delegated_by_roles to gate actions that must only be
+    # reachable via an authorised service account (e.g. INSTRUCTION_MARKER for USE).
+    return user_subject.model_copy(update={
+        "delegated_by": service_subject.user_id,
+        "delegated_by_roles": service_subject.roles,
+    })

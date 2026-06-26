@@ -1,18 +1,31 @@
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 from harness.config import Settings
 from harness.fixtures import SeedFile, build_instruction_payload, load_users
 from harness.helpers import (
     Operation,
+    PaymentOperation,
     _approver_for_instruction,
+    _count_payment_security_events,
+    _fetch_approved_instructions,
     _fetch_ui_instructions,
+    _fetch_ui_payments,
     _session_for_user,
+    _universal_payment_approver,
     auth_client,
+    build_payment_scenario,
+    build_payment_seed_plan,
     build_scenario,
     build_seed_plan,
     ilm_client,
+    payment_client,
+    payment_submitter_for_lob,
 )
+
 from harness.ilm_client import InstructionLifecycleClient
+from harness.payment_client import PaymentServiceClient
 from harness.results import HarnessActionResult
 from harness.zitadel_auth import ZitadelAuthClient
 
@@ -303,6 +316,343 @@ def run_policy_scenario(settings: Settings) -> HarnessActionResult:
             detail = response.text.strip()
             if detail:
                 result.logs.append(f"     {detail[:300]}")
+
+    result.succeeded = 1 if failures == 0 else 0
+    result.failed = failures
+    result.ok = failures == 0
+    result.logs.append(f"Scenario finished with {failures} failure(s).")
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Payment actions
+# ---------------------------------------------------------------------------
+
+def _payment_clients(
+    settings: Settings,
+) -> tuple[SeedFile, ZitadelAuthClient, PaymentServiceClient]:
+    seed = load_users(settings.users_file)
+    auth = auth_client(settings)
+    ps = payment_client(settings)
+    return seed, auth, ps
+
+
+def create_payments(settings: Settings, count: int) -> HarnessActionResult:
+    result = HarnessActionResult(action="create_payments", requested=count)
+    if error := _require_pat(settings):
+        result.logs.append(f"error: {error}")
+        result.ok = False
+        return result
+
+    seed, auth, ps = _payment_clients(settings)
+
+    approved = _fetch_approved_instructions(settings)
+    # Prefer STANDING so we can reuse them; fall back to SINGLE_USE
+    standing = [i for i in approved if i.get("status") == "STANDING"]
+    pool = standing if standing else approved
+
+    if not pool:
+        result.logs.append(
+            "No approved STANDING or SINGLE_USE instructions found. "
+            "Run approve-instructions first."
+        )
+        result.ok = False
+        return result
+
+    value_date = (date.today() + timedelta(days=1)).isoformat()
+    result.logs.append(
+        f"Creating {count} payment(s) against {len(pool)} approved instruction(s)"
+    )
+
+    for index, (user_id, amount) in enumerate(build_payment_seed_plan(count), start=1):
+        instruction = pool[index % len(pool)]
+        instruction_id = instruction["instruction_id"]
+        owning_lob = instruction.get("owning_lob", "?")
+
+        result.logs.append(
+            f"[{index}] create payment  user={user_id}  amount={amount:,.0f}"
+            f"  lob={owning_lob}  instruction={instruction_id[:8]}…"
+        )
+        session = _session_for_user(auth, seed, settings, user_id)
+        response = ps.create_payment(session, instruction_id, amount, value_date)
+
+        if response.status_code == 201:
+            result.succeeded += 1
+            result.logs.append(
+                f"  -> HTTP 201 created {response.json()['payment_id']}"
+            )
+        else:
+            result.failed += 1
+            result.logs.append(f"  -> HTTP {response.status_code} FAIL")
+            detail = response.text.strip()
+            if detail:
+                result.logs.append(f"     {detail[:300]}")
+
+    result.ok = result.failed == 0
+    result.logs.append(
+        f"Created {result.succeeded} payment(s) with {result.failed} failure(s)."
+    )
+    return result
+
+
+def submit_payments(settings: Settings, count: int) -> HarnessActionResult:
+    result = HarnessActionResult(action="submit_payments", requested=count)
+    if error := _require_pat(settings):
+        result.logs.append(f"error: {error}")
+        result.ok = False
+        return result
+
+    seed, auth, ps = _payment_clients(settings)
+
+    drafts = _fetch_ui_payments(settings, status="DRAFT")
+    to_process = drafts[:count]
+
+    if not to_process:
+        result.logs.append("No DRAFT payments available to submit.")
+        return result
+
+    result.logs.append(f"Submitting up to {len(to_process)} payment(s)")
+
+    for index, payment in enumerate(to_process, start=1):
+        payment_id = payment["payment_id"]
+        owning_lob = payment.get("owning_lob", "?")
+        try:
+            submitter_id = payment_submitter_for_lob(owning_lob)
+        except ValueError as exc:
+            result.failed += 1
+            result.logs.append(f"[{index}] {payment_id}  lob={owning_lob}  skip: {exc}")
+            continue
+        result.logs.append(
+            f"[{index}] {payment_id}  lob={owning_lob}  submitting as {submitter_id}"
+        )
+        session = _session_for_user(auth, seed, settings, submitter_id)
+        response = ps.submit_payment(session, payment_id)
+        if response.status_code in range(200, 300):
+            result.succeeded += 1
+            result.logs.append(f"  -> submit HTTP {response.status_code} OK")
+        else:
+            result.failed += 1
+            result.logs.append(f"  -> submit HTTP {response.status_code} FAIL")
+            detail = response.text.strip()
+            if detail:
+                result.logs.append(f"     {detail[:300]}")
+
+    result.ok = result.failed == 0
+    result.logs.append(
+        f"Submitted {result.succeeded} payment(s) with {result.failed} failure(s)."
+    )
+    return result
+
+
+def approve_payments(settings: Settings, count: int) -> HarnessActionResult:
+    result = HarnessActionResult(action="approve_payments", requested=count)
+    if error := _require_pat(settings):
+        result.logs.append(f"error: {error}")
+        result.ok = False
+        return result
+
+    seed, auth, ps = _payment_clients(settings)
+    approver_id = _universal_payment_approver()
+
+    submitted = _fetch_ui_payments(settings, status="SUBMITTED")
+    to_process = submitted[:count]
+
+    if not to_process:
+        result.logs.append("No SUBMITTED payments available to approve.")
+        return result
+
+    result.logs.append(
+        f"Approving up to {len(to_process)} payment(s) as {approver_id}"
+    )
+    approve_session = _session_for_user(auth, seed, settings, approver_id)
+
+    for index, payment in enumerate(to_process, start=1):
+        payment_id = payment["payment_id"]
+        amount = payment.get("amount", 0)
+        owning_lob = payment.get("owning_lob", "?")
+        result.logs.append(
+            f"[{index}] {payment_id}  lob={owning_lob}  amount={amount:,.0f}"
+        )
+        response = ps.approve_payment(approve_session, payment_id)
+        if response.status_code in range(200, 300):
+            result.succeeded += 1
+            result.logs.append(f"  -> approve HTTP {response.status_code} OK")
+        else:
+            result.failed += 1
+            result.logs.append(f"  -> approve HTTP {response.status_code} FAIL")
+            detail = response.text.strip()
+            if detail:
+                result.logs.append(f"     {detail[:300]}")
+
+    result.ok = result.failed == 0
+    result.logs.append(
+        f"Approved {result.succeeded} payment(s) with {result.failed} failure(s)."
+    )
+    return result
+
+
+def reject_payments(settings: Settings, count: int) -> HarnessActionResult:
+    result = HarnessActionResult(action="reject_payments", requested=count)
+    if error := _require_pat(settings):
+        result.logs.append(f"error: {error}")
+        result.ok = False
+        return result
+
+    seed, auth, ps = _payment_clients(settings)
+    approver_id = _universal_payment_approver()
+
+    submitted = _fetch_ui_payments(settings, status="SUBMITTED")
+    to_process = submitted[:count]
+
+    if not to_process:
+        result.logs.append("No SUBMITTED payments available to reject.")
+        return result
+
+    result.logs.append(
+        f"Rejecting up to {len(to_process)} payment(s) as {approver_id}"
+    )
+    reject_session = _session_for_user(auth, seed, settings, approver_id)
+
+    for index, payment in enumerate(to_process, start=1):
+        payment_id = payment["payment_id"]
+        owning_lob = payment.get("owning_lob", "?")
+        result.logs.append(f"[{index}] {payment_id}  lob={owning_lob}")
+        response = ps.reject_payment(
+            reject_session, payment_id, reason="Rejected via test harness"
+        )
+        if response.status_code in range(200, 300):
+            result.succeeded += 1
+            result.logs.append(f"  -> reject HTTP {response.status_code} OK")
+        else:
+            result.failed += 1
+            result.logs.append(f"  -> reject HTTP {response.status_code} FAIL")
+            detail = response.text.strip()
+            if detail:
+                result.logs.append(f"     {detail[:300]}")
+
+    result.ok = result.failed == 0
+    result.logs.append(
+        f"Rejected {result.succeeded} payment(s) with {result.failed} failure(s)."
+    )
+    return result
+
+
+def run_payment_policy_scenario(settings: Settings) -> HarnessActionResult:
+    """OPA payment policy scenario with expected INFO and ALERT security events.
+
+    Creates a payment, exercises CREATE/SUBMIT/APPROVE denials (ALERT), then
+    completes the happy path (INFO).
+    """
+    result = HarnessActionResult(action="run_payment_policy_scenario", requested=1)
+    if error := _require_pat(settings):
+        result.logs.append(f"error: {error}")
+        result.ok = False
+        return result
+
+    seed, auth, ps = _payment_clients(settings)
+    failures = 0
+    scenario = build_payment_scenario()
+    expected_denials = sum(1 for _, _, expect_success, _ in scenario if not expect_success)
+    expected_successes = sum(1 for _, _, expect_success, _ in scenario if expect_success)
+
+    alerts_before = (
+        _count_payment_security_events(settings, severity="ALERT", outcome="failure")
+        if settings.verify_security_events
+        else -1
+    )
+    infos_before = (
+        _count_payment_security_events(settings, severity="INFO", outcome="success")
+        if settings.verify_security_events
+        else -1
+    )
+
+    result.logs.append("Running payment lifecycle policy scenario")
+
+    # Discover a FICC approved instruction to use throughout the scenario
+    approved = _fetch_approved_instructions(settings)
+    ficc_instructions = [
+        i for i in approved
+        if i.get("owning_lob") == "FICC"
+        and i.get("status") == "STANDING"
+    ]
+    if not ficc_instructions:
+        ficc_instructions = [i for i in approved if i.get("owning_lob") == "FICC"]
+    if not ficc_instructions:
+        result.logs.append(
+            "No approved FICC instruction found. "
+            "Run approve-instructions first to seed at least one FICC instruction."
+        )
+        result.ok = False
+        return result
+
+    instruction_id = ficc_instructions[0]["instruction_id"]
+    value_date = (date.today() + timedelta(days=1)).isoformat()
+    result.logs.append(f"Using FICC instruction {instruction_id}")
+
+    payment_id: str | None = None
+
+    for index, (operation, user_id, expect_success, description) in enumerate(
+        scenario, start=1
+    ):
+        session = _session_for_user(auth, seed, settings, user_id)
+        result.logs.append(
+            f"[{index}] {description} "
+            f"(user={user_id}, op={operation.value}, expect={'OK' if expect_success else 'DENY'})"
+        )
+
+        if operation == PaymentOperation.CREATE_PAYMENT:
+            response = ps.create_payment(session, instruction_id, 1_000_000.0, value_date)
+            if expect_success and response.status_code == 201:
+                payment_id = response.json()["payment_id"]
+        elif operation == PaymentOperation.SUBMIT_PAYMENT:
+            if not payment_id:
+                result.logs.append("  skip: no payment_id (earlier CREATE failed)")
+                continue
+            response = ps.submit_payment(session, payment_id)
+        elif operation == PaymentOperation.APPROVE_PAYMENT:
+            if not payment_id:
+                result.logs.append("  skip: no payment_id (earlier step failed)")
+                continue
+            response = ps.approve_payment(session, payment_id)
+        elif operation == PaymentOperation.REJECT_PAYMENT:
+            if not payment_id:
+                result.logs.append("  skip: no payment_id")
+                continue
+            response = ps.reject_payment(session, payment_id, reason="test harness rejection")
+        else:
+            raise RuntimeError(f"unsupported operation: {operation}")
+
+        ok = (200 <= response.status_code < 300) == expect_success
+        result.logs.append(f"  -> HTTP {response.status_code} {'PASS' if ok else 'FAIL'}")
+        if not ok:
+            failures += 1
+            detail = response.text.strip()
+            if detail:
+                result.logs.append(f"     {detail[:300]}")
+
+    if settings.verify_security_events and alerts_before >= 0:
+        alerts_after = _count_payment_security_events(
+            settings, severity="ALERT", outcome="failure"
+        )
+        infos_after = _count_payment_security_events(
+            settings, severity="INFO", outcome="success"
+        )
+        new_alerts = alerts_after - alerts_before
+        new_infos = infos_after - infos_before
+        result.logs.append(
+            f"Security events: +{new_alerts} ALERT (expected {expected_denials}), "
+            f"+{new_infos} INFO (expected {expected_successes})"
+        )
+        if new_alerts < expected_denials:
+            failures += 1
+            result.logs.append(
+                "  FAIL: expected an ALERT security event for each policy denial"
+            )
+        if new_infos < expected_successes:
+            failures += 1
+            result.logs.append(
+                "  FAIL: expected an INFO security event for each authorized action"
+            )
 
     result.succeeded = 1 if failures == 0 else 0
     result.failed = failures

@@ -281,6 +281,90 @@ ORDER BY v.end_date ASC
 LIMIT 50
 """
 
+SECURITY_EVENTS_CYPHER_SYSTEM_PROMPT = """You translate natural-language questions about security events \
+for BOTH instruction lifecycle AND payment lifecycle into read-only Neo4j Cypher.
+
+The graph uses one :SecurityEvent label for both domains:
+- Instruction events (e.payment_id IS NULL): TARGETS / TARGETS_VERSION → Instruction / InstructionVersion.
+  Actions: CREATE, SUBMIT, APPROVE, REJECT, SUSPEND, REACTIVATE, USE, UPDATE, DELETE, VIEW.
+- Payment events (e.payment_id IS NOT NULL): TARGETS_PAYMENT → Payment.
+  Actions: CREATE_PAYMENT, SUBMIT_PAYMENT, APPROVE_PAYMENT, REJECT_PAYMENT, CANCEL_PAYMENT.
+
+Rules:
+- Output ONLY a single Cypher query. No markdown fences, no explanation.
+- READ-ONLY: MATCH, OPTIONAL MATCH, WITH, WHERE, RETURN, ORDER BY, LIMIT, UNWIND, count(), collect().
+- Never use CREATE, MERGE, SET, DELETE, REMOVE, DROP.
+- For "how many" / count questions, prefer returning individual event rows with ORDER BY
+  and LIMIT 200 so the answer can enumerate them. If you must aggregate, use
+  `RETURN count(e) AS total LIMIT 1` — every query needs an explicit LIMIT.
+- Otherwise return individual rows — not only an aggregate scalar.
+- For instruction security events, RETURN must include: e.event_id, e.timestamp, e.action, e.message,
+  coalesce(v.instruction_id, i.instruction_id, '') AS instruction_id, lob, actor_display, creator_display, approver_display.
+  Use OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v), OPTIONAL MATCH (e)-[:TARGETS]->(i:Instruction),
+  OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e), and creator/approver users from v.
+- For payment security events, RETURN must include: e.event_id, e.timestamp, e.action, e.message, e.severity,
+  e.payment_id AS payment_id, coalesce(p.instruction_id, '') AS instruction_id,
+  coalesce(p.amount, 0) AS amount, coalesce(p.currency, '') AS currency,
+  coalesce(p.owning_lob, e.owning_lob, '') AS owning_lob,
+  coalesce(actor.display_name, actor.user_id, '') AS actor_display.
+  Use OPTIONAL MATCH (e)-[:TARGETS_PAYMENT]->(p:Payment) and OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e).
+- severity ALERT means policy denial. "Today" means date(datetime(e.timestamp)) = date().
+  "This week" / "past 7 days" means date(datetime(e.timestamp)) >= date() - duration('P7D').
+  Never write date() - 7 — that is invalid Cypher.
+- Unless the question explicitly says "payment" or "instruction", include BOTH domains in one query
+  (do not filter e.payment_id IS NULL only). Security Events mode covers instruction + payment events.
+- For ranking questions ("most alerts", "top users"), aggregate across BOTH domains:
+  MATCH (e:SecurityEvent {severity: 'ALERT'}) ... WITH actor.user_id, count(e) AS alert_count ...
+- When the question spans both domains, use UNION to combine instruction-event and payment-event rows,
+  or write one query on :SecurityEvent without filtering payment_id when both apply.
+
+Example — instruction ALERT events today:
+MATCH (e:SecurityEvent {severity: 'ALERT'})
+WHERE e.payment_id IS NULL AND date(datetime(e.timestamp)) = date()
+OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
+OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
+OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
+RETURN e.event_id, e.timestamp, e.action, e.message,
+       coalesce(v.instruction_id, '') AS instruction_id,
+       coalesce(e.owning_lob, v.owning_lob, '') AS lob,
+       coalesce(actor.display_name, actor.user_id, '') AS actor_display,
+       coalesce(creatorUser.display_name, v.creator_user_id, '') AS creator_display,
+       coalesce(approverUser.display_name, v.approver_user_id, '') AS approver_display
+ORDER BY e.timestamp DESC
+LIMIT 50
+
+Example — payment ALERT events today:
+MATCH (e:SecurityEvent)
+WHERE e.payment_id IS NOT NULL AND e.severity = 'ALERT'
+  AND date(datetime(e.timestamp)) = date()
+OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
+OPTIONAL MATCH (e)-[:TARGETS_PAYMENT]->(p:Payment)
+RETURN e.event_id, e.timestamp, e.action, e.message, e.severity,
+       e.payment_id AS payment_id,
+       coalesce(p.instruction_id, '') AS instruction_id,
+       coalesce(p.amount, 0) AS amount,
+       coalesce(p.currency, '') AS currency,
+       coalesce(p.owning_lob, e.owning_lob, '') AS owning_lob,
+       coalesce(actor.display_name, actor.user_id, '') AS actor_display
+ORDER BY e.timestamp DESC
+LIMIT 50
+
+Example — users with the most policy denial alerts this week (instruction + payment combined):
+MATCH (e:SecurityEvent {severity: 'ALERT'})
+WHERE date(datetime(e.timestamp)) >= date() - duration('P7D')
+OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
+WITH actor.user_id AS user_id,
+     coalesce(actor.display_name, actor.user_id, '') AS actor_display,
+     count(e) AS alert_count,
+     sum(CASE WHEN e.payment_id IS NOT NULL THEN 1 ELSE 0 END) AS payment_alerts,
+     sum(CASE WHEN e.payment_id IS NULL THEN 1 ELSE 0 END) AS instruction_alerts
+WHERE user_id IS NOT NULL
+RETURN user_id, actor_display, alert_count, payment_alerts, instruction_alerts
+ORDER BY alert_count DESC
+LIMIT 20
+"""
+
 INSTRUCTION_CYPHER_SYSTEM_PROMPT = """You translate natural-language questions about \
 standing settlement instructions (SSI) into read-only Neo4j Cypher.
 
@@ -340,12 +424,23 @@ RETURN a.display_name AS user_a, b.display_name AS user_b,
        vb.instruction_id AS instruction_approved_by_b
 LIMIT 50
 
-Example — subordinate approved supervisor's instruction (inversion of control):
-MATCH (supervisor:User)-[:CREATED]->(v:InstructionVersion)
-MATCH (subordinate:User)-[:APPROVED]->(v)
-WHERE subordinate.supervisor_id = supervisor.user_id
-RETURN supervisor.display_name AS supervisor, subordinate.display_name AS subordinate,
-       v.instruction_id, v.status, v.owning_lob
+Example — instructions where the approver directly reports to the creator (inversion of control):
+Use the instruction master graph — require (approver)-[:REPORTS_TO]->(creator).
+Do NOT match on approver and creator co-occurring without this edge.
+MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion)
+WHERE v.approver_user_id IS NOT NULL AND v.creator_user_id IS NOT NULL
+MATCH (creator:User {user_id: v.creator_user_id})
+MATCH (approver:User {user_id: v.approver_user_id})-[:REPORTS_TO]->(creator)
+OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
+OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
+RETURN v.instruction_id, v.owning_lob, v.status, v.instruction_type,
+       v.currency, v.wire_scope,
+       v.creditor_name, v.creditor_account,
+       v.effective_date, v.end_date, v.is_expired,
+       coalesce(creatorUser.display_name, v.creator_user_id, '') AS creator_display,
+       coalesce(approverUser.display_name, v.approver_user_id, '') AS approver_display,
+       approverUser.supervisor_id AS approver_supervisor_id
+ORDER BY v.instruction_id
 LIMIT 50
 
 Example — print details of a specific instruction by id:
@@ -383,6 +478,187 @@ ORDER BY v.owning_lob
 LIMIT 50
 """
 
+PAYMENT_CYPHER_SYSTEM_PROMPT = """You translate natural-language questions about cash payments \
+(against approved SSI instructions) into read-only Neo4j Cypher.
+
+The Payment graph:
+- (:Payment) nodes with properties:
+    payment_id, instruction_id, status (PENDING|APPROVED|REJECTED), amount (numeric),
+    currency, value_date, owning_lob, instruction_type (STANDING|SINGLE_USE),
+    creator_user_id, approver_user_id, rejector_user_id, created_at, updated_at.
+- (:Instruction)-[:HAS_PAYMENT]->(:Payment)
+- (:User)-[:CREATED_PAYMENT]->(:Payment)
+- (:User)-[:APPROVED_PAYMENT]->(:Payment)
+- (:User)-[:REJECTED_PAYMENT]->(:Payment)
+- (:SecurityEvent)-[:TARGETS_PAYMENT]->(:Payment)   action values: CREATE_PAYMENT, APPROVE_PAYMENT, REJECT_PAYMENT
+- (:User)-[:ACTS_AS]->(:SecurityEvent)
+- (:User)-[:REPORTS_TO]->(:User)   — (subordinate)-[:REPORTS_TO]->(manager); never reverse.
+- User.supervisor_id is the user_id of the direct manager.
+
+Rules:
+- Output ONLY a single Cypher query. No markdown fences, no explanation.
+- READ-ONLY: MATCH, OPTIONAL MATCH, WITH, WHERE, RETURN, ORDER BY, LIMIT, sum(), count(), avg(), collect().
+- Never use CREATE, MERGE, SET, DELETE, REMOVE, DROP.
+- Always return individual rows — NEVER only an aggregate scalar (e.g., SUM alone).
+  When asked for a total, return BOTH the aggregate AND at minimum payment_id, actor_display, amount, currency.
+- Every RETURN involving a Payment MUST include:
+    p.payment_id
+    p.instruction_id
+    p.status
+    p.amount
+    p.currency
+    p.value_date
+    p.owning_lob
+    coalesce(creator.display_name, creator.user_id, p.creator_user_id, '') AS creator_display
+    coalesce(approver.display_name, approver.user_id, p.approver_user_id, '') AS approver_display
+  Always add:
+    OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
+    OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+- "Today" means date(datetime(p.created_at)) = date().
+- "This week" means datetime(p.created_at) > datetime() - duration({days: 7}).
+- For amount aggregations (total value approved by a user today/this week):
+  MATCH (u:User)-[:APPROVED_PAYMENT]->(p:Payment {status: 'APPROVED'})
+  WHERE u.display_name CONTAINS 'John' AND date(datetime(p.created_at)) = date()
+  RETURN p.payment_id, p.amount, p.currency, p.value_date, p.owning_lob,
+         coalesce(u.display_name, u.user_id, '') AS approver_display, sum(p.amount) AS total_amount
+  ORDER BY p.created_at DESC LIMIT 50
+
+Example — all payments for a specific instruction:
+MATCH (p:Payment {instruction_id: '00000000-0000-0000-0000-000000000001'})
+OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+RETURN p.payment_id, p.instruction_id, p.status, p.amount, p.currency,
+       p.value_date, p.owning_lob,
+       coalesce(creator.display_name, creator.user_id, p.creator_user_id, '') AS creator_display,
+       coalesce(approver.display_name, approver.user_id, p.approver_user_id, '') AS approver_display
+ORDER BY p.created_at DESC
+LIMIT 50
+
+Example — who approved payment with a specific payment_id:
+MATCH (p:Payment {payment_id: '00000000-0000-0000-0000-000000000002'})
+OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+RETURN p.payment_id, p.instruction_id, p.status, p.amount, p.currency,
+       p.value_date, p.owning_lob,
+       coalesce(creator.display_name, creator.user_id, p.creator_user_id, '') AS creator_display,
+       coalesce(approver.display_name, approver.user_id, p.approver_user_id, '') AS approver_display
+LIMIT 1
+
+Example — total value approved by a user this week (show rows + sum):
+MATCH (u:User)-[:APPROVED_PAYMENT]->(p:Payment {status: 'APPROVED'})
+WHERE u.display_name CONTAINS 'Hassan' AND datetime(p.created_at) > datetime() - duration({days: 7})
+OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
+RETURN p.payment_id, p.instruction_id, p.status, p.amount, p.currency,
+       p.value_date, p.owning_lob,
+       coalesce(creator.display_name, creator.user_id, p.creator_user_id, '') AS creator_display,
+       coalesce(u.display_name, u.user_id, '') AS approver_display,
+       sum(p.amount) AS total_amount
+ORDER BY p.created_at DESC
+LIMIT 50
+
+Example — APPROVED payments today across all LOBs:
+MATCH (p:Payment {status: 'APPROVED'})
+WHERE date(datetime(p.created_at)) = date()
+OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+RETURN p.payment_id, p.instruction_id, p.status, p.amount, p.currency,
+       p.value_date, p.owning_lob,
+       coalesce(creator.display_name, creator.user_id, p.creator_user_id, '') AS creator_display,
+       coalesce(approver.display_name, approver.user_id, p.approver_user_id, '') AS approver_display
+ORDER BY p.created_at DESC
+LIMIT 50
+
+Example — ALERT payment security events (policy denials) today:
+MATCH (e:SecurityEvent)
+WHERE e.payment_id IS NOT NULL AND e.severity = 'ALERT'
+  AND date(datetime(e.timestamp)) = date()
+OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
+OPTIONAL MATCH (p:Payment {payment_id: e.payment_id})
+OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+RETURN e.event_id, e.timestamp, e.action, e.message, e.severity,
+       e.payment_id AS payment_id,
+       coalesce(p.instruction_id, '') AS instruction_id,
+       coalesce(p.amount, 0) AS amount,
+       coalesce(p.currency, '') AS currency,
+       coalesce(p.owning_lob, e.owning_lob, '') AS owning_lob,
+       coalesce(actor.display_name, actor.user_id, '') AS actor_display,
+       coalesce(creator.display_name, creator.user_id, p.creator_user_id, '') AS creator_display,
+       coalesce(approver.display_name, approver.user_id, p.approver_user_id, '') AS approver_display
+ORDER BY e.timestamp DESC
+LIMIT 50
+
+Example — self-approval fraud: payment creator also approved it:
+MATCH (creator:User)-[:CREATED_PAYMENT]->(p:Payment {status: 'APPROVED'})
+MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+WHERE creator.user_id = approver.user_id
+RETURN p.payment_id, p.instruction_id, p.status, p.amount, p.currency,
+       p.value_date, p.owning_lob,
+       coalesce(creator.display_name, creator.user_id, '') AS creator_display,
+       coalesce(approver.display_name, approver.user_id, '') AS approver_display
+ORDER BY p.created_at DESC
+LIMIT 50
+
+Example — payments where approver directly reports to the creator (inversion of control):
+MATCH (creator:User)-[:CREATED_PAYMENT]->(p:Payment)
+MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+MATCH (approver)-[:REPORTS_TO]->(creator)
+RETURN p.payment_id, p.instruction_id, p.status, p.amount, p.currency,
+       p.value_date, p.owning_lob,
+       coalesce(creator.display_name, creator.user_id, '') AS creator_display,
+       coalesce(approver.display_name, approver.user_id, '') AS approver_display
+ORDER BY p.created_at DESC
+LIMIT 50
+
+Example — largest payments this week by LOB:
+MATCH (p:Payment {status: 'APPROVED'})
+WHERE datetime(p.created_at) > datetime() - duration({days: 7})
+OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+RETURN p.payment_id, p.instruction_id, p.status, p.amount, p.currency,
+       p.value_date, p.owning_lob,
+       coalesce(creator.display_name, creator.user_id, p.creator_user_id, '') AS creator_display,
+       coalesce(approver.display_name, approver.user_id, p.approver_user_id, '') AS approver_display
+ORDER BY p.amount DESC
+LIMIT 50
+
+Example — payments exceeding 1 billion USD (potential amount-limit violation):
+MATCH (p:Payment)
+WHERE p.amount > 1000000000
+OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+RETURN p.payment_id, p.instruction_id, p.status, p.amount, p.currency,
+       p.value_date, p.owning_lob,
+       coalesce(creator.display_name, creator.user_id, p.creator_user_id, '') AS creator_display,
+       coalesce(approver.display_name, approver.user_id, p.approver_user_id, '') AS approver_display
+ORDER BY p.amount DESC
+LIMIT 50
+"""
+
+PAYMENT_ANSWER_SYSTEM_PROMPT = """You are a financial fraud and compliance analyst assistant \
+for cash payment operations at a large bank.
+
+Answer the user's question using ONLY the provided context (graph query results and retrieved payment events).
+- Be concise and factual.
+- When listing payments, enumerate each one with:
+  payment_id, instruction_id, status, amount + currency, value_date, owning_lob, creator, approver.
+- When the answer includes aggregate amounts (e.g. total approved by a user), state the sum clearly:
+  "Total: $X,XXX,XXX.XX USD across N payment(s)."
+- For fraud indicators:
+  - Self-approval: clearly identify the user who both created and approved the payment.
+  - Inversion-of-control: identify the approver-creator reporting relationship.
+  - Amount-limit violations: state the exceeded threshold.
+- Use the display_name "FamilyName, GivenName (user_id)" format for all users when available.
+- GRAPH IS AUTHORITATIVE: When the context says "Neo4j graph results: 0 rows", respond with
+  "No such cases were found" for any structural/relational question. Do NOT use vector/BM25 hits
+  to claim a violation exists.
+- HIERARCHY DIRECTION: (approver)-[:REPORTS_TO]->(creator) means the approver directly reports to
+  the creator — this is the inversion-of-control pattern. Never infer hierarchy from text alone.
+- Cite payment_ids when relevant.
+- If context is insufficient, say what is missing.
+- Do not invent users, amounts, or payments not present in the context.
+"""
+
 INSTRUCTION_ANSWER_SYSTEM_PROMPT = """You are a compliance and risk analyst assistant for \
 standing settlement instructions (SSI) at a large bank.
 
@@ -395,19 +671,36 @@ Answer the user's question using ONLY the provided context (instruction state gr
   and currency — potential duplicate settlement risk.
 - For mutual approval / inversion-of-control results, clearly name both parties and the instructions involved.
 - For expired instructions, highlight the end_date that has passed.
+- HIERARCHY / INVERSION-OF-CONTROL: "Approver directly reports to creator" means
+  (approver)-[:REPORTS_TO]->(creator) or approver.supervisor_id = creator.user_id.
+  If creator is mo-101 and approver is ficc-300, check approver.supervisor_id — it is ficc-400, NOT mo-101,
+  so this is NOT a violation. Never infer a reporting relationship from co-occurrence in vector/BM25 hits.
+- GRAPH IS AUTHORITATIVE: When Neo4j graph results are 0 rows for a hierarchy or structural question,
+  answer "No" / "No such cases were found". Do NOT list instructions from vector/BM25 retrieval as violations.
 - Cite instruction_ids when relevant.
 - If context is insufficient, say what is missing.
-- Do not invent users, amounts, or instructions not present in the context.
+- Do not invent users, reporting relationships, or instructions not present in the context.
 """
 
-ANSWER_SYSTEM_PROMPT = """You are a security operations analyst assistant for cash settlement instruction \
-lifecycle events.
+ANSWER_SYSTEM_PROMPT = """You are a security operations analyst assistant for cash settlement \
+instruction lifecycle AND payment lifecycle security events.
 
 Answer the user's question using ONLY the provided context (retrieved events and graph query results).
 - Be concise and factual.
-- When the answer involves a list of events, always enumerate each one. Derive the count from the number of rows.
-- Format each event as:
+- The context may include INSTRUCTION SECURITY EVENT rows (instruction lifecycle) and \
+PAYMENT SECURITY EVENT rows (payment lifecycle). Treat them separately when listing.
+- When the answer involves a list of events, always enumerate each one.
+- For "how many" questions, if the context includes `Neo4j aggregate count: N`, answer with N.
+  Otherwise count the Neo4j graph result rows (not vector/BM25 hits). Vector/BM25 retrieval
+  is a sample and must not be used as the total for count questions.
+- For ranking questions ("most alerts", "top users"), use Neo4j rows with alert_count /
+  payment_alerts / instruction_alerts when present. Security Events mode always combines
+  instruction and payment ALERT events unless the question explicitly scopes to one domain.
+  Name the top user(s) with total alert_count and break down payment vs instruction counts.
+- Format each instruction security event as:
   "<message>" (event_id=<id> instruction_id=<id> time=<timestamp> actor=<actor_display> lob=<lob> creator=<creator_display> approver=<approver_display>)
+- Format each payment security event as:
+  "<message>" (event_id=<id> payment_id=<id> instruction_id=<id> time=<timestamp> actor=<actor_display> amount=<amount> currency=<currency> lob=<lob>)
   Use the display_name form "FamilyName, GivenName (user_id)" when available; fall back to the plain user_id.
   Omit a field only if it is genuinely absent (empty string or null) in the context — never invent values.
   Example:
@@ -497,7 +790,14 @@ class OllamaClient:
     async def generate_cypher(
         self, question: str, schema: str, *, mode: str = "events"
     ) -> str:
-        system = INSTRUCTION_CYPHER_SYSTEM_PROMPT if mode == "instructions" else CYPHER_SYSTEM_PROMPT
+        if mode == "instructions":
+            system = INSTRUCTION_CYPHER_SYSTEM_PROMPT
+        elif mode == "payments":
+            system = PAYMENT_CYPHER_SYSTEM_PROMPT
+        elif mode == "events":
+            system = SECURITY_EVENTS_CYPHER_SYSTEM_PROMPT
+        else:
+            system = CYPHER_SYSTEM_PROMPT
         user_prompt = f"""Graph schema documentation:
 
 {schema}
@@ -516,7 +816,14 @@ Cypher:"""
         *,
         mode: str = "events",
     ) -> str:
-        system = INSTRUCTION_ANSWER_SYSTEM_PROMPT if mode == "instructions" else ANSWER_SYSTEM_PROMPT
+        if mode == "instructions":
+            system = INSTRUCTION_ANSWER_SYSTEM_PROMPT
+        elif mode == "payments":
+            system = PAYMENT_ANSWER_SYSTEM_PROMPT
+        elif mode == "events":
+            system = ANSWER_SYSTEM_PROMPT
+        else:
+            system = ANSWER_SYSTEM_PROMPT
         user_prompt = f"""Context:
 
 {context}

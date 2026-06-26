@@ -10,7 +10,7 @@ from ilm.models.api import (
     UpdateInstructionRequest,
     UseInstructionRequest,
 )
-from ilm.repository import InstructionNotFoundError
+from ilm.repository import ConcurrentModificationError, InstructionNotFoundError
 from ilm.service import InstructionService, InvalidStateTransitionError
 
 router = APIRouter(prefix="/instructions", tags=["instructions"])
@@ -157,4 +157,6 @@ async def _lifecycle_action(handler, instruction_id: str, subject: Subject, *arg
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except InvalidStateTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ConcurrentModificationError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

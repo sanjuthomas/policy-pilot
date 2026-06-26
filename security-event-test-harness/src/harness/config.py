@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     email_domain: str = "ssi.local"
     security_events_database: str = "security_events"
     security_events_collection: str = "instruction-lifecycle-manager"
+    payment_service_url: str = "http://localhost:8093"
+    payment_service_api_prefix: str = "/api/v1"
+    payment_security_events_collection: str = "payment-service"
     mongodb_uri: str = "mongodb://localhost:27017"
     verify_security_events: bool = True
 

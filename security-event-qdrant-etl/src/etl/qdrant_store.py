@@ -179,6 +179,35 @@ class QdrantHybridStore:
             ],
         )
 
+    def upsert_payment_point(
+        self,
+        point_id: str,
+        search_text: str,
+        payload: dict,
+        *,
+        dense_vector: list[float],
+    ) -> None:
+        """Upsert a payment or payment security event into the shared Qdrant collection."""
+        if self._client is None:
+            raise RuntimeError("Qdrant client not connected")
+
+        self._client.upsert(
+            collection_name=settings.qdrant_collection,
+            points=[
+                models.PointStruct(
+                    id=point_id,
+                    vector={
+                        settings.qdrant_dense_vector_name: dense_vector,
+                        settings.qdrant_bm25_vector_name: models.Document(
+                            text=search_text,
+                            model=settings.qdrant_bm25_model,
+                        ),
+                    },
+                    payload=payload,
+                )
+            ],
+        )
+
     def upsert_instruction_state(
         self,
         instruction_id: str,

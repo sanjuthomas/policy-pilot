@@ -62,6 +62,8 @@ Every authorized create/read/mutation emits a document to MongoDB `security_even
 | Authorized action | `INFO` | OPA allowed |
 | Policy denial | `ALERT` | OPA denied before any write |
 
+Key OPA rules include: creator cannot approve own instruction; approver must not report directly to creator (inversion of control); approver LOB must match instruction LOB.
+
 Events use ECS-style fields (`event`, `actor`, `resource`, `source`).
 
 **Excluded actors:** Service user `etl-reader` does not emit VIEW events (prevents ETL → Kafka feedback loop). Configure via `SECURITY_EVENT_EXCLUDED_USER_IDS`.

@@ -1,6 +1,6 @@
 # Neo4j Graph Model
 
-Version-controlled **graph schema and documentation** for security events and instruction lifecycle snapshots.
+Version-controlled **graph schema and documentation** for security events, instruction lifecycle snapshots, and payment lifecycle.
 
 ## Layout
 
@@ -9,14 +9,16 @@ schema.cypher         — constraints and indexes (applied by ETL on startup)
 relationships.cypher  — node labels, properties, relationships (documentation)
 ```
 
-## Two ETL pipelines write to this graph
+## Four ETL pipelines write to this graph
 
 | Pipeline | Kafka topic | Consumer group | Writes |
 |---|---|---|---|
 | `SecurityEventPipeline` | `instruction-security-events` (4 partitions) | `security-event-qdrant-etl` | SecurityEvent, User (actor), Instruction, InstructionVersion, ProfitCenter |
 | `InstructionPipeline` | `ssi-instructions` (4 partitions) | `ssi-instruction-etl` | Instruction, InstructionVersion, User (creator/approver/rejector/actor), ProfitCenter, CONFLICTS_WITH |
+| `PaymentSecurityEventPipeline` | `payment-security-events` (4 partitions) | `payment-security-event-etl` | SecurityEvent (payment), User (actor), Payment, Instruction |
+| `PaymentFactPipeline` | `ssi-payments` (4 partitions) | `payment-fact-etl` | Payment, User (creator/submitter/approver/rejector), Instruction, HAS_PAYMENT |
 
-Both topics carry **full fact events** — the ETL makes no API calls to the ILM.
+All topics carry **full fact events** — the ETL makes no API calls to ILM or the payment service.
 Partition key is `user_id` so all actions by the same user arrive in order.
 
 ## Graph model
@@ -27,6 +29,7 @@ flowchart TB
         UA[User actor] -->|ACTED_AS| SE[SecurityEvent]
         SE -->|TARGETS| I[Instruction]
         SE -->|TARGETS_VERSION| IV[InstructionVersion]
+        SE -->|TARGETS_PAYMENT| P[Payment]
         SE -->|INVOLVES_LOB| PC[ProfitCenter]
     end
 
@@ -43,6 +46,16 @@ flowchart TB
         UR[User rejector] -->|REJECTED| IV
         UM[User actor] -->|MUTATED| IV
     end
+
+    subgraph Payment Master Graph
+        I -->|HAS_PAYMENT| P
+        UPC[User creator] -->|CREATED_PAYMENT| P
+        UPS[User submitter] -->|SUBMITTED_PAYMENT| P
+        UPA[User approver] -->|APPROVED_PAYMENT| P
+        UPR[User rejector] -->|REJECTED_PAYMENT| P
+    end
+
+    U[User] -->|REPORTS_TO| S[User supervisor]
 ```
 
 ## Node properties
@@ -51,7 +64,8 @@ flowchart TB
 |---|---|
 | `Instruction` | `instruction_id`, `owning_lob`, `instruction_type`, `wire_scope`, `currency` |
 | `InstructionVersion` | `instruction_id`, `version_number`, `status`, `action`, `instruction_type`, `owning_lob`, `wire_scope`, `currency`, `effective_date`, `end_date`, `is_expired`, `creditor_name`, `creditor_account`, `creditor_bic`, `debtor_name`, `debtor_account`, `creator_user_id`, `approver_user_id`, `rejector_user_id` |
-| `SecurityEvent` | `event_id`, `timestamp`, `severity`, `action`, `outcome`, `message`, `wire_scope`, `instruction_type`, `owning_lob` |
+| `Payment` | `payment_id`, `instruction_id`, `status`, `amount`, `currency`, `value_date`, `owning_lob`, `instruction_type`, `created_by`, `approved_by` |
+| `SecurityEvent` | `event_id`, `timestamp`, `severity`, `action`, `outcome`, `message`, `wire_scope`, `instruction_type`, `owning_lob`, `payment_id` (null for instruction events) |
 | `User` | `user_id`, `given_name`, `family_name`, `display_name` (\*), `title`, `lob`, `roles`, `supervisor_id` |
 | `ProfitCenter` | `name` |
 
@@ -61,40 +75,50 @@ flowchart TB
 
 | Relationship | Direction | Written by | Meaning |
 |---|---|---|---|
-| `HAS_VERSION` | `Instruction → InstructionVersion` | both | All point-in-time versions |
-| `CURRENT` | `Instruction → InstructionVersion` | both | Latest version (version-aware, never regresses) |
+| `HAS_VERSION` | `Instruction → InstructionVersion` | instruction pipelines | All point-in-time versions |
+| `CURRENT` | `Instruction → InstructionVersion` | instruction pipelines | Latest version (version-aware, never regresses) |
 | `OWNED_BY` | `Instruction → ProfitCenter` | InstructionPipeline | Instruction's owning LOB |
 | `BELONGS_TO` | `InstructionVersion → ProfitCenter` | InstructionPipeline | Version's owning LOB |
 | `CONFLICTS_WITH` | `Instruction ↔ Instruction` | InstructionPipeline | Same creditor account + currency = potential duplicate route |
-| `CREATED` | `User → InstructionVersion` | both | Creator of this version |
+| `CREATED` | `User → InstructionVersion` | both instruction pipelines | Creator of this version |
 | `SUBMITTED` | `User → InstructionVersion` | SecurityEventPipeline | Submitter of this version |
-| `APPROVED` | `User → InstructionVersion` | both | Approver of this version |
+| `APPROVED` | `User → InstructionVersion` | both instruction pipelines | Approver of this version |
 | `APPROVED_FOR` | `User → Instruction` | InstructionPipeline | User has approved for this instruction root |
-| `REJECTED` | `User → InstructionVersion` | both | Rejector of this version |
+| `REJECTED` | `User → InstructionVersion` | both instruction pipelines | Rejector of this version |
 | `MUTATED` | `User → InstructionVersion` | InstructionPipeline | Actor who triggered mutation (carries `action`, `timestamp` props) |
-| `ACTED_AS` | `User → SecurityEvent` | SecurityEventPipeline | Actor who generated the security event |
+| `ACTED_AS` | `User → SecurityEvent` | security event pipelines | Actor who generated the security event |
 | `TARGETS` | `SecurityEvent → Instruction` | SecurityEventPipeline | Event targets instruction root |
 | `TARGETS_VERSION` | `SecurityEvent → InstructionVersion` | SecurityEventPipeline | Event targets specific version |
+| `TARGETS_PAYMENT` | `SecurityEvent → Payment` | PaymentSecurityEventPipeline | Payment security event targets payment |
+| `HAS_PAYMENT` | `Instruction → Payment` | PaymentFactPipeline | Instruction has payment(s) |
+| `CREATED_PAYMENT` | `User → Payment` | PaymentFactPipeline | Payment creator |
+| `SUBMITTED_PAYMENT` | `User → Payment` | PaymentFactPipeline | Payment submitter |
+| `APPROVED_PAYMENT` | `User → Payment` | PaymentFactPipeline | Payment approver |
+| `REJECTED_PAYMENT` | `User → Payment` | PaymentFactPipeline | Payment rejector |
 | `INVOLVES_LOB` | `SecurityEvent → ProfitCenter` | SecurityEventPipeline | Event's owning LOB |
+| `REPORTS_TO` | `User → User` | all pipelines (on user upsert) | Org hierarchy from ZITADEL `supervisor_id` |
 
-**Planned but not yet written:** `SUPERSEDES` (version chain), `REPORTS_TO` (org hierarchy).
+**Planned but not yet written:** `SUPERSEDES` (version chain).
 
-## Qdrant points (dual source)
+## Qdrant points (four source tags)
 
-The ETL also writes to Qdrant (`instruction_security_events` collection). Each point has a `source` tag:
+The ETL also writes to Qdrant (`ssi_search_index` collection). Each point has a `source` tag:
 
 | `source` tag | Point ID | One per | Written by |
 |---|---|---|---|
 | `security_event` | `uuid5(event_id)` | Security event | SecurityEventPipeline |
 | `instruction_state` | `uuid5("instruction:" + instruction_id)` | Instruction (upserted on every mutation) | InstructionPipeline |
+| `payment_security_event` | `uuid5(event_id)` | Payment security event | PaymentSecurityEventPipeline |
+| `payment_fact` | `uuid5("payment:" + payment_id)` | Payment (upserted on every mutation) | PaymentFactPipeline |
 
 The chat API filters by source based on the selected mode:
 
 | Chat mode | Qdrant filter | Neo4j focus |
 |---|---|---|
-| `events` | `source = security_event` | SecurityEvent graph |
-| `instructions` | `source = instruction_state` | Instruction master graph |
-| `both` | no filter | both |
+| `events` | `security_event` + `payment_security_event` | Both security event graphs |
+| `instructions` | `instruction_state` | Instruction master graph |
+| `payments` | `payment_fact` | Payment master graph |
+| `all` | no filter | All entity types |
 
 ## Neo4j Browser
 
@@ -126,29 +150,29 @@ RETURN a.display_name AS user_a, b.display_name AS user_b,
        va.instruction_id AS approved_by_a,
        vb.instruction_id AS approved_by_b;
 
-// Potential duplicate settlement routes
-MATCH (i1:Instruction)-[:CONFLICTS_WITH]->(i2:Instruction)
-MATCH (i1)-[:CURRENT]->(v1:InstructionVersion)
-MATCH (i2)-[:CURRENT]->(v2:InstructionVersion)
-RETURN v1.instruction_id, v1.creditor_account, v1.currency,
-       v2.instruction_id
-LIMIT 50;
-
 // Subordinate approved supervisor's instruction (inversion of control)
-MATCH (sup:User)-[:CREATED]->(v:InstructionVersion)
-MATCH (sub:User)-[:APPROVED]->(v)
-WHERE sub.supervisor_id = sup.user_id
-RETURN sup.display_name AS supervisor, sub.display_name AS subordinate,
+MATCH (creator:User)-[:CREATED]->(v:InstructionVersion)
+MATCH (approver:User)-[:APPROVED]->(v)
+MATCH (approver)-[:REPORTS_TO]->(creator)
+RETURN creator.display_name AS supervisor, approver.display_name AS subordinate,
        v.instruction_id, v.owning_lob;
+
+// Payment approver reports to payment creator
+MATCH (creator:User)-[:CREATED_PAYMENT]->(p:Payment)
+MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+MATCH (approver)-[:REPORTS_TO]->(creator)
+RETURN creator.display_name, approver.display_name, p.payment_id, p.amount
+LIMIT 50;
 
 // ALERT events today with full context
 MATCH (e:SecurityEvent {severity: 'ALERT'})
 WHERE date(datetime(e.timestamp)) = date()
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
 OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+OPTIONAL MATCH (e)-[:TARGETS_PAYMENT]->(p:Payment)
 RETURN e.event_id, e.message, e.timestamp,
        coalesce(actor.display_name, actor.user_id) AS actor,
-       v.instruction_id, v.owning_lob
+       v.instruction_id, p.payment_id, p.amount
 ORDER BY e.timestamp DESC;
 ```
 

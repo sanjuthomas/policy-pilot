@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Payment Browser</title>
+    <link rel="stylesheet" href="/ui/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark"></span>
+        <div>
+          <h1>Payment Browser</h1>
+          <p class="subtitle">MongoDB change stream · read-only</p>
+        </div>
+      </div>
+      <div class="status-group">
+        <nav class="nav-links" aria-label="Payment service views">
+          <a href="/ui/" class="active">Payments</a>
+          <a href="/ui/security-events/">Security events</a>
+        </nav>
+        <div id="load-status" class="status-pill status-connecting">Loading</div>
+        <div class="stat">
+          <span class="stat-label">Shown</span>
+          <span id="stat-total" class="stat-value">0</span>
+        </div>
+      </div>
+    </header>
+
+    <section class="toolbar">
+      <label class="filter">
+        Status
+        <select id="status-filter">
+          <option value="ALL">All</option>
+          <option value="DRAFT">DRAFT</option>
+          <option value="SUBMITTED">SUBMITTED</option>
+          <option value="APPROVED">APPROVED</option>
+          <option value="REJECTED">REJECTED</option>
+          <option value="CANCELLED">CANCELLED</option>
+        </select>
+      </label>
+      <label class="filter">
+        Owning LOB
+        <select id="lob-filter">
+          <option value="ALL">All</option>
+        </select>
+      </label>
+      <label class="filter">
+        Instruction Type
+        <select id="type-filter">
+          <option value="ALL">All</option>
+          <option value="STANDING">STANDING</option>
+          <option value="SINGLE_USE">SINGLE_USE</option>
+        </select>
+      </label>
+      <button id="refresh-btn" type="button" class="btn">Refresh</button>
+      <button id="pause-btn" type="button" class="btn">Pause live feed</button>
+      <button id="clear-btn" type="button" class="btn btn-ghost">Clear view</button>
+    </section>
+
+    <main class="table-wrap">
+      <table id="payments-table">
+        <thead>
+          <tr>
+            <th class="col-id">Payment ID</th>
+            <th class="col-id">Instruction ID</th>
+            <th>Ver</th>
+            <th>Status</th>
+            <th>Instruction Type</th>
+            <th>LOB</th>
+            <th>Amount</th>
+            <th>Currency</th>
+            <th>Value Date</th>
+            <th>Created by</th>
+            <th>Approved by</th>
+            <th>Created (UTC)</th>
+            <th>Updated (UTC)</th>
+          </tr>
+        </thead>
+        <tbody id="payments-body"></tbody>
+      </table>
+      <div id="empty-state" class="empty-state hidden">No payments found.</div>
+    </main>
+
+    <script src="/ui/static/app.js"></script>
+  </body>
+</html>

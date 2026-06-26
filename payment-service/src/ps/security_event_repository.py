@@ -1,0 +1,80 @@
+import logging
+from typing import Any
+
+from ps.config import settings
+from ps.database import get_security_events_db
+from ps.kafka_publisher import kafka_publisher
+from ps.models.api import Subject
+from ps.models.enums import PaymentAction
+from ps.models.payment import Payment
+from ps.models.security_event import PaymentSecurityEvent
+
+logger = logging.getLogger(__name__)
+
+
+class SecurityEventRepository:
+    """Write-only persistence for payment SIEM events (MongoDB + Kafka)."""
+
+    @property
+    def _col(self):
+        return get_security_events_db()[settings.security_events_collection]
+
+    async def insert_document(self, document: dict[str, Any]) -> dict[str, Any]:
+        await self._col.insert_one(document)
+        return document
+
+    async def publish(self, document: dict[str, Any]) -> None:
+        await kafka_publisher.publish_security_event(document)
+
+    async def insert(self, event: PaymentSecurityEvent) -> PaymentSecurityEvent:
+        document = event.model_dump(mode="json")
+        await self.insert_document(document)
+        try:
+            await self.publish(document)
+        except Exception:
+            logger.exception("failed to publish security event %s to Kafka", event.event_id)
+        return event
+
+    async def record_authorized_action(
+        self,
+        action: PaymentAction,
+        subject: Subject,
+        payment: Payment,
+        *,
+        details: dict[str, Any] | None = None,
+    ) -> PaymentSecurityEvent:
+        event = PaymentSecurityEvent.authorized_action(
+            action,
+            subject,
+            payment,
+            details=details,
+        )
+        return await self.insert(event)
+
+    async def record_policy_denial(
+        self,
+        action: PaymentAction,
+        subject: Subject,
+        payment: Payment,
+        *,
+        reason: str,
+        details: dict[str, Any] | None = None,
+    ) -> PaymentSecurityEvent:
+        event = PaymentSecurityEvent.policy_denial(
+            action,
+            subject,
+            payment,
+            reason=reason,
+            details=details,
+        )
+        return await self.insert(event)
+
+    async def ensure_indexes(self) -> None:
+        await self._col.create_index("event_id", unique=True)
+        await self._col.create_index([("timestamp", -1)])
+        await self._col.create_index("event.action")
+        await self._col.create_index("event.outcome")
+        await self._col.create_index("severity")
+        await self._col.create_index("actor.user_id")
+        await self._col.create_index("resource.id")
+        logger.info("payment security_events collection indexes ensured")

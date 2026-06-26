@@ -130,17 +130,54 @@ users:
       - INSTRUCTION_APPROVER
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # ETL service account
+  # Front office — payment submitters (DRAFT → SUBMITTED)
+  #
+  # SUBMIT_PAYMENT requires PAYMENT_CREATOR + subject.lob matching the
+  # instruction owning LOB.  These users belong to the trading desk itself
+  # (front office), unlike middle-office creators who cover LOBs via list.
   # ═══════════════════════════════════════════════════════════════════════════
 
-  - user_id: etl-reader
-    given_name: ETL
-    family_name: Reader
+  - user_id: fo-ficc-101
+    given_name: Alex
+    family_name: Morrison
     title: Analyst
+    lob: FICC
     roles:
-      - INSTRUCTION_CREATOR
-    groups:
-      - MIDDLE_OFFICE
+      - PAYMENT_CREATOR
+    supervisor_id: ficc-300
+
+  - user_id: fo-fx-101
+    given_name: Jordan
+    family_name: Blake
+    title: Analyst
+    lob: FX
+    roles:
+      - PAYMENT_CREATOR
+    supervisor_id: fx-300
+
+  - user_id: fo-rates-101
+    given_name: Sam
+    family_name: Okafor
+    title: Analyst
+    lob: DESK_RATES
+    roles:
+      - PAYMENT_CREATOR
+    supervisor_id: rates-201
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Payment service account
+  # Used for service-to-service calls from payment-service → ILM (OBO pattern).
+  # Holds only INSTRUCTION_VIEWER so it can read instructions but cannot mutate them.
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - user_id: svc-payment
+    given_name: Payment
+    family_name: Service
+    title: Service Account
+    roles:
+      - INSTRUCTION_VIEWER
+      - INSTRUCTION_MARKER
+    groups: []
 
   # ═══════════════════════════════════════════════════════════════════════════
   # PAYMENT SERVICE USERS
@@ -151,7 +188,7 @@ users:
   #                      requires MIDDLE_OFFICE group + matching covering_lobs
   #
   # Demo scenario coverage:
-  #   pay-101/102/103  Pure creators — normal payment submission
+  #   pay-101/102/103  Middle-office creators — CREATE_PAYMENT requires covering_lobs
   #   pay-201          Approver covering FICC + FX (1B limit)
   #   pay-202          Approver covering FICC + DESK_RATES (1B limit)
   #                    → LOB-coverage violation if asked to approve FX payment
@@ -177,6 +214,9 @@ users:
     groups:
       - MIDDLE_OFFICE
       - UP_TO_100_MILLION_CLUB
+    covering_lobs:
+      - FICC
+      - FX
     supervisor_id: pay-201
 
   - user_id: pay-102
@@ -188,6 +228,9 @@ users:
     groups:
       - MIDDLE_OFFICE
       - UP_TO_100_MILLION_CLUB
+    covering_lobs:
+      - FICC
+      - FX
     supervisor_id: pay-201
 
   - user_id: pay-103
@@ -199,6 +242,10 @@ users:
     groups:
       - MIDDLE_OFFICE
       - UP_TO_1_BILLION_CLUB
+    covering_lobs:
+      - FICC
+      - FX
+      - DESK_RATES
     supervisor_id: pay-202
 
   # --- Pure approvers (FUNDING_APPROVER only) --------------------------------

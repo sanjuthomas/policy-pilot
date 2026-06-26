@@ -69,7 +69,12 @@ async function sendMessage(text) {
   sendBtn.disabled = true;
   sendBtn.textContent = "Thinking…";
 
-  const modeLabel = { events: "🔍 Events", instructions: "📋 Instructions", both: "🔀 Both" }[mode] || mode;
+  const modeLabel = {
+    events: "🔍 Events",
+    instructions: "📋 Instructions",
+    payments: "💳 Payments",
+    all: "🔀 All entities",
+  }[mode] || mode;
   appendMessage("user", `[${modeLabel}] ${text}`);
   history.push({ role: "user", content: text });
 

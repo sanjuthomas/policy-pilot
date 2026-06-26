@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Security Event Search</title>
-    <link rel="stylesheet" href="/static/styles.css?v=5" />
+    <link rel="stylesheet" href="/static/styles.css?v=6" />
   </head>
   <body>
     <header class="topbar">
@@ -82,6 +82,74 @@
       </section>
     </main>
 
-    <script src="/static/app.js?v=5"></script>
+    <!-- Text → Cypher pane -->
+    <section class="panel cypher-panel">
+      <h2>Text <span class="arrow">→</span> Cypher</h2>
+      <p class="panel-intro">
+        Translate a natural-language question into a read-only Cypher query using
+        <strong>qwen3:30b</strong>, then run it directly against Neo4j.
+        Requires the chat service to be running.
+      </p>
+
+      <form id="cypher-form" class="search-form">
+        <div class="search-controls" style="margin-bottom: 0.75rem;">
+          <label class="field field-inline" for="cypher-mode-select">
+            <span class="field-label">Graph mode</span>
+            <select id="cypher-mode-select">
+              <option value="events" selected>Security events</option>
+              <option value="instructions">Instructions</option>
+              <option value="payments">Payments</option>
+            </select>
+          </label>
+        </div>
+
+        <label class="field" for="cypher-question-input">
+          <span class="field-label">Natural language question</span>
+          <textarea
+            id="cypher-question-input"
+            rows="3"
+            placeholder="e.g. find all approvals where the approver reports to the creator"
+            required
+          ></textarea>
+        </label>
+
+        <div class="search-controls">
+          <button type="submit" id="cypher-generate-btn" class="btn-primary">Generate Cypher</button>
+          <span id="cypher-generate-status" class="muted" style="font-size:0.8rem;"></span>
+        </div>
+      </form>
+
+      <div id="cypher-output-wrap" class="hidden" style="margin-top:1rem;">
+        <label class="field" for="cypher-output">
+          <span class="field-label">Generated Cypher
+            <span id="cypher-valid-badge" class="badge" style="margin-left:0.5rem;font-size:0.7rem;"></span>
+          </span>
+          <textarea
+            id="cypher-output"
+            rows="8"
+            class="mono"
+            spellcheck="false"
+            placeholder="Cypher will appear here…"
+          ></textarea>
+        </label>
+        <div id="cypher-error-msg" class="muted hidden" style="color:var(--color-warn,#e09550);font-size:0.8rem;margin-top:0.25rem;"></div>
+
+        <div class="search-controls" style="margin-top:0.75rem;">
+          <button type="button" id="cypher-copy-btn" class="btn btn-ghost">Copy</button>
+          <button type="button" id="cypher-run-btn" class="btn-secondary">Run against Neo4j</button>
+          <span id="cypher-run-status" class="muted" style="font-size:0.8rem;"></span>
+        </div>
+      </div>
+
+      <div id="cypher-results-wrap" class="hidden" style="margin-top:1rem;">
+        <div class="results-header">
+          <h3 id="cypher-results-title">Neo4j result</h3>
+          <button type="button" id="cypher-clear-btn" class="btn btn-ghost">Clear</button>
+        </div>
+        <pre id="cypher-results-output" class="results-detail" aria-label="Cypher result JSON"></pre>
+      </div>
+    </section>
+
+    <script src="/static/app.js?v=6"></script>
   </body>
 </html>

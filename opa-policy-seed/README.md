@@ -3,19 +3,25 @@
 Version-controlled **Rego policies** uploaded to OPA on Docker Compose startup.
 
 ILM calls `POST /v1/data/ssi/instruction_lifecycle/allow` before every instruction create or mutation.
+The payment service calls `POST /v1/data/payment/lifecycle/allow` before every payment create or mutation.
 
 ## Layout
 
 ```
 policies/
-└── ssi/
-    ├── common.rego              # Shared helpers (roles, LOB, dates)
-    ├── approval_matrix.rego     # Who may approve whom by title + LOB
-    ├── lifecycle_rules.rego     # Valid state transitions
-    └── instruction_lifecycle.rego  # allow rules per action
+├── ssi/
+│   ├── common.rego              # Shared helpers (roles, LOB, dates, subordinate check)
+│   ├── approval_matrix.rego     # Who may approve whom by title + LOB
+│   ├── lifecycle_rules.rego     # Valid state transitions
+│   └── instruction_lifecycle.rego  # allow rules per action
+└── payment/
+    ├── common.rego              # LOB coverage, creator≠approver, subordinate check
+    ├── amount_limits.rego       # Amount-limit clubs from ZITADEL groups
+    ├── violations.rego          # Violation catalog + is_alert helper
+    └── lifecycle.rego           # CREATE / SUBMIT / APPROVE / REJECT rules
 ```
 
-## Authorization model
+## SSI instruction authorization
 
 | Actor | Roles | Scope |
 |-------|-------|-------|
@@ -24,15 +30,29 @@ policies/
 
 Valid LOB values: `FICC`, `FX`, or `DESK_<name>`.
 
-**Out of scope:** Treasury liquidity instructions.
-
 ### Actions governed
 
 `CREATE`, `UPDATE`, `DELETE`, `SUBMIT`, `APPROVE`, `REJECT`, `SUSPEND`, `REACTIVATE`, `USE`, `VIEW`
 
-Policy denials surface as HTTP 403 on ILM and `ALERT` security events on Kafka.
+Key rules: creator cannot approve own instruction; approver must not report directly to creator (inversion of control); approver LOB must match instruction LOB.
 
-## Evaluate locally
+## Payment authorization
+
+| Actor | Roles | Scope |
+|-------|-------|-------|
+| Middle office | `PAYMENT_CREATOR` + `covering_lobs` | Create payments for covered LOBs |
+| Front office | `PAYMENT_CREATOR` + `lob` | Submit payments for own desk LOB |
+| Middle office | `FUNDING_APPROVER` + `covering_lobs` | Approve/reject submitted payments for covered LOBs |
+
+### Actions governed
+
+`CREATE_PAYMENT`, `SUBMIT_PAYMENT`, `APPROVE_PAYMENT`, `REJECT_PAYMENT`
+
+Key rules: payment amount within user's club ceiling and absolute $100 B limit; instruction must be `STANDING` or `SINGLE_USE` and not expired; creator cannot approve own payment; approver must not report directly to creator; approver must cover the instruction LOB.
+
+Policy denials surface as HTTP 403 and `ALERT` security events on Kafka.
+
+## Evaluate locally (instruction)
 
 ```bash
 curl -s http://localhost:8181/v1/data/ssi/instruction_lifecycle/allow \
@@ -54,6 +74,31 @@ curl -s http://localhost:8181/v1/data/ssi/instruction_lifecycle/allow \
         "created_by": { "user_id": "mo-100", "title": "Analyst" }
       },
       "account": { "owning_lob": "FICC" }
+    }
+  }'
+```
+
+## Evaluate locally (payment)
+
+```bash
+curl -s http://localhost:8181/v1/data/payment/lifecycle/allow \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "input": {
+      "action": "CREATE_PAYMENT",
+      "subject": {
+        "user_id": "pay-101",
+        "roles": ["PAYMENT_CREATOR"],
+        "groups": ["MIDDLE_OFFICE", "UP_TO_100_MILLION_CLUB"],
+        "covering_lobs": ["FICC", "FX"]
+      },
+      "payment": {
+        "amount": 1000000,
+        "instruction_owning_lob": "FICC",
+        "instruction_status": "STANDING",
+        "instruction_end_date": "2027-06-24T00:00:00Z",
+        "created_by": { "user_id": "pay-101" }
+      }
     }
   }'
 ```

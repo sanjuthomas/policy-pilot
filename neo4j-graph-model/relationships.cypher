@@ -156,3 +156,42 @@
 // (:SecurityEvent)-[:INVOLVES_LOB]->(:ProfitCenter)
 //   From security_event.resource.owning_lob.
 //   Written by: SecurityEventPipeline
+
+// ---------------------------------------------------------------------------
+// PAYMENT NODE
+// ---------------------------------------------------------------------------
+//
+// (:Payment)
+//   payment_id          unique UUID
+//   instruction_id      backing SSI instruction
+//   status              PENDING | APPROVED | REJECTED
+//   amount              numeric payment amount
+//   currency            ISO 4217 currency code (from instruction)
+//   value_date          intended settlement date
+//   owning_lob          LOB from the backing instruction
+//   instruction_type    STANDING | SINGLE_USE
+//   creator_user_id
+//   approver_user_id
+//   rejector_user_id
+//   created_at
+//   updated_at
+//
+// (:Instruction)-[:HAS_PAYMENT]->(:Payment)
+//   One instruction can have many payments (STANDING = many; SINGLE_USE = at most one).
+//   Written by: PaymentPipeline
+//
+// (:User)-[:CREATED_PAYMENT]->(:Payment)
+//   The PAYMENT_CREATOR who submitted the payment request.
+//   Written by: PaymentPipeline
+//
+// (:User)-[:APPROVED_PAYMENT]->(:Payment)
+//   The FUNDING_APPROVER who approved the payment.
+//   Written by: PaymentPipeline
+//
+// (:User)-[:REJECTED_PAYMENT]->(:Payment)
+//   The FUNDING_APPROVER who rejected the payment.
+//   Written by: PaymentPipeline
+//
+// (:SecurityEvent)-[:TARGETS_PAYMENT]->(:Payment)
+//   Payment security events link to the Payment node.
+//   Written by: PaymentSecurityEventPipeline

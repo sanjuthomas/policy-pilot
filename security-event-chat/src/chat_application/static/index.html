@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Security Event Chat</title>
-    <link rel="stylesheet" href="/static/styles.css?v=1" />
+    <link rel="stylesheet" href="/static/styles.css?v=3" />
   </head>
   <body>
     <header class="topbar">
@@ -46,8 +46,12 @@
               <span class="mode-pill">Instructions</span>
             </label>
             <label class="mode-option">
-              <input type="radio" name="mode" value="both" />
-              <span class="mode-pill">Both</span>
+              <input type="radio" name="mode" value="payments" />
+              <span class="mode-pill">Payments</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="mode" value="all" />
+              <span class="mode-pill">All entities</span>
             </label>
           </div>
           <label class="sr-only" for="chat-input">Your question</label>
@@ -84,6 +88,6 @@
       </aside>
     </main>
 
-    <script src="/static/app.js?v=1"></script>
+    <script src="/static/app.js?v=3"></script>
   </body>
 </html>

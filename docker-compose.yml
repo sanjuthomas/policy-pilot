@@ -42,17 +42,22 @@ services:
       - |
         /opt/kafka/bin/kafka-topics.sh --create --if-not-exists \
           --bootstrap-server kafka:9092 \
-          --topic security-events \
-          --partitions 4 \
-          --replication-factor 1
-        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists \
-          --bootstrap-server kafka:9092 \
           --topic instruction-security-events \
           --partitions 4 \
           --replication-factor 1
         /opt/kafka/bin/kafka-topics.sh --create --if-not-exists \
           --bootstrap-server kafka:9092 \
           --topic ssi-instructions \
+          --partitions 4 \
+          --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists \
+          --bootstrap-server kafka:9092 \
+          --topic ssi-payments \
+          --partitions 4 \
+          --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists \
+          --bootstrap-server kafka:9092 \
+          --topic payment-security-events \
           --partitions 4 \
           --replication-factor 1
     networks:
@@ -200,7 +205,6 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_SECURITY_EVENTS_TOPIC: instruction-security-events
       KAFKA_INSTRUCTION_TOPIC: ssi-instructions
-      SECURITY_EVENT_EXCLUDED_USER_IDS: etl-reader
     volumes:
       - zitadel-bootstrap:/zitadel/bootstrap:ro
       - ./instruction-lifecycle-manager/src/instruction_lifecycle_manager/static:/usr/local/lib/python3.12/site-packages/instruction_lifecycle_manager/static:ro
@@ -229,16 +233,22 @@ services:
       KAFKA_CONSUMER_GROUP: security-event-qdrant-etl
       KAFKA_INSTRUCTION_TOPIC: ssi-instructions
       KAFKA_INSTRUCTION_CONSUMER_GROUP: ssi-instruction-etl
+      KAFKA_PAYMENT_SECURITY_EVENTS_TOPIC: payment-security-events
+      KAFKA_PAYMENT_SECURITY_EVENTS_CONSUMER_GROUP: payment-security-event-etl
+      KAFKA_PAYMENTS_TOPIC: ssi-payments
+      KAFKA_PAYMENTS_CONSUMER_GROUP: payment-fact-etl
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: neo4j
       NEO4J_PASSWORD: devpassword
       GRAPH_MODEL_DIR: /app/neo4j-graph-model
       QDRANT_URL: http://qdrant:6333
-      QDRANT_COLLECTION: instruction_security_events
+      QDRANT_COLLECTION: ssi_search_index
       QDRANT_BM25_MODEL: qdrant/bm25
       # Host Mac Ollama (GPU) — not containerized; ETL calls out over HTTP only
       OLLAMA_URL: http://host.docker.internal:11434
       OLLAMA_EMBEDDING_MODEL: bge-m3:latest
+      # Cypher generation is proxied through the chat service
+      CHAT_SERVICE_URL: http://security-event-chat:8092
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -252,8 +262,51 @@ services:
         condition: service_started
       instruction-lifecycle-manager:
         condition: service_started
+      payment-service:
+        condition: service_started
       zitadel-api:
         condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - security-event-net
+
+  payment-service:
+    build: ./payment-service
+    container_name: payment-service
+    ports:
+      - "8093:8093"
+    environment:
+      MONGODB_URI: mongodb://mongodb:27017/?replicaSet=rs0
+      MONGODB_DATABASE: ssi_cash_activities
+      MONGODB_COLLECTION: payments
+      SECURITY_EVENTS_DATABASE: security_events
+      SECURITY_EVENTS_COLLECTION: payment-service
+      OPA_URL: http://opa:8181
+      ILM_URL: http://instruction-lifecycle-manager:8000
+      SERVICE_USER_ID: svc-payment
+      SERVICE_USER_PASSWORD: Password1!
+      OIDC_ISSUER_URL: http://localhost:8080
+      OIDC_INTERNAL_URL: http://zitadel-proxy
+      ZITADEL_INTERNAL_URL: http://zitadel-proxy
+      ZITADEL_SERVICE_PAT_FILE: /zitadel/bootstrap/login-client.pat
+      AUTH_MODE: jwt
+      KAFKA_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_PAYMENTS_TOPIC: ssi-payments
+      KAFKA_SECURITY_EVENTS_TOPIC: payment-security-events
+    volumes:
+      - zitadel-bootstrap:/zitadel/bootstrap:ro
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+      opa-policy-seed:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+      instruction-lifecycle-manager:
+        condition: service_started
     restart: unless-stopped
     networks:
       - security-event-net
@@ -265,6 +318,7 @@ services:
       - "8091:8091"
     environment:
       ILM_URL: http://instruction-lifecycle-manager:8000
+      PAYMENT_SERVICE_URL: http://payment-service:8093
       MONGODB_URI: mongodb://mongodb:27017/?replicaSet=rs0
       ZITADEL_URL: http://zitadel-proxy
       ZITADEL_HOST_HEADER: localhost
@@ -276,6 +330,8 @@ services:
       - ./security-event-test-harness/src/harness/static:/usr/local/lib/python3.12/site-packages/harness/static:ro
     depends_on:
       instruction-lifecycle-manager:
+        condition: service_started
+      payment-service:
         condition: service_started
       zitadel-api:
         condition: service_healthy
@@ -290,7 +346,7 @@ services:
       - "8092:8092"
     environment:
       QDRANT_URL: http://qdrant:6333
-      QDRANT_COLLECTION: instruction_security_events
+      QDRANT_COLLECTION: ssi_search_index
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: neo4j
       NEO4J_PASSWORD: devpassword

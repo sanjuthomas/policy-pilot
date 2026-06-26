@@ -4,14 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Test Harness</title>
-    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/styles.css?v=2" />
   </head>
   <body>
     <header class="topbar">
       <div class="brand">
         <span class="brand-mark"></span>
         <div>
-          <h1>Instruction Test Harness</h1>
+          <h1>Test Harness</h1>
           <p class="subtitle">Generate lifecycle data for end-to-end ETL testing</p>
         </div>
       </div>
@@ -22,15 +22,23 @@
           <span id="stat-instructions" class="stat-value">—</span>
         </div>
         <div class="stat">
-          <span class="stat-label">Security events</span>
+          <span class="stat-label">Payments</span>
+          <span id="stat-payments" class="stat-value">—</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">ILM events</span>
           <span id="stat-events" class="stat-value">—</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Payment events</span>
+          <span id="stat-payment-events" class="stat-value">—</span>
         </div>
       </div>
     </header>
 
     <main class="layout">
       <section class="panel">
-        <h2>Lifecycle actions</h2>
+        <h2>Instruction actions</h2>
         <p class="panel-intro">
           Enter a count and run an action. Each button drives the ILM API with seeded ZITADEL users.
         </p>
@@ -73,9 +81,65 @@
           </article>
 
           <article class="action-card action-card-wide" data-action="run-policy-scenario">
-            <h3>Run policy scenario</h3>
+            <h3>Run instruction policy scenario</h3>
             <p>
               Execute the fixed 9-step OPA policy harness (create, deny, submit, approve, list versions).
+            </p>
+            <div class="action-controls">
+              <button type="button" class="btn-secondary">Run scenario</button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Payment actions</h2>
+        <p class="panel-intro">
+          Create and manage payments against approved instructions. Requires at least one approved instruction.
+        </p>
+
+        <div class="action-grid" id="payment-action-grid">
+          <article class="action-card" data-action="create-payments">
+            <h3>Create payments</h3>
+            <p>Create payments against approved STANDING instructions using seeded payment creators.</p>
+            <div class="action-controls">
+              <input type="number" min="1" max="500" value="5" aria-label="Count" />
+              <button type="button" class="btn-primary">Create</button>
+            </div>
+          </article>
+
+          <article class="action-card" data-action="submit-payments">
+            <h3>Submit payments</h3>
+            <p>Submit up to N DRAFT payments for approval as the original creator.</p>
+            <div class="action-controls">
+              <input type="number" min="1" max="500" value="5" aria-label="Count" />
+              <button type="button" class="btn-primary">Submit</button>
+            </div>
+          </article>
+
+          <article class="action-card" data-action="approve-payments">
+            <h3>Approve payments</h3>
+            <p>Approve up to N SUBMITTED payments as pay-204 (covers all LOBs).</p>
+            <div class="action-controls">
+              <input type="number" min="1" max="500" value="5" aria-label="Count" />
+              <button type="button" class="btn-primary">Approve</button>
+            </div>
+          </article>
+
+          <article class="action-card" data-action="reject-payments">
+            <h3>Reject payments</h3>
+            <p>Reject up to N SUBMITTED payments as pay-204.</p>
+            <div class="action-controls">
+              <input type="number" min="1" max="500" value="1" aria-label="Count" />
+              <button type="button" class="btn-warn">Reject</button>
+            </div>
+          </article>
+
+          <article class="action-card action-card-wide" data-action="run-payment-policy-scenario">
+            <h3>Run payment policy scenario</h3>
+            <p>
+              Execute the 7-step OPA payment policy harness: create (DRAFT), deny
+              unauthorized create/submit/approve (ALERT), submit (SUBMITTED), approve (APPROVED).
             </p>
             <div class="action-controls">
               <button type="button" class="btn-secondary">Run scenario</button>
@@ -93,6 +157,6 @@
       </section>
     </main>
 
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v=2"></script>
   </body>
 </html>

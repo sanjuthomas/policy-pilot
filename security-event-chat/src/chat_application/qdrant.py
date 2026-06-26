@@ -49,6 +49,24 @@ class QdrantSearchClient:
         """Build a Qdrant filter to restrict by point source tag."""
         if source is None:
             return None
+        if source == "security_events":
+            return models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="source",
+                        match=models.MatchAny(any=["security_event", "payment_security_event"]),
+                    )
+                ]
+            )
+        if source == "payment":
+            return models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="source",
+                        match=models.MatchValue(value="payment_fact"),
+                    )
+                ]
+            )
         return models.Filter(
             must=[
                 models.FieldCondition(

@@ -8,6 +8,7 @@ from neo4j import READ_ACCESS, AsyncDriver, AsyncGraphDatabase
 from chat_application.config import settings
 from chat_application.cypher import (
     LOOKUP_INSTRUCTION_BY_EVENT_CYPHER,
+    normalize_read_only_cypher,
     records_to_rows,
     validate_read_only_cypher,
 )
@@ -49,6 +50,7 @@ class Neo4jClient:
             raise RuntimeError("Neo4j client not connected")
 
         # Layers 1-7: application-side validation (fast-fail before network round-trip)
+        cypher = normalize_read_only_cypher(cypher)
         validate_read_only_cypher(cypher)
 
         # Layer 8: server-side enforcement — Neo4j rejects any write operation

@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     ollama_timeout_seconds: float = 300.0
 
     qdrant_url: str = "http://qdrant:6333"
-    qdrant_collection: str = "instruction_security_events"
+    qdrant_collection: str = "ssi_search_index"
     qdrant_dense_vector_name: str = "dense"
     qdrant_bm25_vector_name: str = "bm25"
     qdrant_bm25_model: str = "qdrant/bm25"

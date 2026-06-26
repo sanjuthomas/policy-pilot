@@ -309,3 +309,136 @@ void refreshComponents();
 setInterval(() => {
   void refreshComponents();
 }, 20000);
+
+// ── Text → Cypher pane ────────────────────────────────────────────────────
+
+const cypherForm = document.getElementById("cypher-form");
+const cypherModeSelect = document.getElementById("cypher-mode-select");
+const cypherQuestionInput = document.getElementById("cypher-question-input");
+const cypherGenerateBtn = document.getElementById("cypher-generate-btn");
+const cypherGenerateStatus = document.getElementById("cypher-generate-status");
+const cypherOutputWrap = document.getElementById("cypher-output-wrap");
+const cypherOutput = document.getElementById("cypher-output");
+const cypherValidBadge = document.getElementById("cypher-valid-badge");
+const cypherErrorMsg = document.getElementById("cypher-error-msg");
+const cypherCopyBtn = document.getElementById("cypher-copy-btn");
+const cypherRunBtn = document.getElementById("cypher-run-btn");
+const cypherRunStatus = document.getElementById("cypher-run-status");
+const cypherResultsWrap = document.getElementById("cypher-results-wrap");
+const cypherResultsTitle = document.getElementById("cypher-results-title");
+const cypherResultsOutput = document.getElementById("cypher-results-output");
+const cypherClearBtn = document.getElementById("cypher-clear-btn");
+
+let cypherBusy = false;
+
+function setCypherBusy(next) {
+  cypherBusy = next;
+  cypherGenerateBtn.disabled = next;
+  cypherRunBtn.disabled = next;
+}
+
+function showCypherResult(data) {
+  cypherResultsTitle.textContent = `Neo4j result — ${data.row_count} row(s)`;
+  cypherResultsOutput.textContent = JSON.stringify(data.rows, null, 2);
+  cypherResultsWrap.classList.remove("hidden");
+}
+
+function clearCypherResults() {
+  cypherResultsWrap.classList.add("hidden");
+  cypherResultsOutput.textContent = "";
+  cypherRunStatus.textContent = "";
+}
+
+cypherForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (cypherBusy) return;
+
+  const question = cypherQuestionInput.value.trim();
+  if (!question) return;
+
+  setCypherBusy(true);
+  cypherGenerateStatus.textContent = "Generating… (may take 20–60 s)";
+  cypherOutputWrap.classList.add("hidden");
+  clearCypherResults();
+
+  try {
+    const response = await fetch("/api/cypher/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, mode: cypherModeSelect.value }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      const msg = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || data);
+      throw new Error(msg);
+    }
+
+    cypherOutput.value = data.cypher || "";
+    cypherOutputWrap.classList.remove("hidden");
+
+    if (data.valid) {
+      cypherValidBadge.textContent = "valid";
+      cypherValidBadge.style.background = "var(--color-ok, #3a7d44)";
+      cypherErrorMsg.classList.add("hidden");
+    } else {
+      cypherValidBadge.textContent = "invalid";
+      cypherValidBadge.style.background = "var(--color-warn, #a0522d)";
+      cypherErrorMsg.textContent = data.error || "Validation failed";
+      cypherErrorMsg.classList.remove("hidden");
+    }
+
+    cypherGenerateStatus.textContent = `Generated via ${data.model || "qwen3:30b"}`;
+  } catch (error) {
+    cypherGenerateStatus.textContent = `Error: ${error.message}`;
+  } finally {
+    setCypherBusy(false);
+  }
+});
+
+cypherCopyBtn.addEventListener("click", () => {
+  const text = cypherOutput.value;
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    const prev = cypherCopyBtn.textContent;
+    cypherCopyBtn.textContent = "Copied!";
+    setTimeout(() => { cypherCopyBtn.textContent = prev; }, 1500);
+  });
+});
+
+cypherRunBtn.addEventListener("click", async () => {
+  if (cypherBusy) return;
+  const cypher = cypherOutput.value.trim();
+  if (!cypher) return;
+
+  setCypherBusy(true);
+  cypherRunStatus.textContent = "Running…";
+  clearCypherResults();
+
+  try {
+    const response = await fetch("/api/cypher/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cypher }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      const msg = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || data);
+      throw new Error(msg);
+    }
+    showCypherResult(data);
+    cypherRunStatus.textContent = `${data.row_count} row(s) returned`;
+  } catch (error) {
+    cypherRunStatus.textContent = `Run failed: ${error.message}`;
+  } finally {
+    setCypherBusy(false);
+  }
+});
+
+cypherClearBtn.addEventListener("click", () => {
+  clearCypherResults();
+  cypherOutputWrap.classList.add("hidden");
+  cypherOutput.value = "";
+  cypherGenerateStatus.textContent = "";
+  cypherValidBadge.textContent = "";
+  cypherErrorMsg.classList.add("hidden");
+});

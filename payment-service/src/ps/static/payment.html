@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Payment</title>
+    <link rel="stylesheet" href="/ui/static/styles.css" />
+  </head>
+  <body class="detail-page">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark"></span>
+        <div>
+          <h1>Payment</h1>
+          <p id="payment-id-subtitle" class="subtitle mono">Loading…</p>
+        </div>
+      </div>
+      <div class="status-group">
+        <a class="btn btn-ghost" href="/ui/">Back to browser</a>
+      </div>
+    </header>
+
+    <main class="detail-main">
+      <div id="detail-error" class="detail-error hidden"></div>
+      <div id="detail-summary" class="detail-card hidden"></div>
+      <section id="lifecycle-section" class="lifecycle-section hidden">
+        <div class="lifecycle-header">
+          <h2>Lifecycle events</h2>
+        </div>
+        <ul id="lifecycle-list" class="lifecycle-list"></ul>
+      </section>
+      <section id="detail-json-section" class="detail-json-section hidden">
+        <div class="detail-json-header">
+          <h2>Full payment</h2>
+          <button id="copy-json-btn" type="button" class="btn btn-ghost">Copy JSON</button>
+        </div>
+        <pre id="detail-json" class="detail-json"></pre>
+      </section>
+    </main>
+
+    <script src="/ui/static/payment.js"></script>
+  </body>
+</html>

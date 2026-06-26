@@ -50,3 +50,22 @@ FOR (v:InstructionVersion) ON (v.effective_date);
 
 CREATE INDEX instruction_version_end_date IF NOT EXISTS
 FOR (v:InstructionVersion) ON (v.end_date);
+
+// Payment constraints and indexes
+CREATE CONSTRAINT payment_id_unique IF NOT EXISTS
+FOR (p:Payment) REQUIRE p.payment_id IS UNIQUE;
+
+CREATE INDEX payment_instruction_id IF NOT EXISTS
+FOR (p:Payment) ON (p.instruction_id);
+
+CREATE INDEX payment_status IF NOT EXISTS
+FOR (p:Payment) ON (p.status);
+
+CREATE INDEX payment_created_at IF NOT EXISTS
+FOR (p:Payment) ON (p.created_at);
+
+CREATE INDEX payment_owning_lob IF NOT EXISTS
+FOR (p:Payment) ON (p.owning_lob);
+
+CREATE INDEX payment_security_event_id IF NOT EXISTS
+FOR (e:SecurityEvent) ON (e.payment_id);

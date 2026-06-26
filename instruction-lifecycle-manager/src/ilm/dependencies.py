@@ -1,6 +1,6 @@
 from fastapi import Header, HTTPException
 
-from ilm.auth import subject_from_bearer_token
+from ilm.auth import subject_from_bearer_token, subject_from_obo_call
 from ilm.config import settings
 from ilm.models.api import Subject
 from ilm.models.enums import is_valid_owning_lob
@@ -35,6 +35,10 @@ def _subject_from_headers(
 def get_subject(
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    x_on_behalf_of: str | None = Header(default=None, alias="X-On-Behalf-Of"),
+    x_on_behalf_of_session_id: str | None = Header(
+        default=None, alias="X-On-Behalf-Of-Session-Id"
+    ),
     x_subject_user_id: str | None = Header(default=None, alias="X-Subject-User-Id"),
     x_subject_title: str | None = Header(default=None, alias="X-Subject-Title"),
     x_subject_roles: str | None = Header(default=None, alias="X-Subject-Roles"),
@@ -54,8 +58,20 @@ def get_subject(
             )
         if not settings.oidc_issuer_url:
             raise HTTPException(status_code=500, detail="OIDC issuer is not configured")
-        token = authorization.split(" ", 1)[1].strip()
-        return subject_from_bearer_token(token, session_id=x_session_id)
+        service_token = authorization.split(" ", 1)[1].strip()
+
+        # On-Behalf-Of: service token in Authorization, user token in X-On-Behalf-Of.
+        # X-Session-Id belongs to the service; X-On-Behalf-Of-Session-Id to the user.
+        # Authorize using the user's roles; log events for the user.
+        if x_on_behalf_of:
+            return subject_from_obo_call(
+                service_token,
+                x_on_behalf_of,
+                service_session_id=x_session_id,
+                user_session_id=x_on_behalf_of_session_id,
+            )
+
+        return subject_from_bearer_token(service_token, session_id=x_session_id)
 
     if settings.auth_mode == "headers" or not has_bearer:
         missing = [

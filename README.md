@@ -2,7 +2,7 @@
 
 A monorepo demonstrating how to build a **retrieval-augmented generation (RAG) system over financial security events** using a fully local, containerized stack.
 
-The domain is **Security Settlement Instructions** in a capital-markets middle-office context. Every instruction mutation — create, submit, approve, reject, suspend, reactivate — is recorded as a structured security event, streamed through Kafka, indexed into Qdrant and Neo4j, and made queryable via a natural-language chat interface powered by a local Ollama LLM.
+The domain is **Security Settlement Instructions (SSI)** and **cash payments** against approved instructions in a capital-markets middle-office context. Every instruction or payment mutation — create, submit, approve, reject, and policy denial — is recorded as a structured security event, streamed through Kafka, indexed into Qdrant and Neo4j, and made queryable via a natural-language chat interface powered by a local Ollama LLM.
 
 ## Demo questions
 
@@ -29,6 +29,12 @@ The chat is designed to surface **fraud patterns, compliance violations, and col
 - _Can you show me the instruction associated with security event id `<uuid>`?_
 - _Can you show me the full lifecycle timeline of instruction `<uuid>`?_
 
+**Payment policy and compliance:**
+- _How many payment ALERT events happened today?_
+- _Which user triggered the most policy denial alerts this week?_
+- _Are there any payments where the approver directly reports to the payment creator?_
+- _Show me all APPROVED payments over $10M for FICC this week._
+
 ---
 
 ## Architecture
@@ -41,6 +47,7 @@ flowchart TB
 
     subgraph apps [Applications]
         ILM[instruction-lifecycle-manager :8000]
+        PAY[payment-service :8093]
         HARNESS[test-harness :8091]
         ETL[security-event-qdrant-etl :8090]
         CHAT[security-event-chat :8092]
@@ -62,11 +69,17 @@ flowchart TB
     end
 
     ZITADEL --> ILM
+    ZITADEL --> PAY
     ZITADEL --> HARNESS
     ILM --> OPA
+    PAY --> OPA
     ILM --> MONGO
+    PAY --> MONGO
+    PAY -->|read instructions| ILM
     ILM -->|instruction-security-events| KAFKA
     ILM -->|ssi-instructions| KAFKA
+    PAY -->|payment-security-events| KAFKA
+    PAY -->|ssi-payments| KAFKA
     KAFKA --> ETL
     ETL --> QD
     ETL --> NEO
@@ -75,13 +88,19 @@ flowchart TB
     CHAT --> NEO
     CHAT --> OLLAMA
     HARNESS --> ILM
+    HARNESS --> PAY
 ```
 
 ### Data flow
 
 1. **ILM** — operator creates/mutates an instruction; ZITADEL JWT is validated; OPA authorizes the action; instruction version and security event are written to MongoDB **in a single transaction**; two Kafka fact events are published — one to `instruction-security-events` (security event + full instruction snapshot) and one to `ssi-instructions` (instruction state fact).
-2. **ETL** — runs two independent Kafka consumers. The **SecurityEventPipeline** consumes `instruction-security-events` and upserts a Neo4j security-event subgraph and a Qdrant hybrid point tagged `source=security_event`. The **InstructionPipeline** consumes `ssi-instructions` and upserts the instruction master graph in Neo4j and a Qdrant point tagged `source=instruction_state`. Both pipelines are **self-contained** — every fact event carries the full instruction snapshot, so no API callbacks to the ILM are needed.
-3. **Chat** — on every user question, selects a retrieval mode (`events` / `instructions` / `both`), runs three retrievers in parallel (Qdrant vector + BM25 filtered by source tag, Ollama-generated Cypher → Neo4j), merges results with reciprocal rank fusion, and synthesises a natural-language answer with Ollama. When the question contains a UUID, the pipeline also performs a deterministic exact lookup in both stores.
+2. **Payment service** — middle-office users create payments against approved SSI instructions; front-office desk users submit them; funding approvers approve or reject. OPA enforces amount limits, LOB coverage, segregation of duties, and reporting-line rules. Each action writes to MongoDB and publishes to `payment-security-events` (audit) and `ssi-payments` (payment state fact).
+3. **ETL** — runs four independent Kafka consumers, all **self-contained** (full snapshots embedded — no API callbacks):
+   - **SecurityEventPipeline** (`instruction-security-events`) → Neo4j + Qdrant `source=security_event`
+   - **InstructionPipeline** (`ssi-instructions`) → instruction master graph + Qdrant `source=instruction_state`
+   - **PaymentSecurityEventPipeline** (`payment-security-events`) → payment security graph + Qdrant `source=payment_security_event`
+   - **PaymentFactPipeline** (`ssi-payments`) → payment master graph + Qdrant `source=payment_fact`
+4. **Chat** — selects a retrieval mode (`events` / `instructions` / `payments` / `all`), runs vector + BM25 + Neo4j in parallel, merges with reciprocal rank fusion, and synthesises an answer with Ollama. Count, ranking, and hierarchy questions use **deterministic planned Cypher** (Neo4j is authoritative — vector/BM25 hits are not used to infer structural violations). UUID questions trigger exact Qdrant + Neo4j lookups.
 
 ---
 
@@ -163,6 +182,7 @@ OPA evaluates the Rego policy bundle and returns `{"result": {"allow": false, "r
 |---|---|---|
 | Role gate | `"INSTRUCTION_APPROVER" in subject.roles` | Non-approvers attempting to approve |
 | Creator cannot approve | `subject.user_id != resource.created_by` | Self-approval (cross-approval collusion) |
+| Subordinate cannot approve | `approver.supervisor_id != creator.user_id` | Manager approving subordinate's instruction (inversion of control) |
 | LOB ownership | `subject.lob == resource.owning_lob` | Wrong-desk approval (e.g. FX desk approving FICC instruction) |
 | Status gate | `resource.status == "PENDING"` | Approving an instruction not yet submitted |
 | Role segregation | `"INSTRUCTION_CREATOR" not in subject.roles` | Middle-office creator accounts cannot approve |
@@ -282,12 +302,14 @@ Embedding throughput with `bge-m3` is approximately **80–120 documents/second*
 |-----|---------|---------|
 | http://localhost:8000/ui/ | ILM | Instruction browser |
 | http://localhost:8000/ui/security-events/ | ILM | Live security event monitor (SSE) |
+| http://localhost:8093/ui/ | Payment service | Payment browser |
+| http://localhost:8093/ui/security-events/ | Payment service | Live payment security event monitor (SSE) |
 | http://localhost:8000/docs | ILM | OpenAPI |
 | http://localhost:8090 | ETL | Search console — vector / BM25 / hybrid / Neo4j |
-| http://localhost:8091 | Test harness | Generate lifecycle traffic |
-| http://localhost:8092 | Chat | Natural-language Q&A |
+| http://localhost:8091 | Test harness | Generate instruction + payment lifecycle traffic |
+| http://localhost:8092 | Chat | Natural-language Q&A (four search modes) |
 | http://localhost:7474/browser/ | Neo4j | Graph browser — `neo4j` / `devpassword` |
-| http://localhost:8080 | ZITADEL | Identity provider |
+| http://localhost:8080/ui/console | ZITADEL | Identity admin console |
 
 ---
 
@@ -296,12 +318,13 @@ Embedding throughput with `bge-m3` is approximately **80–120 documents/second*
 | Directory | Role |
 |-----------|------|
 | `instruction-lifecycle-manager` | FastAPI lifecycle API — OPA authorization, Mongo persistence (bi-temporal versioning), Kafka security event publishing, instruction and security event UIs |
-| `security-event-qdrant-etl` | Dual Kafka consumers — SecurityEventPipeline (`instruction-security-events`) + InstructionPipeline (`ssi-instructions`) → Neo4j graph writer + Qdrant hybrid indexer (two point types) + search console UI |
-| `security-event-chat` | RAG chat — triple retrieval (vector + BM25 + Cypher), RRF merge, Ollama answer synthesis |
-| `security-event-test-harness` | ZITADEL-authenticated browser UI to drive create → submit → approve / reject lifecycles |
+| `payment-service` | Cash payment lifecycle against approved SSI instructions — OPA authorization (amount limits, LOB coverage, segregation of duties), Mongo persistence, Kafka publishing, payment and security event UIs |
+| `security-event-qdrant-etl` | Four Kafka consumers — instruction + payment security events and state facts → Neo4j graph writer + Qdrant hybrid indexer (`ssi_search_index`) + search console UI |
+| `security-event-chat` | RAG chat — four search modes, triple retrieval (vector + BM25 + Cypher), planned graph queries for counts/rankings/hierarchy, RRF merge, Ollama answer synthesis |
+| `security-event-test-harness` | ZITADEL-authenticated browser UI to drive instruction and payment lifecycles, including OPA policy demo scenarios |
 | `neo4j-graph-model` | Graph schema docs, Cypher constraints/indexes, example queries |
-| `opa-policy-seed` | Rego policies — approval matrix, LOB ownership, role checks |
-| `zitadel-seed` | Demo user seed (`users.yaml`) — middle office + FICC/FX/DESK approvers + ETL service account |
+| `opa-policy-seed` | Rego policies — SSI instruction lifecycle + payment lifecycle (amount limits, violations) |
+| `zitadel-seed` | Demo user seed (`users.yaml`) — middle office, FICC/FX/DESK approvers, payment creators/approvers, front-office submitters, service accounts |
 | `log-forwarder` | Optional container log shipping to Kafka |
 
 ---
@@ -375,10 +398,10 @@ docker compose up -d
 PAT=$(docker exec zitadel-login cat /zitadel/bootstrap/login-client.pat | tr -d '\n')
 cd zitadel-seed && ZITADEL_PAT="$PAT" python3 seed.py
 
-# 4. Open the test harness and generate some lifecycle traffic
+# 4. Open the test harness — run instruction and payment policy scenarios
 open http://localhost:8091
 
-# 5. Open the chat and start asking questions
+# 5. Open the chat and start asking questions (try Security Events mode first)
 open http://localhost:8092
 ```
 
@@ -409,7 +432,14 @@ All passwords are `Password1!`. Login names follow `{user_id}@ssi.local`.
 | `fx-201` | Amira Hassan | Associate — approver | FX |
 | `fx-300` | Lucas Berger | VP — approver | FX |
 | `rates-201` | Nina Johansson | Associate — approver | DESK_RATES |
+| `pay-101` | Emily Rodriguez | Analyst — payment creator | FICC, FX |
+| `pay-201` | Sophie Laurent | VP — funding approver | FICC, FX |
+| `fo-ficc-101` | Alex Morrison | Analyst — front-office submitter | FICC |
+| `fo-fx-101` | Jordan Blake | Analyst — front-office submitter | FX |
 | `etl-reader` | — | Service account — excluded from security event emission (`SECURITY_EVENT_EXCLUDED_USER_IDS`) | — |
+| `svc-payment` | — | Service account — payment service → ILM reads (`INSTRUCTION_VIEWER`) | — |
+
+See `zitadel-seed/users.yaml` for the full payment user roster (`pay-102` … `pay-400`, amount-limit clubs, and dual-role holders).
 
 ---
 
@@ -432,11 +462,46 @@ Lifecycle: `DRAFT` → `PENDING` → `STANDING | SINGLE_USE` or `REJECTED` → `
 
 ---
 
+## Payment model
+
+A **payment** is a cash transfer request against an approved SSI instruction. Middle-office users create payments; front-office desk users submit them; funding approvers approve or reject.
+
+```
+instruction_id      linked SSI route (must be STANDING or SINGLE_USE)
+amount              payment amount (USD in demo)
+currency            ISO 4217
+value_date          settlement date
+owning_lob          inherited from instruction
+```
+
+Lifecycle: `DRAFT` → `SUBMITTED` → `APPROVED` or `REJECTED` (or `CANCELLED` if the instruction becomes invalid at approval time).
+
+Policy denials (self-approval, wrong LOB, amount over club limit, subordinate approver) emit `ALERT` security events; authorized actions emit `INFO`.
+
+---
+
+## Storage and topic names
+
+| Layer | Name | Purpose |
+|-------|------|---------|
+| Qdrant collection | `ssi_search_index` | Hybrid search index (dense + BM25) |
+| Qdrant payload `source` | `security_event`, `instruction_state`, `payment_security_event`, `payment_fact` | Point type filter for chat modes |
+| MongoDB | `ssi_cash_instructions.instructions` | Instruction versions |
+| MongoDB | `ssi_cash_activities.payments` | Payment records |
+| MongoDB | `security_events.instruction-lifecycle-manager` | ILM security events |
+| MongoDB | `security_events.payment-service` | Payment security events |
+| Kafka | `instruction-security-events` | ILM security event facts |
+| Kafka | `ssi-instructions` | ILM instruction state facts |
+| Kafka | `payment-security-events` | Payment security event facts |
+| Kafka | `ssi-payments` | Payment state facts |
+
+---
+
 ## Neo4j graph model
 
-Two ETL pipelines write to the **same Neo4j database**, producing two complementary sub-graphs that share nodes (`Instruction`, `InstructionVersion`, `User`, `ProfitCenter`).
+Four ETL pipelines write to the **same Neo4j database**, producing complementary sub-graphs that share nodes (`Instruction`, `InstructionVersion`, `User`, `ProfitCenter`, `Payment`, `SecurityEvent`).
 
-### Graph 1 — Security Event Graph
+### Graph 1 — Instruction Security Event Graph
 Built by `SecurityEventPipeline` from the `instruction-security-events` topic.
 Answers: _who triggered this event, what severity, what instruction was touched, which actor caused a policy denial?_
 
@@ -469,11 +534,31 @@ flowchart TB
     UAP -->|APPROVED_FOR| I
     UR[User rejector] -->|REJECTED| IV
     UM[User actor] -->|MUTATED| IV
+    U -->|REPORTS_TO| USuper[User supervisor]
 ```
+
+### Graph 3 — Payment Security Event Graph
+Built by `PaymentSecurityEventPipeline` from the `payment-security-events` topic.
+Answers: _who attempted a denied payment action, what amount/LOB was involved?_
+
+```mermaid
+flowchart TB
+    UA[User actor] -->|ACTED_AS| SE[SecurityEvent]
+    SE -->|TARGETS_PAYMENT| P[Payment]
+    P -->|HAS_PAYMENT| I[Instruction]
+    UC[User creator] -->|CREATED_PAYMENT| P
+    UAP[User approver] -->|APPROVED_PAYMENT| P
+```
+
+### Graph 4 — Payment Master Graph
+Built by `PaymentFactPipeline` from the `ssi-payments` topic.
+Answers: _what is the current payment status, who created/submitted/approved it, which instruction does it use?_
+
+The `REPORTS_TO` relationship (org hierarchy from ZITADEL `supervisor_id`) is written by the ETL on every user upsert and powers inversion-of-control queries in chat.
 
 The `CURRENT` relationship is **version-aware** — it only advances forward and is never overwritten by an older version arriving out of order.
 
-Because the two graphs share nodes, cross-graph queries work naturally:
+Because the graphs share nodes, cross-graph queries work naturally:
 
 ```cypher
 -- ALERT event actor + current instruction state in one query
@@ -497,6 +582,21 @@ WHERE a.user_id <> b.user_id
 RETURN a.display_name AS user_a, b.display_name AS user_b,
        va.instruction_id AS approved_by_a, vb.instruction_id AS approved_by_b;
 
+-- Subordinate approved supervisor's instruction (inversion of control)
+MATCH (creator:User)-[:CREATED]->(v:InstructionVersion)
+MATCH (approver:User)-[:APPROVED]->(v)
+MATCH (approver)-[:REPORTS_TO]->(creator)
+RETURN creator.display_name AS creator, approver.display_name AS approver,
+       v.instruction_id, v.owning_lob
+LIMIT 50;
+
+-- Payment approver reports to payment creator
+MATCH (creator:User)-[:CREATED_PAYMENT]->(p:Payment)
+MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+MATCH (approver)-[:REPORTS_TO]->(creator)
+RETURN creator.display_name, approver.display_name, p.payment_id, p.amount
+LIMIT 50;
+
 -- Potential duplicate settlement routes
 MATCH (i1:Instruction)-[:CONFLICTS_WITH]->(i2:Instruction)
 MATCH (i1)-[:CURRENT]->(v1:InstructionVersion)
@@ -512,20 +612,29 @@ See `neo4j-graph-model/` for the full property catalog and schema.
 ## RAG pipeline detail
 
 ```
-User question
+User question + search mode (events | instructions | payments | all)
+│
+├─ Count / ranking / hierarchy question? ──► Planned Cypher (deterministic, Neo4j authoritative)
 │
 ├─ UUID detected? ──► Exact Qdrant fetch + fixed Neo4j lookup (pinned to top of context)
 │
-├─► Qdrant dense vector search (bge-m3)
-├─► Qdrant BM25 sparse search
-└─► Ollama → Cypher → Neo4j
+├─► Qdrant dense vector search (bge-m3), filtered by mode
+├─► Qdrant BM25 sparse search, filtered by mode
+└─► Ollama → Cypher → Neo4j (mode-specific system prompt)
          │
          ▼
-    RRF merge (k=60) + dedupe by event_id
+    RRF merge (k=60) + dedupe by event_id / payment_id
          │
          ▼
     Ollama chat synthesis
 ```
+
+| Chat mode | Qdrant filter | Neo4j focus |
+|-----------|---------------|-------------|
+| `events` | `security_event` + `payment_security_event` | Both security event graphs |
+| `instructions` | `instruction_state` | Instruction master graph |
+| `payments` | `payment_fact` | Payment master graph |
+| `all` | no filter | All entity types |
 
 The chat API response includes the generated Cypher query, graph rows, per-source timing, and source cards tagged `vector` / `bm25` / `neo4j` / `exact`.
 
@@ -538,7 +647,12 @@ Every instruction mutation (create, update, submit, approve, reject, suspend, re
 - the instruction version to `ssi_cash_instructions.instructions`
 - the matching security event to `security_events.instruction-lifecycle-manager`
 
-in a **single MongoDB multi-document transaction**. Kafka publish happens only after the transaction commits. MongoDB must run as a replica set — `docker-compose.yml` initialises `rs0` automatically.
+Every payment mutation (create, submit, approve, reject) writes:
+
+- the payment record to `ssi_cash_activities.payments`
+- the matching security event to `security_events.payment-service`
+
+in a **single MongoDB multi-document transaction** per service. Kafka publish happens only after the transaction commits. MongoDB must run as a replica set — `docker-compose.yml` initialises `rs0` automatically.
 
 ---
 
@@ -557,6 +671,10 @@ security-event-search           # :8090
 cd security-event-chat && pip install -e .
 security-event-chat             # :8092
 
+# Payment service
+cd payment-service && pip install -e .
+payment-service                 # :8093
+
 # Test harness
 cd security-event-test-harness && pip install -e .
 security-event-test-harness-ui  # :8091
@@ -572,6 +690,7 @@ Each service reads configuration from environment variables (see its own README 
 .
 ├── docker-compose.yml
 ├── instruction-lifecycle-manager/   # ILM API + instruction / security UIs
+├── payment-service/                 # Payment API + payment / security UIs
 ├── security-event-qdrant-etl/       # Kafka ETL + search console
 ├── security-event-chat/             # RAG chat
 ├── security-event-test-harness/     # E2E test harness UI

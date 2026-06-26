@@ -23,6 +23,8 @@ class SecurityEventActor(BaseModel):
     roles: list[str]
     lob: str | None = None
     supervisor_id: str | None = None
+    # Set when the action was performed via an On-Behalf-Of service delegation.
+    delegated_by: str | None = None
 
 
 class SecurityEventResource(BaseModel):
@@ -78,6 +80,7 @@ class SecurityEvent(BaseModel):
             roles=subject.roles,
             lob=subject.lob,
             supervisor_id=subject.supervisor_id,
+            delegated_by=subject.delegated_by,
         )
 
     @classmethod
@@ -114,6 +117,13 @@ class SecurityEvent(BaseModel):
         )
 
     @classmethod
+    def _delegation_details(cls, subject: Subject) -> dict[str, Any]:
+        """Extra details to include when the call is an OBO delegation."""
+        if not subject.delegated_by:
+            return {}
+        return {"delegated_by": subject.delegated_by, "delegation": "on_behalf_of"}
+
+    @classmethod
     def authorized_action(
         cls,
         action: LifecycleAction,
@@ -127,11 +137,13 @@ class SecurityEvent(BaseModel):
         resource = cls._resource_from_instruction(
             instruction, version_number=version_number
         )
+        event_details = {**cls._delegation_details(subject), **(details or {})}
         return cls(
             severity=SecurityEventSeverity.INFO,
             message=(
                 f"Authorized {action.value} on instruction "
                 f"{instruction.instruction_id} by {subject.user_id}"
+                + (f" via {subject.delegated_by}" if subject.delegated_by else "")
             ),
             event=SecurityEventContext(
                 type=cls._event_types_for_action(action),
@@ -141,7 +153,7 @@ class SecurityEvent(BaseModel):
             actor=actor,
             resource=resource,
             source=cls._source(),
-            details=details or {},
+            details=event_details,
             instruction_snapshot=instruction.model_dump(mode="json"),
         )
 
@@ -157,13 +169,17 @@ class SecurityEvent(BaseModel):
     ) -> "SecurityEvent":
         actor = cls._actor_from_subject(subject)
         resource = cls._resource_from_instruction(instruction)
-        event_details = dict(details or {})
-        event_details["policy_engine"] = "opa"
+        event_details = {
+            **cls._delegation_details(subject),
+            **(details or {}),
+            "policy_engine": "opa",
+        }
         return cls(
             severity=SecurityEventSeverity.ALERT,
             message=(
                 f"Policy denied {action.value} on instruction "
                 f"{instruction.instruction_id} by {subject.user_id}"
+                + (f" via {subject.delegated_by}" if subject.delegated_by else "")
             ),
             event=SecurityEventContext(
                 type=["access", "denied"],

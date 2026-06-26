@@ -7,6 +7,7 @@ import httpx
 from harness.config import Settings
 from harness.fixtures import SeedFile, build_instruction_payload, load_users
 from harness.ilm_client import InstructionLifecycleClient
+from harness.payment_client import PaymentServiceClient
 from harness.zitadel_auth import SessionCredentials, ZitadelAuthClient
 
 
@@ -17,6 +18,13 @@ class Operation(StrEnum):
     SUBMIT = "submit"
     APPROVE = "approve"
     LIST_VERSIONS = "list_versions"
+
+
+class PaymentOperation(StrEnum):
+    CREATE_PAYMENT = "create_payment"
+    SUBMIT_PAYMENT = "submit_payment"
+    APPROVE_PAYMENT = "approve_payment"
+    REJECT_PAYMENT = "reject_payment"
 
 
 def build_scenario() -> list[tuple[Operation, str, bool, str]]:
@@ -126,6 +134,122 @@ def ilm_client(settings: Settings) -> InstructionLifecycleClient:
     return InstructionLifecycleClient(settings)
 
 
+def payment_client(settings: Settings) -> PaymentServiceClient:
+    return PaymentServiceClient(settings)
+
+
+# ---------------------------------------------------------------------------
+# Payment helpers
+# ---------------------------------------------------------------------------
+
+def _fetch_ui_payments(settings: Settings, *, status: str | None = None) -> list[dict]:
+    params: dict = {"limit": 500}
+    if status:
+        params["status"] = status
+    with httpx.Client(timeout=30.0) as client:
+        response = client.get(
+            f"{settings.payment_service_url.rstrip('/')}/api/ui/payments",
+            params=params,
+        )
+        response.raise_for_status()
+        return response.json().get("payments", [])
+
+
+def _count_payment_security_events(
+    settings: Settings,
+    *,
+    severity: str | None = None,
+    outcome: str | None = None,
+) -> int:
+    try:
+        from pymongo import MongoClient
+    except ImportError:
+        return -1
+
+    query: dict = {}
+    if severity is not None:
+        query["severity"] = severity
+    if outcome is not None:
+        query["event.outcome"] = outcome
+
+    client = MongoClient(settings.mongodb_uri)
+    try:
+        collection = client[settings.security_events_database][
+            settings.payment_security_events_collection
+        ]
+        return collection.count_documents(query)
+    finally:
+        client.close()
+
+
+def _fetch_approved_instructions(settings: Settings) -> list[dict]:
+    """Return STANDING and SINGLE_USE instructions from the ILM UI API."""
+    all_instructions = _fetch_ui_instructions(settings)
+    return [
+        i for i in all_instructions
+        if i.get("status") in {"STANDING", "SINGLE_USE"}
+    ]
+
+
+def build_payment_seed_plan(count: int) -> list[tuple[str, float]]:
+    """Return (user_id, amount) for each payment.  Instructions are resolved at run time."""
+    templates = [
+        ("pay-101", 1_000_000.0),
+        ("pay-102", 5_000_000.0),
+        ("pay-103", 50_000_000.0),
+        ("pay-101", 500_000.0),
+        ("pay-102", 10_000_000.0),
+        ("pay-103", 100_000_000.0),
+        ("pay-101", 2_000_000.0),
+        ("pay-102", 750_000.0),
+    ]
+    plan: list[tuple[str, float]] = []
+    for index in range(count):
+        plan.append(templates[index % len(templates)])
+    return plan
+
+
+def _universal_payment_approver() -> str:
+    """pay-204 covers FICC+FX+DESK_RATES and holds only FUNDING_APPROVER — can never
+    self-approve because they cannot create payments."""
+    return "pay-204"
+
+
+def payment_submitter_for_lob(lob: str) -> str:
+    """Front-office user who may SUBMIT_PAYMENT for the given instruction LOB."""
+    mapping = {
+        "FICC": "fo-ficc-101",
+        "FX": "fo-fx-101",
+        "DESK_RATES": "fo-rates-101",
+    }
+    if lob not in mapping:
+        raise ValueError(f"no front-office payment submitter configured for LOB {lob!r}")
+    return mapping[lob]
+
+
+def build_payment_scenario() -> list[tuple[PaymentOperation, str, bool, str]]:
+    """Return (operation, user_id, expect_success, description) for the payment policy demo.
+
+    Full DRAFT → SUBMIT → APPROVE lifecycle with OPA denial cases that emit ALERT events:
+      1. pay-101 creates a FICC payment (→ DRAFT, INFO)
+      2. pay-201 (approver only) tries to create           → DENY (ALERT)
+      3. pay-101 (middle office) tries to submit            → DENY (ALERT)
+      4. fo-ficc-101 submits the payment (→ SUBMITTED, INFO)
+      5. pay-101 tries to approve own payment               → DENY (ALERT)
+      6. pay-203 (FX-only) tries to approve                 → DENY (ALERT)
+      7. pay-201 (FICC/FX VP) approves                      → OK (INFO)
+    """
+    return [
+        (PaymentOperation.CREATE_PAYMENT,  "pay-101", True,  "middle office creates FICC payment (→ DRAFT)"),
+        (PaymentOperation.CREATE_PAYMENT,  "pay-201", False, "funding approver cannot create payment (ALERT)"),
+        (PaymentOperation.SUBMIT_PAYMENT,  "pay-101", False, "middle office cannot submit — not front-office LOB (ALERT)"),
+        (PaymentOperation.SUBMIT_PAYMENT,  "fo-ficc-101", True,  "front office submits payment for approval (→ SUBMITTED)"),
+        (PaymentOperation.APPROVE_PAYMENT, "pay-101", False, "creator cannot approve own payment (ALERT)"),
+        (PaymentOperation.APPROVE_PAYMENT, "pay-203", False, "FX-only approver cannot approve FICC payment (ALERT)"),
+        (PaymentOperation.APPROVE_PAYMENT, "pay-201", True,  "FICC/FX VP approver approves payment (→ APPROVED)"),
+    ]
+
+
 __all__ = [
     "Operation",
     "build_instruction_payload",
@@ -133,6 +257,7 @@ __all__ = [
     "build_seed_plan",
     "_approver_for_instruction",
     "_count_security_events",
+    "_count_payment_security_events",
     "_fetch_ui_instructions",
     "_session_for_user",
     "auth_client",

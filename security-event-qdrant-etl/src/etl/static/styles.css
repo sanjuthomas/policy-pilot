@@ -321,6 +321,12 @@ button:disabled {
   margin-left: auto;
 }
 
+.btn-secondary {
+  background: linear-gradient(135deg, #1d4ed8, #60a5fa);
+  color: #eff6ff;
+  font-weight: 600;
+}
+
 .btn-ghost {
   background: transparent;
   color: var(--muted);
@@ -488,4 +494,54 @@ button:disabled {
     margin-left: 0;
     width: 100%;
   }
+}
+
+/* ── Text → Cypher pane ─────────────────────────────────────────────────── */
+
+.cypher-panel {
+  margin: 0 1.5rem 2rem;
+}
+
+.panel-intro {
+  font-size: 0.87rem;
+  color: var(--muted);
+  margin-bottom: 1rem;
+}
+
+.cypher-panel h2 .arrow {
+  color: var(--color-accent);
+}
+
+#cypher-output {
+  font-family: var(--font-mono, "JetBrains Mono", "Fira Code", monospace);
+  font-size: 0.82rem;
+  background: var(--surface-2, #1a1d24);
+  border: 1px solid var(--border, #2e3340);
+  border-radius: 6px;
+  padding: 0.75rem;
+  resize: vertical;
+  width: 100%;
+  color: inherit;
+}
+
+#cypher-results-output {
+  max-height: 20rem;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+select {
+  background: var(--surface-2, #1a1d24);
+  color: inherit;
+  border: 1px solid var(--border, #2e3340);
+  border-radius: 6px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+#cypher-generate-btn:disabled,
+#cypher-run-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
