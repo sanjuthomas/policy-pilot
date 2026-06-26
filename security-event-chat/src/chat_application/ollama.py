@@ -121,6 +121,39 @@ RETURN e.event_id, e.timestamp, e.action, e.message,
 ORDER BY e.timestamp DESC
 LIMIT 20
 
+Example — self-approval attempt: user approved an instruction they created (segregation of duties violation):
+MATCH (actor:User)-[:ACTED_AS]->(e:SecurityEvent {action: 'APPROVE'})
+MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+WHERE actor.user_id = v.creator_user_id
+OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
+OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
+RETURN e.event_id, e.timestamp, e.action, e.outcome, e.message,
+       coalesce(v.instruction_id, '') AS instruction_id,
+       coalesce(e.owning_lob, v.owning_lob, '') AS lob,
+       coalesce(actor.display_name, actor.user_id, '') AS actor_display,
+       coalesce(v.creator_user_id, '') AS creator_user_id,
+       coalesce(creatorUser.display_name, v.creator_user_id, '') AS creator_display,
+       coalesce(v.approver_user_id, '') AS approver_user_id,
+       coalesce(approverUser.display_name, v.approver_user_id, '') AS approver_display
+ORDER BY e.timestamp DESC
+LIMIT 20
+
+Example — all APPROVE events (successful and denied) to check for policy violations:
+MATCH (actor:User)-[:ACTED_AS]->(e:SecurityEvent {action: 'APPROVE'})
+OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
+OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
+RETURN e.event_id, e.timestamp, e.action, e.outcome, e.message,
+       coalesce(v.instruction_id, '') AS instruction_id,
+       coalesce(e.owning_lob, v.owning_lob, '') AS lob,
+       coalesce(actor.display_name, actor.user_id, '') AS actor_display,
+       coalesce(v.creator_user_id, '') AS creator_user_id,
+       coalesce(creatorUser.display_name, v.creator_user_id, '') AS creator_display,
+       coalesce(v.approver_user_id, '') AS approver_user_id,
+       coalesce(approverUser.display_name, v.approver_user_id, '') AS approver_display
+ORDER BY e.timestamp DESC
+LIMIT 50
+
 Example — cross-approval conflict (users who approved each other's instructions):
 MATCH (approver:User)-[:APPROVED]->(v1:InstructionVersion)<-[:CREATED]-(creator:User)
 MATCH (creator)-[:APPROVED]->(v2:InstructionVersion)<-[:CREATED]-(approver)
