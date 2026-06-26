@@ -125,7 +125,7 @@ function renderTable() {
       <td class="mono">${event?.event?.action || "—"}</td>
       <td>${outcomeBadge(event?.event?.outcome)}</td>
       <td>${actorCell(event.actor)}</td>
-      <td class="mono">${event?.actor?.lob || "—"}</td>
+      <td class="mono">${event?.actor?.lob || event?.resource?.owning_lob || "—"}</td>
       <td>${resourceCell(event.resource)}</td>
       <td class="message">${event.message || ""}</td>
     `;

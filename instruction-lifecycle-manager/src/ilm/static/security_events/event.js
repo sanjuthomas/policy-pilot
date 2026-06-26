@@ -68,7 +68,7 @@ function renderSummary(event) {
         ${field("Actor", actor.user_id)}
         ${field("Title", actor.title)}
         ${field("Roles", (actor.roles || []).join(", "))}
-        ${field("LOB", actor.lob)}
+        ${field("LOB", actor.lob || resource.owning_lob)}
         ${field("Supervisor", actor.supervisor_id)}
         ${field("Resource ID", resource.id)}
         ${field("Resource type", resource.type)}
