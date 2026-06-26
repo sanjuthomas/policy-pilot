@@ -8,12 +8,15 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-
 from pydantic import BaseModel, Field
 
 from chat_application import __version__
 from chat_application.config import settings
-from chat_application.cypher import load_graph_schema, normalize_read_only_cypher, validate_read_only_cypher
+from chat_application.cypher import (
+    load_graph_schema,
+    normalize_read_only_cypher,
+    validate_read_only_cypher,
+)
 from chat_application.models import ChatRequest, ChatResponse
 from chat_application.neo4j import Neo4jClient
 from chat_application.ollama import OllamaClient

@@ -20,7 +20,7 @@ def _subject_from_headers(
 
     groups = [g.strip() for g in x_subject_groups.split(",") if g.strip()] if x_subject_groups else []
     covering_lobs = (
-        [l.strip() for l in x_subject_covering_lobs.split(",") if l.strip()]
+        [lob.strip() for lob in x_subject_covering_lobs.split(",") if lob.strip()]
         if x_subject_covering_lobs
         else []
     )

@@ -3,7 +3,6 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
 
-from ps.config import settings
 from ps.repository import PaymentNotFoundError, PaymentRepository
 from ps.ui_broadcaster import PaymentBroadcaster
 

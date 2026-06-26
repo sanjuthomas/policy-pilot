@@ -23,7 +23,6 @@ from harness.helpers import (
     payment_client,
     payment_submitter_for_lob,
 )
-
 from harness.ilm_client import InstructionLifecycleClient
 from harness.payment_client import PaymentServiceClient
 from harness.results import HarnessActionResult

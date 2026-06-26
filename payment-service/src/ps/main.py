@@ -21,7 +21,8 @@ from ps.security_ui_routes import (
 )
 from ps.security_ui_routes import router as security_ui_router
 from ps.service_identity import service_identity
-from ps.ui_routes import STATIC_DIR, payment_broadcaster, router as ui_router
+from ps.ui_routes import STATIC_DIR, payment_broadcaster
+from ps.ui_routes import router as ui_router
 from ps.ui_watcher import PaymentWatcher
 
 logger = logging.getLogger(__name__)

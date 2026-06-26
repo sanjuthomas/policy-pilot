@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from typing import Any
 
 from ps.config import settings
 from ps.database import get_db

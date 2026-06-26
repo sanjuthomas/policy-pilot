@@ -18,7 +18,10 @@ from etl.instruction_pipeline import InstructionPipeline
 from etl.kafka_consumer import SecurityEventKafkaConsumer
 from etl.neo4j_client import Neo4jGraphWriter
 from etl.ollama_client import OllamaEmbeddingClient
-from etl.payment_consumer import PaymentFactKafkaConsumer, PaymentSecurityEventKafkaConsumer
+from etl.payment_consumer import (
+    PaymentFactKafkaConsumer,
+    PaymentSecurityEventKafkaConsumer,
+)
 from etl.payment_pipeline import PaymentFactPipeline, PaymentSecurityEventPipeline
 from etl.pipeline import SecurityEventPipeline
 from etl.qdrant_store import QdrantHybridStore
