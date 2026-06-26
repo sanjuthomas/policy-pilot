@@ -25,6 +25,7 @@ class Subject(BaseModel):
     title: str
     lob: str | None = None
     roles: list[str] = Field(min_length=1)
+    groups: list[str] = Field(default_factory=list)
     supervisor_id: str | None = None
 
     def to_opa_subject(self) -> dict:
@@ -32,6 +33,7 @@ class Subject(BaseModel):
             "user_id": self.user_id,
             "title": self.title,
             "roles": self.roles,
+            "groups": self.groups,
         }
         if self.lob is not None:
             payload["lob"] = self.lob

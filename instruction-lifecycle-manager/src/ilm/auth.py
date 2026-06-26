@@ -73,6 +73,17 @@ def _parse_roles(raw: str) -> list[str]:
     return [str(role) for role in parsed]
 
 
+def _parse_json_list(raw: str) -> list[str]:
+    """Parse a JSON array string; returns empty list if the array is empty."""
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        parsed = [part.strip() for part in raw.split(",") if part.strip()]
+    if not isinstance(parsed, list):
+        return []
+    return [str(item) for item in parsed]
+
+
 def _subject_from_metadata(
     metadata: dict[str, str],
     *,
@@ -91,6 +102,9 @@ def _subject_from_metadata(
         raise ValueError("missing roles metadata")
     roles = _parse_roles(roles_raw)
 
+    groups_raw = metadata.get("groups")
+    groups = _parse_json_list(groups_raw) if groups_raw else []
+
     lob = metadata.get("lob")
     if lob is not None and not is_valid_owning_lob(lob):
         raise ValueError(f"invalid lob metadata: {lob}")
@@ -103,6 +117,7 @@ def _subject_from_metadata(
         title=title,
         lob=lob,
         roles=roles,
+        groups=groups,
         supervisor_id=supervisor_id,
     )
 
