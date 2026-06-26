@@ -107,6 +107,8 @@ allow if {
 
     not_supervisor_of_creator
 
+    approver_not_subordinate_of_creator
+
     approver_is_allowed
 
     within_three_year_limit

@@ -53,3 +53,10 @@ instruction_not_expired if {
 payment_creator_is_not_approver if {
     input.subject.user_id != input.payment.created_by.user_id
 }
+
+# Reporting-line conflict: a FUNDING_APPROVER who reports directly to the
+# payment creator must not approve that payment.  Having a manager approve
+# a subordinate's payment creates a chain-of-command conflict of interest.
+payment_approver_not_subordinate_of_creator if {
+    input.payment.created_by.user_id != input.subject.supervisor_id
+}

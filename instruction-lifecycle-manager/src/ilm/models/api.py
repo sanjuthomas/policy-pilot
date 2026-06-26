@@ -37,6 +37,8 @@ class Subject(BaseModel):
         }
         if self.lob is not None:
             payload["lob"] = self.lob
+        if self.supervisor_id is not None:
+            payload["supervisor_id"] = self.supervisor_id
         return payload
 
 

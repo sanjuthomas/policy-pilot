@@ -223,6 +223,13 @@ class RagService:
                 "Neo4j graph results:\n"
                 + json.dumps(graph_rows[:20], indent=2, default=str)
             )
+        elif cypher and not graph_unavailable:
+            sections.append(
+                "Neo4j graph results: 0 rows — the graph query found no matching records. "
+                "For structural questions (supervisor relationships, hierarchy violations, "
+                "cross-approvals) this means no such case exists in the data. "
+                "Do NOT use vector/BM25 hits to contradict this finding."
+            )
 
         if hits:
             lines: list[str] = []

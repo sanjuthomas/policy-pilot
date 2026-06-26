@@ -66,4 +66,6 @@ allow if {
     within_amount_limit
 
     payment_creator_is_not_approver
+
+    payment_approver_not_subordinate_of_creator
 }

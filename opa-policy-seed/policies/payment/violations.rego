@@ -108,6 +108,20 @@ violations["SELF_APPROVAL"] if {
     not payment_creator_is_not_approver
 }
 
+# ── Subordinate approving creator's payment (reporting-line conflict) ─────────
+# Rule:     If the approver reports directly to the payment creator (i.e.
+#           the creator is the approver's supervisor), the approval must be
+#           blocked.  A manager can exert undue influence over a subordinate's
+#           approval decision — this creates an unacceptable conflict of interest.
+#           The same principle applies in SSI instruction approvals.
+# Severity: ALERT — chain-of-command conflict; potential coercion or collusion.
+
+violations["ALERT_SUBORDINATE_APPROVING_CREATOR"] if {
+    input.action == "APPROVE_PAYMENT"
+    has_role("FUNDING_APPROVER")
+    not payment_approver_not_subordinate_of_creator
+}
+
 # ---------------------------------------------------------------------------
 # is_alert — convenience rule
 #

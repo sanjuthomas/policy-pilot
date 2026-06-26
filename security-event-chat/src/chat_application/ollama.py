@@ -51,6 +51,12 @@ InstructionVersion has instruction_id as a property.
 - When the question names a specific event_id UUID, match that SecurityEvent directly. \
 Prefer TARGETS_VERSION and return v.instruction_id, or TARGETS and return i.instruction_id. \
 Do not chain HAS_VERSION after TARGETS_VERSION.
+- User nodes have a supervisor_id property (the user_id of their direct manager) and a \
+[:REPORTS_TO] relationship: (subordinate:User)-[:REPORTS_TO]->(manager:User). \
+ALWAYS use (subordinate)-[:REPORTS_TO]->(manager) — never reverse this direction. \
+"A reports to B" means A.supervisor_id = B.user_id and (A)-[:REPORTS_TO]->(B). \
+"B's subordinate" means someone whose supervisor_id equals B.user_id. \
+Never confuse "A is in B's reporting chain" (indirect) with "A directly reports to B" (A.supervisor_id = B.user_id).
 
 Example — ALERT events today (always return rows, not just a count):
 MATCH (e:SecurityEvent {severity: 'ALERT'})
@@ -153,6 +159,22 @@ RETURN e.event_id, e.timestamp, e.action, e.outcome, e.message,
        coalesce(approverUser.display_name, v.approver_user_id, '') AS approver_display
 ORDER BY e.timestamp DESC
 LIMIT 50
+
+Example — subordinate approved creator's instruction (approver directly reports to the creator):
+MATCH (actor:User)-[:ACTED_AS]->(e:SecurityEvent {action: 'APPROVE'})
+MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+MATCH (actor)-[:REPORTS_TO]->(creatorUser:User {user_id: v.creator_user_id})
+OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
+RETURN e.event_id, e.timestamp, e.action, e.outcome, e.message,
+       coalesce(v.instruction_id, '') AS instruction_id,
+       coalesce(e.owning_lob, v.owning_lob, '') AS lob,
+       coalesce(actor.display_name, actor.user_id, '') AS actor_display,
+       coalesce(v.creator_user_id, '') AS creator_user_id,
+       coalesce(creatorUser.display_name, v.creator_user_id, '') AS creator_display,
+       coalesce(v.approver_user_id, '') AS approver_user_id,
+       coalesce(approverUser.display_name, v.approver_user_id, '') AS approver_display
+ORDER BY e.timestamp DESC
+LIMIT 20
 
 Example — cross-approval conflict (users who approved each other's instructions):
 MATCH (approver:User)-[:APPROVED]->(v1:InstructionVersion)<-[:CREATED]-(creator:User)
@@ -399,6 +421,16 @@ Answer the user's question using ONLY the provided context (retrieved events and
 - For lifecycle/timeline results, present events in chronological order with actor and action.
 - For LOB summaries, group results by owning_lob when multiple LOBs appear.
 - For expired instructions, note the end_date that has passed.
+- HIERARCHY DIRECTION: "A directly reports to B" means A.supervisor_id = B.user_id — the arrow
+  goes A → B (REPORTS_TO). Being in someone's reporting chain (indirect) is NOT the same as
+  directly reporting to them. When answering questions about inversion-of-control or subordinate
+  approval, only conclude a violation if the graph query explicitly matched the REPORTS_TO edge
+  from approver to creator. Never infer a reporting relationship from the context alone.
+- GRAPH IS AUTHORITATIVE: When the context says "Neo4j graph results: 0 rows", that is the
+  definitive answer for any structural/relational question (supervisor hierarchy, cross-approvals,
+  inversion of control). Respond with "No such cases were found" and do NOT use vector or BM25
+  hits to claim a violation exists. Vector/BM25 hits show events that were textually similar to
+  the query — they do NOT prove the structural relationship asked about.
 - If context is insufficient, say what is missing.
 - Do not invent users, amounts, or events not present in the context.
 """
