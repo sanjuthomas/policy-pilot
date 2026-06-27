@@ -7,7 +7,10 @@ from typing import Any
 
 from neo4j import AsyncDriver, AsyncGraphDatabase
 
-from etl.authorization_context import authorization_fact_neo4j_params, authorization_neo4j_params
+from etl.authorization_context import (
+    authorization_fact_neo4j_params,
+    authorization_neo4j_params,
+)
 from etl.config import settings
 from etl.enrichment import EnrichedSecurityEventDocument
 

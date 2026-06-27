@@ -11,7 +11,10 @@ import logging
 import uuid
 from typing import Any
 
-from etl.authorization_context import authorization_merged_fields, authorization_search_parts
+from etl.authorization_context import (
+    authorization_merged_fields,
+    authorization_search_parts,
+)
 from etl.neo4j_client import Neo4jGraphWriter
 from etl.ollama_client import OllamaEmbeddingClient
 from etl.qdrant_store import QdrantHybridStore

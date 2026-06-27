@@ -1,6 +1,11 @@
 from datetime import datetime
 from uuid import uuid4
 
+from ilm.authorization import (
+    build_authorization_block,
+    details_with_authorization,
+    instruction_resource_context,
+)
 from ilm.config import settings
 from ilm.database import mongo_transaction
 from ilm.kafka_publisher import kafka_publisher
@@ -25,7 +30,6 @@ from ilm.models.instruction import (
 )
 from ilm.models.instruction_fact import InstructionFact
 from ilm.models.security_event import SecurityEvent
-from ilm.authorization import build_authorization_block, details_with_authorization, instruction_resource_context
 from ilm.opa import OpaClient
 from ilm.repository import InstructionRepository
 from ilm.security_event_repository import SecurityEventRepository

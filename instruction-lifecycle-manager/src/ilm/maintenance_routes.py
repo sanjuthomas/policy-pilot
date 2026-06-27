@@ -7,11 +7,13 @@ from pydantic import BaseModel, Field
 
 from ilm.kafka_publisher import kafka_publisher
 from ilm.models.enums import LifecycleAction
-from ilm.models.instruction_fact import InstructionFact
-from ilm.models.api import Subject
 from ilm.models.instruction import CashSettlementInstruction
+from ilm.models.instruction_fact import InstructionFact
 from ilm.opa import OpaClient
-from ilm.security_event_repair import _subject_from_actor, repair_security_event_authorization
+from ilm.security_event_repair import (
+    _subject_from_actor,
+    repair_security_event_authorization,
+)
 from ilm.security_event_repository import SecurityEventRepository
 
 logger = logging.getLogger(__name__)

@@ -4,7 +4,10 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from etl.authorization_context import authorization_merged_fields, authorization_search_parts
+from etl.authorization_context import (
+    authorization_merged_fields,
+    authorization_search_parts,
+)
 
 
 def _display_name(user: dict[str, Any]) -> str:
