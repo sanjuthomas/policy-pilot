@@ -14,7 +14,7 @@ Four independent consumers run in the same process. Every Kafka message carries 
 
 ```mermaid
 flowchart TB
-    K1[instruction-security-events] --> P1[SecurityEventPipeline]
+    K1[instruction-security-events] --> P1[InstructionSecurityEventPipeline]
     K2[ssi-instructions] --> P2[InstructionPipeline]
     K3[payment-security-events] --> P3[PaymentSecurityEventPipeline]
     K4[ssi-payments] --> P4[PaymentFactPipeline]
@@ -31,7 +31,7 @@ flowchart TB
 
 | Pipeline | Kafka topic | Consumer group | Qdrant `source` tag |
 |----------|-------------|----------------|---------------------|
-| `SecurityEventPipeline` | `instruction-security-events` | `security-event-qdrant-etl` | `security_event` |
+| `InstructionSecurityEventPipeline` | `instruction-security-events` | `instruction-security-event-etl` | `instruction_security_event` |
 | `InstructionPipeline` | `ssi-instructions` | `ssi-instruction-etl` | `instruction_state` |
 | `PaymentSecurityEventPipeline` | `payment-security-events` | `payment-security-event-etl` | `payment_security_event` |
 | `PaymentFactPipeline` | `ssi-payments` | `payment-fact-etl` | `payment_fact` |
@@ -52,7 +52,17 @@ Stored in Qdrant payload (and used for search text):
 | `instruction` | Instruction snapshot from the event |
 | `merged` | Denormalized join (actor, creator, action, wire_scope, …) |
 | `search_text` | Flattened string for embedding + BM25 |
-| `source` | `security_event`, `instruction_state`, `payment_security_event`, or `payment_fact` |
+| `source` | `instruction_security_event`, `instruction_state`, `payment_security_event`, or `payment_fact` |
+
+### Authorization fields (indexed for chat)
+
+| Pipeline | Extra indexed fields |
+|----------|---------------------|
+| Instruction security events | `merged.authorization_summary`, `merged.authorization_basis`, `merged.timestamp` |
+| Instruction state (`ssi-instructions`) | `approved_at`, `authorization_summary`, `authorization_basis` on Qdrant + Neo4j `InstructionVersion` |
+| Payment security events / facts | Same denormalization pattern |
+
+On APPROVE instruction security events, the pipeline **patches** the existing `instruction_state` Qdrant point with approval authorization. Non-APPROVE instruction facts preserve existing approval fields when upserting.
 
 ## Search Console
 
@@ -69,7 +79,8 @@ Component status bar shows Kafka, Qdrant, Neo4j, and Ollama health.
 
 | Variable | Default |
 |----------|---------|
-| `KAFKA_SECURITY_EVENTS_TOPIC` | `instruction-security-events` |
+| `KAFKA_INSTRUCTION_SECURITY_EVENTS_TOPIC` | `instruction-security-events` |
+| `KAFKA_INSTRUCTION_SECURITY_EVENTS_CONSUMER_GROUP` | `instruction-security-event-etl` |
 | `KAFKA_INSTRUCTION_TOPIC` | `ssi-instructions` |
 | `KAFKA_PAYMENT_SECURITY_EVENTS_TOPIC` | `payment-security-events` |
 | `KAFKA_PAYMENTS_TOPIC` | `ssi-payments` |
@@ -106,7 +117,7 @@ If Qdrant/Neo4j are empty but Kafka has messages, reset each consumer group:
 docker compose stop security-event-qdrant-etl
 
 for TOPIC_GROUP in \
-  "instruction-security-events:security-event-qdrant-etl" \
+  "instruction-security-events:instruction-security-event-etl" \
   "ssi-instructions:ssi-instruction-etl" \
   "payment-security-events:payment-security-event-etl" \
   "ssi-payments:payment-fact-etl"

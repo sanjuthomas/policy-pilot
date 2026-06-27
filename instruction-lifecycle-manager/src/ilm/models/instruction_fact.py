@@ -39,6 +39,10 @@ class InstructionFact(BaseModel):
     instruction_snapshot: dict[str, Any] = Field(
         description="Full serialized CashSettlementInstruction at mutation time"
     )
+    authorization: dict[str, Any] | None = Field(
+        default=None,
+        description="OPA decision context for this mutation (allow_basis, summary, violations)",
+    )
 
     @classmethod
     def from_instruction(
@@ -48,6 +52,7 @@ class InstructionFact(BaseModel):
         instruction: CashSettlementInstruction,
         *,
         version_number: int,
+        authorization: dict[str, Any] | None = None,
     ) -> "InstructionFact":
         return cls(
             instruction_id=instruction.instruction_id,
@@ -61,4 +66,5 @@ class InstructionFact(BaseModel):
             actor_roles=subject.roles,
             actor_supervisor_id=subject.supervisor_id,
             instruction_snapshot=instruction.model_dump(mode="json"),
+            authorization=authorization,
         )

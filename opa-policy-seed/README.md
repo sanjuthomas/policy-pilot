@@ -2,26 +2,29 @@
 
 Version-controlled **Rego policies** uploaded to OPA on Docker Compose startup.
 
-ILM calls `POST /v1/data/ssi/instruction_lifecycle/allow` before every instruction create or mutation.
+ILM calls `POST /v1/data/instruction/lifecycle/allow` before every instruction create or mutation.
 The payment service calls `POST /v1/data/payment/lifecycle/allow` before every payment create or mutation.
 
 ## Layout
 
 ```
 policies/
-├── ssi/
+├── instruction/
 │   ├── common.rego              # Shared helpers (roles, LOB, dates, subordinate check)
 │   ├── approval_matrix.rego     # Who may approve whom by title + LOB
 │   ├── lifecycle_rules.rego     # Valid state transitions
-│   └── instruction_lifecycle.rego  # allow rules per action
+│   ├── violations.rego          # Violation catalog + is_alert helper
+│   ├── allow_basis.rego         # Allow reasons for success audit trail
+│   └── lifecycle.rego           # allow rules per action
 └── payment/
     ├── common.rego              # LOB coverage, creator≠approver, subordinate check
     ├── amount_limits.rego       # Amount-limit clubs from ZITADEL groups
     ├── violations.rego          # Violation catalog + is_alert helper
+    ├── allow_basis.rego         # Allow reasons for success audit trail
     └── lifecycle.rego           # CREATE / SUBMIT / APPROVE / REJECT rules
 ```
 
-## SSI instruction authorization
+## Instruction authorization
 
 | Actor | Roles | Scope |
 |-------|-------|-------|
@@ -34,7 +37,20 @@ Valid LOB values: `FICC`, `FX`, or `DESK_<name>`.
 
 `CREATE`, `UPDATE`, `DELETE`, `SUBMIT`, `APPROVE`, `REJECT`, `SUSPEND`, `REACTIVATE`, `USE`, `VIEW`
 
-Key rules: creator cannot approve own instruction; approver must not report directly to creator (inversion of control); approver LOB must match instruction LOB.
+Key rules: creator cannot approve own instruction; approver must not report directly to creator (inversion of control); approver LOB must match instruction LOB; approver title must satisfy the approval matrix.
+
+Policy denials surface as HTTP 403 and `ALERT` security events on Kafka. ILM and payment service query:
+
+| OPA endpoint | Purpose |
+|--------------|---------|
+| `/v1/data/instruction/lifecycle/allow` | Boolean decision |
+| `/v1/data/instruction/lifecycle/allow_basis` | Human-readable allow reasons (stored on security events) |
+| `/v1/data/instruction/lifecycle/violations` | Named denial codes |
+| `/v1/data/instruction/lifecycle/is_alert` | Escalation severity |
+
+The same pattern applies under `/v1/data/payment/lifecycle/…` for payments.
+
+On allow, services build `details.authorization.summary` from `allow_basis` and persist it on Mongo security events, Kafka facts, and (via ETL) Qdrant/Neo4j for RAG **Who / When / Why** answers.
 
 ## Payment authorization
 
@@ -55,7 +71,7 @@ Policy denials surface as HTTP 403 and `ALERT` security events on Kafka.
 ## Evaluate locally (instruction)
 
 ```bash
-curl -s http://localhost:8181/v1/data/ssi/instruction_lifecycle/allow \
+curl -s http://localhost:8181/v1/data/instruction/lifecycle/allow \
   -H 'Content-Type: application/json' \
   -d '{
     "input": {

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from typing import Any
 
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
@@ -160,7 +161,7 @@ class QdrantHybridStore:
 
         point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, document.event_id))
         payload = document.model_dump(mode="json")
-        payload["source"] = "security_event"
+        payload["source"] = "instruction_security_event"
 
         self._client.upsert(
             collection_name=settings.qdrant_collection,
@@ -237,6 +238,66 @@ class QdrantHybridStore:
                             model=settings.qdrant_bm25_model,
                         ),
                     },
+                    payload=payload,
+                )
+            ],
+        )
+
+    def get_instruction_state_payload(self, instruction_id: str) -> dict[str, Any] | None:
+        if self._client is None:
+            return None
+        point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"instruction:{instruction_id}"))
+        records = self._client.retrieve(
+            collection_name=settings.qdrant_collection,
+            ids=[point_id],
+            with_payload=True,
+        )
+        if not records:
+            return None
+        return dict(records[0].payload or {})
+
+    def patch_instruction_state_authorization(
+        self,
+        instruction_id: str,
+        *,
+        approved_at: str | None,
+        authorization_summary: str | None,
+        authorization_basis: list[str] | None,
+    ) -> None:
+        """Merge approval authorization onto an existing instruction-state point."""
+        if self._client is None or not authorization_summary:
+            return
+
+        point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"instruction:{instruction_id}"))
+        records = self._client.retrieve(
+            collection_name=settings.qdrant_collection,
+            ids=[point_id],
+            with_payload=True,
+            with_vectors=True,
+        )
+        if not records:
+            return
+
+        record = records[0]
+        payload = dict(record.payload or {})
+        basis = list(authorization_basis or [])
+        payload["approved_at"] = approved_at or payload.get("approved_at")
+        payload["authorization_summary"] = authorization_summary
+        payload["authorization_basis"] = basis
+        extra = " ".join(
+            part
+            for part in [approved_at or "", authorization_summary, " ".join(basis)]
+            if part
+        )
+        if extra:
+            payload["search_text"] = f"{payload.get('search_text', '')} {extra}".strip()
+
+        self._client.upsert(
+            collection_name=settings.qdrant_collection,
+            points=[
+                models.PointStruct(
+                    id=point_id,
+                    vector=record.vector,
                     payload=payload,
                 )
             ],

@@ -31,11 +31,14 @@ def _hit_key(event_id: str | None, instruction_id: str | None, summary: str) -> 
 
 def _summary_from_qdrant(hit: dict[str, Any]) -> str:
     merged = hit.get("merged") or {}
+    if merged.get("authorization_summary"):
+        return str(merged["authorization_summary"])
     parts = [
         merged.get("action"),
         merged.get("severity"),
         merged.get("actor_user_id"),
         merged.get("creator_user_id"),
+        merged.get("event_reason") or merged.get("reason"),
         merged.get("message") or hit.get("search_text", "")[:200],
     ]
     return " · ".join(str(p) for p in parts if p)

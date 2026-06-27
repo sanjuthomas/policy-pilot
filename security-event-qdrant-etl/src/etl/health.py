@@ -7,7 +7,9 @@ from typing import Any
 import httpx
 
 from etl.config import settings
-from etl.kafka_consumer import SecurityEventKafkaConsumer
+from etl.instruction_security_event_consumer import (
+    InstructionSecurityEventKafkaConsumer,
+)
 from etl.neo4j_client import Neo4jGraphWriter
 from etl.ollama_client import OllamaEmbeddingClient
 from etl.qdrant_store import QdrantHybridStore
@@ -21,20 +23,25 @@ def _status(ok: bool, status: str, **extra: Any) -> ComponentStatus:
     return {"ok": ok, "status": status, **extra}
 
 
-async def check_kafka(kafka_consumer: SecurityEventKafkaConsumer) -> ComponentStatus:
+async def check_kafka(
+    instruction_security_event_consumer: InstructionSecurityEventKafkaConsumer,
+) -> ComponentStatus:
     base = {
         "bootstrap_servers": settings.kafka_bootstrap_servers,
-        "topic": settings.kafka_security_events_topic,
-        "consumer_group": settings.kafka_consumer_group,
+        "topic": settings.kafka_instruction_security_events_topic,
+        "consumer_group": settings.kafka_instruction_security_events_consumer_group,
     }
     if not settings.kafka_enabled:
         return _status(True, "disabled", detail="Kafka consumer disabled", **base)
 
-    if kafka_consumer._consumer is None or kafka_consumer._task is None:
+    if (
+        instruction_security_event_consumer._consumer is None
+        or instruction_security_event_consumer._task is None
+    ):
         return _status(False, "down", detail="consumer not started", **base)
 
-    if kafka_consumer._task.done():
-        exc = kafka_consumer._task.exception()
+    if instruction_security_event_consumer._task.done():
+        exc = instruction_security_event_consumer._task.exception()
         return _status(
             False,
             "down",
@@ -43,7 +50,7 @@ async def check_kafka(kafka_consumer: SecurityEventKafkaConsumer) -> ComponentSt
         )
 
     try:
-        cluster = kafka_consumer._consumer._client.cluster
+        cluster = instruction_security_event_consumer._consumer._client.cluster
         broker_count = len(cluster.brokers()) if cluster else 0
     except Exception as exc:
         logger.warning("kafka cluster metadata unavailable: %s", exc)
@@ -246,13 +253,13 @@ async def check_neo4j(neo4j_writer: Neo4jGraphWriter) -> ComponentStatus:
 
 async def component_status(
     *,
-    kafka_consumer: SecurityEventKafkaConsumer,
+    instruction_security_event_consumer: InstructionSecurityEventKafkaConsumer,
     qdrant_store: QdrantHybridStore,
     neo4j_writer: Neo4jGraphWriter,
     ollama_client: OllamaEmbeddingClient,
 ) -> dict[str, ComponentStatus]:
     kafka_status, neo4j_status, ollama_status = await asyncio.gather(
-        check_kafka(kafka_consumer),
+        check_kafka(instruction_security_event_consumer),
         check_neo4j(neo4j_writer),
         check_ollama(ollama_client),
     )

@@ -10,6 +10,7 @@ from ilm import __version__
 from ilm.config import settings
 from ilm.database import close, connect
 from ilm.kafka_publisher import kafka_publisher
+from ilm.maintenance_routes import router as maintenance_router
 from ilm.routes import router
 from ilm.security_event_watcher import SecurityEventWatcher
 from ilm.security_ui_routes import (
@@ -73,6 +74,7 @@ app = FastAPI(
 )
 
 app.include_router(router, prefix=settings.api_prefix)
+app.include_router(maintenance_router, prefix=settings.api_prefix)
 app.include_router(ui_router)
 app.include_router(security_ui_router)
 app.mount("/ui/static", StaticFiles(directory=UI_STATIC_DIR), name="ui-static")

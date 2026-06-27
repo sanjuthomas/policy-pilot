@@ -66,6 +66,31 @@ Key OPA rules include: creator cannot approve own instruction; approver must not
 
 Events use ECS-style fields (`event`, `actor`, `resource`, `source`).
 
+### Authorization audit block
+
+On every OPA decision the ILM stores `details.authorization`:
+
+| Field | Content |
+|-------|---------|
+| `summary` | Human-readable allow/deny sentence |
+| `allow_basis` | Policy checks that passed (allows) |
+| `violations` | Named violation codes (denials) |
+| `subject_at_decision` | Actor snapshot at decision time |
+| `resource_context` | Instruction fields used by OPA |
+
+On successful actions, `event.reason` is set to `authorization.summary`. The same block is published on Kafka `instruction-security-events` and embedded in `InstructionFact.authorization` on `ssi-instructions`.
+
+### Maintenance APIs (backfill)
+
+For security events created before the audit-trail fix (empty `details.authorization`):
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/v1/maintenance/repair-authorization` | Replay OPA on historical success events; update Mongo; republish Kafka |
+| POST | `/api/v1/maintenance/republish-approve-events` | Re-publish APPROVE events/facts so ETL refreshes Qdrant instruction state |
+
+The test harness wraps these: `POST http://localhost:8091/api/actions/repair-authorization`
+
 **Excluded actors:** Service user `etl-reader` does not emit VIEW events (prevents ETL → Kafka feedback loop). Configure via `SECURITY_EVENT_EXCLUDED_USER_IDS`.
 
 ## Example: create instruction

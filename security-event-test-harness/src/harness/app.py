@@ -166,6 +166,12 @@ async def reject_payments(request: CountRequest) -> dict:
     return await _run_action("reject-payments", request.count)
 
 
+@app.post("/api/actions/repair-authorization")
+async def repair_authorization() -> dict:
+    result = await asyncio.to_thread(actions.repair_authorization, settings)
+    return result.to_dict()
+
+
 @app.post("/api/actions/run-payment-policy-scenario")
 async def run_payment_policy_scenario() -> dict:
     result = await asyncio.to_thread(actions.run_payment_policy_scenario, settings)

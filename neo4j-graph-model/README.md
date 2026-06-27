@@ -13,7 +13,7 @@ relationships.cypher  — node labels, properties, relationships (documentation)
 
 | Pipeline | Kafka topic | Consumer group | Writes |
 |---|---|---|---|
-| `SecurityEventPipeline` | `instruction-security-events` (4 partitions) | `security-event-qdrant-etl` | SecurityEvent, User (actor), Instruction, InstructionVersion, ProfitCenter |
+| `InstructionSecurityEventPipeline` | `instruction-security-events` (4 partitions) | `instruction-security-event-etl` | SecurityEvent, User (actor), Instruction, InstructionVersion, ProfitCenter |
 | `InstructionPipeline` | `ssi-instructions` (4 partitions) | `ssi-instruction-etl` | Instruction, InstructionVersion, User (creator/approver/rejector/actor), ProfitCenter, CONFLICTS_WITH |
 | `PaymentSecurityEventPipeline` | `payment-security-events` (4 partitions) | `payment-security-event-etl` | SecurityEvent (payment), User (actor), Payment, Instruction |
 | `PaymentFactPipeline` | `ssi-payments` (4 partitions) | `payment-fact-etl` | Payment, User (creator/submitter/approver/rejector), Instruction, HAS_PAYMENT |
@@ -63,9 +63,9 @@ flowchart TB
 | Node | Key properties |
 |---|---|
 | `Instruction` | `instruction_id`, `owning_lob`, `instruction_type`, `wire_scope`, `currency` |
-| `InstructionVersion` | `instruction_id`, `version_number`, `status`, `action`, `instruction_type`, `owning_lob`, `wire_scope`, `currency`, `effective_date`, `end_date`, `is_expired`, `creditor_name`, `creditor_account`, `creditor_bic`, `debtor_name`, `debtor_account`, `creator_user_id`, `approver_user_id`, `rejector_user_id` |
+| `InstructionVersion` | `instruction_id`, `version_number`, `status`, `action`, …, `approved_at`, `authorization_summary`, `authorization_basis`, `creator_user_id`, `approver_user_id`, `rejector_user_id` |
 | `Payment` | `payment_id`, `instruction_id`, `status`, `amount`, `currency`, `value_date`, `owning_lob`, `instruction_type`, `created_by`, `approved_by` |
-| `SecurityEvent` | `event_id`, `timestamp`, `severity`, `action`, `outcome`, `message`, `wire_scope`, `instruction_type`, `owning_lob`, `payment_id` (null for instruction events) |
+| `SecurityEvent` | `event_id`, `timestamp`, `severity`, `action`, `outcome`, `message`, …, `authorization_summary`, `authorization_basis`, `authorization_decision` |
 | `User` | `user_id`, `given_name`, `family_name`, `display_name` (\*), `title`, `lob`, `roles`, `supervisor_id` |
 | `ProfitCenter` | `name` |
 
@@ -81,21 +81,21 @@ flowchart TB
 | `BELONGS_TO` | `InstructionVersion → ProfitCenter` | InstructionPipeline | Version's owning LOB |
 | `CONFLICTS_WITH` | `Instruction ↔ Instruction` | InstructionPipeline | Same creditor account + currency = potential duplicate route |
 | `CREATED` | `User → InstructionVersion` | both instruction pipelines | Creator of this version |
-| `SUBMITTED` | `User → InstructionVersion` | SecurityEventPipeline | Submitter of this version |
+| `SUBMITTED` | `User → InstructionVersion` | InstructionSecurityEventPipeline | Submitter of this version |
 | `APPROVED` | `User → InstructionVersion` | both instruction pipelines | Approver of this version |
 | `APPROVED_FOR` | `User → Instruction` | InstructionPipeline | User has approved for this instruction root |
 | `REJECTED` | `User → InstructionVersion` | both instruction pipelines | Rejector of this version |
 | `MUTATED` | `User → InstructionVersion` | InstructionPipeline | Actor who triggered mutation (carries `action`, `timestamp` props) |
 | `ACTED_AS` | `User → SecurityEvent` | security event pipelines | Actor who generated the security event |
-| `TARGETS` | `SecurityEvent → Instruction` | SecurityEventPipeline | Event targets instruction root |
-| `TARGETS_VERSION` | `SecurityEvent → InstructionVersion` | SecurityEventPipeline | Event targets specific version |
+| `TARGETS` | `SecurityEvent → Instruction` | InstructionSecurityEventPipeline | Event targets instruction root |
+| `TARGETS_VERSION` | `SecurityEvent → InstructionVersion` | InstructionSecurityEventPipeline | Event targets specific version |
 | `TARGETS_PAYMENT` | `SecurityEvent → Payment` | PaymentSecurityEventPipeline | Payment security event targets payment |
 | `HAS_PAYMENT` | `Instruction → Payment` | PaymentFactPipeline | Instruction has payment(s) |
 | `CREATED_PAYMENT` | `User → Payment` | PaymentFactPipeline | Payment creator |
 | `SUBMITTED_PAYMENT` | `User → Payment` | PaymentFactPipeline | Payment submitter |
 | `APPROVED_PAYMENT` | `User → Payment` | PaymentFactPipeline | Payment approver |
 | `REJECTED_PAYMENT` | `User → Payment` | PaymentFactPipeline | Payment rejector |
-| `INVOLVES_LOB` | `SecurityEvent → ProfitCenter` | SecurityEventPipeline | Event's owning LOB |
+| `INVOLVES_LOB` | `SecurityEvent → ProfitCenter` | InstructionSecurityEventPipeline | Event's owning LOB |
 | `REPORTS_TO` | `User → User` | all pipelines (on user upsert) | Org hierarchy from ZITADEL `supervisor_id` |
 
 **Planned but not yet written:** `SUPERSEDES` (version chain).
@@ -106,7 +106,7 @@ The ETL also writes to Qdrant (`ssi_search_index` collection). Each point has a 
 
 | `source` tag | Point ID | One per | Written by |
 |---|---|---|---|
-| `security_event` | `uuid5(event_id)` | Security event | SecurityEventPipeline |
+| `instruction_security_event` | `uuid5(event_id)` | Security event | InstructionSecurityEventPipeline |
 | `instruction_state` | `uuid5("instruction:" + instruction_id)` | Instruction (upserted on every mutation) | InstructionPipeline |
 | `payment_security_event` | `uuid5(event_id)` | Payment security event | PaymentSecurityEventPipeline |
 | `payment_fact` | `uuid5("payment:" + payment_id)` | Payment (upserted on every mutation) | PaymentFactPipeline |
@@ -115,7 +115,7 @@ The chat API filters by source based on the selected mode:
 
 | Chat mode | Qdrant filter | Neo4j focus |
 |---|---|---|
-| `events` | `security_event` + `payment_security_event` | Both security event graphs |
+| `events` | `instruction_security_event` + `payment_security_event` | Both security event graphs |
 | `instructions` | `instruction_state` | Instruction master graph |
 | `payments` | `payment_fact` | Payment master graph |
 | `all` | no filter | All entity types |
@@ -133,6 +133,14 @@ cat schema.cypher | docker exec -i neo4j cypher-shell -u neo4j -p devpassword
 ## Example queries
 
 ```cypher
+// Who approved an instruction (audit trail from instruction master graph)
+MATCH (i:Instruction {instruction_id: $uuid})-[:CURRENT]->(v:InstructionVersion)
+OPTIONAL MATCH (au:User {user_id: v.approver_user_id})
+RETURN v.instruction_id, v.approved_at,
+       coalesce(au.display_name, v.approver_user_id) AS approver,
+       v.authorization_summary, v.authorization_basis
+LIMIT 1;
+
 // All STANDING instructions for LOB FICC with creator and approver
 MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion {status: 'STANDING', owning_lob: 'FICC'})
 OPTIONAL MATCH (cu:User {user_id: v.creator_user_id})

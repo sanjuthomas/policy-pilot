@@ -12,6 +12,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from etl.authorization_context import (
+    authorization_merged_from_fact,
+    authorization_search_parts,
+)
 from etl.neo4j_client import Neo4jGraphWriter
 from etl.ollama_client import OllamaEmbeddingClient
 from etl.qdrant_store import QdrantHybridStore
@@ -56,12 +60,15 @@ def _build_instruction_search_text(fact: dict[str, Any]) -> str:
         rejected_by.get("user_id") or "",
         rejected_by.get("given_name") or "",
         rejected_by.get("family_name") or "",
+        snap.get("approved_at") or "",
         fact.get("actor_user_id") or "",
         fact.get("actor_given_name") or "",
         fact.get("actor_family_name") or "",
         fact.get("actor_lob") or "",
         fact.get("action") or "",
     ]
+    auth_parts = authorization_search_parts(authorization_merged_from_fact(fact))
+    parts.extend(auth_parts)
     return " ".join(str(p) for p in parts if p).strip()
 
 
@@ -95,6 +102,7 @@ class InstructionPipeline:
         dense_vector = await self.ollama_client.embed(search_text)
 
         snap = fact.get("instruction_snapshot") or {}
+        auth_merged = authorization_merged_from_fact(fact)
         payload = {
             "instruction_id": instruction_id,
             "version_number": fact.get("version_number"),
@@ -107,6 +115,8 @@ class InstructionPipeline:
             "currency": snap.get("currency"),
             "effective_date": snap.get("effective_date"),
             "end_date": snap.get("end_date"),
+            "approved_at": auth_merged.get("approved_at") or snap.get("approved_at"),
+            "submitted_at": auth_merged.get("submitted_at") or snap.get("submitted_at"),
             "creditor_name": (snap.get("creditor") or {}).get("name"),
             "creditor_account_id": (snap.get("creditor_account") or {}).get("identification"),
             "debtor_name": (snap.get("debtor") or {}).get("name"),
@@ -114,11 +124,22 @@ class InstructionPipeline:
             "creator_display": _display_name(snap.get("created_by") or {}),
             "approver_user_id": (snap.get("approved_by") or {}).get("user_id"),
             "approver_display": _display_name(snap.get("approved_by") or {}),
+            "authorization_summary": auth_merged.get("authorization_summary"),
+            "authorization_basis": auth_merged.get("authorization_basis") or [],
             "actor_user_id": fact.get("actor_user_id"),
             "actor_display": _display_name(fact, prefix="actor_"),
             "search_text": search_text,
             "instruction_snapshot": snap,
         }
+
+        if fact.get("action") != "APPROVE":
+            existing = self.qdrant_store.get_instruction_state_payload(instruction_id)
+            if existing:
+                if not payload.get("authorization_summary"):
+                    payload["authorization_summary"] = existing.get("authorization_summary")
+                    payload["authorization_basis"] = existing.get("authorization_basis") or []
+                if not payload.get("approved_at"):
+                    payload["approved_at"] = existing.get("approved_at")
 
         self.qdrant_store.upsert_instruction_state(
             instruction_id=instruction_id,

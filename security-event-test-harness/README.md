@@ -32,6 +32,9 @@ The instruction scenario verifies MongoDB security event count increases and inc
 | Submit payments | Front-office users submit DRAFT payments |
 | Approve payments | Funding approvers approve SUBMITTED payments |
 | Run payment scenario | Fixed 7-step OPA scenario (DRAFT → SUBMIT → APPROVE with denials) |
+| **Repair authorization** | Backfill missing OPA `details.authorization` on historical events and re-index APPROVE facts |
+
+The **repair authorization** action calls ILM `POST /api/v1/maintenance/repair-authorization` then `republish-approve-events`. Run once after upgrading demo data from before the authorization audit-trail fix.
 
 The payment scenario verifies MongoDB counts: **+4 ALERT** and **+3 INFO** events in `security_events.payment-service`:
 
@@ -92,3 +95,9 @@ docker compose up -d security-event-test-harness
 ```
 
 Requires ILM, payment service, and ZITADEL running.
+
+## API (maintenance)
+
+```bash
+curl -X POST http://localhost:8091/api/actions/repair-authorization
+```

@@ -9,7 +9,7 @@ from aiokafka import AIOKafkaConsumer
 from neo4j.exceptions import TransientError
 
 from etl.config import settings
-from etl.pipeline import SecurityEventPipeline
+from etl.instruction_security_event_pipeline import InstructionSecurityEventPipeline
 
 logger = logging.getLogger(__name__)
 
@@ -17,21 +17,23 @@ _MAX_RETRIES = 5
 _RETRY_BASE_DELAY = 0.2  # seconds
 
 
-class SecurityEventKafkaConsumer:
-    def __init__(self, pipeline: SecurityEventPipeline) -> None:
+class InstructionSecurityEventKafkaConsumer:
+    """Consumes instruction security events from the instruction-security-events topic."""
+
+    def __init__(self, pipeline: InstructionSecurityEventPipeline) -> None:
         self.pipeline = pipeline
         self._consumer: AIOKafkaConsumer | None = None
         self._task: asyncio.Task | None = None
 
     async def start(self) -> None:
         if not settings.kafka_enabled:
-            logger.info("Kafka consumer disabled")
+            logger.info("Instruction security event Kafka consumer disabled")
             return
 
         self._consumer = AIOKafkaConsumer(
-            settings.kafka_security_events_topic,
+            settings.kafka_instruction_security_events_topic,
             bootstrap_servers=settings.kafka_bootstrap_servers,
-            group_id=settings.kafka_consumer_group,
+            group_id=settings.kafka_instruction_security_events_consumer_group,
             enable_auto_commit=False,
             auto_offset_reset="earliest",
             value_deserializer=lambda value: json.loads(value.decode("utf-8")),
@@ -39,9 +41,9 @@ class SecurityEventKafkaConsumer:
         await self._consumer.start()
         self._task = asyncio.create_task(self._run())
         logger.info(
-            "Kafka consumer started topic=%s group=%s",
-            settings.kafka_security_events_topic,
-            settings.kafka_consumer_group,
+            "Instruction security event Kafka consumer started topic=%s group=%s",
+            settings.kafka_instruction_security_events_topic,
+            settings.kafka_instruction_security_events_consumer_group,
         )
 
     async def close(self) -> None:
@@ -84,7 +86,8 @@ class SecurityEventKafkaConsumer:
                             )
                     except Exception:
                         logger.exception(
-                            "failed to process Kafka message offset=%s partition=%s — skipping",
+                            "failed to process instruction security event offset=%s "
+                            "partition=%s — skipping",
                             message.offset,
                             message.partition,
                         )
@@ -96,4 +99,4 @@ class SecurityEventKafkaConsumer:
         if not isinstance(payload, dict) or "event_id" not in payload:
             logger.warning("skipping invalid Kafka payload: %s", payload)
             return
-        await self.pipeline.process_security_event(payload)
+        await self.pipeline.process_instruction_security_event(payload)

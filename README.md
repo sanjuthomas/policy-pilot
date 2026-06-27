@@ -19,6 +19,7 @@ The chat is designed to surface **fraud patterns, compliance violations, and col
 
 **Compliance investigation:**
 - _Who created the instruction that Michael Torres rejected?_
+- _Who approved instruction `<uuid>` and why was it allowed?_ (full OPA audit trail — approver, timestamp, policy rationale)
 - _Show me all ALERT events for FICC instructions in the last 7 days._
 - _Which users triggered the most policy denial alerts this week?_
 
@@ -93,14 +94,14 @@ flowchart TB
 
 ### Data flow
 
-1. **ILM** — operator creates/mutates an instruction; ZITADEL JWT is validated; OPA authorizes the action; instruction version and security event are written to MongoDB **in a single transaction**; two Kafka fact events are published — one to `instruction-security-events` (security event + full instruction snapshot) and one to `ssi-instructions` (instruction state fact).
-2. **Payment service** — middle-office users create payments against approved SSI instructions; front-office desk users submit them; funding approvers approve or reject. OPA enforces amount limits, LOB coverage, segregation of duties, and reporting-line rules. Each action writes to MongoDB and publishes to `payment-security-events` (audit) and `ssi-payments` (payment state fact).
-3. **ETL** — runs four independent Kafka consumers, all **self-contained** (full snapshots embedded — no API callbacks):
-   - **SecurityEventPipeline** (`instruction-security-events`) → Neo4j + Qdrant `source=security_event`
+1. **ILM** — operator creates/mutates an instruction; ZITADEL JWT is validated; OPA authorizes the action (`allow` + `allow_basis`); instruction version and security event (with `details.authorization`) are written to MongoDB **in a single transaction**; two Kafka fact events are published — one to `instruction-security-events` (security event + full instruction snapshot) and one to `ssi-instructions` (instruction state fact + authorization on mutations).
+2. **Payment service** — middle-office users create payments against approved SSI instructions; OPA evaluates allow/deny with the same audit block pattern; each action writes to MongoDB and publishes to `payment-security-events` (audit) and `ssi-payments` (payment state fact).
+3. **ETL** — runs four independent Kafka consumers, all **self-contained** (full snapshots embedded — no API callbacks). Denormalizes `authorization_summary`, `approved_at`, and related fields onto Qdrant and Neo4j for chat retrieval.
+   - **InstructionSecurityEventPipeline** (`instruction-security-events`) → Neo4j + Qdrant `source=instruction_security_event`
    - **InstructionPipeline** (`ssi-instructions`) → instruction master graph + Qdrant `source=instruction_state`
    - **PaymentSecurityEventPipeline** (`payment-security-events`) → payment security graph + Qdrant `source=payment_security_event`
    - **PaymentFactPipeline** (`ssi-payments`) → payment master graph + Qdrant `source=payment_fact`
-4. **Chat** — selects a retrieval mode (`events` / `instructions` / `payments` / `all`), runs vector + BM25 + Neo4j in parallel, merges with reciprocal rank fusion, and synthesises an answer with Ollama. Count, ranking, and hierarchy questions use **deterministic planned Cypher** (Neo4j is authoritative — vector/BM25 hits are not used to infer structural violations). UUID questions trigger exact Qdrant + Neo4j lookups.
+4. **Chat** — selects a retrieval mode (`events` / `instructions` / `payments` / `all`), runs vector + BM25 + Neo4j in parallel, merges with reciprocal rank fusion. Count, ranking, hierarchy, and approval-by-ID questions use **deterministic planned Cypher** or exact lookups. Instruction approval audit questions return **Who / When** from indexed data and **Why** via LLM rewrite of OPA `authorization_summary`. Other questions use full Ollama synthesis.
 
 ---
 
@@ -174,7 +175,25 @@ Before every instruction mutation, the ILM submits a structured authorization qu
 }
 ```
 
-OPA evaluates the Rego policy bundle and returns `{"result": {"allow": false, "reason": "creator cannot approve their own instruction"}}`. The ILM then either proceeds or emits a **policy denial security event** (severity `ALERT`) to Kafka.
+OPA evaluates the Rego policy bundle and returns `allow` / `deny`. On success the ILM and payment service also call **`allow_basis`** (human-readable allow reasons) and **`violations`** / **`is_alert`** on denials. The result is stored on every security event as `details.authorization` and copied to `event.reason` for authorized actions.
+
+Example authorization block on an APPROVE security event:
+
+```json
+{
+  "engine": "opa",
+  "package": "instruction.lifecycle",
+  "action": "APPROVE",
+  "decision": "allow",
+  "allow_basis": [
+    "approval matrix: Vice President may approve work by Analyst",
+    "approver LOB FICC matches instruction LOB",
+    "approver does not report to creator",
+    "role INSTRUCTION_APPROVER"
+  ],
+  "summary": "Vasquez, Elena (ficc-300) was allowed to APPROVE because approval matrix: Vice President may approve work by Analyst; ..."
+}
+```
 
 **Key policies enforced:**
 
@@ -187,7 +206,7 @@ OPA evaluates the Rego policy bundle and returns `{"result": {"allow": false, "r
 | Status gate | `resource.status == "PENDING"` | Approving an instruction not yet submitted |
 | Role segregation | `"INSTRUCTION_CREATOR" not in subject.roles` | Middle-office creator accounts cannot approve |
 
-**Why policy-as-code matters for this demo:** Every OPA denial becomes an `ALERT`-severity security event in Kafka → Neo4j → Qdrant. The RAG chat can then surface patterns like _"which users triggered the most policy denial alerts?"_ or _"has anyone attempted to approve their own instruction?"_ — questions that only make sense if the policy engine is generating a structured, queryable audit trail rather than just returning 403.
+**Why policy-as-code matters for this demo:** Allows and denials both produce structured audit records in Kafka → Neo4j → Qdrant. Denials surface as `ALERT` events for fraud-pattern questions (_"which users triggered the most policy denial alerts?"_). Allows carry `details.authorization` so the chat can answer approval audit questions with **Who / When / Why**, not just a name from instruction state.
 
 **Why OPA over embedding auth in the ILM:** Policy logic changes independently of application logic. Adding a new rule (e.g. "MD-level approval required for international wire > $10M") requires editing a `.rego` file and reloading OPA — not rebuilding and redeploying the ILM. The `opa-policy-seed` container loads policies from the `opa-policy-seed/policies/` directory at startup.
 
@@ -317,13 +336,13 @@ Embedding throughput with `bge-m3` is approximately **80–120 documents/second*
 
 | Directory | Role |
 |-----------|------|
-| `instruction-lifecycle-manager` | FastAPI lifecycle API — OPA authorization, Mongo persistence (bi-temporal versioning), Kafka security event publishing, instruction and security event UIs |
+| `instruction-lifecycle-manager` | FastAPI lifecycle API — OPA authorization with `details.authorization` audit block, Mongo persistence, Kafka publishing, maintenance backfill APIs |
 | `payment-service` | Cash payment lifecycle against approved SSI instructions — OPA authorization (amount limits, LOB coverage, segregation of duties), Mongo persistence, Kafka publishing, payment and security event UIs |
 | `security-event-qdrant-etl` | Four Kafka consumers — instruction + payment security events and state facts → Neo4j graph writer + Qdrant hybrid indexer (`ssi_search_index`) + search console UI |
-| `security-event-chat` | RAG chat — four search modes, triple retrieval (vector + BM25 + Cypher), planned graph queries for counts/rankings/hierarchy, RRF merge, Ollama answer synthesis |
-| `security-event-test-harness` | ZITADEL-authenticated browser UI to drive instruction and payment lifecycles, including OPA policy demo scenarios |
+| `security-event-chat` | RAG chat — four search modes, triple retrieval, Who/When/Why approval audit (deterministic facts + LLM WHY rewrite), planned Cypher, regression suite |
+| `security-event-test-harness` | ZITADEL-authenticated UI to drive lifecycles, OPA policy scenarios, authorization backfill (`repair-authorization`) |
 | `neo4j-graph-model` | Graph schema docs, Cypher constraints/indexes, example queries |
-| `opa-policy-seed` | Rego policies — SSI instruction lifecycle + payment lifecycle (amount limits, violations) |
+| `opa-policy-seed` | Rego policies — `instruction/` + `payment/` packages with `allow_basis`, `violations`, lifecycle rules |
 | `zitadel-seed` | Demo user seed (`users.yaml`) — middle office, FICC/FX/DESK approvers, payment creators/approvers, front-office submitters, service accounts |
 | `log-forwarder` | Optional container log shipping to Kafka |
 
@@ -363,9 +382,10 @@ The LLM used for Cypher generation and answer synthesis is [Qwen3-30B](https://h
 | Context window | 32 768 tokens |
 | Strengths | Strong code and structured output generation (Cypher), instruction following, multilingual |
 
-The model is called twice per user question:
-1. **Cypher generation** — `CYPHER_SYSTEM_PROMPT` + schema + question → a read-only Neo4j Cypher query
-2. **Answer synthesis** — `ANSWER_SYSTEM_PROMPT` + retrieved context → a natural-language answer with event IDs, actors, and LOB attribution
+The model is called twice per user question (or three times for instruction approval audit questions — see below):
+1. **Cypher generation** — mode-specific system prompt + schema + question → a read-only Neo4j Cypher query
+2. **Answer synthesis** — mode-specific system prompt + retrieved context → a natural-language answer with event IDs, actors, and LOB attribution
+3. **Authorization WHY summarization** (Instructions mode, approval-audit questions only) — rewrites the OPA `authorization_summary` into 2–4 readable sentences while preserving every material policy check; WHO and WHEN remain deterministic from indexed data
 
 Both calls are made via `POST /api/chat` on the local Ollama instance with `stream: false`.
 
@@ -401,7 +421,10 @@ cd zitadel-seed && ZITADEL_PAT="$PAT" python3 seed.py
 # 4. Open the test harness — run instruction and payment policy scenarios
 open http://localhost:8091
 
-# 5. Open the chat and start asking questions (try Security Events mode first)
+# 5. (Optional) Backfill OPA authorization on events created before the audit-trail fix
+curl -X POST http://localhost:8091/api/actions/repair-authorization
+
+# 6. Open the chat and start asking questions (try Security Events mode first)
 open http://localhost:8092
 ```
 
@@ -485,7 +508,7 @@ Policy denials (self-approval, wrong LOB, amount over club limit, subordinate ap
 | Layer | Name | Purpose |
 |-------|------|---------|
 | Qdrant collection | `ssi_search_index` | Hybrid search index (dense + BM25) |
-| Qdrant payload `source` | `security_event`, `instruction_state`, `payment_security_event`, `payment_fact` | Point type filter for chat modes |
+| Qdrant payload `source` | `instruction_security_event`, `instruction_state`, `payment_security_event`, `payment_fact` | Point type filter for chat modes |
 | MongoDB | `ssi_cash_instructions.instructions` | Instruction versions |
 | MongoDB | `ssi_cash_activities.payments` | Payment records |
 | MongoDB | `security_events.instruction-lifecycle-manager` | ILM security events |
@@ -502,7 +525,7 @@ Policy denials (self-approval, wrong LOB, amount over club limit, subordinate ap
 Four ETL pipelines write to the **same Neo4j database**, producing complementary sub-graphs that share nodes (`Instruction`, `InstructionVersion`, `User`, `ProfitCenter`, `Payment`, `SecurityEvent`).
 
 ### Graph 1 — Instruction Security Event Graph
-Built by `SecurityEventPipeline` from the `instruction-security-events` topic.
+Built by `InstructionSecurityEventPipeline` from the `instruction-security-events` topic.
 Answers: _who triggered this event, what severity, what instruction was touched, which actor caused a policy denial?_
 
 ```mermaid
@@ -616,6 +639,9 @@ User question + search mode (events | instructions | payments | all)
 │
 ├─ Count / ranking / hierarchy question? ──► Planned Cypher (deterministic, Neo4j authoritative)
 │
+├─ Instructions mode + UUID + "who approved"? ──► Exact instruction lookup + APPROVE event fetch
+│                                              └─► Who/When from graph; Why via OPA summary + LLM rewrite
+│
 ├─ UUID detected? ──► Exact Qdrant fetch + fixed Neo4j lookup (pinned to top of context)
 │
 ├─► Qdrant dense vector search (bge-m3), filtered by mode
@@ -626,17 +652,52 @@ User question + search mode (events | instructions | payments | all)
     RRF merge (k=60) + dedupe by event_id / payment_id
          │
          ▼
-    Ollama chat synthesis
+    Ollama answer synthesis (or structured Who/When/Why for approval audit)
 ```
 
 | Chat mode | Qdrant filter | Neo4j focus |
 |-----------|---------------|-------------|
-| `events` | `security_event` + `payment_security_event` | Both security event graphs |
+| `events` | `instruction_security_event` + `payment_security_event` | Both security event graphs |
 | `instructions` | `instruction_state` | Instruction master graph |
 | `payments` | `payment_fact` | Payment master graph |
 | `all` | no filter | All entity types |
 
 The chat API response includes the generated Cypher query, graph rows, per-source timing, and source cards tagged `vector` / `bm25` / `neo4j` / `exact`.
+
+---
+
+## Authorization audit trail (Who / When / Why)
+
+Every authorized instruction or payment mutation stores an OPA **authorization block** on the security event:
+
+| Field | Purpose |
+|-------|---------|
+| `details.authorization.summary` | Human-readable allow/deny sentence |
+| `details.authorization.allow_basis` | List of policy checks that passed (allows only) |
+| `details.authorization.violations` | Named violation codes (denials) |
+| `details.authorization.subject_at_decision` | Actor snapshot at decision time |
+| `event.reason` | Copy of `summary` on successful actions |
+
+The ETL denormalizes these onto Qdrant (`authorization_summary`, `authorization_basis`, `approved_at` on `instruction_state`) and Neo4j (`InstructionVersion.approved_at`, `authorization_summary`, `authorization_basis`).
+
+**Chat behaviour (Instructions mode, approval questions):**
+
+| Part | Source | Method |
+|------|--------|--------|
+| **WHO** | `approver_display` / graph | Deterministic |
+| **WHEN** | `approved_at` / event timestamp | Deterministic |
+| **WHY** | OPA `authorization_summary` + `allow_basis` | LLM rewrite into readable prose (falls back to raw summary if Ollama fails) |
+
+**Backfill for data created before the audit-trail fix:**
+
+```bash
+# Repairs missing authorization on historical events and re-indexes APPROVE facts
+curl -X POST http://localhost:8091/api/actions/repair-authorization
+
+# Or call ILM directly:
+curl -X POST "http://localhost:8000/api/v1/maintenance/repair-authorization?limit=500"
+curl -X POST "http://localhost:8000/api/v1/maintenance/republish-approve-events?limit=500"
+```
 
 ---
 

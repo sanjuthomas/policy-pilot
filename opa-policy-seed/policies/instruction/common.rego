@@ -1,4 +1,4 @@
-package ssi.instruction_lifecycle
+package instruction.lifecycle
 
 has_role(role) if {
     role in input.subject.roles

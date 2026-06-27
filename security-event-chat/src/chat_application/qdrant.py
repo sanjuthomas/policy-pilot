@@ -54,7 +54,9 @@ class QdrantSearchClient:
                 must=[
                     models.FieldCondition(
                         key="source",
-                        match=models.MatchAny(any=["security_event", "payment_security_event"]),
+                        match=models.MatchAny(
+                            any=["instruction_security_event", "payment_security_event"]
+                        ),
                     )
                 ]
             )
@@ -123,6 +125,72 @@ class QdrantSearchClient:
             "instruction": payload.get("instruction"),
             "payload": payload,
         }
+
+    def fetch_by_instruction_id(self, instruction_id: str) -> dict[str, Any] | None:
+        """Exact lookup of the current instruction-state point."""
+        if self._client is None or not self.has_collection():
+            return None
+
+        point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"instruction:{instruction_id}"))
+        records = self._client.retrieve(
+            collection_name=settings.qdrant_collection,
+            ids=[point_id],
+            with_payload=True,
+        )
+        if not records:
+            return None
+
+        payload = dict(records[0].payload or {})
+        return {
+            "source": "exact_instruction",
+            "score": 1.0,
+            "instruction_id": payload.get("instruction_id"),
+            "search_text": payload.get("search_text", ""),
+            "merged": payload,
+            "payload": payload,
+        }
+
+    def fetch_instruction_approve_events(self, instruction_id: str) -> list[dict[str, Any]]:
+        """Fetch APPROVE security events for an instruction (authorization audit trail)."""
+        if self._client is None or not self.has_collection():
+            return []
+
+        response, _ = self._client.scroll(
+            collection_name=settings.qdrant_collection,
+            scroll_filter=models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="instruction_id",
+                        match=models.MatchValue(value=instruction_id),
+                    ),
+                    models.FieldCondition(
+                        key="source",
+                        match=models.MatchValue(value="instruction_security_event"),
+                    ),
+                ]
+            ),
+            limit=20,
+            with_payload=True,
+        )
+        hits: list[dict[str, Any]] = []
+        for point in response:
+            payload = dict(point.payload or {})
+            merged = payload.get("merged") or {}
+            if merged.get("action") != "APPROVE":
+                continue
+            hits.append(
+                {
+                    "source": "exact_approve_event",
+                    "score": 1.0,
+                    "event_id": payload.get("event_id"),
+                    "instruction_id": payload.get("instruction_id"),
+                    "search_text": payload.get("search_text", ""),
+                    "merged": merged,
+                    "security_event": payload.get("security_event") or {},
+                    "payload": payload,
+                }
+            )
+        return hits
 
     def search_bm25(
         self,

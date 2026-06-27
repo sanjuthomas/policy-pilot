@@ -23,6 +23,19 @@ from chat_application.reranker import RankedHit, graph_rows_to_hits, rrf_merge
 logger = logging.getLogger(__name__)
 
 
+def _parse_authorization_basis(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value if item]
+    if isinstance(value, str) and value.strip():
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return [str(item) for item in parsed if item]
+        except json.JSONDecodeError:
+            pass
+    return []
+
+
 class RagService:
     def __init__(
         self,
@@ -78,6 +91,11 @@ class RagService:
             if event_ids and mode != "instructions"
             else None
         )
+        instruction_exact_task = (
+            asyncio.create_task(self._lookup_exact_instruction_ids(event_ids, message))
+            if event_ids and mode == "instructions"
+            else None
+        )
 
         vector_hits, bm25_hits, graph_result = await asyncio.gather(
             vector_task, bm25_task, cypher_task
@@ -87,6 +105,8 @@ class RagService:
         exact_graph_rows: list[dict[str, Any]] = []
         if exact_task is not None:
             exact_hits, exact_graph_rows = await exact_task
+        if instruction_exact_task is not None:
+            exact_hits.extend(await instruction_exact_task)
 
         graph_rows = list(exact_graph_rows)
         seen_graph = {json.dumps(row, sort_keys=True, default=str) for row in graph_rows}
@@ -111,7 +131,13 @@ class RagService:
         chat_history = [{"role": m.role, "content": m.content} for m in history[-8:]]
 
         gen_started = time.perf_counter()
-        answer = await self.ollama.synthesize_answer(message, context, chat_history, mode=mode)
+        answer = await self._synthesize_instruction_approval_answer(
+            message, event_ids, merged, graph_result["rows"]
+        )
+        if answer is None:
+            answer = await self.ollama.synthesize_answer(
+                message, context, chat_history, mode=mode
+            )
         generation_ms = (time.perf_counter() - gen_started) * 1000
 
         return ChatResponse(
@@ -166,6 +192,27 @@ class RagService:
                     graph_rows.append(row)
 
         return hits, graph_rows
+
+    async def _lookup_exact_instruction_ids(
+        self, instruction_ids: list[str], message: str
+    ) -> list[dict[str, Any]]:
+        hits: list[dict[str, Any]] = []
+        approval_question = "approv" in message.lower()
+
+        for instruction_id in instruction_ids:
+            state_hit = await asyncio.to_thread(
+                self.qdrant.fetch_by_instruction_id, instruction_id
+            )
+            if state_hit is not None:
+                hits.append(state_hit)
+
+            if approval_question:
+                approve_hits = await asyncio.to_thread(
+                    self.qdrant.fetch_instruction_approve_events, instruction_id
+                )
+                hits.extend(approve_hits)
+
+        return hits
 
     @staticmethod
     def _merge_with_exact(
@@ -227,6 +274,68 @@ class RagService:
             cyphers.append(normalized)
             rows.extend(await self.neo4j.run_cypher(normalized))
         return {"cypher": "\n\n".join(cyphers), "rows": rows}
+
+    async def _synthesize_instruction_approval_answer(
+        self,
+        message: str,
+        instruction_ids: list[str],
+        hits: list[RankedHit],
+        graph_rows: list[dict[str, Any]],
+    ) -> str | None:
+        """Return Who/When/Why when OPA authorization is in context; LLM rewrites WHY for readability."""
+        if "approv" not in message.lower() or not instruction_ids:
+            return None
+
+        target_id = instruction_ids[0]
+        approver: str | None = None
+        when: str | None = None
+        summary: str | None = None
+        basis: list[str] = []
+
+        for row in graph_rows:
+            row_id = row.get("v.instruction_id") or row.get("instruction_id")
+            if str(row_id) != target_id:
+                continue
+            summary = row.get("v.authorization_summary") or row.get("authorization_summary")
+            approver = row.get("approver_display")
+            when = row.get("v.approved_at") or row.get("approved_at")
+            basis = _parse_authorization_basis(
+                row.get("v.authorization_basis") or row.get("authorization_basis")
+            )
+            break
+
+        for hit in hits:
+            payload = hit.merged or {}
+            payload_id = hit.instruction_id or payload.get("instruction_id")
+            if str(payload_id) != target_id:
+                continue
+            summary = summary or payload.get("authorization_summary")
+            approver = approver or payload.get("approver_display") or payload.get("actor_display")
+            when = when or payload.get("approved_at") or payload.get("timestamp")
+            if not basis:
+                basis = _parse_authorization_basis(payload.get("authorization_basis"))
+            if summary:
+                break
+
+        if not approver or not summary:
+            return None
+
+        why = await self.ollama.summarize_authorization_why(
+            approver=approver,
+            authorization_summary=summary,
+            authorization_basis=basis or None,
+        )
+
+        when_line = f"WHEN: {when}" if when else None
+        return "\n".join(
+            line
+            for line in (
+                f"WHO: {approver}",
+                when_line,
+                f"WHY: {why}",
+            )
+            if line
+        )
 
     @staticmethod
     def _build_context(
@@ -313,8 +422,10 @@ class RagService:
                 payload = hit.merged or {}
                 snap = payload.get("instruction_snapshot") or {}
                 src = payload.get("source") or (sorted(hit.sources)[0] if hit.sources else "?")
+                if src in {"vector", "bm25", "exact"} and payload.get("source"):
+                    src = payload.get("source")
 
-                if src == "instruction_state":
+                if src == "instruction_state" or src == "exact_instruction":
                     lines.append(
                         f"[{index}] INSTRUCTION instruction_id={hit.instruction_id} "
                         f"score={hit.score:.4f}\n"
@@ -325,6 +436,9 @@ class RagService:
                         f"creditor_acct={snap.get('creditor_account_id')}\n"
                         f"  creator={payload.get('creator_display')} "
                         f"approver={payload.get('approver_display')}\n"
+                        f"  approved_at={payload.get('approved_at') or snap.get('approved_at')}\n"
+                        f"  why={payload.get('authorization_summary') or ''}\n"
+                        f"  basis={' | '.join(payload.get('authorization_basis') or [])}\n"
                         f"  effective={snap.get('effective_date')} end={snap.get('end_date')} "
                         f"expired={snap.get('is_expired', False)}"
                     )
@@ -347,25 +461,36 @@ class RagService:
                         f"[{index}] PAYMENT SECURITY EVENT event_id={hit.event_id} "
                         f"payment_id={payload.get('payment_id')} "
                         f"instruction_id={payload.get('instruction_id')} score={hit.score:.4f}\n"
-                        f"  action={payload.get('action')} severity={payload.get('severity')} "
-                        f"outcome={payload.get('outcome')} actor={payload.get('actor_display')}\n"
+                        f"  time={payload.get('timestamp')} action={payload.get('action')} "
+                        f"severity={payload.get('severity')} outcome={payload.get('outcome')} "
+                        f"actor={payload.get('actor_display')}\n"
                         f"  amount={payload.get('amount', psnap.get('amount'))} "
                         f"currency={payload.get('currency', psnap.get('currency'))} "
                         f"lob={payload.get('owning_lob', psnap.get('owning_lob'))}\n"
-                        f"  message={payload.get('message', hit.summary)}"
+                        f"  why={payload.get('authorization_summary') or payload.get('reason') or payload.get('message', hit.summary)}\n"
+                        f"  basis={' | '.join(payload.get('authorization_basis') or [])}"
                     )
-                else:
+                elif src in ("instruction_security_event", "security_event", "exact_approve_event"):
                     merged = hit.merged or {}
                     lines.append(
                         f"[{index}] INSTRUCTION SECURITY EVENT event_id={hit.event_id} "
                         f"instruction_id={hit.instruction_id} "
                         f"sources={sorted(hit.sources)} score={hit.score:.4f}\n"
-                        f"  action={merged.get('action')} severity={merged.get('severity')} "
+                        f"  time={merged.get('timestamp')} action={merged.get('action')} "
+                        f"severity={merged.get('severity')} outcome={merged.get('outcome')} "
                         f"actor={merged.get('actor_display', merged.get('actor_user_id'))} "
                         f"lob={merged.get('owning_lob')}\n"
                         f"  creator={merged.get('creator_display', merged.get('creator_user_id'))} "
                         f"approver={merged.get('approver_display', merged.get('approver_user_id'))}\n"
-                        f"  summary: {hit.summary}"
+                        f"  why={merged.get('authorization_summary') or merged.get('event_reason') or merged.get('reason') or hit.summary}\n"
+                        f"  basis={' | '.join(merged.get('authorization_basis') or [])}"
+                    )
+                else:
+                    merged = hit.merged or {}
+                    lines.append(
+                        f"[{index}] UNKNOWN source={src} event_id={hit.event_id} "
+                        f"instruction_id={hit.instruction_id} score={hit.score:.4f}\n"
+                        f"  summary: {hit.summary or merged.get('message', '')}"
                     )
             label = {
                 "events": "Retrieved security events (instruction + payment)",

@@ -25,7 +25,8 @@ from ilm.models.instruction import (
 )
 from ilm.models.instruction_fact import InstructionFact
 from ilm.models.security_event import SecurityEvent
-from ilm.opa import OpaClient, PolicyDeniedError
+from ilm.authorization import build_authorization_block, details_with_authorization, instruction_resource_context
+from ilm.opa import OpaClient
 from ilm.repository import InstructionRepository
 from ilm.security_event_repository import SecurityEventRepository
 from ilm.storage import VersionedInstruction
@@ -168,19 +169,27 @@ class InstructionService:
         *,
         record_security_event: bool = False,
         security_event_details: dict | None = None,
-    ) -> None:
-        try:
-            await self.opa.authorize(action, subject, instruction)
-        except PolicyDeniedError as exc:
+    ) -> dict:
+        decision = await self.opa.evaluate(action, subject, instruction)
+        authorization = build_authorization_block(
+            decision,
+            subject,
+            action,
+            resource_context=instruction_resource_context(instruction),
+        )
+        if not decision.allowed:
             if record_security_event and self._should_record_security_event(subject):
                 await self.security_events.record_policy_denial(
                     action,
                     subject,
                     instruction,
-                    reason=str(exc),
-                    details=security_event_details,
+                    reason=authorization["summary"],
+                    details=details_with_authorization(
+                        security_event_details, authorization
+                    ),
                 )
-            raise PermissionError(str(exc)) from exc
+            raise PermissionError(authorization["summary"])
+        return authorization
 
     async def _record_authorized_action(
         self,
@@ -256,6 +265,7 @@ class InstructionService:
                 subject,
                 saved.instruction,
                 version_number=saved.version_number,
+                authorization=(details or {}).get("authorization"),
             )
             await kafka_publisher.publish_instruction_fact(fact.model_dump(mode="json"))
 
@@ -271,13 +281,14 @@ class InstructionService:
         skip_authorize: bool = False,
     ) -> VersionedInstruction:
         if not skip_authorize:
-            await self._authorize(
+            authorization = await self._authorize(
                 action,
                 subject,
                 instruction,
                 record_security_event=True,
                 security_event_details=details,
             )
+            details = details_with_authorization(details, authorization)
         self._record_event(instruction, action, subject, details)
         return await self._save_instruction_with_security_event(
             instruction,
@@ -290,17 +301,19 @@ class InstructionService:
         self, request: CreateInstructionRequest, subject: Subject
     ) -> InstructionResponse:
         instruction = _instruction_from_request(request, subject)
-        await self._authorize(
+        authorization = await self._authorize(
             LifecycleAction.CREATE,
             subject,
             instruction,
             record_security_event=True,
         )
-        self._record_event(instruction, LifecycleAction.CREATE, subject)
+        details = details_with_authorization(None, authorization)
+        self._record_event(instruction, LifecycleAction.CREATE, subject, details)
         saved = await self._save_instruction_with_security_event(
             instruction,
             LifecycleAction.CREATE,
             subject,
+            details=details,
             initial=True,
         )
         return _to_response(saved)
@@ -376,7 +389,7 @@ class InstructionService:
 
     async def get(self, instruction_id: str, subject: Subject) -> InstructionResponse:
         record = await self.repository.get_current(instruction_id)
-        await self._authorize(
+        authorization = await self._authorize(
             LifecycleAction.VIEW,
             subject,
             record.instruction,
@@ -387,6 +400,7 @@ class InstructionService:
             subject,
             record.instruction,
             version_number=record.version_number,
+            details=details_with_authorization(None, authorization),
         )
         return _to_response(record)
 
@@ -417,7 +431,7 @@ class InstructionService:
             ):
                 continue
             try:
-                await self._authorize(
+                authorization = await self._authorize(
                     LifecycleAction.VIEW,
                     subject,
                     record.instruction,
@@ -430,6 +444,7 @@ class InstructionService:
                 subject,
                 record.instruction,
                 version_number=record.version_number,
+                details=details_with_authorization(None, authorization),
             )
             visible.append(_to_response(record))
         return visible
@@ -440,7 +455,7 @@ class InstructionService:
         if instruction.status != InstructionStatus.DRAFT:
             raise InvalidStateTransitionError("only DRAFT instructions can be submitted")
 
-        await self._authorize(
+        authorization = await self._authorize(
             LifecycleAction.SUBMIT,
             subject,
             instruction,
@@ -448,10 +463,12 @@ class InstructionService:
         )
         instruction.status = InstructionStatus.PENDING
         instruction.submitted_at = datetime.utcnow()
+        details = details_with_authorization(None, authorization)
         saved = await self._persist_new_version(
             instruction,
             LifecycleAction.SUBMIT,
             subject,
+            details=details,
             skip_authorize=True,
         )
         return _to_response(saved)
@@ -462,7 +479,7 @@ class InstructionService:
         if instruction.status != InstructionStatus.PENDING:
             raise InvalidStateTransitionError("only PENDING instructions can be approved")
 
-        await self._authorize(
+        authorization = await self._authorize(
             LifecycleAction.APPROVE,
             subject,
             instruction,
@@ -483,10 +500,12 @@ class InstructionService:
             supervisor_id=subject.supervisor_id,
         )
         instruction.approved_at = datetime.utcnow()
+        details = details_with_authorization(None, authorization)
         saved = await self._persist_new_version(
             instruction,
             LifecycleAction.APPROVE,
             subject,
+            details=details,
             skip_authorize=True,
         )
         return _to_response(saved)
@@ -502,7 +521,7 @@ class InstructionService:
         if instruction.status != InstructionStatus.PENDING:
             raise InvalidStateTransitionError("only PENDING instructions can be rejected")
 
-        await self._authorize(
+        authorization = await self._authorize(
             LifecycleAction.REJECT,
             subject,
             instruction,
@@ -521,11 +540,12 @@ class InstructionService:
         )
         instruction.rejected_at = datetime.utcnow()
         instruction.rejection_reason = request.reason
+        details = details_with_authorization({"reason": request.reason}, authorization)
         saved = await self._persist_new_version(
             instruction,
             LifecycleAction.REJECT,
             subject,
-            {"reason": request.reason},
+            details=details,
             skip_authorize=True,
         )
         return _to_response(saved)
@@ -541,7 +561,7 @@ class InstructionService:
                 "only active STANDING or SINGLE_USE instructions can be suspended"
             )
 
-        await self._authorize(
+        authorization = await self._authorize(
             LifecycleAction.SUSPEND,
             subject,
             instruction,
@@ -550,10 +570,12 @@ class InstructionService:
         instruction.status = InstructionStatus.SUSPENDED
         instruction.suspended_by = subject.user_id
         instruction.suspended_at = datetime.utcnow()
+        details = details_with_authorization(None, authorization)
         saved = await self._persist_new_version(
             instruction,
             LifecycleAction.SUSPEND,
             subject,
+            details=details,
             skip_authorize=True,
         )
         return _to_response(saved)
@@ -564,7 +586,7 @@ class InstructionService:
         if instruction.status != InstructionStatus.SUSPENDED:
             raise InvalidStateTransitionError("only SUSPENDED instructions can be reactivated")
 
-        await self._authorize(
+        authorization = await self._authorize(
             LifecycleAction.REACTIVATE,
             subject,
             instruction,
@@ -577,10 +599,12 @@ class InstructionService:
         )
         instruction.suspended_by = None
         instruction.suspended_at = None
+        details = details_with_authorization(None, authorization)
         saved = await self._persist_new_version(
             instruction,
             LifecycleAction.REACTIVATE,
             subject,
+            details=details,
             skip_authorize=True,
         )
         return _to_response(saved)
@@ -609,7 +633,7 @@ class InstructionService:
             "end_to_end_identification": request.end_to_end_identification,
             "currency": instruction.currency,
         }
-        await self._authorize(
+        authorization = await self._authorize(
             LifecycleAction.USE,
             subject,
             instruction,
@@ -620,11 +644,12 @@ class InstructionService:
         if instruction.instruction_type == InstructionType.SINGLE_USE:
             instruction.status = InstructionStatus.USED
 
+        details = details_with_authorization(use_details, authorization)
         saved = await self._persist_new_version(
             instruction,
             LifecycleAction.USE,
             subject,
-            use_details,
+            details=details,
             skip_authorize=True,
         )
         return _to_response(saved)

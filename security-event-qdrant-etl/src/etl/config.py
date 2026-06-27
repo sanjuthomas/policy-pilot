@@ -11,8 +11,8 @@ class Settings(BaseSettings):
 
     kafka_enabled: bool = True
     kafka_bootstrap_servers: str = "kafka:9092"
-    kafka_security_events_topic: str = "instruction-security-events"
-    kafka_consumer_group: str = "security-event-qdrant-etl"
+    kafka_instruction_security_events_topic: str = "instruction-security-events"
+    kafka_instruction_security_events_consumer_group: str = "instruction-security-event-etl"
     kafka_instruction_topic: str = "ssi-instructions"
     kafka_instruction_consumer_group: str = "ssi-instruction-etl"
     kafka_payment_security_events_topic: str = "payment-security-events"

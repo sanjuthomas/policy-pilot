@@ -15,7 +15,10 @@ from etl.config import settings
 from etl.health import component_status
 from etl.instruction_consumer import InstructionKafkaConsumer
 from etl.instruction_pipeline import InstructionPipeline
-from etl.kafka_consumer import SecurityEventKafkaConsumer
+from etl.instruction_security_event_consumer import (
+    InstructionSecurityEventKafkaConsumer,
+)
+from etl.instruction_security_event_pipeline import InstructionSecurityEventPipeline
 from etl.neo4j_client import Neo4jGraphWriter
 from etl.ollama_client import OllamaEmbeddingClient
 from etl.payment_consumer import (
@@ -23,7 +26,6 @@ from etl.payment_consumer import (
     PaymentSecurityEventKafkaConsumer,
 )
 from etl.payment_pipeline import PaymentFactPipeline, PaymentSecurityEventPipeline
-from etl.pipeline import SecurityEventPipeline
 from etl.qdrant_store import QdrantHybridStore
 
 __version__ = "0.2.0"
@@ -36,7 +38,7 @@ neo4j_writer = Neo4jGraphWriter()
 ollama_client = OllamaEmbeddingClient()
 qdrant_store = QdrantHybridStore()
 
-security_event_pipeline = SecurityEventPipeline(
+instruction_security_event_pipeline = InstructionSecurityEventPipeline(
     neo4j_writer=neo4j_writer,
     ollama_client=ollama_client,
     qdrant_store=qdrant_store,
@@ -58,7 +60,9 @@ payment_fact_pipeline = PaymentFactPipeline(
     qdrant_store=qdrant_store,
 )
 
-security_event_consumer = SecurityEventKafkaConsumer(security_event_pipeline)
+instruction_security_event_consumer = InstructionSecurityEventKafkaConsumer(
+    instruction_security_event_pipeline
+)
 instruction_consumer = InstructionKafkaConsumer(instruction_pipeline)
 payment_security_event_consumer = PaymentSecurityEventKafkaConsumer(payment_security_event_pipeline)
 payment_fact_consumer = PaymentFactKafkaConsumer(payment_fact_pipeline)
@@ -75,7 +79,7 @@ async def lifespan(_: FastAPI):
     await neo4j_writer.connect()
     qdrant_store.connect()
 
-    await security_event_consumer.start()
+    await instruction_security_event_consumer.start()
     await instruction_consumer.start()
     await payment_security_event_consumer.start()
     await payment_fact_consumer.start()
@@ -90,7 +94,7 @@ async def lifespan(_: FastAPI):
     logger.info("security-event-qdrant-etl started (quad consumers: instruction events, instruction facts, payment events, payment facts)")
     yield
 
-    await security_event_consumer.close()
+    await instruction_security_event_consumer.close()
     await instruction_consumer.close()
     await payment_security_event_consumer.close()
     await payment_fact_consumer.close()
@@ -117,7 +121,7 @@ async def index() -> FileResponse:
 @app.get("/health")
 async def health() -> dict:
     components = await component_status(
-        kafka_consumer=security_event_consumer,
+        instruction_security_event_consumer=instruction_security_event_consumer,
         qdrant_store=qdrant_store,
         neo4j_writer=neo4j_writer,
         ollama_client=ollama_client,
@@ -129,7 +133,7 @@ async def health() -> dict:
 @app.get("/api/stats")
 async def stats() -> dict:
     components = await component_status(
-        kafka_consumer=security_event_consumer,
+        instruction_security_event_consumer=instruction_security_event_consumer,
         qdrant_store=qdrant_store,
         neo4j_writer=neo4j_writer,
         ollama_client=ollama_client,
@@ -143,7 +147,7 @@ async def stats() -> dict:
 @app.get("/api/components")
 async def components() -> dict:
     return await component_status(
-        kafka_consumer=security_event_consumer,
+        instruction_security_event_consumer=instruction_security_event_consumer,
         qdrant_store=qdrant_store,
         neo4j_writer=neo4j_writer,
         ollama_client=ollama_client,

@@ -11,6 +11,7 @@ import logging
 import uuid
 from typing import Any
 
+from etl.authorization_context import authorization_merged_fields, authorization_search_parts
 from etl.neo4j_client import Neo4jGraphWriter
 from etl.ollama_client import OllamaEmbeddingClient
 from etl.qdrant_store import QdrantHybridStore
@@ -40,18 +41,23 @@ def _build_payment_event_search_text(event: dict[str, Any]) -> str:
     snap = event.get("payment_snapshot") or {}
     created_by = snap.get("created_by") or {}
     approved_by = snap.get("approved_by") or {}
+    auth_ctx = authorization_merged_fields(event)
 
     parts = [
         event.get("message", ""),
+        event.get("timestamp", ""),
         event.get("severity", ""),
         event_ctx.get("action", ""),
         event_ctx.get("outcome", ""),
         event_ctx.get("reason") or "",
+        *authorization_search_parts(auth_ctx),
         actor.get("user_id", ""),
         actor.get("given_name") or "",
         actor.get("family_name") or "",
         actor.get("title", ""),
         " ".join(actor.get("roles") or []),
+        " ".join(actor.get("groups") or []),
+        " ".join(actor.get("covering_lobs") or []),
         actor.get("lob") or "",
         resource.get("id", ""),
         resource.get("instruction_id", ""),
@@ -131,12 +137,14 @@ class PaymentSecurityEventPipeline:
         snap = event.get("payment_snapshot") or {}
         created_by = snap.get("created_by") or {}
 
+        auth_ctx = authorization_merged_fields(event)
         payload = {
             "event_id": event_id,
             "payment_id": resource.get("id"),
             "instruction_id": resource.get("instruction_id"),
             "source": "payment_security_event",
             "search_text": search_text,
+            "timestamp": event.get("timestamp"),
             "severity": event.get("severity"),
             "message": event.get("message"),
             "action": event_ctx.get("action"),
@@ -149,6 +157,7 @@ class PaymentSecurityEventPipeline:
             "actor_display": _display(actor),
             "creator_user_id": created_by.get("user_id"),
             "creator_display": _display(created_by),
+            **auth_ctx,
             "security_event": event,
         }
 

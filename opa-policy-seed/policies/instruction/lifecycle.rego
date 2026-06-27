@@ -1,4 +1,4 @@
-package ssi.instruction_lifecycle
+package instruction.lifecycle
 
 default allow := false
 

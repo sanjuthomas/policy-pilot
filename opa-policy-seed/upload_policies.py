@@ -72,10 +72,17 @@ def list_policy_ids() -> list[str]:
 
 
 PREFERRED_DELETE_ORDER = (
-    "ssi/instruction_lifecycle.rego",
-    "ssi/lifecycle_rules.rego",
-    "ssi/approval_matrix.rego",
-    "ssi/common.rego",
+    "instruction/lifecycle.rego",
+    "instruction/violations.rego",
+    "instruction/allow_basis.rego",
+    "instruction/lifecycle_rules.rego",
+    "instruction/approval_matrix.rego",
+    "instruction/common.rego",
+    "payment/lifecycle.rego",
+    "payment/violations.rego",
+    "payment/allow_basis.rego",
+    "payment/amount_limits.rego",
+    "payment/common.rego",
 )
 
 

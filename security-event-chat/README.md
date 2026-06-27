@@ -13,8 +13,8 @@ The sidebar radio buttons select what Qdrant and Neo4j focus on:
 
 | Mode | Qdrant filter | Use for |
 |------|---------------|---------|
-| **Security Events** (`events`) | `security_event` + `payment_security_event` | Policy denials, audit trail, ALERT/INFO counts |
-| **Instructions** (`instructions`) | `instruction_state` | Instruction state, duplicate routes, approval patterns |
+| **Security Events** (`events`) | `instruction_security_event` + `payment_security_event` | Policy denials, audit trail, ALERT/INFO counts |
+| **Instructions** (`instructions`) | `instruction_state` | Instruction state, duplicate routes, **Who/When/Why approval audit** |
 | **Payments** (`payments`) | `payment_fact` | Payment amounts, statuses, approvers |
 | **All entities** (`all`) | no filter | Cross-domain questions |
 
@@ -33,19 +33,42 @@ flowchart LR
     V --> R[RRF merge + dedupe]
     B --> R
     N --> R
-    R --> A[Ollama answer]
+    R --> A{Approval audit?}
+    A -->|yes| W[Who/When deterministic + LLM WHY rewrite]
+    A -->|no| L[Ollama full answer]
 ```
 
-1. **Planned Cypher** — count, ranking, and hierarchy questions bypass LLM Cypher generation and run deterministic queries (Neo4j is authoritative; vector hits are not used to infer structural violations)
-2. **Vector** — `bge-m3:latest` embed → Qdrant dense search (mode-filtered)
-3. **BM25** — Qdrant sparse lexical search (mode-filtered)
-4. **Neo4j** — Ollama generates read-only Cypher from mode-specific prompts + `neo4j-graph-model/relationships.cypher`
-5. **Merge** — reciprocal rank fusion (k=60), dedupe by `event_id` / `payment_id`
-6. **Answer** — Ollama chat model synthesizes natural language from merged context
+1. **Planned Cypher** — count, ranking, hierarchy, and instruction approval-by-ID questions bypass LLM Cypher generation (Neo4j is authoritative)
+2. **Exact lookup** — UUID in question triggers Qdrant fetch by ID; Instructions mode also fetches APPROVE security events for approval questions
+3. **Vector** — `bge-m3:latest` embed → Qdrant dense search (mode-filtered)
+4. **BM25** — Qdrant sparse lexical search (mode-filtered)
+5. **Neo4j** — Ollama generates read-only Cypher from mode-specific prompts + `neo4j-graph-model/relationships.cypher`
+6. **Merge** — reciprocal rank fusion (k=60), dedupe by `event_id` / `instruction_id`
+7. **Answer** — full Ollama synthesis, **or** structured Who/When/Why for instruction approval audit questions
 
-The sidebar shows generated Cypher, timing, and source cards tagged `vector` / `bm25` / `neo4j`.
+## Who / When / Why (approval audit)
+
+For questions like _"Who approved instruction `<uuid>`?"_ in **Instructions** mode:
+
+| Part | Source | Method |
+|------|--------|--------|
+| **WHO** | `approver_display` from instruction state or graph | Deterministic — no LLM |
+| **WHEN** | `approved_at` or APPROVE event timestamp | Deterministic — no LLM |
+| **WHY** | `authorization_summary` + `allow_basis` from OPA | **LLM rewrite** into 2–4 readable sentences; preserves all material policy checks; falls back to raw OPA text if Ollama fails |
+
+Example answer shape:
+
+```
+WHO: Vasquez, Elena (ficc-300)
+WHEN: 2026-06-27T02:48:09.697763
+WHY: Elena Vasquez was authorized to approve because her Vice President title satisfies the approval matrix for Analyst work in FICC, her LOB matched the instruction, and there was no reporting relationship between approver and creator. The instruction met duration, role, and valid-transition requirements.
+```
+
+Requires indexed `authorization_summary` on instruction state or APPROVE security events. Run harness **`repair-authorization`** after upgrading from an older demo dataset.
 
 ## Example questions
+
+See **`regression/questions.yaml`** for the full regression bank (~60 cases) and **`regression/README.md`** for how to run it.
 
 **Security Events mode:**
 - How many ALERT events happened today?
@@ -53,7 +76,7 @@ The sidebar shows generated Cypher, timing, and source cards tagged `vector` / `
 - Which user triggered the most policy denial alerts this week?
 
 **Instructions mode:**
-- How many instructions were created today?
+- Who approved instruction `<uuid>`? (Who / When / Why audit trail)
 - Are there any instructions approved by someone who directly reports to the creator?
 - Are there active instructions sharing the same creditor account and currency?
 
@@ -86,7 +109,7 @@ security-event-chat
 ```bash
 curl -s -X POST http://localhost:8092/api/chat \
   -H 'Content-Type: application/json' \
-  -d '{"message":"How many payment ALERT events happened today?","mode":"events","history":[]}'
+  -d '{"message":"Who approved instruction ID 242cf85e-6ae5-49bb-befb-9141d5053307?","mode":"instructions","history":[]}'
 ```
 
 | Method | Path | Description |
@@ -100,3 +123,13 @@ curl -s -X POST http://localhost:8092/api/chat \
 ```bash
 docker compose up -d security-event-chat
 ```
+
+## Regression suite
+
+```bash
+cd security-event-chat
+pip install -e ".[regression]"
+PYTHONPATH=. python -m regression.runner --seed --report regression-report.json
+```
+
+See `regression/README.md` for filters (`--mode`, `--tags`, `--ids`) and CI usage via `RUN_CHAT_REGRESSION=1 pytest`.

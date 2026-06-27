@@ -51,6 +51,8 @@ Every authorized action or policy denial emits a document to MongoDB `security_e
 | Authorized action | `INFO` | OPA allowed |
 | Policy denial | `ALERT` | OPA denied before any write |
 
+Authorized actions store `details.authorization` (OPA `allow_basis`, `summary`, subject snapshot) and set `event.reason` to the summary. Same pattern as the ILM.
+
 Payment mutations write the payment record and matching security event in a **single MongoDB transaction** (replica set required).
 
 ## Storage

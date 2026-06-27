@@ -5,7 +5,7 @@ from ps.config import settings
 from ps.database import get_security_events_db
 from ps.kafka_publisher import kafka_publisher
 from ps.models.api import Subject
-from ps.models.enums import PaymentAction
+from ps.models.enums import PaymentAction, SecurityEventSeverity
 from ps.models.payment import Payment
 from ps.models.security_event import PaymentSecurityEvent
 
@@ -59,6 +59,7 @@ class SecurityEventRepository:
         *,
         reason: str,
         details: dict[str, Any] | None = None,
+        severity: SecurityEventSeverity | None = None,
     ) -> PaymentSecurityEvent:
         event = PaymentSecurityEvent.policy_denial(
             action,
@@ -66,6 +67,7 @@ class SecurityEventRepository:
             payment,
             reason=reason,
             details=details,
+            severity=severity,
         )
         return await self.insert(event)
 

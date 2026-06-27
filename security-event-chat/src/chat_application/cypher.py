@@ -209,6 +209,27 @@ def _is_subordinate_approver_question(question: str) -> bool:
     )
 
 
+def _is_instruction_approval_lookup(question: str) -> bool:
+    q = question.lower()
+    if "approv" not in q:
+        return False
+    return bool(_UUID_PATTERN.search(question)) or "instruction" in q
+
+
+def _instruction_approval_lookup_queries(instruction_id: str) -> list[tuple[str, str]]:
+    return [
+        (
+            "approval_lookup",
+            f"""MATCH (i:Instruction {{instruction_id: '{instruction_id}'}})-[:CURRENT]->(v:InstructionVersion)
+OPTIONAL MATCH (approverUser:User {{user_id: v.approver_user_id}})
+RETURN v.instruction_id, v.status, v.approved_at,
+       coalesce(approverUser.display_name, v.approver_user_id, '') AS approver_display,
+       v.authorization_summary, v.authorization_basis
+LIMIT 1""",
+        ),
+    ]
+
+
 def _instruction_subordinate_approver_queries() -> list[tuple[str, str]]:
     """Instructions where approver-[:REPORTS_TO]->creator on the current version."""
     return [
@@ -240,6 +261,11 @@ def plan_graph_queries(question: str, *, mode: str) -> list[tuple[str, str]] | N
 
     if mode == "instructions" and _is_subordinate_approver_question(question):
         return _instruction_subordinate_approver_queries()
+
+    if mode == "instructions" and _is_instruction_approval_lookup(question):
+        uuids = extract_uuids(question)
+        if uuids:
+            return _instruction_approval_lookup_queries(uuids[0])
 
     if (
         mode == "events"

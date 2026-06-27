@@ -1,4 +1,4 @@
-package ssi.instruction_lifecycle
+package instruction.lifecycle
 
 valid_transition if {
     input.action == "UPDATE"

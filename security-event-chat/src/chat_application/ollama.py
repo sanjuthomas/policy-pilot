@@ -133,7 +133,7 @@ MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
 WHERE actor.user_id = v.creator_user_id
 OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
 OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
-RETURN e.event_id, e.timestamp, e.action, e.outcome, e.message,
+RETURN e.event_id, e.timestamp, e.action, e.outcome, e.message, e.reason, e.authorization_summary,
        coalesce(v.instruction_id, '') AS instruction_id,
        coalesce(e.owning_lob, v.owning_lob, '') AS lob,
        coalesce(actor.display_name, actor.user_id, '') AS actor_display,
@@ -143,6 +143,17 @@ RETURN e.event_id, e.timestamp, e.action, e.outcome, e.message,
        coalesce(approverUser.display_name, v.approver_user_id, '') AS approver_display
 ORDER BY e.timestamp DESC
 LIMIT 20
+
+Example — who approved a specific instruction (successful APPROVE security event):
+MATCH (e:SecurityEvent {action: 'APPROVE', outcome: 'success'})-[:TARGETS_VERSION]->(v:InstructionVersion {instruction_id: '00000000-0000-0000-0000-000000000001'})
+OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
+OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
+RETURN e.event_id, e.timestamp, e.action, e.outcome, e.reason, e.authorization_summary,
+       v.instruction_id, coalesce(e.owning_lob, v.owning_lob, '') AS lob,
+       coalesce(actor.display_name, actor.user_id, '') AS actor_display,
+       coalesce(creatorUser.display_name, v.creator_user_id, '') AS creator_display
+ORDER BY e.timestamp DESC
+LIMIT 1
 
 Example — all APPROVE events (successful and denied) to check for policy violations:
 MATCH (actor:User)-[:ACTED_AS]->(e:SecurityEvent {action: 'APPROVE'})
@@ -382,7 +393,8 @@ Rules:
 - InstructionVersion fields: instruction_id, version_number, status, action, currency, wire_scope,
   instruction_type, owning_lob, effective_date, end_date, is_expired, creditor_name,
   creditor_account, creditor_scheme, creditor_bic, debtor_name, debtor_account, debtor_bic,
-  creator_user_id, approver_user_id, rejector_user_id.
+  creator_user_id, approver_user_id, rejector_user_id, approved_at, authorization_summary,
+  authorization_basis.
 - User nodes have display_name in "FamilyName, GivenName (user_id)" form.
 - LOB node is ProfitCenter, linked by (i)-[:OWNED_BY]->(lob:ProfitCenter).
 - (i)-[:CONFLICTS_WITH]->(j:Instruction) means same creditor account + currency = potential duplicate route.
@@ -454,6 +466,14 @@ RETURN v.instruction_id, v.owning_lob, v.status, v.instruction_type,
        v.effective_date, v.end_date, v.is_expired,
        coalesce(creatorUser.display_name, v.creator_user_id, '') AS creator_display,
        coalesce(approverUser.display_name, v.approver_user_id, '') AS approver_display
+LIMIT 1
+
+Example — who approved a specific instruction (WHO / WHEN / WHY):
+MATCH (i:Instruction {instruction_id: '2846a7c0-4734-4626-bb58-13a966f935a1'})-[:CURRENT]->(v:InstructionVersion)
+OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
+RETURN v.instruction_id, v.status, v.approved_at,
+       coalesce(approverUser.display_name, v.approver_user_id, '') AS approver_display,
+       v.authorization_summary, v.authorization_basis
 LIMIT 1
 
 Example — how many STANDING instructions for LOB FX:
@@ -534,7 +554,23 @@ RETURN p.payment_id, p.instruction_id, p.status, p.amount, p.currency,
 ORDER BY p.created_at DESC
 LIMIT 50
 
-Example — who approved payment with a specific payment_id:
+Example — who approved payment with a specific payment_id (use the APPROVE_PAYMENT security event):
+MATCH (e:SecurityEvent {payment_id: '00000000-0000-0000-0000-000000000002', action: 'APPROVE_PAYMENT', outcome: 'success'})
+OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
+OPTIONAL MATCH (p:Payment {payment_id: e.payment_id})
+OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
+RETURN e.event_id, e.timestamp, e.action, e.outcome, e.reason, e.authorization_summary,
+       e.payment_id AS payment_id,
+       coalesce(p.instruction_id, '') AS instruction_id,
+       coalesce(p.amount, 0) AS amount,
+       coalesce(p.currency, '') AS currency,
+       coalesce(p.owning_lob, e.owning_lob, '') AS owning_lob,
+       coalesce(actor.display_name, actor.user_id, '') AS actor_display,
+       coalesce(creator.display_name, creator.user_id, p.creator_user_id, '') AS creator_display
+ORDER BY e.timestamp DESC
+LIMIT 1
+
+Example — who approved payment with a specific payment_id (payment state fallback only):
 MATCH (p:Payment {payment_id: '00000000-0000-0000-0000-000000000002'})
 OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
 OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
@@ -642,6 +678,9 @@ Answer the user's question using ONLY the provided context (graph query results 
 - Be concise and factual.
 - When listing payments, enumerate each one with:
   payment_id, instruction_id, status, amount + currency, value_date, owning_lob, creator, approver.
+- For "who approved" / "why was this allowed" / "when was it approved" questions, use PAYMENT SECURITY EVENT
+  rows where action=APPROVE_PAYMENT and outcome=success. Answer with WHO (actor), WHEN (timestamp),
+  and WHY (authorization_summary or authorization_basis / event.reason). Payment state alone is insufficient.
 - When the answer includes aggregate amounts (e.g. total approved by a user), state the sum clearly:
   "Total: $X,XXX,XXX.XX USD across N payment(s)."
 - For fraud indicators:
@@ -666,6 +705,11 @@ Answer the user's question using ONLY the provided context (instruction state gr
 - Be concise and factual.
 - When listing instructions, enumerate each one clearly with:
   instruction_id, owning_lob, status, currency, wire_scope, creditor, creator, approver, effective/end dates.
+- For "who approved" / "why was this allowed" / "when was it approved" questions, use INSTRUCTION rows
+  (instruction state) or INSTRUCTION SECURITY EVENT rows where action=APPROVE and outcome=success.
+  Answer with WHO (approver or actor display name), WHEN (approved_at or timestamp),
+  and WHY (authorization_summary in full — include the complete OPA summary text, not the generic
+  event message). Prefer authorization_summary over message when both are present.
 - Use the display_name "FamilyName, GivenName (user_id)" format for all users when available.
 - For CONFLICTS_WITH results (duplicate routes), explain both instructions share the same creditor account
   and currency — potential duplicate settlement risk.
@@ -680,6 +724,19 @@ Answer the user's question using ONLY the provided context (instruction state gr
 - Cite instruction_ids when relevant.
 - If context is insufficient, say what is missing.
 - Do not invent users, reporting relationships, or instructions not present in the context.
+"""
+
+AUTHORIZATION_WHY_SUMMARY_SYSTEM_PROMPT = """You rewrite OPA policy authorization text into clear, professional English \
+for a compliance audit answer.
+
+Rules:
+- Output ONLY the rewritten explanation — no WHO/WHEN labels, no markdown, no bullet lists unless essential.
+- Use 2–4 concise sentences in plain language a business reader can follow.
+- Preserve every material policy check from the source (roles, LOB match, approval matrix, hierarchy rules, \
+duration limits, self-approval, valid transitions). Do not drop checks; group related ones naturally.
+- Do not invent users, roles, LOBs, or policy rules not present in the source text.
+- Do not say "the policy allowed" without stating the substantive reasons.
+- Keep approver name and title if mentioned in the source.
 """
 
 ANSWER_SYSTEM_PROMPT = """You are a security operations analyst assistant for cash settlement \
@@ -698,9 +755,13 @@ PAYMENT SECURITY EVENT rows (payment lifecycle). Treat them separately when list
   instruction and payment ALERT events unless the question explicitly scopes to one domain.
   Name the top user(s) with total alert_count and break down payment vs instruction counts.
 - Format each instruction security event as:
-  "<message>" (event_id=<id> instruction_id=<id> time=<timestamp> actor=<actor_display> lob=<lob> creator=<creator_display> approver=<approver_display>)
+  "<message>" (event_id=<id> instruction_id=<id> time=<timestamp> actor=<actor_display> lob=<lob> creator=<creator_display> approver=<approver_display> why=<authorization_summary or event.reason>)
 - Format each payment security event as:
-  "<message>" (event_id=<id> payment_id=<id> instruction_id=<id> time=<timestamp> actor=<actor_display> amount=<amount> currency=<currency> lob=<lob>)
+  "<message>" (event_id=<id> payment_id=<id> instruction_id=<id> time=<timestamp> actor=<actor_display> amount=<amount> currency=<currency> lob=<lob> why=<authorization_summary or event.reason>)
+- For "who approved" / "why was this allowed" questions, prefer APPROVE / APPROVE_PAYMENT security events
+  (action with outcome=success) because they carry authorization_summary (OPA allow_basis) and timestamp.
+  Always answer with three parts when available: WHO (actor display name), WHEN (timestamp), WHY (authorization_summary
+  or authorization_basis / event.reason). Do not answer with approver name alone from instruction/payment state.
   Use the display_name form "FamilyName, GivenName (user_id)" when available; fall back to the plain user_id.
   Omit a field only if it is genuinely absent (empty string or null) in the context — never invent values.
   Example:
@@ -834,6 +895,40 @@ Question: {question}"""
             user=user_prompt,
             history=history,
         )
+
+    async def summarize_authorization_why(
+        self,
+        *,
+        approver: str,
+        authorization_summary: str,
+        authorization_basis: list[str] | None = None,
+    ) -> str:
+        """Rewrite OPA authorization text into readable English; fall back to raw summary on failure."""
+        basis_block = ""
+        if authorization_basis:
+            basis_block = "\nPolicy basis points:\n" + "\n".join(
+                f"- {point}" for point in authorization_basis
+            )
+
+        user_prompt = f"""Approver: {approver}
+
+OPA authorization summary:
+{authorization_summary}
+{basis_block}
+
+Rewrite the authorization reason in clear English:"""
+
+        try:
+            rewritten = await self.chat(
+                system=AUTHORIZATION_WHY_SUMMARY_SYSTEM_PROMPT,
+                user=user_prompt,
+            )
+            if rewritten:
+                return rewritten.strip()
+        except Exception as exc:
+            logger.warning("authorization why summarization failed: %s", exc)
+
+        return authorization_summary.strip()
 
 
 def _extract_cypher(raw: str) -> str:

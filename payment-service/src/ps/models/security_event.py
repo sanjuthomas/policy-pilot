@@ -19,6 +19,8 @@ class SecurityEventActor(BaseModel):
     family_name: str | None = None
     title: str
     roles: list[str]
+    groups: list[str] = Field(default_factory=list)
+    covering_lobs: list[str] = Field(default_factory=list)
     lob: str | None = None
     supervisor_id: str | None = None
 
@@ -68,6 +70,8 @@ class PaymentSecurityEvent(BaseModel):
             family_name=subject.family_name,
             title=subject.title,
             roles=subject.roles,
+            groups=subject.groups,
+            covering_lobs=subject.covering_lobs,
             lob=subject.lob,
             supervisor_id=subject.supervisor_id,
         )
@@ -106,6 +110,9 @@ class PaymentSecurityEvent(BaseModel):
         *,
         details: dict[str, Any] | None = None,
     ) -> "PaymentSecurityEvent":
+        event_details = dict(details or {})
+        authorization = event_details.get("authorization") or {}
+        reason = authorization.get("summary")
         return cls(
             severity=SecurityEventSeverity.INFO,
             message=f"Authorized {action.value} on payment {payment.payment_id} by {subject.user_id}",
@@ -113,6 +120,7 @@ class PaymentSecurityEvent(BaseModel):
                 type=cls._event_types_for_action(action),
                 action=action.value,
                 outcome=SecurityEventOutcome.SUCCESS,
+                reason=reason,
             ),
             actor=cls._actor(subject),
             resource=cls._resource(payment),
@@ -130,11 +138,17 @@ class PaymentSecurityEvent(BaseModel):
         *,
         reason: str,
         details: dict[str, Any] | None = None,
+        severity: SecurityEventSeverity | None = None,
     ) -> "PaymentSecurityEvent":
         event_details = dict(details or {})
         event_details["policy_engine"] = "opa"
         return cls(
-            severity=SecurityEventSeverity.ALERT,
+            severity=severity
+            or (
+                SecurityEventSeverity.ALERT
+                if (event_details.get("authorization") or {}).get("is_alert")
+                else SecurityEventSeverity.MEDIUM
+            ),
             message=f"Policy denied {action.value} on payment {payment.payment_id} by {subject.user_id}",
             event=SecurityEventContext(
                 type=["access", "denied"],

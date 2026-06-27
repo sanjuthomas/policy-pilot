@@ -11,14 +11,21 @@ dependencies = [
     "httpx>=0.28.0",
     "neo4j>=5.26.0",
     "qdrant-client>=1.15.2",
+    "pyyaml>=6.0.0",
+]
+
+[project.optional-dependencies]
+regression = [
+    "pytest>=8.0.0",
 ]
 
 [project.scripts]
 security-event-chat = "chat_application.main:run"
+security-event-chat-regression = "regression.runner:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/chat_application"]
+packages = ["src/chat_application", "regression"]

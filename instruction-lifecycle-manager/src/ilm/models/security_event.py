@@ -21,6 +21,7 @@ class SecurityEventActor(BaseModel):
     family_name: str | None = None
     title: str
     roles: list[str]
+    groups: list[str] = Field(default_factory=list)
     lob: str | None = None
     supervisor_id: str | None = None
     # Set when the action was performed via an On-Behalf-Of service delegation.
@@ -78,6 +79,7 @@ class SecurityEvent(BaseModel):
             family_name=subject.family_name,
             title=subject.title,
             roles=subject.roles,
+            groups=subject.groups,
             lob=subject.lob,
             supervisor_id=subject.supervisor_id,
             delegated_by=subject.delegated_by,
@@ -138,6 +140,8 @@ class SecurityEvent(BaseModel):
             instruction, version_number=version_number
         )
         event_details = {**cls._delegation_details(subject), **(details or {})}
+        authorization = event_details.get("authorization") or {}
+        reason = authorization.get("summary")
         return cls(
             severity=SecurityEventSeverity.INFO,
             message=(
@@ -149,6 +153,7 @@ class SecurityEvent(BaseModel):
                 type=cls._event_types_for_action(action),
                 action=action.value,
                 outcome=SecurityEventOutcome.SUCCESS,
+                reason=reason,
             ),
             actor=actor,
             resource=resource,
@@ -166,6 +171,7 @@ class SecurityEvent(BaseModel):
         *,
         reason: str,
         details: dict[str, Any] | None = None,
+        severity: SecurityEventSeverity | None = None,
     ) -> "SecurityEvent":
         actor = cls._actor_from_subject(subject)
         resource = cls._resource_from_instruction(instruction)
@@ -175,7 +181,12 @@ class SecurityEvent(BaseModel):
             "policy_engine": "opa",
         }
         return cls(
-            severity=SecurityEventSeverity.ALERT,
+            severity=severity
+            or (
+                SecurityEventSeverity.ALERT
+                if (event_details.get("authorization") or {}).get("is_alert")
+                else SecurityEventSeverity.MEDIUM
+            ),
             message=(
                 f"Policy denied {action.value} on instruction "
                 f"{instruction.instruction_id} by {subject.user_id}"

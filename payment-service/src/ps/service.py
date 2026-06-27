@@ -8,10 +8,11 @@ from uuid import uuid4
 from ps.ilm_client import IlmClient, InstructionNotFoundError, InstructionStateError
 from ps.kafka_publisher import kafka_publisher
 from ps.models.api import LifecycleEvent, RejectPaymentRequest, Subject, UserReference
-from ps.models.enums import PaymentAction, PaymentStatus
+from ps.authorization import build_authorization_block, details_with_authorization, payment_resource_context
+from ps.models.enums import PaymentAction, PaymentStatus, SecurityEventSeverity
 from ps.models.payment import Payment
 from ps.models.security_event import PaymentSecurityEvent
-from ps.opa import OpaClient, PolicyDeniedError
+from ps.opa import OpaClient
 from ps.repository import PaymentNotFoundError, PaymentRepository
 from ps.security_event_repository import SecurityEventRepository
 
@@ -136,23 +137,39 @@ class PaymentService:
         *,
         instruction_end_date: str = "",
         instruction_status: str = "",
-    ) -> None:
-        try:
-            await self.opa.authorize(
-                action,
-                subject,
+    ) -> dict:
+        decision = await self.opa.evaluate(
+            action,
+            subject,
+            payment,
+            instruction_end_date=instruction_end_date,
+            instruction_status=instruction_status,
+        )
+        authorization = build_authorization_block(
+            decision,
+            subject,
+            action,
+            resource_context=payment_resource_context(
                 payment,
-                instruction_end_date=instruction_end_date,
                 instruction_status=instruction_status,
-            )
-        except PolicyDeniedError as exc:
+                instruction_end_date=instruction_end_date,
+            ),
+        )
+        if not decision.allowed:
             await self.event_repo.record_policy_denial(
                 action,
                 subject,
                 payment,
-                reason=str(exc),
+                reason=authorization["summary"],
+                details=details_with_authorization(None, authorization),
+                severity=(
+                    SecurityEventSeverity.ALERT
+                    if decision.is_alert
+                    else SecurityEventSeverity.MEDIUM
+                ),
             )
-            raise PermissionError(str(exc)) from exc
+            raise PermissionError(authorization["summary"])
+        return authorization
 
     async def _record_success(
         self,
@@ -217,7 +234,7 @@ class PaymentService:
         )
 
         try:
-            await self._authorize(
+            authorization = await self._authorize(
                 PaymentAction.CREATE_PAYMENT,
                 subject,
                 payment,
@@ -260,7 +277,11 @@ class PaymentService:
         await self.repo.insert(payment)
 
         await self._record_success(
-            PaymentAction.CREATE_PAYMENT, subject, payment, event_id=event_id
+            PaymentAction.CREATE_PAYMENT,
+            subject,
+            payment,
+            event_id=event_id,
+            details=details_with_authorization(None, authorization),
         )
 
         logger.info(
@@ -294,7 +315,7 @@ class PaymentService:
         instruction_status = instruction.get("status", "")
 
         try:
-            await self._authorize(
+            authorization = await self._authorize(
                 PaymentAction.SUBMIT_PAYMENT,
                 subject,
                 payment,
@@ -321,7 +342,11 @@ class PaymentService:
         await self.repo.update(payment)
 
         await self._record_success(
-            PaymentAction.SUBMIT_PAYMENT, subject, payment, event_id=event_id
+            PaymentAction.SUBMIT_PAYMENT,
+            subject,
+            payment,
+            event_id=event_id,
+            details=details_with_authorization(None, authorization),
         )
 
         logger.info("payment submitted payment_id=%s by=%s", payment_id, subject.user_id)
@@ -361,7 +386,7 @@ class PaymentService:
         instruction_status = instruction.get("status", "")
 
         try:
-            await self._authorize(
+            authorization = await self._authorize(
                 PaymentAction.APPROVE_PAYMENT,
                 subject,
                 payment,
@@ -388,7 +413,11 @@ class PaymentService:
         await self.repo.update(payment)
 
         await self._record_success(
-            PaymentAction.APPROVE_PAYMENT, subject, payment, event_id=event_id
+            PaymentAction.APPROVE_PAYMENT,
+            subject,
+            payment,
+            event_id=event_id,
+            details=details_with_authorization(None, authorization),
         )
 
         logger.info("payment approved payment_id=%s by=%s", payment_id, subject.user_id)
@@ -423,7 +452,7 @@ class PaymentService:
         instruction_status = instruction.get("status", "")
 
         try:
-            await self._authorize(
+            authorization = await self._authorize(
                 PaymentAction.REJECT_PAYMENT,
                 subject,
                 payment,
@@ -456,7 +485,7 @@ class PaymentService:
             subject,
             payment,
             event_id=event_id,
-            details={"reason": request.reason},
+            details=details_with_authorization({"reason": request.reason}, authorization),
         )
 
         logger.info("payment rejected payment_id=%s by=%s", payment_id, subject.user_id)

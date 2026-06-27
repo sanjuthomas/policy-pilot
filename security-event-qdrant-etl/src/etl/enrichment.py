@@ -4,6 +4,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from etl.authorization_context import authorization_merged_fields, authorization_search_parts
+
 
 def _display_name(user: dict[str, Any]) -> str:
     """Return 'Family, Given (user_id)' when names are known, else just user_id."""
@@ -109,6 +111,7 @@ def build_merged_context(
         "rejector_title": rejected_by.get("title"),
         "rejector_lob": rejected_by.get("lob"),
         "rejector_supervisor_id": rejected_by.get("supervisor_id"),
+        **authorization_merged_fields(security_event),
     }
 
 
@@ -124,6 +127,7 @@ def build_search_text(
         ctx.get("action", ""),
         ctx.get("outcome", ""),
         ctx.get("reason") or "",
+        *authorization_search_parts(ctx),
         ctx.get("actor_user_id", ""),
         ctx.get("actor_given_name") or "",
         ctx.get("actor_family_name") or "",

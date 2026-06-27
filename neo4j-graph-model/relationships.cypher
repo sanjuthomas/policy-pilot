@@ -2,7 +2,7 @@
 // Documentation only. No data is created by this file.
 //
 // Two ETL pipelines write to this graph:
-//   1. SecurityEventPipeline  — consumes instruction-security-events topic
+//   1. InstructionSecurityEventPipeline  — consumes instruction-security-events topic
 //   2. InstructionPipeline    — consumes ssi-instructions topic
 //
 // Source of truth in MongoDB:
@@ -143,19 +143,19 @@
 //
 // (:User)-[:ACTED_AS]->(:SecurityEvent)
 //   Security event actor (subject who performed the action).
-//   Written by: SecurityEventPipeline
+//   Written by: InstructionSecurityEventPipeline
 //
 // (:SecurityEvent)-[:TARGETS]->(:Instruction)
 //   From security_event.resource.id.
-//   Written by: SecurityEventPipeline
+//   Written by: InstructionSecurityEventPipeline
 //
 // (:SecurityEvent)-[:TARGETS_VERSION]->(:InstructionVersion)
 //   When security_event.resource.version_number is set.
-//   Written by: SecurityEventPipeline
+//   Written by: InstructionSecurityEventPipeline
 //
 // (:SecurityEvent)-[:INVOLVES_LOB]->(:ProfitCenter)
 //   From security_event.resource.owning_lob.
-//   Written by: SecurityEventPipeline
+//   Written by: InstructionSecurityEventPipeline
 
 // ---------------------------------------------------------------------------
 // PAYMENT NODE

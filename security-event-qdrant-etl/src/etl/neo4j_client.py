@@ -7,6 +7,7 @@ from typing import Any
 
 from neo4j import AsyncDriver, AsyncGraphDatabase
 
+from etl.authorization_context import authorization_fact_neo4j_params, authorization_neo4j_params
 from etl.config import settings
 from etl.enrichment import EnrichedSecurityEventDocument
 
@@ -91,6 +92,7 @@ class Neo4jGraphWriter:
         currency = merged.get("currency")
         action = event_ctx.get("action")
         outcome = event_ctx.get("outcome")
+        auth_params = authorization_neo4j_params(event)
 
         # All writes in a single transaction for atomicity
         async with self._driver.session() as session:
@@ -112,7 +114,11 @@ class Neo4jGraphWriter:
                         e.source_version   = $source_version,
                         e.wire_scope       = $wire_scope,
                         e.instruction_type = $instruction_type,
-                        e.owning_lob       = $owning_lob
+                        e.owning_lob       = $owning_lob,
+                        e.authorization_summary = $authorization_summary,
+                        e.authorization_decision = $authorization_decision,
+                        e.authorization_basis = $authorization_basis,
+                        e.authorization_violations = $authorization_violations
                     """,
                     event_id=document.event_id,
                     timestamp=event.get("timestamp"),
@@ -127,6 +133,7 @@ class Neo4jGraphWriter:
                     wire_scope=wire_scope,
                     instruction_type=instruction_type,
                     owning_lob=owning_lob,
+                    **auth_params,
                 )
 
                 # --- Actor User node + ACTED_AS + BELONGS_TO ---
@@ -644,6 +651,7 @@ class Neo4jGraphWriter:
         rejector_user_id = rejected_by.get("user_id")
 
         actor_user_id = fact.get("actor_user_id")
+        auth_params = authorization_fact_neo4j_params(fact)
 
         query = """
         // ── Instruction root node ────────────────────────────────────────────────
@@ -677,6 +685,9 @@ class Neo4jGraphWriter:
               v.creator_user_id    = $creator_user_id,
               v.approver_user_id   = $approver_user_id,
               v.rejector_user_id   = $rejector_user_id,
+              v.approved_at        = coalesce($approved_at, v.approved_at),
+              v.authorization_summary = coalesce($authorization_summary, v.authorization_summary),
+              v.authorization_basis   = coalesce($authorization_basis, v.authorization_basis),
               v.is_expired         = (
                   $end_date IS NOT NULL AND $end_date <> '' AND
                   date(substring($end_date, 0, 10)) < date()
@@ -819,6 +830,7 @@ class Neo4jGraphWriter:
             "actor_lob": fact.get("actor_lob"),
             "actor_roles": _roles_json(fact.get("actor_roles")),
             "actor_supervisor_id": fact.get("actor_supervisor_id"),
+            **auth_params,
         }
 
         async with self._driver.session() as session:
@@ -877,6 +889,7 @@ class Neo4jGraphWriter:
         payment_id = resource.get("id", "")
         instruction_id = resource.get("instruction_id", "")
         owning_lob = resource.get("owning_lob", "")
+        auth_params = authorization_neo4j_params(event)
 
         async with self._driver.session() as session:
             tx = await session.begin_transaction()
@@ -894,7 +907,11 @@ class Neo4jGraphWriter:
                         e.payment_id       = $payment_id,
                         e.source_application = $source_application,
                         e.source_version   = $source_version,
-                        e.owning_lob       = $owning_lob
+                        e.owning_lob       = $owning_lob,
+                        e.authorization_summary = $authorization_summary,
+                        e.authorization_decision = $authorization_decision,
+                        e.authorization_basis = $authorization_basis,
+                        e.authorization_violations = $authorization_violations
                     """,
                     event_id=event_id,
                     timestamp=event.get("timestamp"),
@@ -907,6 +924,7 @@ class Neo4jGraphWriter:
                     source_application=source.get("application"),
                     source_version=source.get("version"),
                     owning_lob=owning_lob,
+                    **auth_params,
                 )
 
                 # Actor + ACTED_AS
