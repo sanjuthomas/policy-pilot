@@ -34,6 +34,40 @@ jobs:
         working-directory: ${{ matrix.service }}
         run: ruff check src/ --select E,F,W,I --ignore E501
 
+  # ── Unit test coverage (≥70%, excludes test harness) ───────────────────────
+  test-coverage:
+    name: Coverage — ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: instruction-lifecycle-manager
+            package: ilm
+            extra: dev
+          - service: payment-service
+            package: ps
+            extra: dev
+          - service: security-event-qdrant-etl
+            package: etl
+            extra: dev
+          - service: security-event-chat
+            package: chat_application
+            extra: regression
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install and run tests with coverage
+        working-directory: ${{ matrix.service }}
+        run: |
+          pip install --quiet -e ".[${{ matrix.extra }}]"
+          pytest --cov=${{ matrix.package }} --cov-report=term-missing --cov-fail-under=70
+
   # ── Docker build ───────────────────────────────────────────────────────────
   docker-build:
     name: Docker build — ${{ matrix.service }}

@@ -38,6 +38,54 @@ done
 
 Do **not** commit or push if any service still reports errors.
 
+### Test coverage (minimum 70%)
+
+Every Python service **except** `security-event-test-harness` must maintain **≥ 70% line coverage** on its application package. The harness is integration/demo tooling and is exempt.
+
+| Service | Coverage target (`--cov`) |
+|---------|---------------------------|
+| `instruction-lifecycle-manager` | `ilm` |
+| `payment-service` | `ps` |
+| `security-event-qdrant-etl` | `etl` |
+| `security-event-chat` | `chat_application` |
+
+When you add or change code in a service, **add or update tests** so that service stays at or above 70%. Do not commit or push if coverage on a touched service falls below the threshold.
+
+#### One command (required before every commit/push)
+
+From the repository root — run tests with coverage for each non-harness service:
+
+```bash
+pip install pytest pytest-cov
+
+for spec in \
+  "instruction-lifecycle-manager:ilm" \
+  "payment-service:ps" \
+  "security-event-qdrant-etl:etl" \
+  "security-event-chat:chat_application"
+do
+  svc="${spec%%:*}"
+  pkg="${spec##*:}"
+  echo "=== $svc (≥70% on $pkg) ==="
+  (
+    cd "$svc"
+    pip install -q -e .
+    pip install -q pytest pytest-cov
+    pytest --cov="$pkg" --cov-report=term-missing --cov-fail-under=70
+  )
+done
+```
+
+If a service has no `tests/` directory yet, create one and add tests for the code you touched — do not skip the coverage check.
+
+Optional chat regression suite (does not replace the 70% unit-coverage requirement):
+
+```bash
+cd security-event-chat
+pip install -e ".[regression]"
+RUN_CHAT_REGRESSION=1 pytest tests/test_chat_regression.py -v
+```
+
 ### Lint all Python services (check only)
 
 ```bash
@@ -78,6 +126,15 @@ inside each service directory listed in the lint matrix:
 
 It also builds Docker images for those four services. (`payment-service` is not in the CI lint matrix yet, but keep it clean anyway.)
 
+The same workflow runs **unit test coverage** (≥ 70% line coverage) for:
+
+- `instruction-lifecycle-manager` (`ilm`)
+- `payment-service` (`ps`)
+- `security-event-qdrant-etl` (`etl`)
+- `security-event-chat` (`chat_application`)
+
+`security-event-test-harness` is exempt from the coverage gate.
+
 ### Common lint failures
 
 | Rule | Meaning | Fix |
@@ -114,9 +171,10 @@ When removing a symbol from code, **remove its import** in the same edit (`F401`
 
 1. Make code changes.
 2. Run the **required** lint loop (`--fix` then verify) on every touched Python service.
-3. Fix any remaining errors manually — do not push with lint failures.
-4. Commit only when the user asks; if committing, ensure all five services pass lint.
-5. After push, confirm the GitHub Actions **Build** workflow succeeds.
+3. Run the **required** coverage loop (≥ 70%) on every touched non-harness service; add tests when needed.
+4. Fix any remaining errors manually — do not push with lint failures or sub-threshold coverage.
+5. Commit only when the user asks; if committing, ensure all five services pass lint and all four application services meet coverage.
+6. After push, confirm the GitHub Actions **Build** workflow succeeds (lint, coverage, and Docker build jobs).
 
 ## Project layout
 
@@ -134,5 +192,6 @@ See the root [README.md](README.md) for architecture, storage names, and demo UR
 
 - Match existing code style in each service (imports, naming, FastAPI patterns).
 - Keep changes focused; avoid unrelated refactors.
+- Maintain **≥ 70% test coverage** on `ilm`, `ps`, `etl`, and `chat_application` (see above); `security-event-test-harness` is exempt.
 - Do not commit secrets (`.env`, PAT files, credentials).
 - Only create git commits when the user explicitly asks.
