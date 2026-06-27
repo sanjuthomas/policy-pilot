@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
 from ilm.dependencies import get_subject
 from ilm.maintenance_routes import router as maintenance_router
 from ilm.models.api import InstructionResponse, Subject
@@ -54,9 +55,9 @@ def _sample_response() -> InstructionResponse:
     from ilm.models.api import CreateInstructionRequest
     from ilm.service import _instruction_from_request, _to_response
     from ilm.storage import VersionedInstruction
-    from tests.conftest import _domestic_payload
+    from tests.helpers import domestic_payload
 
-    req = CreateInstructionRequest.model_validate(_domestic_payload())
+    req = CreateInstructionRequest.model_validate(domestic_payload())
     subject = Subject(user_id="u", title="VP", roles=["R"])
     instruction = _instruction_from_request(req, subject, instruction_id="i1")
     return _to_response(
@@ -72,18 +73,18 @@ def _sample_response() -> InstructionResponse:
 def test_create_instruction(api_client: TestClient, mock_service: MagicMock) -> None:
     response_model = _sample_response()
     mock_service.create.return_value = response_model
-    from tests.conftest import _domestic_payload
+    from tests.helpers import domestic_payload
 
-    response = api_client.post("/api/v1/instructions", json=_domestic_payload())
+    response = api_client.post("/api/v1/instructions", json=domestic_payload())
     assert response.status_code == 201
     assert response.json()["instruction_id"] == "i1"
 
 
 def test_create_permission_denied(api_client: TestClient, mock_service: MagicMock) -> None:
     mock_service.create.side_effect = PermissionError("denied")
-    from tests.conftest import _domestic_payload
+    from tests.helpers import domestic_payload
 
-    response = api_client.post("/api/v1/instructions", json=_domestic_payload())
+    response = api_client.post("/api/v1/instructions", json=domestic_payload())
     assert response.status_code == 403
 
 

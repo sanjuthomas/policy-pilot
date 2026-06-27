@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
 
 import pytest
+from pydantic import ValidationError
+
 from ilm.models.api import CreateInstructionRequest
 from ilm.models.enums import (
     AccountIdentificationScheme,
@@ -17,7 +19,6 @@ from ilm.models.instruction import (
     PartyIdentification,
     UserReference,
 )
-from pydantic import ValidationError
 
 
 def test_user_reference_display_name() -> None:

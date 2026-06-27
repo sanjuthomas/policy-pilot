@@ -1,6 +1,7 @@
 import base64
 
 import pytest
+
 from ilm.auth import (
     _decode_metadata_values,
     _parse_json_list,

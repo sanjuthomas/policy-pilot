@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from ilm.kafka_publisher import SecurityEventKafkaPublisher
 
 

@@ -1,6 +1,7 @@
 import pytest
-from ilm.models.api import CreateInstructionRequest, Subject
 from pydantic import ValidationError
+
+from ilm.models.api import CreateInstructionRequest, Subject
 
 
 def test_subject_to_opa_subject_includes_optional_fields() -> None:
@@ -33,8 +34,8 @@ def test_create_instruction_request_validates(sample_create_request: CreateInstr
 
 
 def test_create_instruction_request_rejects_invalid_lob() -> None:
-    from tests.conftest import _domestic_payload
+    from tests.helpers import domestic_payload
 
-    payload = _domestic_payload(owning_lob="NOT_A_LOB")
+    payload = domestic_payload(owning_lob="NOT_A_LOB")
     with pytest.raises(ValidationError):
         CreateInstructionRequest.model_validate(payload)

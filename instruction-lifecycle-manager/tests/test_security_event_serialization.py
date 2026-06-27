@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from bson import ObjectId
+
 from ilm.security_event_serialization import serialize_security_event
 
 

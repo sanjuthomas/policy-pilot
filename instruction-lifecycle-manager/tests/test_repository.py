@@ -2,6 +2,8 @@ from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pymongo.errors import DuplicateKeyError, OperationFailure
+
 from ilm.models.instruction import CashSettlementInstruction
 from ilm.repository import (
     ConcurrentModificationError,
@@ -11,7 +13,6 @@ from ilm.repository import (
 from ilm.storage import (
     versioned_instruction_to_document,
 )
-from pymongo.errors import DuplicateKeyError, OperationFailure
 
 
 def _current_doc(sample_instruction: CashSettlementInstruction) -> dict:
