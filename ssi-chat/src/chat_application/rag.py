@@ -43,6 +43,39 @@ def _parse_authorization_basis(value: Any) -> list[str]:
     return []
 
 
+def _append_policy_basis(why: str, basis: list[str]) -> str:
+    if not basis:
+        return why
+    bullets = "\n".join(f"  • {point}" for point in basis)
+    return f"{why.rstrip()}\n\nPolicy basis:\n{bullets}"
+
+
+def _is_instruction_approval_question(message: str, mode: SearchMode) -> bool:
+    q = message.lower()
+    if "approv" not in q:
+        return False
+    if "payment" in q and "instruction" not in q:
+        return False
+    return mode == "instructions" or "instruction" in q
+
+
+def _is_payment_approval_question(message: str, mode: SearchMode) -> bool:
+    q = message.lower()
+    if "approv" not in q:
+        return False
+    if "instruction" in q and "payment" not in q:
+        return False
+    return mode == "payments" or "payment" in q
+
+
+def _should_lookup_payment_ids(message: str, uuids: list[str], mode: SearchMode) -> bool:
+    if not uuids:
+        return False
+    if mode == "payments":
+        return True
+    return "payment" in message.lower()
+
+
 def _display_from_snap_user(snap: dict[str, Any], field: str) -> str:
     user = snap.get(field) or {}
     family_name = user.get("family_name")
@@ -176,6 +209,11 @@ class RagService:
             if event_ids and mode == "instructions"
             else None
         )
+        payment_exact_task = (
+            asyncio.create_task(self._lookup_exact_payment_ids(event_ids, message))
+            if event_ids and _should_lookup_payment_ids(message, event_ids, mode)
+            else None
+        )
 
         vector_hits, bm25_hits, graph_result = await asyncio.gather(
             vector_task, bm25_task, cypher_task
@@ -187,6 +225,8 @@ class RagService:
             exact_hits, exact_graph_rows = await exact_task
         if instruction_exact_task is not None:
             exact_hits.extend(await instruction_exact_task)
+        if payment_exact_task is not None:
+            exact_hits.extend(await payment_exact_task)
 
         graph_rows = list(exact_graph_rows)
         seen_graph = {json.dumps(row, sort_keys=True, default=str) for row in graph_rows}
@@ -211,9 +251,15 @@ class RagService:
         chat_history = [{"role": m.role, "content": m.content} for m in history[-8:]]
 
         gen_started = time.perf_counter()
-        answer = await self._synthesize_instruction_approval_answer(
-            message, event_ids, merged, graph_result["rows"]
-        )
+        answer = None
+        if _is_instruction_approval_question(message, mode):
+            answer = await self._synthesize_instruction_approval_answer(
+                message, event_ids, merged, graph_result["rows"]
+            )
+        if answer is None and _is_payment_approval_question(message, mode):
+            answer = await self._synthesize_payment_approval_answer(
+                message, event_ids, merged, graph_result["rows"]
+            )
         if answer is None:
             answer = await self.ollama.synthesize_answer(
                 message, context, chat_history, mode=mode
@@ -289,6 +335,27 @@ class RagService:
             if approval_question:
                 approve_hits = await asyncio.to_thread(
                     self.qdrant.fetch_instruction_approve_events, instruction_id
+                )
+                hits.extend(approve_hits)
+
+        return hits
+
+    async def _lookup_exact_payment_ids(
+        self, payment_ids: list[str], message: str
+    ) -> list[dict[str, Any]]:
+        hits: list[dict[str, Any]] = []
+        approval_question = "approv" in message.lower()
+
+        for payment_id in payment_ids:
+            fact_hit = await asyncio.to_thread(
+                self.qdrant.fetch_by_payment_id, payment_id
+            )
+            if fact_hit is not None:
+                hits.append(fact_hit)
+
+            if approval_question:
+                approve_hits = await asyncio.to_thread(
+                    self.qdrant.fetch_payment_approve_events, payment_id
                 )
                 hits.extend(approve_hits)
 
@@ -469,6 +536,85 @@ class RagService:
             authorization_summary=summary,
             authorization_basis=basis or None,
         )
+        why = _append_policy_basis(why, basis)
+
+        when_line = f"WHEN: {when}" if when else None
+        return "\n".join(
+            line
+            for line in (
+                f"WHO: {approver}",
+                when_line,
+                f"WHY: {why}",
+            )
+            if line
+        )
+
+    async def _synthesize_payment_approval_answer(
+        self,
+        message: str,
+        payment_ids: list[str],
+        hits: list[RankedHit],
+        graph_rows: list[dict[str, Any]],
+    ) -> str | None:
+        """Return Who/When/Why for payment approval using OPA authorization from indexed events."""
+        if "approv" not in message.lower() or not payment_ids:
+            return None
+
+        target_id = payment_ids[0]
+        approver: str | None = None
+        when: str | None = None
+        summary: str | None = None
+        basis: list[str] = []
+
+        for row in graph_rows:
+            row_id = row.get("payment_id")
+            if str(row_id) != target_id:
+                continue
+            summary = row.get("authorization_summary")
+            approver = row.get("approver_display")
+            when = row.get("approved_at")
+            basis = _parse_authorization_basis(row.get("authorization_basis"))
+            break
+
+        for hit in hits:
+            payload = hit.merged or {}
+            payload_id = payload.get("payment_id")
+            if str(payload_id) != target_id:
+                continue
+
+            is_approve_event = payload.get("action") == "APPROVE_PAYMENT" or payload.get(
+                "source"
+            ) in {"exact_approve_payment_event", "payment_security_event"}
+
+            if is_approve_event:
+                summary = payload.get("authorization_summary") or summary
+                approver = (
+                    payload.get("actor_display")
+                    or payload.get("approver_display")
+                    or approver
+                )
+                when = payload.get("timestamp") or payload.get("approved_at") or when
+                if not basis:
+                    basis = _parse_authorization_basis(payload.get("authorization_basis"))
+            else:
+                approver = approver or payload.get("approver_display")
+                when = when or payload.get("approved_at")
+
+            if summary and approver and basis:
+                break
+
+        if not approver:
+            return None
+        if not summary and not basis:
+            return None
+
+        summary = summary or f"{approver} was allowed to APPROVE_PAYMENT"
+        why = await self.ollama.summarize_authorization_why(
+            approver=approver,
+            authorization_summary=summary,
+            authorization_basis=basis or None,
+        )
+        why = _append_policy_basis(why, basis)
 
         when_line = f"WHEN: {when}" if when else None
         return "\n".join(

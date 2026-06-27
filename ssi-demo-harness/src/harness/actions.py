@@ -3,17 +3,19 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from harness.config import Settings
-from harness.fixtures import SeedFile, build_instruction_payload, load_users
+from harness.fixtures import SeedFile, build_instruction_payload, load_users, user_by_id
 from harness.helpers import (
     Operation,
     PaymentOperation,
     _approver_for_instruction,
+    _approver_for_payment,
     _count_payment_security_events,
     _fetch_api_instructions,
     _fetch_api_payments,
     _fetch_approved_instructions,
+    _instruction_submitter,
+    _rejector_for_payment,
     _session_for_user,
-    _universal_payment_approver,
     auth_client,
     build_payment_scenario,
     build_payment_seed_plan,
@@ -57,7 +59,7 @@ def create_instructions(
     result.logs.append(f"Creating {count} instruction(s)")
 
     for index, (user_id, owning_lob, instruction_type, currency) in enumerate(
-        build_seed_plan(count), start=1
+        build_seed_plan(count, seed=seed), start=1
     ):
         session = _session_for_user(auth, seed, settings, user_id)
         payload = build_instruction_payload(
@@ -99,7 +101,6 @@ def submit_instructions(
         return result
 
     seed, auth, ilm = _clients(settings)
-    submitter_id = "mo-100"
     drafts = _fetch_api_instructions(settings, admin_session, status="DRAFT")
     to_process = drafts[:count]
 
@@ -107,6 +108,7 @@ def submit_instructions(
         result.logs.append("No DRAFT instructions available to submit.")
         return result
 
+    submitter_id = _instruction_submitter(seed)
     result.logs.append(f"Submitting up to {len(to_process)} instruction(s) as {submitter_id}")
     submit_session = _session_for_user(auth, seed, settings, submitter_id)
 
@@ -145,7 +147,7 @@ def approve_instructions(
         return result
 
     seed, auth, ilm = _clients(settings)
-    submitter_id = "mo-100"
+    submitter_id = _instruction_submitter(seed)
 
     drafts = _fetch_api_instructions(settings, admin_session, status="DRAFT")
     pending = _fetch_api_instructions(settings, admin_session, status="PENDING")
@@ -154,9 +156,18 @@ def approve_instructions(
         result.logs.append("No DRAFT or PENDING instructions available to approve.")
         return result
 
+    def _created_by(instruction: dict) -> dict:
+        return instruction.get("created_by") or {}
+
     def _sort_key(instruction: dict) -> tuple[int, str]:
-        creator_title = (instruction.get("created_by") or {}).get("title", "")
-        approvable = _approver_for_instruction(instruction["owning_lob"], creator_title)
+        created_by = _created_by(instruction)
+        approvable = _approver_for_instruction(
+            seed,
+            instruction["owning_lob"],
+            str(created_by.get("user_id") or ""),
+            str(created_by.get("title") or ""),
+            created_by.get("supervisor_id"),
+        )
         return (0 if approvable else 1, instruction["instruction_id"])
 
     candidates.sort(key=_sort_key)
@@ -167,20 +178,29 @@ def approve_instructions(
         instruction_id = instruction["instruction_id"]
         owning_lob = instruction["owning_lob"]
         status = instruction["status"]
-        creator_title = (instruction.get("created_by") or {}).get("title", "")
-        approver_id = _approver_for_instruction(owning_lob, creator_title)
+        created_by = _created_by(instruction)
+        creator_title = created_by.get("title", "")
+        creator_id = created_by.get("user_id", "")
+        approver_id = _approver_for_instruction(
+            seed,
+            owning_lob,
+            str(creator_id or ""),
+            str(creator_title or ""),
+            created_by.get("supervisor_id"),
+        )
         if not approver_id:
             result.skipped += 1
             result.failed += 1
             result.logs.append(
-                f"[{index}] {instruction_id} skip: no seeded approver for "
-                f"lob={owning_lob} creator_title={creator_title!r}"
+                f"[{index}] {instruction_id} skip: no eligible approver for "
+                f"lob={owning_lob} creator={creator_id} title={creator_title!r}"
             )
             continue
 
         result.logs.append(
             f"[{index}] {instruction_id} lob={owning_lob} status={status} "
-            f"creator_title={creator_title} submit={submitter_id} approve={approver_id}"
+            f"creator={creator_id} title={creator_title} "
+            f"submit={submitter_id} approve={approver_id}"
         )
 
         if status == "DRAFT":
@@ -239,13 +259,22 @@ def reject_instructions(
     for index, instruction in enumerate(to_process, start=1):
         instruction_id = instruction["instruction_id"]
         owning_lob = instruction["owning_lob"]
-        creator_title = (instruction.get("created_by") or {}).get("title", "")
-        approver_id = _approver_for_instruction(owning_lob, creator_title)
+        created_by = instruction.get("created_by") or {}
+        creator_title = created_by.get("title", "")
+        creator_id = created_by.get("user_id", "")
+        approver_id = _approver_for_instruction(
+            seed,
+            owning_lob,
+            str(creator_id or ""),
+            str(creator_title or ""),
+            created_by.get("supervisor_id"),
+        )
         if not approver_id:
             result.skipped += 1
             result.failed += 1
             result.logs.append(
-                f"[{index}] {instruction_id} skip: no seeded approver for lob={owning_lob}"
+                f"[{index}] {instruction_id} skip: no eligible approver for "
+                f"lob={owning_lob} creator={creator_id}"
             )
             continue
 
@@ -386,8 +415,30 @@ def create_payments(
         f"Creating {count} payment(s) against {len(pool)} approved instruction(s)"
     )
 
-    for index, (user_id, amount) in enumerate(build_payment_seed_plan(count), start=1):
-        instruction = pool[index % len(pool)]
+    for index, (user_id, amount) in enumerate(
+        build_payment_seed_plan(count, seed=seed), start=1
+    ):
+        try:
+            creator = user_by_id(seed, user_id)
+        except KeyError:
+            result.failed += 1
+            result.logs.append(f"[{index}] skip: unknown payment creator {user_id}")
+            continue
+
+        matching = [
+            instruction
+            for instruction in pool
+            if instruction.get("owning_lob") in creator.covering_lobs
+        ]
+        if not matching:
+            result.failed += 1
+            result.logs.append(
+                f"[{index}] skip: no approved instruction for creator {user_id} "
+                f"covering {creator.covering_lobs}"
+            )
+            continue
+
+        instruction = matching[index % len(matching)]
         instruction_id = instruction["instruction_id"]
         owning_lob = instruction.get("owning_lob", "?")
 
@@ -443,7 +494,7 @@ def submit_payments(
         payment_id = payment["payment_id"]
         owning_lob = payment.get("owning_lob", "?")
         try:
-            submitter_id = payment_submitter_for_lob(owning_lob)
+            submitter_id = payment_submitter_for_lob(seed, owning_lob)
         except ValueError as exc:
             result.failed += 1
             result.logs.append(f"[{index}] {payment_id}  lob={owning_lob}  skip: {exc}")
@@ -482,27 +533,40 @@ def approve_payments(
         return result
 
     seed, auth, ps = _payment_clients(settings)
-    approver_id = _universal_payment_approver()
 
     submitted = _fetch_api_payments(settings, admin_session, status="SUBMITTED")
-    to_process = submitted[:count]
-
-    if not to_process:
+    if not submitted:
         result.logs.append("No SUBMITTED payments available to approve.")
         return result
 
-    result.logs.append(
-        f"Approving up to {len(to_process)} payment(s) as {approver_id}"
-    )
-    approve_session = _session_for_user(auth, seed, settings, approver_id)
+    def _sort_key(payment: dict) -> tuple[int, str]:
+        approvable = _approver_for_payment(seed, payment)
+        return (0 if approvable else 1, payment["payment_id"])
+
+    to_process = sorted(submitted, key=_sort_key)[:count]
+    result.logs.append(f"Approving up to {len(to_process)} payment(s)")
 
     for index, payment in enumerate(to_process, start=1):
         payment_id = payment["payment_id"]
         amount = payment.get("amount", 0)
         owning_lob = payment.get("owning_lob", "?")
+        created_by = payment.get("created_by") or {}
+        creator_id = created_by.get("user_id", "?")
+        approver_id = _approver_for_payment(seed, payment)
+        if not approver_id:
+            result.skipped += 1
+            result.failed += 1
+            result.logs.append(
+                f"[{index}] {payment_id} skip: no eligible approver for "
+                f"lob={owning_lob} creator={creator_id} amount={amount:,.0f}"
+            )
+            continue
+
         result.logs.append(
-            f"[{index}] {payment_id}  lob={owning_lob}  amount={amount:,.0f}"
+            f"[{index}] {payment_id} lob={owning_lob} creator={creator_id} "
+            f"amount={amount:,.0f} approve={approver_id}"
         )
+        approve_session = _session_for_user(auth, seed, settings, approver_id)
         response = ps.approve_payment(approve_session, payment_id)
         if response.status_code in range(200, 300):
             result.succeeded += 1
@@ -533,7 +597,6 @@ def reject_payments(
         return result
 
     seed, auth, ps = _payment_clients(settings)
-    approver_id = _universal_payment_approver()
 
     submitted = _fetch_api_payments(settings, admin_session, status="SUBMITTED")
     to_process = submitted[:count]
@@ -542,15 +605,22 @@ def reject_payments(
         result.logs.append("No SUBMITTED payments available to reject.")
         return result
 
-    result.logs.append(
-        f"Rejecting up to {len(to_process)} payment(s) as {approver_id}"
-    )
-    reject_session = _session_for_user(auth, seed, settings, approver_id)
+    result.logs.append(f"Rejecting up to {len(to_process)} payment(s)")
 
     for index, payment in enumerate(to_process, start=1):
         payment_id = payment["payment_id"]
         owning_lob = payment.get("owning_lob", "?")
-        result.logs.append(f"[{index}] {payment_id}  lob={owning_lob}")
+        rejector_id = _rejector_for_payment(seed, payment)
+        if not rejector_id:
+            result.skipped += 1
+            result.failed += 1
+            result.logs.append(
+                f"[{index}] {payment_id} skip: no eligible rejector for lob={owning_lob}"
+            )
+            continue
+
+        result.logs.append(f"[{index}] {payment_id} lob={owning_lob} reject={rejector_id}")
+        reject_session = _session_for_user(auth, seed, settings, rejector_id)
         response = ps.reject_payment(
             reject_session, payment_id, reason="Rejected via test harness"
         )

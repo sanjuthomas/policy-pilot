@@ -50,3 +50,21 @@ def test_get_compliance_subject_allows_compliance_analyst(auth_client: TestClien
             json={"message": "hello"},
         )
     assert response.status_code == 503
+
+
+def test_get_compliance_subject_allows_platform_admin(auth_client: TestClient) -> None:
+    import chat_application.main as main_module
+
+    subject = Subject(
+        user_id="admin-001",
+        title="Platform Administrator",
+        roles=["PLATFORM_ADMIN"],
+    )
+    main_module.rag_service = None
+    with patch("chat_application.dependencies.subject_from_bearer_token", return_value=subject):
+        response = auth_client.post(
+            "/api/chat",
+            headers={"Authorization": "Bearer test-token"},
+            json={"message": "hello"},
+        )
+    assert response.status_code == 503

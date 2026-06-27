@@ -81,7 +81,7 @@ class LoginRequest(BaseModel):
 
 @app.get("/api/compliance-users")
 async def list_compliance_users() -> dict:
-    users = compliance_users(settings.users_file)
+    users = compliance_users(settings.users_file, allowed_roles=settings.compliance_role_set)
     return {
         "users": [
             {

@@ -14,6 +14,7 @@ class SeedUser(BaseModel):
     family_name: str
     title: str
     roles: list[str]
+    groups: list[str] = Field(default_factory=list)
     lob: str | None = None
     supervisor_id: str | None = None
     covering_lobs: list[str] = Field(default_factory=list)

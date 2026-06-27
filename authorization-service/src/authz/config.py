@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     zitadel_service_pat_file: Path | None = None
     auth_mode: str = "auto"
 
-    compliance_roles: str = "COMPLIANCE_ANALYST,COMPLIANCE_OFFICER"
+    compliance_roles: str = "COMPLIANCE_ANALYST,COMPLIANCE_OFFICER,PLATFORM_ADMIN"
 
     @property
     def compliance_role_set(self) -> set[str]:

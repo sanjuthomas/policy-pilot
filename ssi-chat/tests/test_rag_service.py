@@ -89,6 +89,79 @@ class TestRagServiceAsk:
         mock_ollama.synthesize_answer.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_ask_payment_approval_synthesis(
+        self, rag_service, mock_ollama, mock_qdrant, mock_neo4j
+    ) -> None:
+        pid = "9b3251c9-d28e-4ad5-9bf4-dbc3c4fc13d8"
+        mock_qdrant.search_vector = MagicMock(return_value=[])
+        mock_qdrant.search_bm25 = MagicMock(return_value=[])
+        mock_qdrant.fetch_by_payment_id = MagicMock(
+            return_value={
+                "source": "exact_payment",
+                "payment_id": pid,
+                "merged": {
+                    "source": "payment_fact",
+                    "payment_id": pid,
+                    "approver_display": "Laurent, Sophie (pay-201)",
+                    "status": "APPROVED",
+                },
+            }
+        )
+        mock_qdrant.fetch_payment_approve_events = MagicMock(
+            return_value=[
+                {
+                    "source": "exact_approve_payment_event",
+                    "payment_id": pid,
+                    "merged": {
+                        "source": "payment_security_event",
+                        "payment_id": pid,
+                        "action": "APPROVE_PAYMENT",
+                        "outcome": "success",
+                        "actor_display": "Laurent, Sophie (pay-201)",
+                        "timestamp": "2026-06-27T21:39:26.072387Z",
+                        "authorization_summary": (
+                            "Laurent, Sophie (pay-201) was allowed to APPROVE_PAYMENT because "
+                            "role FUNDING_APPROVER; group MIDDLE_OFFICE"
+                        ),
+                        "authorization_basis": [
+                            "role FUNDING_APPROVER",
+                            "group MIDDLE_OFFICE",
+                            "covers LOB FICC",
+                            "amount 10000000.0 within subject and absolute limits",
+                            "not self-approval (creator is not approver)",
+                            "approver does not report to payment creator",
+                        ],
+                    },
+                }
+            ]
+        )
+        mock_neo4j.run_cypher = AsyncMock(
+            return_value=[
+                {
+                    "payment_id": pid,
+                    "approver_display": "Laurent, Sophie (pay-201)",
+                    "approved_at": "2026-06-27T21:39:26.072387Z",
+                    "authorization_summary": "OPA allowed",
+                    "authorization_basis": '["role FUNDING_APPROVER"]',
+                }
+            ]
+        )
+        mock_ollama.summarize_authorization_why = AsyncMock(
+            return_value="Sophie Laurent was authorized as a funding approver covering FICC."
+        )
+
+        response = await rag_service.ask(
+            f"Who approved the payment {pid}?",
+            [],
+            mode="payments",
+        )
+        assert response.answer.startswith("WHO:")
+        assert "Policy basis:" in response.answer
+        assert "role FUNDING_APPROVER" in response.answer
+        assert "covers LOB FICC" in response.answer
+        mock_ollama.synthesize_answer.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_search_vector_handles_embed_failure(self, rag_service, mock_ollama) -> None:
         mock_ollama.embed = AsyncMock(side_effect=RuntimeError("embed down"))
         hits = await rag_service._search_vector("query", 5)

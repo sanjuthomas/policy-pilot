@@ -24,6 +24,13 @@ def load_users(path: Path) -> SeedFile:
     return SeedFile.model_validate(raw)
 
 
-def compliance_users(path: Path, *, compliance_role: str = "COMPLIANCE_ANALYST") -> list[SeedUser]:
+def compliance_users(
+    path: Path,
+    *,
+    allowed_roles: set[str] | None = None,
+    compliance_role: str = "COMPLIANCE_ANALYST",
+) -> list[SeedUser]:
+    """Users who may sign in to chat / policy inquiry UIs."""
+    roles = allowed_roles if allowed_roles is not None else {compliance_role}
     seed = load_users(path)
-    return [user for user in seed.users if compliance_role in user.roles]
+    return [user for user in seed.users if roles.intersection(user.roles)]

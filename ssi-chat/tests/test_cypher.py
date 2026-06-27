@@ -136,6 +136,17 @@ class TestPlanGraphQueries:
         assert planned[0][0] == "approval_lookup"
         assert iid in planned[0][1]
 
+    def test_payment_approval_lookup_by_uuid(self) -> None:
+        pid = "9b3251c9-d28e-4ad5-9bf4-dbc3c4fc13d8"
+        planned = plan_graph_queries(
+            f"Who approved the payment {pid}?",
+            mode="payments",
+        )
+        assert planned is not None
+        assert planned[0][0] == "payment_approval_lookup"
+        assert pid in planned[0][1]
+        assert "APPROVE_PAYMENT" in planned[0][1]
+
     def test_non_count_question_returns_none(self) -> None:
         assert plan_graph_queries("List recent events", mode="events") is None
 

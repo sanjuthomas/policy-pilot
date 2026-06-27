@@ -44,11 +44,11 @@ flowchart LR
 4. **BM25** — Qdrant sparse lexical search (mode-filtered)
 5. **Neo4j** — Ollama generates read-only Cypher from mode-specific prompts + `neo4j-graph-model/relationships.cypher`
 6. **Merge** — reciprocal rank fusion (k=60), dedupe by `event_id` / `instruction_id`
-7. **Answer** — full Ollama synthesis, **or** structured Who/When/Why for instruction approval audit questions
+7. **Answer** — full Ollama synthesis, **or** structured Who/When/Why for instruction and payment approval audit questions
 
 ## Who / When / Why (approval audit)
 
-For questions like _"Who approved instruction `<uuid>`?"_ in **Instructions** mode:
+For questions like _"Who approved instruction `<uuid>`?"_ in **Instructions** mode, or _"Who approved payment `<uuid>`?"_ in **Payments** mode:
 
 | Part | Source | Method |
 |------|--------|--------|
@@ -81,6 +81,7 @@ See **`regression/questions.yaml`** for the full regression bank (~60 cases) and
 - Are there active instructions sharing the same creditor account and currency?
 
 **Payments mode:**
+- Who approved payment `<uuid>`? (Who / When / Why audit trail with OPA policy basis)
 - How many payments were approved today for FICC?
 - Show payments over $10M approved this week.
 

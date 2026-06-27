@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     oidc_issuer_url: str | None = None
     oidc_internal_url: str | None = None
     oidc_audience: str | None = None
-    compliance_roles: str = "COMPLIANCE_ANALYST,COMPLIANCE_OFFICER"
+    compliance_roles: str = "COMPLIANCE_ANALYST,COMPLIANCE_OFFICER,PLATFORM_ADMIN"
     default_user_password: str = "Password1!"
 
     @property

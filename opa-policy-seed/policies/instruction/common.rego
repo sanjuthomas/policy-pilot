@@ -48,12 +48,22 @@ creator_is_not_approver if {
 
 # Blocks A from approving B's instruction when B is A's manager (existing rule).
 not_supervisor_of_creator if {
+    not input.instruction.created_by.supervisor_id
+}
+
+not_supervisor_of_creator if {
+    input.instruction.created_by.supervisor_id
     input.subject.user_id != input.instruction.created_by.supervisor_id
 }
 
 # Blocks A from approving B's instruction when A reports directly to B,
 # i.e. the creator must not be the approver's own supervisor.
 approver_not_subordinate_of_creator if {
+    not input.subject.supervisor_id
+}
+
+approver_not_subordinate_of_creator if {
+    input.subject.supervisor_id
     input.instruction.created_by.user_id != input.subject.supervisor_id
 }
 

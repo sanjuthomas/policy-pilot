@@ -9,6 +9,10 @@ def test_compliance_role_set_includes_analyst() -> None:
     assert "COMPLIANCE_ANALYST" in settings.compliance_role_set
 
 
+def test_compliance_role_set_includes_platform_admin() -> None:
+    assert "PLATFORM_ADMIN" in settings.compliance_role_set
+
+
 def test_get_compliance_subject_rejects_non_compliance() -> None:
     subject = Subject(
         user_id="pay-201",
@@ -27,3 +31,12 @@ def test_get_compliance_subject_allows_analyst() -> None:
         roles=["COMPLIANCE_ANALYST"],
     )
     assert get_compliance_subject(subject).user_id == "comp-001"
+
+
+def test_get_compliance_subject_allows_platform_admin() -> None:
+    subject = Subject(
+        user_id="admin-001",
+        title="Platform Administrator",
+        roles=["PLATFORM_ADMIN"],
+    )
+    assert get_compliance_subject(subject).user_id == "admin-001"

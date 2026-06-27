@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from harness.fixtures import load_users
 from harness.helpers import (
     PaymentOperation,
     _count_payment_security_events,
@@ -23,7 +24,8 @@ def test_build_payment_scenario_non_empty() -> None:
 
 
 def test_payment_submitter_for_lob() -> None:
-    assert payment_submitter_for_lob("FICC").startswith("fo-ficc")
+    seed = load_users(__import__("pathlib").Path(__file__).resolve().parents[2] / "zitadel-seed" / "users.yaml")
+    assert payment_submitter_for_lob(seed, "FICC", rng=__import__("random").Random(0)).startswith("fo-ficc")
 
 
 def test_count_security_events_with_mock_mongo() -> None:

@@ -213,7 +213,20 @@ def _is_instruction_approval_lookup(question: str) -> bool:
     q = question.lower()
     if "approv" not in q:
         return False
+    if "payment" in q and "instruction" not in q:
+        return False
     return bool(_UUID_PATTERN.search(question)) or "instruction" in q
+
+
+def _is_payment_approval_lookup(question: str, *, mode: str) -> bool:
+    q = question.lower()
+    if "approv" not in q:
+        return False
+    if "instruction" in q and "payment" not in q:
+        return False
+    if not _UUID_PATTERN.search(question):
+        return False
+    return "payment" in q or mode == "payments"
 
 
 def _instruction_approval_lookup_queries(instruction_id: str) -> list[tuple[str, str]]:
@@ -225,6 +238,26 @@ OPTIONAL MATCH (approverUser:User {{user_id: v.approver_user_id}})
 RETURN v.instruction_id, v.status, v.approved_at,
        coalesce(approverUser.display_name, v.approver_user_id, '') AS approver_display,
        v.authorization_summary, v.authorization_basis
+LIMIT 1""",
+        ),
+    ]
+
+
+def _payment_approval_lookup_queries(payment_id: str) -> list[tuple[str, str]]:
+    return [
+        (
+            "payment_approval_lookup",
+            f"""MATCH (e:SecurityEvent)
+WHERE e.payment_id = '{payment_id}'
+  AND e.action = 'APPROVE_PAYMENT'
+  AND e.outcome = 'success'
+OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
+RETURN e.payment_id AS payment_id,
+       e.timestamp AS approved_at,
+       coalesce(actor.display_name, actor.user_id, '') AS approver_display,
+       e.authorization_summary AS authorization_summary,
+       e.authorization_basis AS authorization_basis
+ORDER BY e.timestamp DESC
 LIMIT 1""",
         ),
     ]
@@ -266,6 +299,11 @@ def plan_graph_queries(question: str, *, mode: str) -> list[tuple[str, str]] | N
         uuids = extract_uuids(question)
         if uuids:
             return _instruction_approval_lookup_queries(uuids[0])
+
+    if mode in ("payments", "events") and _is_payment_approval_lookup(question, mode=mode):
+        uuids = extract_uuids(question)
+        if uuids:
+            return _payment_approval_lookup_queries(uuids[0])
 
     if (
         mode == "events"

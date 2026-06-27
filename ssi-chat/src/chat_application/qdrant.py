@@ -32,7 +32,15 @@ class QdrantSearchClient:
 
     def _to_hit(self, point: models.ScoredPoint, source: str) -> dict[str, Any]:
         payload = dict(point.payload or {})
-        merged = payload.get("merged") or {}
+        merged = payload.get("merged")
+        if not merged and payload.get("source") in {
+            "payment_security_event",
+            "payment_fact",
+            "instruction_state",
+        }:
+            merged = payload
+        elif not merged:
+            merged = {}
         security_event = payload.get("security_event") or {}
         return {
             "source": source,
@@ -186,6 +194,75 @@ class QdrantSearchClient:
                     "instruction_id": payload.get("instruction_id"),
                     "search_text": payload.get("search_text", ""),
                     "merged": merged,
+                    "security_event": payload.get("security_event") or {},
+                    "payload": payload,
+                }
+            )
+        return hits
+
+    def fetch_by_payment_id(self, payment_id: str) -> dict[str, Any] | None:
+        """Exact lookup of the current payment-fact point."""
+        if self._client is None or not self.has_collection():
+            return None
+
+        point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"payment:{payment_id}"))
+        records = self._client.retrieve(
+            collection_name=settings.qdrant_collection,
+            ids=[point_id],
+            with_payload=True,
+        )
+        if not records:
+            return None
+
+        payload = dict(records[0].payload or {})
+        return {
+            "source": "exact_payment",
+            "score": 1.0,
+            "payment_id": payload.get("payment_id"),
+            "instruction_id": payload.get("instruction_id"),
+            "search_text": payload.get("search_text", ""),
+            "merged": payload,
+            "payload": payload,
+        }
+
+    def fetch_payment_approve_events(self, payment_id: str) -> list[dict[str, Any]]:
+        """Fetch APPROVE_PAYMENT security events for a payment (authorization audit trail)."""
+        if self._client is None or not self.has_collection():
+            return []
+
+        response, _ = self._client.scroll(
+            collection_name=settings.qdrant_collection,
+            scroll_filter=models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="payment_id",
+                        match=models.MatchValue(value=payment_id),
+                    ),
+                    models.FieldCondition(
+                        key="source",
+                        match=models.MatchValue(value="payment_security_event"),
+                    ),
+                ]
+            ),
+            limit=20,
+            with_payload=True,
+        )
+        hits: list[dict[str, Any]] = []
+        for point in response:
+            payload = dict(point.payload or {})
+            if payload.get("action") != "APPROVE_PAYMENT":
+                continue
+            if payload.get("outcome") not in (None, "success"):
+                continue
+            hits.append(
+                {
+                    "source": "exact_approve_payment_event",
+                    "score": 1.0,
+                    "event_id": payload.get("event_id"),
+                    "payment_id": payload.get("payment_id"),
+                    "instruction_id": payload.get("instruction_id"),
+                    "search_text": payload.get("search_text", ""),
+                    "merged": payload,
                     "security_event": payload.get("security_event") or {},
                     "payload": payload,
                 }

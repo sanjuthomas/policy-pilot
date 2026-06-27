@@ -464,10 +464,10 @@ All passwords are `Password1!`. Login names follow `{user_id}@ssi.local`.
 | `fo-fx-101` | Jordan Blake | Analyst — front-office submitter | FX |
 | `etl-reader` | — | Service account — excluded from security event emission (`SECURITY_EVENT_EXCLUDED_USER_IDS`) | — |
 | `svc-payment` | — | Service account — payment service → ILM reads (`INSTRUCTION_VIEWER`) | — |
-| `admin-001` | Platform Administrator | **Platform admin** — secured UIs (harness, browsers, ETL console, user directory) | — |
-| `comp-001` / `comp-002` | Compliance analysts | Live OPA eligibility questions in **ssi-chat** only | — |
+| `admin-001` | Platform Administrator | **Platform admin** — secured UIs (harness, browsers, ETL console, user directory) and **ssi-chat** | — |
+| `comp-001` / `comp-002` | Compliance analysts | **ssi-chat** and live OPA eligibility questions | — |
 
-**Platform admin (`admin-001`)** — sign in at any secured admin UI (test harness, instruction browser, payment browser, ETL indexer, authorization user directory). Requires `PLATFORM_ADMIN` role and `ADMIN` group. All `/api/ui/*` and harness `/api/*` routes require this login; business lifecycle APIs still use their respective seeded users via Zitadel JWT.
+**Platform admin (`admin-001`)** — sign in at any secured admin UI (test harness, instruction browser, payment browser, ETL indexer, authorization user directory) and at **ssi-chat** (`http://localhost:8092`). Requires `PLATFORM_ADMIN` role and `ADMIN` group. All `/api/ui/*` and harness `/api/*` routes require this login; chat and authorization eligibility APIs accept `PLATFORM_ADMIN` in addition to compliance roles. Business lifecycle APIs still use their respective seeded users via Zitadel JWT.
 
 After changing `users.yaml`, re-seed Zitadel (`zitadel-seed` container or manual seed script).
 
