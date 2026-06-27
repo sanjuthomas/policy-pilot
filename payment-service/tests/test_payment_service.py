@@ -391,14 +391,19 @@ async def test_reject_policy_denied(
 
 
 @pytest.mark.asyncio
-async def test_get_and_list(service: PaymentService, payment: Payment) -> None:
+async def test_get_and_list(service: PaymentService, payment: Payment, subject: Subject) -> None:
     service.repo.find_by_id.return_value = payment
     service.repo.list.return_value = [payment]
 
-    got = await service.get(payment.payment_id)
+    got = await service.get(payment.payment_id, subject)
     assert got.payment_id == payment.payment_id
 
-    items = await service.list(instruction_id="instr-001", status="DRAFT", limit=10)
+    items = await service.list(
+        subject,
+        instruction_id="instr-001",
+        status="DRAFT",
+        limit=10,
+    )
     assert len(items) == 1
     service.repo.list.assert_awaited_once_with(
         instruction_id="instr-001",
@@ -408,10 +413,43 @@ async def test_get_and_list(service: PaymentService, payment: Payment) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_not_found(service: PaymentService) -> None:
+async def test_get_denied_for_unrelated_subject(
+    service: PaymentService,
+    payment: Payment,
+) -> None:
+    service.repo.find_by_id.return_value = payment
+    outsider = Subject(
+        user_id="outsider",
+        title="Analyst",
+        lob="OTHER",
+        roles=["PAYMENT_CREATOR"],
+        covering_lobs=["OTHER"],
+    )
+    with pytest.raises(PermissionError, match="not authorized"):
+        await service.get(payment.payment_id, outsider)
+
+
+@pytest.mark.asyncio
+async def test_list_filters_to_viewable_payments(
+    service: PaymentService,
+    payment: Payment,
+    subject: Subject,
+) -> None:
+    hidden = payment.model_copy(deep=True)
+    hidden.payment_id = "pay-hidden"
+    hidden.owning_lob = "FX"
+    hidden.created_by = hidden.created_by.model_copy(update={"user_id": "someone-else"})
+    service.repo.list.return_value = [payment, hidden]
+
+    items = await service.list(subject)
+    assert [item.payment_id for item in items] == [payment.payment_id]
+
+
+@pytest.mark.asyncio
+async def test_get_not_found(service: PaymentService, subject: Subject) -> None:
     service.repo.find_by_id.side_effect = PaymentNotFoundError("pay-missing")
     with pytest.raises(LookupError, match="pay-missing"):
-        await service.get("pay-missing")
+        await service.get("pay-missing", subject)
 
 
 @pytest.mark.asyncio

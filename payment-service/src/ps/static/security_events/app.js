@@ -15,7 +15,7 @@ const pauseBtn = document.getElementById("pause-btn");
 const clearBtn = document.getElementById("clear-btn");
 
 let paused = false;
-let source = null;
+let pollTimer = null;
 
 function formatTime(value) {
   const date = new Date(value);
@@ -113,12 +113,9 @@ function renderTable() {
   const visible = events.filter(passesFilters);
   emptyState.classList.toggle("hidden", visible.length > 0);
 
-  visible.forEach((event, index) => {
+  visible.forEach((event) => {
     const row = document.createElement("tr");
     row.className = severityClass(event.severity);
-    if (index === 0) {
-      row.classList.add("row-new");
-    }
     row.innerHTML = `
       <td class="col-event-id">${eventIdLink(event.event_id)}</td>
       <td class="mono">${formatTime(event.timestamp)}</td>
@@ -135,69 +132,46 @@ function renderTable() {
   updateStats();
 }
 
-function prependEvent(event, { isLive = false } = {}) {
-  if (!event?.event_id || seenIds.has(event.event_id)) {
-    return;
-  }
-  seenIds.add(event.event_id);
-  events.unshift(event);
-  if (events.length > MAX_ROWS) {
-    const removed = events.pop();
-    if (removed?.event_id) {
-      seenIds.delete(removed.event_id);
+function replaceEvents(nextEvents) {
+  events.length = 0;
+  seenIds.clear();
+  nextEvents.forEach((event) => {
+    if (!event?.event_id || seenIds.has(event.event_id)) {
+      return;
     }
-  }
+    seenIds.add(event.event_id);
+    events.push(event);
+  });
   updateActionFilterOptions();
   renderTable();
-  if (isLive) {
-    const firstRow = tbody.querySelector("tr");
-    if (firstRow) {
-      firstRow.classList.add("row-new");
-      window.setTimeout(() => firstRow.classList.remove("row-new"), 1200);
-    }
-  }
 }
 
 async function loadInitialEvents() {
-  const response = await fetch(API_BASE);
+  if (!AdminAuth.loadSession()) {
+    setConnectionStatus("error", "Sign in required");
+    return;
+  }
+  setConnectionStatus("connecting", "Loading");
+  const response = await AdminAuth.adminFetch(API_BASE);
   const payload = await response.json();
-  const initial = (payload.events || []).slice().reverse();
-  initial.forEach((event) => prependEvent(event));
+  replaceEvents((payload.events || []).slice(0, MAX_ROWS));
+  setConnectionStatus("live", `Loaded ${events.length}`);
+}
+
+function startPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+  }
+  pollTimer = setInterval(() => {
+    if (!paused) {
+      void loadInitialEvents();
+    }
+  }, 2000);
 }
 
 function setConnectionStatus(state, label) {
   connectionStatus.className = `status-pill status-${state}`;
   connectionStatus.textContent = label;
-}
-
-function connectStream() {
-  if (source) {
-    source.close();
-  }
-  setConnectionStatus("connecting", "Connecting");
-  source = new EventSource(`${API_BASE}/stream`);
-
-  source.addEventListener("connected", () => {
-    setConnectionStatus("live", "Live · change stream");
-  });
-
-  source.onmessage = (message) => {
-    if (paused) {
-      return;
-    }
-    try {
-      const event = JSON.parse(message.data);
-      prependEvent(event, { isLive: true });
-    } catch (error) {
-      console.error("invalid SSE payload", error);
-    }
-  };
-
-  source.onerror = () => {
-    setConnectionStatus("error", "Reconnecting…");
-    source.close();
-    window.setTimeout(connectStream, 2000);
-  };
 }
 
 severityFilter.addEventListener("change", renderTable);
@@ -214,4 +188,14 @@ clearBtn.addEventListener("click", () => {
   renderTable();
 });
 
-loadInitialEvents().then(connectStream);
+AdminAuth.bindAdminAuthPanel({
+  statusEl: document.getElementById("auth-status"),
+  userEl: document.getElementById("auth-user"),
+  passwordEl: document.getElementById("auth-password"),
+  loginBtn: document.getElementById("auth-login-btn"),
+  logoutBtn: document.getElementById("auth-logout-btn"),
+  onAuthenticated: () => {
+    void loadInitialEvents();
+    startPolling();
+  },
+});

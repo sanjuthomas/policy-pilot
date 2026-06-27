@@ -84,7 +84,12 @@ async def list_payments(
     subject: Subject = Depends(get_subject),
     service: PaymentService = Depends(get_service),
 ) -> list[PaymentResponse]:
-    payments = await service.list(instruction_id=instruction_id, status=status, limit=limit)
+    payments = await service.list(
+        subject,
+        instruction_id=instruction_id,
+        status=status,
+        limit=limit,
+    )
     return [_to_response(p) for p in payments]
 
 
@@ -95,9 +100,11 @@ async def get_payment(
     service: PaymentService = Depends(get_service),
 ) -> PaymentResponse:
     try:
-        return _to_response(await service.get(payment_id))
+        return _to_response(await service.get(payment_id, subject))
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
 @router.post("/{payment_id}/submit", response_model=PaymentResponse)

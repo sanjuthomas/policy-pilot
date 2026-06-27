@@ -15,26 +15,47 @@ def ilm_client() -> IlmClient:
     return IlmClient()
 
 
-def test_auth_headers_obo_delegation(ilm_client: IlmClient) -> None:
+@pytest.mark.asyncio
+async def test_auth_headers_obo_delegation(ilm_client: IlmClient) -> None:
     service_identity = MagicMock()
     service_identity.token = "svc-token"
     service_identity.session_id = "svc-session"
+    service_identity.ensure_logged_in = AsyncMock()
 
     with patch("ps.service_identity.service_identity", service_identity):
-        headers = ilm_client._auth_headers("user-token", "user-session")
+        headers = await ilm_client._auth_headers("user-token", "user-session")
 
     assert headers["Authorization"] == "Bearer svc-token"
     assert headers["X-Session-Id"] == "svc-session"
     assert headers["X-On-Behalf-Of"] == "user-token"
     assert headers["X-On-Behalf-Of-Session-Id"] == "user-session"
+    service_identity.ensure_logged_in.assert_not_called()
 
 
-def test_auth_headers_fallback_user_token(ilm_client: IlmClient) -> None:
+@pytest.mark.asyncio
+async def test_auth_headers_retries_login_when_service_token_missing(
+    ilm_client: IlmClient,
+) -> None:
     service_identity = MagicMock()
     service_identity.token = None
+    service_identity.ensure_logged_in = AsyncMock()
 
     with patch("ps.service_identity.service_identity", service_identity):
-        headers = ilm_client._auth_headers("user-token", "user-session")
+        headers = await ilm_client._auth_headers("user-token", "user-session")
+
+    service_identity.ensure_logged_in.assert_awaited_once()
+    assert headers["Authorization"] == "Bearer user-token"
+    assert headers["X-Session-Id"] == "user-session"
+
+
+@pytest.mark.asyncio
+async def test_auth_headers_fallback_user_token(ilm_client: IlmClient) -> None:
+    service_identity = MagicMock()
+    service_identity.token = None
+    service_identity.ensure_logged_in = AsyncMock()
+
+    with patch("ps.service_identity.service_identity", service_identity):
+        headers = await ilm_client._auth_headers("user-token", "user-session")
 
     assert headers["Authorization"] == "Bearer user-token"
     assert headers["X-Session-Id"] == "user-session"

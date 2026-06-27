@@ -15,10 +15,11 @@ jobs:
       fail-fast: false
       matrix:
         service:
-          - instruction-lifecycle-manager
-          - security-event-chat
-          - security-event-qdrant-etl
-          - security-event-test-harness
+          - instruction-service
+          - authorization-service
+          - ssi-chat
+          - ssi-indexer
+          - ssi-demo-harness
 
     steps:
       - uses: actions/checkout@v4
@@ -42,16 +43,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - service: instruction-lifecycle-manager
+          - service: instruction-service
             package: ilm
             extra: dev
           - service: payment-service
             package: ps
             extra: dev
-          - service: security-event-qdrant-etl
+          - service: authorization-service
+            package: authz
+            extra: dev
+          - service: ssi-indexer
             package: etl
             extra: dev
-          - service: security-event-chat
+          - service: ssi-chat
             package: chat_application
             extra: regression
 
@@ -76,14 +80,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - service: instruction-lifecycle-manager
-            context: instruction-lifecycle-manager
-          - service: security-event-chat
-            context: security-event-chat
-          - service: security-event-qdrant-etl
-            context: security-event-qdrant-etl
-          - service: security-event-test-harness
-            context: security-event-test-harness
+          - service: instruction-service
+            context: .
+            dockerfile: instruction-service/Dockerfile
+          - service: authorization-service
+            context: .
+            dockerfile: authorization-service/Dockerfile
+          - service: ssi-chat
+            context: ./ssi-chat
+            dockerfile: Dockerfile
+          - service: ssi-indexer
+            context: .
+            dockerfile: ssi-indexer/Dockerfile
+          - service: ssi-demo-harness
+            context: .
+            dockerfile: ssi-demo-harness/Dockerfile
 
     steps:
       - uses: actions/checkout@v4
@@ -94,7 +105,8 @@ jobs:
       - name: Build ${{ matrix.service }}
         uses: docker/build-push-action@v6
         with:
-          context: ./${{ matrix.context }}
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           push: false
           tags: ${{ matrix.service }}:ci
           cache-from: type=gha,scope=${{ matrix.service }}

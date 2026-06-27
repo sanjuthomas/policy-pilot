@@ -6,6 +6,7 @@ while the original user's token travels in ``X-On-Behalf-Of``.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from urllib.parse import urlparse
 
@@ -46,7 +47,7 @@ class ServiceIdentity:
     def session_id(self) -> str | None:
         return self._session_id
 
-    async def login(self) -> None:
+    async def login(self, *, max_attempts: int = 5, retry_delay_s: float = 2.0) -> None:
         """Create a Zitadel session for svc-payment using the service PAT."""
         if not settings.zitadel_service_pat:
             logger.warning(
@@ -56,47 +57,68 @@ class ServiceIdentity:
 
         user_id = settings.service_user_id
         password = settings.service_user_password
+        last_exc: Exception | None = None
 
-        try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                resp = await client.post(
-                    f"{_zitadel_base()}/v2/sessions",
-                    headers={
-                        **_host_header(),
-                        "Authorization": f"Bearer {settings.zitadel_service_pat}",
-                        "Content-Type": "application/json",
-                        "Accept": "application/json",
-                    },
-                    json={
-                        "checks": {
-                            "user": {"loginName": user_id},
-                            "password": {"password": password},
-                        }
-                    },
+        for attempt in range(1, max_attempts + 1):
+            try:
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    resp = await client.post(
+                        f"{_zitadel_base()}/v2/sessions",
+                        headers={
+                            **_host_header(),
+                            "Authorization": f"Bearer {settings.zitadel_service_pat}",
+                            "Content-Type": "application/json",
+                            "Accept": "application/json",
+                        },
+                        json={
+                            "checks": {
+                                "user": {"loginName": user_id},
+                                "password": {"password": password},
+                            }
+                        },
+                    )
+                    resp.raise_for_status()
+                    body = resp.json()
+
+                self._session_id = body.get("sessionId") or body.get("session_id")
+                self._session_token = body.get("sessionToken") or body.get("session_token")
+
+                if not self._session_token:
+                    raise ValueError(f"Zitadel session response missing token: {body}")
+
+                logger.info(
+                    "payment-service authenticated as %s (session_id=%s)",
+                    user_id,
+                    self._session_id,
                 )
-                resp.raise_for_status()
-                body = resp.json()
+                return
+            except Exception as exc:
+                last_exc = exc
+                self._session_token = None
+                self._session_id = None
+                if attempt < max_attempts:
+                    logger.warning(
+                        "payment-service login attempt %s/%s for %s failed: %s — retrying",
+                        attempt,
+                        max_attempts,
+                        user_id,
+                        exc,
+                    )
+                    await asyncio.sleep(retry_delay_s)
 
-            self._session_id = body.get("sessionId") or body.get("session_id")
-            self._session_token = body.get("sessionToken") or body.get("session_token")
+        logger.error(
+            "payment-service could not authenticate as %s after %s attempts: %s — "
+            "OBO delegation will be unavailable",
+            user_id,
+            max_attempts,
+            last_exc,
+        )
 
-            if not self._session_token:
-                raise ValueError(f"Zitadel session response missing token: {body}")
-
-            logger.info(
-                "payment-service authenticated as %s (session_id=%s)",
-                user_id,
-                self._session_id,
-            )
-        except Exception as exc:
-            logger.error(
-                "payment-service could not authenticate as %s: %s — "
-                "OBO delegation will be unavailable",
-                user_id,
-                exc,
-            )
-            self._session_token = None
-            self._session_id = None
+    async def ensure_logged_in(self) -> None:
+        """Retry login when startup raced ahead of Zitadel."""
+        if self._session_token:
+            return
+        await self.login(max_attempts=3, retry_delay_s=1.0)
 
 
 # Module-level singleton

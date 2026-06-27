@@ -1,0 +1,38 @@
+[project]
+name = "ssi-telemetry"
+version = "0.1.0"
+description = "Shared OpenTelemetry logs and metrics setup for SSI demo services"
+requires-python = ">=3.12"
+dependencies = [
+  "opentelemetry-api>=1.27.0",
+  "opentelemetry-sdk>=1.27.0",
+  "opentelemetry-exporter-otlp-proto-grpc>=1.27.0",
+  "opentelemetry-exporter-otlp-proto-http>=1.27.0",
+  "opentelemetry-instrumentation-fastapi>=0.48b0",
+  "opentelemetry-instrumentation-logging>=0.48b0",
+  "opentelemetry-instrumentation-httpx>=0.48b0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+  "pytest-cov>=6",
+  "fastapi>=0.115.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.coverage.run]
+source = ["telemetry"]
+
+[tool.coverage.report]
+fail_under = 70
+
+[build-system]
+requires = ["setuptools>=75.0.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta, timezone
 
 import pytest
 from ps.models.api import Subject
 from ps.models.enums import PaymentStatus
 from ps.models.payment import Payment
+
+
+@pytest.fixture(scope="session", autouse=True)
+def disable_open_telemetry_for_tests() -> None:
+    os.environ["OTEL_SDK_DISABLED"] = "true"
 
 
 @pytest.fixture

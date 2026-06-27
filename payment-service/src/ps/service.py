@@ -5,6 +5,8 @@ import logging
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from platform_auth import is_platform_admin
+
 from ps.authorization import (
     build_authorization_block,
     details_with_authorization,
@@ -23,6 +25,26 @@ from ps.security_event_repository import SecurityEventRepository
 logger = logging.getLogger(__name__)
 
 _APPROVED_STATUSES = {"STANDING", "SINGLE_USE"}
+
+
+def _covers_payment_lob(subject: Subject, owning_lob: str) -> bool:
+    return owning_lob in subject.covering_lobs
+
+
+def _can_view_payment(subject: Subject, payment: Payment) -> bool:
+    if is_platform_admin(subject):
+        return True
+    if subject.user_id == payment.created_by.user_id:
+        return True
+    lob = payment.owning_lob
+    roles = set(subject.roles)
+    if "PAYMENT_CREATOR" in roles and (
+        _covers_payment_lob(subject, lob) or subject.lob == lob
+    ):
+        return True
+    if "FUNDING_APPROVER" in roles and _covers_payment_lob(subject, lob):
+        return True
+    return False
 
 
 def _user_ref(subject: Subject) -> UserReference:
@@ -492,17 +514,26 @@ class PaymentService:
 
     # ── Read ──────────────────────────────────────────────────────────────────
 
-    async def get(self, payment_id: str) -> Payment:
-        return await self._get_or_404(payment_id)
+    async def get(self, payment_id: str, subject: Subject) -> Payment:
+        payment = await self._get_or_404(payment_id)
+        if not _can_view_payment(subject, payment):
+            raise PermissionError("not authorized to view payment")
+        return payment
 
     async def list(
         self,
+        subject: Subject,
         *,
         instruction_id: str | None = None,
         status: str | None = None,
         limit: int = 100,
     ) -> list[Payment]:
-        return await self.repo.list(instruction_id=instruction_id, status=status, limit=limit)
+        payments = await self.repo.list(
+            instruction_id=instruction_id,
+            status=status,
+            limit=limit,
+        )
+        return [payment for payment in payments if _can_view_payment(subject, payment)]
 
     # ── Internal helpers ──────────────────────────────────────────────────────
 

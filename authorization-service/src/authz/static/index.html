@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>User Directory — Authorization Service</title>
+    <link rel="stylesheet" href="/ui/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark"></span>
+        <div>
+          <h1>User Directory</h1>
+          <p class="subtitle">ZITADEL seed · read-only · policy attributes</p>
+        </div>
+      </div>
+      <div class="status-group">
+        <div class="admin-auth">
+          <span id="auth-status" class="muted">Admin sign-in required</span>
+          <input id="auth-user" type="text" value="admin-001" aria-label="Admin user" />
+          <input id="auth-password" type="password" placeholder="Password" aria-label="Password" />
+          <button type="button" id="auth-login-btn" class="btn">Sign in</button>
+          <button type="button" id="auth-logout-btn" class="btn btn-ghost hidden">Sign out</button>
+        </div>
+        <div id="load-status" class="status-pill status-connecting">Loading</div>
+        <div class="stat">
+          <span class="stat-label">Users</span>
+          <span id="stat-total" class="stat-value">0</span>
+        </div>
+      </div>
+    </header>
+
+    <section class="toolbar">
+      <label class="filter filter-search">
+        <span class="filter-label">Search</span>
+        <input
+          id="search-input"
+          type="search"
+          placeholder="User id, name, role, group, LOB…"
+          autocomplete="off"
+        />
+      </label>
+      <label class="filter">
+        <span class="filter-label">Role</span>
+        <select id="role-filter">
+          <option value="">All roles</option>
+        </select>
+      </label>
+      <label class="filter">
+        <span class="filter-label">Group / club</span>
+        <select id="group-filter">
+          <option value="">All groups</option>
+        </select>
+      </label>
+      <button type="button" id="clear-filters" class="btn btn-ghost">Clear</button>
+    </section>
+
+    <main class="table-wrap">
+      <table class="user-table" id="user-table">
+        <thead>
+          <tr>
+            <th>User ID</th>
+            <th>Display name</th>
+            <th>Title</th>
+            <th>LOB</th>
+            <th>Roles</th>
+            <th>Groups</th>
+            <th>Amount clubs</th>
+            <th>Covering LOBs</th>
+            <th>Manager</th>
+            <th>Login</th>
+          </tr>
+        </thead>
+        <tbody id="user-rows">
+          <tr>
+            <td colspan="10" class="empty-cell">Loading users…</td>
+          </tr>
+        </tbody>
+      </table>
+    </main>
+
+    <script src="/ui/static/admin-auth.js?v=1"></script>
+    <script src="/ui/static/app.js"></script>
+  </body>
+</html>

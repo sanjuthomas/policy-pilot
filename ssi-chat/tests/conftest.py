@@ -1,0 +1,78 @@
+from __future__ import annotations
+
+import os
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from fastapi.testclient import TestClient
+
+
+@pytest.fixture(scope="session", autouse=True)
+def disable_open_telemetry_for_tests() -> None:
+    os.environ["OTEL_SDK_DISABLED"] = "true"
+
+
+@pytest.fixture
+def mock_ollama():
+    client = MagicMock()
+    client.embed = AsyncMock(return_value=[0.1, 0.2, 0.3])
+    client.chat = AsyncMock(return_value="mocked answer")
+    client.generate_cypher = AsyncMock(
+        return_value="MATCH (e:SecurityEvent) RETURN e LIMIT 1"
+    )
+    client.synthesize_answer = AsyncMock(return_value="Synthesized answer.")
+    client.summarize_authorization_why = AsyncMock(return_value="Policy allowed approval.")
+    return client
+
+
+@pytest.fixture
+def mock_qdrant():
+    client = MagicMock()
+    client.connect = MagicMock()
+    client.close = MagicMock()
+    client.has_collection = MagicMock(return_value=False)
+    client.search_vector = MagicMock(return_value=[])
+    client.search_bm25 = MagicMock(return_value=[])
+    client.fetch_by_event_id = MagicMock(return_value=None)
+    client.fetch_by_instruction_id = MagicMock(return_value=None)
+    client.fetch_instruction_approve_events = MagicMock(return_value=[])
+    return client
+
+
+@pytest.fixture
+def mock_neo4j():
+    client = MagicMock()
+    client.connect = AsyncMock()
+    client.close = AsyncMock()
+    client.run_cypher = AsyncMock(return_value=[])
+    client.lookup_instruction_for_event = AsyncMock(return_value=[])
+    return client
+
+
+@pytest.fixture
+def compliance_subject():
+    from chat_application.subject import Subject
+
+    return Subject(
+        user_id="comp-001",
+        title="Compliance Analyst",
+        roles=["COMPLIANCE_ANALYST"],
+    )
+
+
+@pytest.fixture
+def test_client(mock_ollama, mock_qdrant, mock_neo4j, compliance_subject):
+    import chat_application.main as main_module
+    from chat_application.dependencies import get_compliance_subject
+
+    main_module.ollama_client = mock_ollama
+    main_module.qdrant_client = mock_qdrant
+    main_module.neo4j_client = mock_neo4j
+    main_module.rag_service = None
+
+    main_module.app.dependency_overrides[get_compliance_subject] = lambda: compliance_subject
+
+    with TestClient(main_module.app) as client:
+        yield client
+
+    main_module.app.dependency_overrides.clear()

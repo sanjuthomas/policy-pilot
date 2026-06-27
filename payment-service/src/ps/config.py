@@ -36,7 +36,6 @@ class Settings(BaseSettings):
     kafka_security_events_topic: str = "payment-security-events"
 
     ui_initial_security_event_limit: int = 200
-    ui_poll_interval_seconds: float = 2.0
 
     @model_validator(mode="after")
     def load_service_pat_from_file(self) -> "Settings":

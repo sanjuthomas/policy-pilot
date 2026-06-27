@@ -13,7 +13,7 @@
         <span class="brand-mark" style="background:#2dd4bf;box-shadow:0 0 18px rgba(45,212,191,0.8)"></span>
         <div>
           <h1>Payment Security Event Monitor</h1>
-          <p class="subtitle">MongoDB change stream · payment-service</p>
+          <p class="subtitle">Admin monitor · payment-service</p>
         </div>
       </div>
       <div class="status-group">
@@ -21,6 +21,13 @@
           <a href="/ui/">Payments</a>
           <a href="/ui/security-events/" class="active">Security events</a>
         </nav>
+        <div class="admin-auth">
+          <span id="auth-status" class="muted">Admin sign-in required</span>
+          <input id="auth-user" type="text" value="admin-001" aria-label="Admin user" />
+          <input id="auth-password" type="password" placeholder="Password" aria-label="Password" />
+          <button type="button" id="auth-login-btn" class="btn-secondary">Sign in</button>
+          <button type="button" id="auth-logout-btn" class="btn-ghost hidden">Sign out</button>
+        </div>
         <div id="connection-status" class="status-pill status-connecting">Connecting</div>
         <div class="stat">
           <span class="stat-label">Shown</span>
@@ -78,6 +85,7 @@
       </div>
     </main>
 
-    <script src="/ui/security-events/static/app.js"></script>
+    <script src="/ui/static/admin-auth.js?v=1"></script>
+    <script src="/ui/security-events/static/app.js?v=2"></script>
   </body>
 </html>

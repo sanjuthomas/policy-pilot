@@ -92,6 +92,12 @@ def test_list_payments(api_client: TestClient, payment) -> None:
     assert len(response.json()) == 1
 
 
+def test_get_payment_forbidden(api_client: TestClient, payment) -> None:
+    api_client.mock_service.get.side_effect = PermissionError("denied")
+    response = api_client.get(f"/api/v1/payments/{payment.payment_id}", headers=_headers())
+    assert response.status_code == 403
+
+
 def test_get_payment(api_client: TestClient, payment) -> None:
     api_client.mock_service.get.return_value = payment
     response = api_client.get(f"/api/v1/payments/{payment.payment_id}", headers=_headers())

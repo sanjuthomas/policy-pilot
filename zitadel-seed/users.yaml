@@ -6,6 +6,7 @@
 #   UP_TO_100_MILLION_CLUB — may create/approve payments up to $100 M
 #   UP_TO_1_BILLION_CLUB   — may create/approve payments up to $1 B
 #   UP_TO_100_BILLION_CLUB — may create/approve payments up to $100 B
+#   ADMIN                 — platform operator; required for secured admin UIs
 # covering_lobs — LOBs the user is assigned to cover for payment approval
 
 defaults:
@@ -355,3 +356,42 @@ users:
       - FICC
       - FX
       - DESK_RATES
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # PLATFORM ADMIN — secured browser UIs, test harness, ETL console, maintenance
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - user_id: admin-001
+    given_name: Platform
+    family_name: Administrator
+    title: Platform Administrator
+    roles:
+      - PLATFORM_ADMIN
+      - INSTRUCTION_VIEWER
+    groups:
+      - ADMIN
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # COMPLIANCE — policy inquiry users for chat / authorization-service
+  #
+  # COMPLIANCE_ANALYST may call authorization-service to ask who can approve
+  # a payment (live OPA evaluation). No payment or instruction mutation rights.
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - user_id: comp-001
+    given_name: Alex
+    family_name: Morgan
+    title: Compliance Analyst
+    roles:
+      - COMPLIANCE_ANALYST
+    groups:
+      - COMPLIANCE
+
+  - user_id: comp-002
+    given_name: Jordan
+    family_name: Kim
+    title: Compliance Officer
+    roles:
+      - COMPLIANCE_ANALYST
+    groups:
+      - COMPLIANCE

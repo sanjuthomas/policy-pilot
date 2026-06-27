@@ -115,11 +115,17 @@ async function loadPayment() {
     return;
   }
 
+  if (!AdminAuth.loadSession()) {
+    showError("Admin sign-in required.");
+    subtitle.textContent = paymentId;
+    return;
+  }
+
   subtitle.textContent = paymentId;
   document.title = `Payment · ${paymentId}`;
 
   try {
-    const response = await fetch(
+    const response = await AdminAuth.adminFetch(
       `/api/ui/payments/${encodeURIComponent(paymentId)}`
     );
     if (!response.ok) {
@@ -151,4 +157,13 @@ copyBtn.addEventListener("click", async () => {
   }
 });
 
-loadPayment();
+AdminAuth.bindAdminAuthPanel({
+  statusEl: document.getElementById("auth-status"),
+  userEl: document.getElementById("auth-user"),
+  passwordEl: document.getElementById("auth-password"),
+  loginBtn: document.getElementById("auth-login-btn"),
+  logoutBtn: document.getElementById("auth-logout-btn"),
+  onAuthenticated: () => {
+    void loadPayment();
+  },
+});

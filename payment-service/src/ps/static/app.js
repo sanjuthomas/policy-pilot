@@ -13,7 +13,7 @@ const clearBtn = document.getElementById("clear-btn");
 
 let payments = [];
 let paused = false;
-let source = null;
+let pollTimer = null;
 
 function formatTime(value) {
   if (!value) return "—";
@@ -119,21 +119,14 @@ function setLoadStatus(state, label) {
   loadStatus.textContent = label;
 }
 
-function upsertPayment(payment, { isLive = false } = {}) {
-  const id = payment?.payment_id;
-  if (!id) return;
-  const idx = payments.findIndex((p) => p.payment_id === id);
-  if (idx >= 0) payments.splice(idx, 1);
-  payments.unshift(payment);
-  if (payments.length > MAX_ROWS) payments.pop();
-  updateLobOptions();
-  renderTable({ highlightFirst: isLive });
-}
-
 async function loadPayments() {
+  if (!AdminAuth.loadSession()) {
+    setLoadStatus("error", "Sign in required");
+    return;
+  }
   setLoadStatus("connecting", "Loading");
   try {
-    const response = await fetch("/api/ui/payments?limit=500");
+    const response = await AdminAuth.adminFetch("/api/ui/payments?limit=500");
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const payload = await response.json();
     payments = payload.payments || [];
@@ -147,35 +140,21 @@ async function loadPayments() {
 }
 
 function connectStream() {
-  if (source) source.close();
-  source = new EventSource("/api/ui/payments/stream");
-
-  source.addEventListener("connected", () => {
-    setLoadStatus("live", "Live · change stream");
-  });
-
-  source.onmessage = (message) => {
-    if (paused) return;
-    try {
-      const payment = JSON.parse(message.data);
-      upsertPayment(payment, { isLive: true });
-    } catch (error) {
-      console.error("invalid SSE payload", error);
+  if (pollTimer) {
+    clearInterval(pollTimer);
+  }
+  pollTimer = setInterval(() => {
+    if (!paused) {
+      void loadPayments();
     }
-  };
-
-  source.onerror = () => {
-    setLoadStatus("error", "Reconnecting…");
-    source.close();
-    window.setTimeout(connectStream, 2000);
-  };
+  }, 2000);
 }
 
 statusFilter.addEventListener("change", () => renderTable());
 lobFilter.addEventListener("change", () => renderTable());
 typeFilter.addEventListener("change", () => renderTable());
 
-refreshBtn.addEventListener("click", loadPayments);
+refreshBtn.addEventListener("click", () => void loadPayments());
 
 pauseBtn.addEventListener("click", () => {
   paused = !paused;
@@ -187,4 +166,14 @@ clearBtn.addEventListener("click", () => {
   renderTable();
 });
 
-loadPayments().then(connectStream);
+AdminAuth.bindAdminAuthPanel({
+  statusEl: document.getElementById("auth-status"),
+  userEl: document.getElementById("auth-user"),
+  passwordEl: document.getElementById("auth-password"),
+  loginBtn: document.getElementById("auth-login-btn"),
+  logoutBtn: document.getElementById("auth-logout-btn"),
+  onAuthenticated: () => {
+    void loadPayments();
+    connectStream();
+  },
+});

@@ -100,7 +100,35 @@ async def test_login_failure_clears_token(monkeypatch: pytest.MonkeyPatch) -> No
         mock_client_cls.return_value = mock_client
 
         identity = ServiceIdentity()
-        await identity.login()
+        await identity.login(max_attempts=1)
 
     assert identity.token is None
     assert identity.session_id is None
+
+
+@pytest.mark.asyncio
+async def test_login_retries_before_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("ps.service_identity.settings.zitadel_service_pat", "pat")
+    monkeypatch.setattr("ps.service_identity.settings.oidc_issuer_url", "https://auth.example.com")
+    monkeypatch.setattr("ps.service_identity.settings.service_user_id", "svc-payment")
+    monkeypatch.setattr("ps.service_identity.settings.service_user_password", "Password1!")
+
+    success_response = httpx.Response(
+        200,
+        json={"sessionId": "sess-1", "sessionToken": "tok-1"},
+        request=httpx.Request("POST", "https://auth.example.com/v2/sessions"),
+    )
+
+    with patch("ps.service_identity.httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.post = AsyncMock(
+            side_effect=[RuntimeError("network"), success_response],
+        )
+        mock_client_cls.return_value = mock_client
+
+        identity = ServiceIdentity()
+        await identity.login(max_attempts=2, retry_delay_s=0)
+
+    assert identity.token == "tok-1"
+    assert mock_client.post.await_count == 2

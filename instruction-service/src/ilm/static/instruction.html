@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Instruction</title>
+    <link rel="stylesheet" href="/ui/static/styles.css" />
+  </head>
+  <body class="detail-page">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark"></span>
+        <div>
+          <h1>Instruction</h1>
+          <p id="instruction-id-subtitle" class="subtitle mono">Loading…</p>
+        </div>
+      </div>
+      <div class="status-group">
+        <div class="admin-auth">
+          <span id="auth-status" class="muted">Admin sign-in required</span>
+          <input id="auth-user" type="text" value="admin-001" aria-label="Admin user" />
+          <input id="auth-password" type="password" placeholder="Password" aria-label="Password" />
+          <button type="button" id="auth-login-btn" class="btn-secondary">Sign in</button>
+          <button type="button" id="auth-logout-btn" class="btn-ghost hidden">Sign out</button>
+        </div>
+        <a class="btn btn-ghost" href="/ui/">Back to browser</a>
+      </div>
+    </header>
+
+    <main class="detail-main">
+      <div id="detail-error" class="detail-error hidden"></div>
+      <div id="detail-summary" class="detail-summary hidden"></div>
+      <section id="detail-json-section" class="detail-json-section hidden">
+        <div class="detail-json-header">
+          <h2>Full instruction</h2>
+          <button id="copy-json-btn" type="button" class="btn btn-ghost">Copy JSON</button>
+        </div>
+        <pre id="detail-json" class="detail-json"></pre>
+      </section>
+    </main>
+
+    <script src="/ui/static/admin-auth.js?v=1"></script>
+    <script src="/ui/static/instruction.js?v=2"></script>
+  </body>
+</html>

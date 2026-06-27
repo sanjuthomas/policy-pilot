@@ -13,6 +13,7 @@ dependencies = [
     "PyJWT[crypto]>=2.10.0",
     "aiokafka>=0.12.0",
     "aiofiles>=24.1.0",
+    "ssi-telemetry",
 ]
 
 [project.scripts]
@@ -36,4 +37,11 @@ packages = ["src/ps"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "../shared/platform_auth/src"]
+
+[tool.coverage.run]
+source = ["ps"]
+omit = ["src/ps/main.py"]
+
+[tool.coverage.report]
+fail_under = 70

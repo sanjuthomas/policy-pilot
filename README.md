@@ -47,11 +47,11 @@ flowchart TB
     end
 
     subgraph apps [Applications]
-        ILM[instruction-lifecycle-manager :8000]
+        ILM[instruction-service :8000]
         PAY[payment-service :8093]
-        HARNESS[test-harness :8091]
-        ETL[security-event-qdrant-etl :8090]
-        CHAT[security-event-chat :8092]
+        HARNESS[ssi-demo-harness :8091]
+        ETL[ssi-indexer :8090]
+        CHAT[ssi-chat :8092]
     end
 
     subgraph policy [Policy]
@@ -96,7 +96,7 @@ flowchart TB
 
 1. **ILM** — operator creates/mutates an instruction; ZITADEL JWT is validated; OPA authorizes the action (`allow` + `allow_basis`); instruction version and security event (with `details.authorization`) are written to MongoDB **in a single transaction**; two Kafka fact events are published — one to `instruction-security-events` (security event + full instruction snapshot) and one to `ssi-instructions` (instruction state fact + authorization on mutations).
 2. **Payment service** — middle-office users create payments against approved SSI instructions; OPA evaluates allow/deny with the same audit block pattern; each action writes to MongoDB and publishes to `payment-security-events` (audit) and `ssi-payments` (payment state fact).
-3. **ETL** — runs four independent Kafka consumers, all **self-contained** (full snapshots embedded — no API callbacks). Denormalizes `authorization_summary`, `approved_at`, and related fields onto Qdrant and Neo4j for chat retrieval.
+3. **SSI indexer** — runs four independent Kafka consumers, all **self-contained** (full snapshots embedded — no API callbacks). Denormalizes `authorization_summary`, `approved_at`, and related fields onto Qdrant and Neo4j for chat retrieval.
    - **InstructionSecurityEventPipeline** (`instruction-security-events`) → Neo4j + Qdrant `source=instruction_security_event`
    - **InstructionPipeline** (`ssi-instructions`) → instruction master graph + Qdrant `source=instruction_state`
    - **PaymentSecurityEventPipeline** (`payment-security-events`) → payment security graph + Qdrant `source=payment_security_event`
@@ -324,9 +324,11 @@ Embedding throughput with `bge-m3` is approximately **80–120 documents/second*
 | http://localhost:8093/ui/ | Payment service | Payment browser |
 | http://localhost:8093/ui/security-events/ | Payment service | Live payment security event monitor (SSE) |
 | http://localhost:8000/docs | ILM | OpenAPI |
-| http://localhost:8090 | ETL | Search console — vector / BM25 / hybrid / Neo4j |
-| http://localhost:8091 | Test harness | Generate instruction + payment lifecycle traffic |
-| http://localhost:8092 | Chat | Natural-language Q&A (four search modes) |
+| http://localhost:8090 | SSI indexer | Search console — vector / BM25 / hybrid / Neo4j |
+| http://localhost:8091 | Demo harness | Generate instruction + payment lifecycle traffic |
+| http://localhost:8092 | SSI chat | Natural-language Q&A (four search modes) |
+| http://localhost:8094 | Authorization service | User directory UI + live OPA policy queries |
+| http://localhost:8094/ui/ | Authorization service | Read-only user directory (roles, groups, LOBs, managers) |
 | http://localhost:7474/browser/ | Neo4j | Graph browser — `neo4j` / `devpassword` |
 | http://localhost:8080/ui/console | ZITADEL | Identity admin console |
 
@@ -336,14 +338,15 @@ Embedding throughput with `bge-m3` is approximately **80–120 documents/second*
 
 | Directory | Role |
 |-----------|------|
-| `instruction-lifecycle-manager` | FastAPI lifecycle API — OPA authorization with `details.authorization` audit block, Mongo persistence, Kafka publishing, maintenance backfill APIs |
+| `instruction-service` | FastAPI lifecycle API — OPA authorization with `details.authorization` audit block, Mongo persistence, Kafka publishing, maintenance backfill APIs |
 | `payment-service` | Cash payment lifecycle against approved SSI instructions — OPA authorization (amount limits, LOB coverage, segregation of duties), Mongo persistence, Kafka publishing, payment and security event UIs |
-| `security-event-qdrant-etl` | Four Kafka consumers — instruction + payment security events and state facts → Neo4j graph writer + Qdrant hybrid indexer (`ssi_search_index`) + search console UI |
-| `security-event-chat` | RAG chat — four search modes, triple retrieval, Who/When/Why approval audit (deterministic facts + LLM WHY rewrite), planned Cypher, regression suite |
-| `security-event-test-harness` | ZITADEL-authenticated UI to drive lifecycles, OPA policy scenarios, authorization backfill (`repair-authorization`) |
+| `ssi-indexer` | Four Kafka consumers — instruction + payment security events and state facts → Neo4j graph writer + Qdrant hybrid indexer (`ssi_search_index`) + search console UI |
+| `ssi-chat` | RAG chat — four search modes, triple retrieval, Who/When/Why approval audit (deterministic facts + LLM WHY rewrite), planned Cypher, regression suite; compliance sign-in for live **who can approve this payment?** via authorization-service |
+| `authorization-service` | Policy intelligence API — user directory UI, batch OPA `APPROVE_PAYMENT` evaluation; `COMPLIANCE_ANALYST` role required for eligibility API |
+| `ssi-demo-harness` | ZITADEL-authenticated UI to drive lifecycles, OPA policy scenarios, authorization backfill (`repair-authorization`) |
 | `neo4j-graph-model` | Graph schema docs, Cypher constraints/indexes, example queries |
 | `opa-policy-seed` | Rego policies — `instruction/` + `payment/` packages with `allow_basis`, `violations`, lifecycle rules |
-| `zitadel-seed` | Demo user seed (`users.yaml`) — middle office, FICC/FX/DESK approvers, payment creators/approvers, front-office submitters, service accounts |
+| `zitadel-seed` | Demo user seed (`users.yaml`) — middle office, FICC/FX/DESK approvers, payment creators/approvers, front-office submitters, compliance analysts (`comp-001`, `comp-002`), service accounts |
 | `log-forwarder` | Optional container log shipping to Kafka |
 
 ---
@@ -461,6 +464,12 @@ All passwords are `Password1!`. Login names follow `{user_id}@ssi.local`.
 | `fo-fx-101` | Jordan Blake | Analyst — front-office submitter | FX |
 | `etl-reader` | — | Service account — excluded from security event emission (`SECURITY_EVENT_EXCLUDED_USER_IDS`) | — |
 | `svc-payment` | — | Service account — payment service → ILM reads (`INSTRUCTION_VIEWER`) | — |
+| `admin-001` | Platform Administrator | **Platform admin** — secured UIs (harness, browsers, ETL console, user directory) | — |
+| `comp-001` / `comp-002` | Compliance analysts | Live OPA eligibility questions in **ssi-chat** only | — |
+
+**Platform admin (`admin-001`)** — sign in at any secured admin UI (test harness, instruction browser, payment browser, ETL indexer, authorization user directory). Requires `PLATFORM_ADMIN` role and `ADMIN` group. All `/api/ui/*` and harness `/api/*` routes require this login; business lifecycle APIs still use their respective seeded users via Zitadel JWT.
+
+After changing `users.yaml`, re-seed Zitadel (`zitadel-seed` container or manual seed script).
 
 See `zitadel-seed/users.yaml` for the full payment user roster (`pay-102` … `pay-400`, amount-limit clubs, and dual-role holders).
 
@@ -511,7 +520,7 @@ Policy denials (self-approval, wrong LOB, amount over club limit, subordinate ap
 | Qdrant payload `source` | `instruction_security_event`, `instruction_state`, `payment_security_event`, `payment_fact` | Point type filter for chat modes |
 | MongoDB | `ssi_cash_instructions.instructions` | Instruction versions |
 | MongoDB | `ssi_cash_activities.payments` | Payment records |
-| MongoDB | `security_events.instruction-lifecycle-manager` | ILM security events |
+| MongoDB | `security_events.instruction-service` | ILM security events |
 | MongoDB | `security_events.payment-service` | Payment security events |
 | Kafka | `instruction-security-events` | ILM security event facts |
 | Kafka | `ssi-instructions` | ILM instruction state facts |
@@ -688,6 +697,10 @@ The ETL denormalizes these onto Qdrant (`authorization_summary`, `authorization_
 | **WHEN** | `approved_at` / event timestamp | Deterministic |
 | **WHY** | OPA `authorization_summary` + `allow_basis` | LLM rewrite into readable prose (falls back to raw summary if Ollama fails) |
 
+**Chat behaviour (live policy — who can approve this payment?):**
+
+Compliance analysts sign in at http://localhost:8092 (`comp-001` / `comp-002`, password `Password1!`). Questions like _"Who can approve payment &lt;payment-id&gt;?"_ bypass RAG and call **authorization-service** (`POST /api/v1/payments/{id}/eligible-approvers`), which loads the payment from Mongo, fetches instruction status from ILM, and batch-evaluates `APPROVE_PAYMENT` in OPA over `FUNDING_APPROVER` candidates from `users.yaml`.
+
 **Backfill for data created before the audit-trail fix:**
 
 ```bash
@@ -706,7 +719,7 @@ curl -X POST "http://localhost:8000/api/v1/maintenance/republish-approve-events?
 Every instruction mutation (create, update, submit, approve, reject, suspend, reactivate, use, delete) writes:
 
 - the instruction version to `ssi_cash_instructions.instructions`
-- the matching security event to `security_events.instruction-lifecycle-manager`
+- the matching security event to `security_events.instruction-service`
 
 Every payment mutation (create, submit, approve, reject) writes:
 
@@ -721,24 +734,28 @@ in a **single MongoDB multi-document transaction** per service. Kafka publish ha
 
 ```bash
 # ILM API
-cd instruction-lifecycle-manager && pip install -e .
-uvicorn instruction_lifecycle_manager.main:app --reload --port 8000
+cd instruction-service && pip install -e .
+uvicorn ilm.main:app --reload --port 8000
 
-# ETL + search console
-cd security-event-qdrant-etl && pip install -e .
-security-event-search           # :8090
+# SSI indexer + search console
+cd ssi-indexer && pip install -e .
+ssi-indexer           # :8090
 
-# Chat
-cd security-event-chat && pip install -e .
-security-event-chat             # :8092
+# SSI chat
+cd ssi-chat && pip install -e .
+ssi-chat              # :8092
+
+# Authorization service
+cd authorization-service && pip install -e .
+authorization-service           # :8094
 
 # Payment service
 cd payment-service && pip install -e .
 payment-service                 # :8093
 
-# Test harness
-cd security-event-test-harness && pip install -e .
-security-event-test-harness-ui  # :8091
+# Demo harness
+cd ssi-demo-harness && pip install -e .
+ssi-demo-harness-ui   # :8091
 ```
 
 Each service reads configuration from environment variables (see its own README for the full list). Requires local MongoDB, Kafka, Qdrant, Neo4j, OPA, ZITADEL, and Ollama.
@@ -750,11 +767,11 @@ Each service reads configuration from environment variables (see its own README 
 ```
 .
 ├── docker-compose.yml
-├── instruction-lifecycle-manager/   # ILM API + instruction / security UIs
+├── instruction-service/             # ILM API + instruction / security UIs
 ├── payment-service/                 # Payment API + payment / security UIs
-├── security-event-qdrant-etl/       # Kafka ETL + search console
-├── security-event-chat/             # RAG chat
-├── security-event-test-harness/     # E2E test harness UI
+├── ssi-indexer/                     # Kafka indexer + search console
+├── ssi-chat/                        # RAG chat + compliance policy Q&A
+├── ssi-demo-harness/                # Demo scenario harness UI
 ├── neo4j-graph-model/               # Graph schema and example queries
 ├── opa-policy-seed/                 # Rego policies
 ├── zitadel-seed/                    # Demo user definitions
