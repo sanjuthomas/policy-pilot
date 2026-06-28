@@ -5,24 +5,51 @@ import logging
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from platform_auth import is_platform_admin
+from sequence_client import SequenceClient
+from sequence_client.errors import SequenceClientError
+
+from authz_client import AuthzClient
+
 from ps.authorization import (
     build_authorization_block,
     details_with_authorization,
     payment_resource_context,
 )
+from ps.config import settings
 from ps.ilm_client import IlmClient, InstructionNotFoundError, InstructionStateError
 from ps.kafka_publisher import kafka_publisher
 from ps.models.api import LifecycleEvent, RejectPaymentRequest, Subject, UserReference
 from ps.models.enums import PaymentAction, PaymentStatus
 from ps.models.payment import Payment
 from ps.models.security_event import PaymentSecurityEvent
-from ps.opa import OpaClient
 from ps.repository import PaymentNotFoundError, PaymentRepository
 from ps.security_event_repository import SecurityEventRepository
+from ps.service_identity import service_identity
 
 logger = logging.getLogger(__name__)
 
 _APPROVED_STATUSES = {"STANDING", "SINGLE_USE"}
+
+
+def _covers_payment_lob(subject: Subject, owning_lob: str) -> bool:
+    return owning_lob in subject.covering_lobs
+
+
+def _can_view_payment(subject: Subject, payment: Payment) -> bool:
+    if is_platform_admin(subject):
+        return True
+    if subject.user_id == payment.created_by.user_id:
+        return True
+    lob = payment.owning_lob
+    roles = set(subject.roles)
+    if "PAYMENT_CREATOR" in roles and (
+        _covers_payment_lob(subject, lob) or subject.lob == lob
+    ):
+        return True
+    if "FUNDING_APPROVER" in roles and _covers_payment_lob(subject, lob):
+        return True
+    return False
 
 
 def _user_ref(subject: Subject) -> UserReference:
@@ -127,11 +154,46 @@ def _check_instruction_validity_for_approval(payment: Payment, instruction: dict
 
 
 class PaymentService:
-    def __init__(self) -> None:
+    def __init__(self, sequence_client: SequenceClient | None = None) -> None:
         self.repo = PaymentRepository()
         self.event_repo = SecurityEventRepository()
-        self.opa = OpaClient()
+        self.authz = AuthzClient(settings.authorization_service_url)
         self.ilm = IlmClient()
+        self.sequence = sequence_client or SequenceClient(settings.sequence_service_url)
+
+    async def _evaluate_policy(
+        self,
+        action: PaymentAction,
+        subject: Subject,
+        payment: Payment,
+        *,
+        instruction_end_date: str = "",
+        instruction_status: str = "",
+        bearer_token: str | None = None,
+        session_id: str | None = None,
+    ):
+        await service_identity.ensure_logged_in()
+        common = {
+            "action": action.value,
+            "payment": payment.to_opa_payment(
+                instruction_end_date=instruction_end_date,
+                instruction_status=instruction_status,
+            ),
+            "instruction_end_date": instruction_end_date,
+            "instruction_status": instruction_status,
+            "service_token": service_identity.token,
+            "service_session_id": service_identity.session_id,
+        }
+        if bearer_token and service_identity.token:
+            return await self.authz.evaluate_payment(
+                **common,
+                user_token=bearer_token,
+                user_session_id=session_id,
+            )
+        return await self.authz.evaluate_payment(
+            **common,
+            subject=subject.model_dump(mode="json"),
+        )
 
     async def _authorize(
         self,
@@ -141,13 +203,17 @@ class PaymentService:
         *,
         instruction_end_date: str = "",
         instruction_status: str = "",
+        bearer_token: str | None = None,
+        session_id: str | None = None,
     ) -> dict:
-        decision = await self.opa.evaluate(
+        decision = await self._evaluate_policy(
             action,
             subject,
             payment,
             instruction_end_date=instruction_end_date,
             instruction_status=instruction_status,
+            bearer_token=bearer_token,
+            session_id=session_id,
         )
         authorization = build_authorization_block(
             decision,
@@ -220,7 +286,17 @@ class PaymentService:
         end_date = instruction.get("end_date") or ""
 
         event_id = str(uuid4())
+        business_date = datetime.now(timezone.utc).date()
+        try:
+            payment_id = await self.sequence.next_payment_id(
+                business_date=business_date,
+                owning_lob=instruction["owning_lob"],
+            )
+        except SequenceClientError as exc:
+            raise RuntimeError(f"sequence allocation failed: {exc}") from exc
+
         payment = Payment.create(
+            payment_id=payment_id,
             instruction_id=instruction_id,
             instruction_version=instruction_version,
             amount=amount,
@@ -239,6 +315,8 @@ class PaymentService:
                 payment,
                 instruction_end_date=end_date,
                 instruction_status=instruction_status,
+                bearer_token=bearer_token,
+                session_id=session_id,
             )
         except PermissionError:
             raise
@@ -320,6 +398,8 @@ class PaymentService:
                 payment,
                 instruction_end_date=instruction_end_date,
                 instruction_status=instruction_status,
+                bearer_token=bearer_token,
+                session_id=session_id,
             )
         except PermissionError:
             raise
@@ -391,6 +471,8 @@ class PaymentService:
                 payment,
                 instruction_end_date=instruction_end_date,
                 instruction_status=instruction_status,
+                bearer_token=bearer_token,
+                session_id=session_id,
             )
         except PermissionError:
             raise
@@ -457,6 +539,8 @@ class PaymentService:
                 payment,
                 instruction_end_date=instruction_end_date,
                 instruction_status=instruction_status,
+                bearer_token=bearer_token,
+                session_id=session_id,
             )
         except PermissionError:
             raise
@@ -492,17 +576,48 @@ class PaymentService:
 
     # ── Read ──────────────────────────────────────────────────────────────────
 
-    async def get(self, payment_id: str) -> Payment:
-        return await self._get_or_404(payment_id)
+    async def get(self, payment_id: str, subject: Subject) -> Payment:
+        payment = await self._get_or_404(payment_id)
+        if not _can_view_payment(subject, payment):
+            raise PermissionError("not authorized to view payment")
+        return payment
 
     async def list(
         self,
+        subject: Subject,
         *,
         instruction_id: str | None = None,
         status: str | None = None,
         limit: int = 100,
     ) -> list[Payment]:
-        return await self.repo.list(instruction_id=instruction_id, status=status, limit=limit)
+        payments = await self.repo.list(
+            instruction_id=instruction_id,
+            status=status,
+            limit=limit,
+        )
+        return [payment for payment in payments if _can_view_payment(subject, payment)]
+
+    async def eligible_approvers(self, payment_id: str) -> dict:
+        payment = await self._get_or_404(payment_id)
+        instruction = await self.ilm.get_instruction_as_service(payment.instruction_id)
+        await service_identity.ensure_logged_in()
+        return await self.authz.eligible_payment_approvers(
+            payment={
+                "payment_id": payment.payment_id,
+                "instruction_id": payment.instruction_id,
+                "instruction_version": payment.instruction_version,
+                "status": payment.status.value,
+                "amount": payment.amount,
+                "currency": payment.currency,
+                "owning_lob": payment.owning_lob,
+                "created_by_user_id": payment.created_by.user_id,
+                "created_by_supervisor_id": payment.created_by.supervisor_id,
+            },
+            instruction_status=str(instruction.get("status") or ""),
+            instruction_end_date=str(instruction.get("end_date") or ""),
+            service_token=service_identity.token,
+            service_session_id=service_identity.session_id,
+        )
 
     # ── Internal helpers ──────────────────────────────────────────────────────
 

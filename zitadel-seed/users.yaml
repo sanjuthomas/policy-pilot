@@ -6,6 +6,7 @@
 #   UP_TO_100_MILLION_CLUB — may create/approve payments up to $100 M
 #   UP_TO_1_BILLION_CLUB   — may create/approve payments up to $1 B
 #   UP_TO_100_BILLION_CLUB — may create/approve payments up to $100 B
+#   ADMIN                 — platform operator; required for secured admin UIs
 # covering_lobs — LOBs the user is assigned to cover for payment approval
 
 defaults:
@@ -165,9 +166,22 @@ users:
     supervisor_id: rates-201
 
   # ═══════════════════════════════════════════════════════════════════════════
+  # Instruction service account
+  # Used for service-to-service calls from instruction-service → authorization-service (OBO).
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - user_id: svc-instruction
+    given_name: Instruction
+    family_name: Service
+    title: Service Account
+    roles:
+      - INSTRUCTION_VIEWER
+    groups: []
+
+  # ═══════════════════════════════════════════════════════════════════════════
   # Payment service account
-  # Used for service-to-service calls from payment-service → ILM (OBO pattern).
-  # Holds only INSTRUCTION_VIEWER so it can read instructions but cannot mutate them.
+  # Used for OBO calls from payment-service → authorization-service and ILM.
+  # INSTRUCTION_MARKER is required for marking instructions USED during payment create.
   # ═══════════════════════════════════════════════════════════════════════════
 
   - user_id: svc-payment
@@ -355,3 +369,42 @@ users:
       - FICC
       - FX
       - DESK_RATES
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # PLATFORM ADMIN — secured browser UIs, test harness, ETL console, maintenance
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - user_id: admin-001
+    given_name: Platform
+    family_name: Administrator
+    title: Platform Administrator
+    roles:
+      - PLATFORM_ADMIN
+      - INSTRUCTION_VIEWER
+    groups:
+      - ADMIN
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # COMPLIANCE — policy inquiry users for chat eligibility questions
+  #
+  # COMPLIANCE_ANALYST may call payment-service / instruction-service to ask who can approve
+  # a payment (live OPA evaluation). No payment or instruction mutation rights.
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - user_id: comp-001
+    given_name: Alex
+    family_name: Morgan
+    title: Compliance Analyst
+    roles:
+      - COMPLIANCE_ANALYST
+    groups:
+      - COMPLIANCE
+
+  - user_id: comp-002
+    given_name: Jordan
+    family_name: Kim
+    title: Compliance Officer
+    roles:
+      - COMPLIANCE_ANALYST
+    groups:
+      - COMPLIANCE

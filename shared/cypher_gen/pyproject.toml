@@ -1,0 +1,29 @@
+[project]
+name = "cypher-gen"
+version = "0.1.0"
+description = "Shared Neo4j Cypher generation prompts and read-only validation"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+  "pytest-cov>=6",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.coverage.run]
+source = ["cypher_gen"]
+
+[tool.coverage.report]
+fail_under = 70
+
+[build-system]
+requires = ["setuptools>=75.0.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

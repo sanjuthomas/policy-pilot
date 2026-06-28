@@ -1,19 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
+
+from authz_client import PolicyDecision
 
 from ps.models.api import Subject
 from ps.models.enums import PaymentAction
 from ps.models.payment import Payment
-
-
-@dataclass(frozen=True)
-class PolicyDecision:
-    allowed: bool
-    allow_basis: list[str]
-    violations: list[str]
-    is_alert: bool
 
 
 VIOLATION_LABELS: dict[str, str] = {

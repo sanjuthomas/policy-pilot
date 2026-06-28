@@ -1,15 +1,14 @@
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 
+from ps.admin import get_admin_subject
 from ps.repository import PaymentNotFoundError, PaymentRepository
-from ps.ui_broadcaster import PaymentBroadcaster
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 router = APIRouter(tags=["ui"])
-payment_broadcaster = PaymentBroadcaster()
 
 
 @router.get("/ui")
@@ -27,10 +26,16 @@ async def ui_payment_detail(payment_id: str) -> FileResponse:
 async def ui_list_payments(
     status: str | None = Query(default=None),
     owning_lob: str | None = Query(default=None),
+    instruction_id: str | None = Query(default=None),
     limit: int = Query(default=200, ge=1, le=500),
+    _admin=Depends(get_admin_subject),
 ) -> dict:
     repo = PaymentRepository()
-    payments = await repo.list(status=status, limit=limit)
+    payments = await repo.list(
+        status=status,
+        instruction_id=instruction_id.strip() if instruction_id else None,
+        limit=limit,
+    )
     if owning_lob:
         payments = [p for p in payments if p.owning_lob == owning_lob]
     return {
@@ -39,26 +44,8 @@ async def ui_list_payments(
     }
 
 
-@router.get("/api/ui/payments/stream")
-async def ui_stream_payments() -> StreamingResponse:
-    async def event_generator():
-        yield "event: connected\ndata: {}\n\n"
-        async for payment in payment_broadcaster.subscribe():
-            yield payment_broadcaster.sse_payload(payment)
-
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
-
-
 @router.get("/api/ui/payments/{payment_id}")
-async def ui_get_payment(payment_id: str) -> dict:
+async def ui_get_payment(payment_id: str, _admin=Depends(get_admin_subject)) -> dict:
     repo = PaymentRepository()
     try:
         payment = await repo.find_by_id(payment_id)

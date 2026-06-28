@@ -32,10 +32,11 @@ def _deny_decision(violation: str = "SELF_APPROVAL") -> PolicyDecision:
 
 @pytest.fixture
 def service() -> PaymentService:
-    svc = PaymentService()
+    svc = PaymentService(sequence_client=AsyncMock())
+    svc.sequence.next_payment_id = AsyncMock(return_value="20260701-CORP-P-1")
     svc.repo = AsyncMock()
     svc.event_repo = AsyncMock()
-    svc.opa = AsyncMock()
+    svc.authz = AsyncMock()
     svc.ilm = AsyncMock()
     return svc
 
@@ -47,7 +48,7 @@ async def test_create_standing_payment_success(
     standing_instruction: dict,
 ) -> None:
     service.ilm.get_instruction.return_value = standing_instruction
-    service.opa.evaluate.return_value = _allow_decision()
+    service.authz.evaluate_payment.return_value = _allow_decision()
     service.repo.insert.return_value = None
     service.event_repo.insert.return_value = None
 
@@ -74,7 +75,7 @@ async def test_create_single_use_runs_saga(
 ) -> None:
     standing_instruction["status"] = "SINGLE_USE"
     service.ilm.get_instruction.return_value = standing_instruction
-    service.opa.evaluate.return_value = _allow_decision()
+    service.authz.evaluate_payment.return_value = _allow_decision()
     service.ilm.mark_used.return_value = {"status": "USED"}
 
     with patch("ps.service.kafka_publisher.publish_payment", new_callable=AsyncMock):
@@ -129,7 +130,7 @@ async def test_create_policy_denied(
     payment: Payment,
 ) -> None:
     service.ilm.get_instruction.return_value = standing_instruction
-    service.opa.evaluate.return_value = _deny_decision()
+    service.authz.evaluate_payment.return_value = _deny_decision()
 
     with pytest.raises(PermissionError):
         await service.create(
@@ -151,7 +152,7 @@ async def test_create_single_use_mark_used_state_error(
 ) -> None:
     standing_instruction["status"] = "SINGLE_USE"
     service.ilm.get_instruction.return_value = standing_instruction
-    service.opa.evaluate.return_value = _allow_decision()
+    service.authz.evaluate_payment.return_value = _allow_decision()
     service.ilm.mark_used.side_effect = InstructionStateError("already used")
 
     with pytest.raises(ValueError, match="already used"):
@@ -173,7 +174,7 @@ async def test_create_single_use_mark_used_runtime_error(
 ) -> None:
     standing_instruction["status"] = "SINGLE_USE"
     service.ilm.get_instruction.return_value = standing_instruction
-    service.opa.evaluate.return_value = _allow_decision()
+    service.authz.evaluate_payment.return_value = _allow_decision()
     service.ilm.mark_used.side_effect = RuntimeError("network down")
 
     with pytest.raises(RuntimeError, match="Could not mark instruction"):
@@ -194,7 +195,7 @@ async def test_submit_success(
 ) -> None:
     service.repo.find_by_id.return_value = payment
     service.ilm.get_instruction.return_value = standing_instruction
-    service.opa.evaluate.return_value = _allow_decision()
+    service.authz.evaluate_payment.return_value = _allow_decision()
 
     with patch("ps.service.kafka_publisher.publish_payment", new_callable=AsyncMock):
         result = await service.submit(payment.payment_id, subject)
@@ -236,7 +237,7 @@ async def test_submit_policy_denied(
 ) -> None:
     service.repo.find_by_id.return_value = payment
     service.ilm.get_instruction.return_value = standing_instruction
-    service.opa.evaluate.return_value = _deny_decision("NO_LIMIT_GROUP_ASSIGNED")
+    service.authz.evaluate_payment.return_value = _deny_decision("NO_LIMIT_GROUP_ASSIGNED")
 
     with pytest.raises(PermissionError):
         await service.submit(payment.payment_id, subject)
@@ -251,7 +252,7 @@ async def test_approve_success(
 ) -> None:
     service.repo.find_by_id.return_value = submitted_payment
     service.ilm.get_instruction.return_value = standing_instruction
-    service.opa.evaluate.return_value = _allow_decision(basis=["approver authorized"])
+    service.authz.evaluate_payment.return_value = _allow_decision(basis=["approver authorized"])
 
     with patch("ps.service.kafka_publisher.publish_payment", new_callable=AsyncMock):
         result = await service.approve(submitted_payment.payment_id, approver_subject)
@@ -315,7 +316,7 @@ async def test_approve_policy_denied(
 ) -> None:
     service.repo.find_by_id.return_value = submitted_payment
     service.ilm.get_instruction.return_value = standing_instruction
-    service.opa.evaluate.return_value = _deny_decision("ALERT_SUBORDINATE_APPROVING_CREATOR")
+    service.authz.evaluate_payment.return_value = _deny_decision("ALERT_SUBORDINATE_APPROVING_CREATOR")
 
     with pytest.raises(PermissionError):
         await service.approve(submitted_payment.payment_id, approver_subject)
@@ -330,7 +331,7 @@ async def test_reject_success(
 ) -> None:
     service.repo.find_by_id.return_value = submitted_payment
     service.ilm.get_instruction.return_value = standing_instruction
-    service.opa.evaluate.return_value = _allow_decision()
+    service.authz.evaluate_payment.return_value = _allow_decision()
     request = RejectPaymentRequest(reason="Insufficient documentation")
 
     with patch("ps.service.kafka_publisher.publish_payment", new_callable=AsyncMock):
@@ -380,7 +381,7 @@ async def test_reject_policy_denied(
 ) -> None:
     service.repo.find_by_id.return_value = submitted_payment
     service.ilm.get_instruction.return_value = standing_instruction
-    service.opa.evaluate.return_value = _deny_decision()
+    service.authz.evaluate_payment.return_value = _deny_decision()
 
     with pytest.raises(PermissionError):
         await service.reject(
@@ -391,14 +392,19 @@ async def test_reject_policy_denied(
 
 
 @pytest.mark.asyncio
-async def test_get_and_list(service: PaymentService, payment: Payment) -> None:
+async def test_get_and_list(service: PaymentService, payment: Payment, subject: Subject) -> None:
     service.repo.find_by_id.return_value = payment
     service.repo.list.return_value = [payment]
 
-    got = await service.get(payment.payment_id)
+    got = await service.get(payment.payment_id, subject)
     assert got.payment_id == payment.payment_id
 
-    items = await service.list(instruction_id="instr-001", status="DRAFT", limit=10)
+    items = await service.list(
+        subject,
+        instruction_id="instr-001",
+        status="DRAFT",
+        limit=10,
+    )
     assert len(items) == 1
     service.repo.list.assert_awaited_once_with(
         instruction_id="instr-001",
@@ -408,10 +414,43 @@ async def test_get_and_list(service: PaymentService, payment: Payment) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_not_found(service: PaymentService) -> None:
+async def test_get_denied_for_unrelated_subject(
+    service: PaymentService,
+    payment: Payment,
+) -> None:
+    service.repo.find_by_id.return_value = payment
+    outsider = Subject(
+        user_id="outsider",
+        title="Analyst",
+        lob="OTHER",
+        roles=["PAYMENT_CREATOR"],
+        covering_lobs=["OTHER"],
+    )
+    with pytest.raises(PermissionError, match="not authorized"):
+        await service.get(payment.payment_id, outsider)
+
+
+@pytest.mark.asyncio
+async def test_list_filters_to_viewable_payments(
+    service: PaymentService,
+    payment: Payment,
+    subject: Subject,
+) -> None:
+    hidden = payment.model_copy(deep=True)
+    hidden.payment_id = "pay-hidden"
+    hidden.owning_lob = "FX"
+    hidden.created_by = hidden.created_by.model_copy(update={"user_id": "someone-else"})
+    service.repo.list.return_value = [payment, hidden]
+
+    items = await service.list(subject)
+    assert [item.payment_id for item in items] == [payment.payment_id]
+
+
+@pytest.mark.asyncio
+async def test_get_not_found(service: PaymentService, subject: Subject) -> None:
     service.repo.find_by_id.side_effect = PaymentNotFoundError("pay-missing")
     with pytest.raises(LookupError, match="pay-missing"):
-        await service.get("pay-missing")
+        await service.get("pay-missing", subject)
 
 
 @pytest.mark.asyncio

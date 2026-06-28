@@ -1,4 +1,24 @@
+x-otel-environment: &otel-environment
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  OTEL_EXPORTER_OTLP_INSECURE: "true"
+  OTEL_LOG_CONSOLE: "true"
+  OTEL_DEPLOYMENT_ENVIRONMENT: development
+  OTEL_METRIC_EXPORT_INTERVAL: "15000"
+
 services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.96.0
+    container_name: otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    restart: unless-stopped
+    networks:
+      - security-event-net
+
   kafka:
     image: apache/kafka:3.9.0
     container_name: kafka
@@ -106,7 +126,7 @@ services:
       - security-event-net
 
   neo4j:
-    image: neo4j:2026.05.0
+    image: neo4j:5.26.0
     container_name: neo4j
     ports:
       - "7474:7474"
@@ -122,23 +142,6 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
-    networks:
-      - security-event-net
-
-  log-forwarder:
-    image: sanjuthomas/log-forwarder:latest
-    container_name: log-forwarder
-    command: ["-config", "/config/config.yaml"]
-    depends_on:
-      kafka-init:
-        condition: service_completed_successfully
-    volumes:
-      - ./log-forwarder/config.yaml:/config/config.yaml:ro
-      - log-forwarder-state:/state
-      - app-logs:/var/log/app:ro
-    ports:
-      - "8081:8080"
-    restart: unless-stopped
     networks:
       - security-event-net
 
@@ -185,17 +188,23 @@ services:
     networks:
       - security-event-net
 
-  instruction-lifecycle-manager:
-    build: ./instruction-lifecycle-manager
-    container_name: instruction-lifecycle-manager
+  instruction-service:
+    build:
+      context: .
+      dockerfile: instruction-service/Dockerfile
+    container_name: instruction-service
     ports:
       - "8000:8000"
     environment:
+      <<: *otel-environment
+      OTEL_SERVICE_NAME: instruction-service
       MONGODB_URI: mongodb://mongodb:27017/?replicaSet=rs0
       MONGODB_DATABASE: ssi_cash_instructions
       SECURITY_EVENTS_DATABASE: security_events
-      SECURITY_EVENTS_COLLECTION: instruction-lifecycle-manager
-      OPA_URL: http://opa:8181
+      SECURITY_EVENTS_COLLECTION: instruction-service
+      AUTHORIZATION_SERVICE_URL: http://authorization-service:8094
+      SERVICE_USER_ID: svc-instruction
+      SERVICE_USER_PASSWORD: Password1!
       OIDC_ISSUER_URL: http://localhost:8080
       OIDC_INTERNAL_URL: http://zitadel-proxy
       ZITADEL_INTERNAL_URL: http://zitadel-proxy
@@ -205,9 +214,10 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_SECURITY_EVENTS_TOPIC: instruction-security-events
       KAFKA_INSTRUCTION_TOPIC: ssi-instructions
+      SEQUENCE_SERVICE_URL: http://sequence-service:8095
     volumes:
       - zitadel-bootstrap:/zitadel/bootstrap:ro
-      - ./instruction-lifecycle-manager/src/instruction_lifecycle_manager/static:/usr/local/lib/python3.12/site-packages/instruction_lifecycle_manager/static:ro
+      - ./instruction-service/src/inst/static:/usr/local/lib/python3.12/site-packages/inst/static:ro
     depends_on:
       mongodb:
         condition: service_healthy
@@ -217,16 +227,22 @@ services:
         condition: service_completed_successfully
       kafka-init:
         condition: service_completed_successfully
+      sequence-service:
+        condition: service_started
     restart: unless-stopped
     networks:
       - security-event-net
 
-  security-event-qdrant-etl:
-    build: ./security-event-qdrant-etl
-    container_name: security-event-qdrant-etl
+  ssi-indexer:
+    build:
+      context: .
+      dockerfile: ssi-indexer/Dockerfile
+    container_name: ssi-indexer
     ports:
       - "8090:8090"
     environment:
+      <<: *otel-environment
+      OTEL_SERVICE_NAME: ssi-indexer
       KAFKA_ENABLED: "true"
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_INSTRUCTION_SECURITY_EVENTS_TOPIC: instruction-security-events
@@ -247,11 +263,16 @@ services:
       # Host Mac Ollama (GPU) — not containerized; ETL calls out over HTTP only
       OLLAMA_URL: http://host.docker.internal:11434
       OLLAMA_EMBEDDING_MODEL: bge-m3:latest
-      # Cypher generation is proxied through the chat service
-      CHAT_SERVICE_URL: http://security-event-chat:8092
+      OLLAMA_CHAT_MODEL: qwen3:30b
+      OIDC_ISSUER_URL: http://localhost:8080
+      OIDC_INTERNAL_URL: http://zitadel-proxy
+      ZITADEL_INTERNAL_URL: http://zitadel-proxy
+      ZITADEL_SERVICE_PAT_FILE: /zitadel/bootstrap/login-client.pat
+      AUTH_MODE: jwt
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
+      - zitadel-bootstrap:/zitadel/bootstrap:ro
       - ./neo4j-graph-model:/app/neo4j-graph-model:ro
     depends_on:
       kafka-init:
@@ -260,7 +281,7 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_started
-      instruction-lifecycle-manager:
+      instruction-service:
         condition: service_started
       payment-service:
         condition: service_started
@@ -271,18 +292,22 @@ services:
       - security-event-net
 
   payment-service:
-    build: ./payment-service
+    build:
+      context: .
+      dockerfile: payment-service/Dockerfile
     container_name: payment-service
     ports:
       - "8093:8093"
     environment:
+      <<: *otel-environment
+      OTEL_SERVICE_NAME: payment-service
       MONGODB_URI: mongodb://mongodb:27017/?replicaSet=rs0
       MONGODB_DATABASE: ssi_cash_activities
       MONGODB_COLLECTION: payments
       SECURITY_EVENTS_DATABASE: security_events
       SECURITY_EVENTS_COLLECTION: payment-service
-      OPA_URL: http://opa:8181
-      ILM_URL: http://instruction-lifecycle-manager:8000
+      AUTHORIZATION_SERVICE_URL: http://authorization-service:8094
+      ILM_URL: http://instruction-service:8000
       SERVICE_USER_ID: svc-payment
       SERVICE_USER_PASSWORD: Password1!
       OIDC_ISSUER_URL: http://localhost:8080
@@ -294,6 +319,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_PAYMENTS_TOPIC: ssi-payments
       KAFKA_SECURITY_EVENTS_TOPIC: payment-security-events
+      SEQUENCE_SERVICE_URL: http://sequence-service:8095
     volumes:
       - zitadel-bootstrap:/zitadel/bootstrap:ro
     depends_on:
@@ -305,31 +331,44 @@ services:
         condition: service_completed_successfully
       kafka-init:
         condition: service_completed_successfully
-      instruction-lifecycle-manager:
+      instruction-service:
+        condition: service_started
+      authorization-service:
+        condition: service_started
+      zitadel-api:
+        condition: service_healthy
+      zitadel-login:
+        condition: service_healthy
+      sequence-service:
         condition: service_started
     restart: unless-stopped
     networks:
       - security-event-net
 
-  security-event-test-harness:
-    build: ./security-event-test-harness
-    container_name: security-event-test-harness
+  ssi-demo-harness:
+    build:
+      context: .
+      dockerfile: ssi-demo-harness/Dockerfile
+    container_name: ssi-demo-harness
     ports:
       - "8091:8091"
     environment:
-      ILM_URL: http://instruction-lifecycle-manager:8000
+      ILM_URL: http://instruction-service:8000
       PAYMENT_SERVICE_URL: http://payment-service:8093
       MONGODB_URI: mongodb://mongodb:27017/?replicaSet=rs0
+      OIDC_ISSUER_URL: http://localhost:8080
+      OIDC_INTERNAL_URL: http://zitadel-proxy
       ZITADEL_URL: http://zitadel-proxy
+      ZITADEL_INTERNAL_URL: http://zitadel-proxy
       ZITADEL_HOST_HEADER: localhost
       ZITADEL_SERVICE_PAT_FILE: /zitadel/bootstrap/login-client.pat
       USERS_FILE: /app/zitadel-seed/users.yaml
     volumes:
       - zitadel-bootstrap:/zitadel/bootstrap:ro
       - ./zitadel-seed:/app/zitadel-seed:ro
-      - ./security-event-test-harness/src/harness/static:/usr/local/lib/python3.12/site-packages/harness/static:ro
+      - ./ssi-demo-harness/src/harness/static:/usr/local/lib/python3.12/site-packages/harness/static:ro
     depends_on:
-      instruction-lifecycle-manager:
+      instruction-service:
         condition: service_started
       payment-service:
         condition: service_started
@@ -339,12 +378,68 @@ services:
     networks:
       - security-event-net
 
-  security-event-chat:
-    build: ./security-event-chat
-    container_name: security-event-chat
+  authorization-service:
+    build:
+      context: .
+      dockerfile: authorization-service/Dockerfile
+    container_name: authorization-service
+    ports:
+      - "8094:8094"
+    environment:
+      <<: *otel-environment
+      OTEL_SERVICE_NAME: authorization-service
+      OPA_URL: http://opa:8181
+      USERS_FILE: /app/zitadel-seed/users.yaml
+      OIDC_ISSUER_URL: http://localhost:8080
+      OIDC_INTERNAL_URL: http://zitadel-proxy
+      ZITADEL_INTERNAL_URL: http://zitadel-proxy
+      ZITADEL_SERVICE_PAT_FILE: /zitadel/bootstrap/login-client.pat
+      AUTH_MODE: jwt
+    volumes:
+      - zitadel-bootstrap:/zitadel/bootstrap:ro
+      - ./zitadel-seed:/app/zitadel-seed:ro
+      - ./authorization-service/src/authz/static:/usr/local/lib/python3.12/site-packages/authz/static:ro
+    depends_on:
+      opa-policy-seed:
+        condition: service_completed_successfully
+      zitadel-api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - security-event-net
+
+  sequence-service:
+    build:
+      context: .
+      dockerfile: sequence-service/Dockerfile
+    container_name: sequence-service
+    ports:
+      - "8095:8095"
+    environment:
+      <<: *otel-environment
+      OTEL_SERVICE_NAME: sequence-service
+      MONGODB_URI: mongodb://mongodb:27017/?replicaSet=rs0
+      MONGODB_DATABASE: ssi_sequences
+      MONGODB_COLLECTION: sequence_counters
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - security-event-net
+
+  ssi-chat:
+    build:
+      context: .
+      dockerfile: ssi-chat/Dockerfile
+    container_name: ssi-chat
     ports:
       - "8092:8092"
     environment:
+      <<: *otel-environment
+      OTEL_SERVICE_NAME: ssi-chat
       QDRANT_URL: http://qdrant:6333
       QDRANT_COLLECTION: ssi_search_index
       NEO4J_URI: bolt://neo4j:7687
@@ -354,14 +449,31 @@ services:
       OLLAMA_URL: http://host.docker.internal:11434
       OLLAMA_EMBEDDING_MODEL: bge-m3:latest
       OLLAMA_CHAT_MODEL: qwen3:30b
+      PAYMENT_SERVICE_URL: http://payment-service:8093
+      INSTRUCTION_SERVICE_URL: http://instruction-service:8000
+      USERS_FILE: /app/zitadel-seed/users.yaml
+      ZITADEL_URL: http://zitadel-proxy
+      ZITADEL_HOST_HEADER: localhost
+      ZITADEL_INTERNAL_URL: http://zitadel-proxy
+      ZITADEL_SERVICE_PAT_FILE: /zitadel/bootstrap/login-client.pat
+      OIDC_ISSUER_URL: http://localhost:8080
+      OIDC_INTERNAL_URL: http://zitadel-proxy
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./neo4j-graph-model:/app/neo4j-graph-model:ro
+      - zitadel-bootstrap:/zitadel/bootstrap:ro
+      - ./zitadel-seed:/app/zitadel-seed:ro
     depends_on:
       qdrant:
         condition: service_started
       neo4j:
+        condition: service_healthy
+      payment-service:
+        condition: service_started
+      instruction-service:
+        condition: service_started
+      zitadel-api:
         condition: service_healthy
     restart: unless-stopped
     networks:
@@ -521,8 +633,6 @@ volumes:
   kafka-data:
   qdrant-data:
   neo4j-data:
-  log-forwarder-state:
-  app-logs:
   mongo-data:
   zitadel-postgres-data:
   zitadel-bootstrap:

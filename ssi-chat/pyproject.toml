@@ -1,0 +1,50 @@
+[project]
+name = "ssi-chat"
+version = "0.1.0"
+description = "Conversational Q&A over SSI operations index (Qdrant vector + BM25 + Neo4j + Ollama)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+    "httpx>=0.28.0",
+    "PyJWT[crypto]>=2.10.0",
+    "neo4j>=5.26.0",
+    "qdrant-client>=1.15.2",
+    "pyyaml>=6.0.0",
+    "ssi-telemetry",
+]
+
+[project.optional-dependencies]
+regression = [
+    "pytest>=8.0.0",
+    "pytest-cov>=6.0.0",
+    "pytest-asyncio>=0.24.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "../shared/cypher_gen/src"]
+asyncio_mode = "auto"
+markers = [
+    "regression: integration regression suite (requires RUN_CHAT_REGRESSION=1)",
+]
+
+[tool.coverage.run]
+source = ["chat_application"]
+omit = ["src/chat_application/auth.py"]
+
+[tool.coverage.report]
+fail_under = 70
+
+[project.scripts]
+ssi-chat = "chat_application.main:run"
+ssi-chat-regression = "regression.runner:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/chat_application", "regression"]

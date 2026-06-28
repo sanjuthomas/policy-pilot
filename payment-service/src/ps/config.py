@@ -14,8 +14,9 @@ class Settings(BaseSettings):
     security_events_collection: str = "payment-service"
     application_name: str = "payment-service"
 
-    opa_url: str = "http://localhost:8181"
+    authorization_service_url: str = "http://localhost:8094"
     ilm_url: str = "http://localhost:8000"
+    sequence_service_url: str = "http://localhost:8095"
 
     # Service account used for OBO delegation calls to ILM
     service_user_id: str = "svc-payment"
@@ -29,6 +30,7 @@ class Settings(BaseSettings):
     zitadel_service_pat: str | None = None
     zitadel_service_pat_file: Path | None = None
     auth_mode: str = "auto"
+    compliance_roles: str = "COMPLIANCE_ANALYST,COMPLIANCE_OFFICER,PLATFORM_ADMIN"
 
     kafka_enabled: bool = True
     kafka_bootstrap_servers: str = "kafka:9092"
@@ -36,7 +38,10 @@ class Settings(BaseSettings):
     kafka_security_events_topic: str = "payment-security-events"
 
     ui_initial_security_event_limit: int = 200
-    ui_poll_interval_seconds: float = 2.0
+
+    @property
+    def compliance_role_set(self) -> set[str]:
+        return {role.strip() for role in self.compliance_roles.split(",") if role.strip()}
 
     @model_validator(mode="after")
     def load_service_pat_from_file(self) -> "Settings":

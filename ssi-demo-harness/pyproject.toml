@@ -1,0 +1,56 @@
+[project]
+name = "ssi-demo-harness"
+version = "0.1.0"
+description = "Demo harness for instruction and payment lifecycles with ZITADEL OIDC"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28.0",
+    "pyyaml>=6.0.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+    "pymongo>=4.10.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "PyJWT[crypto]>=2.10.0",
+    "platform-auth",
+]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[project.scripts]
+ssi-demo-harness = "harness.run:main"
+ssi-demo-harness-ui = "harness.app:run"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+  "pytest-cov>=6",
+  "pytest-asyncio>=0.24",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src", "../shared/platform_auth/src"]
+
+[tool.coverage.run]
+source = ["harness"]
+omit = [
+  "src/harness/run.py",
+  "src/harness/actions.py",
+  "src/harness/auth.py",
+  "src/harness/zitadel_auth.py",
+  "src/harness/ilm_client.py",
+  "src/harness/payment_client.py",
+]
+
+[tool.coverage.report]
+fail_under = 70
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/harness"]

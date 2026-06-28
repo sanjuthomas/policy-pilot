@@ -2,8 +2,12 @@
 
 Version-controlled **Rego policies** uploaded to OPA on Docker Compose startup.
 
-ILM calls `POST /v1/data/instruction/lifecycle/allow` before every instruction create or mutation.
-The payment service calls `POST /v1/data/payment/lifecycle/allow` before every payment create or mutation.
+At runtime, only **authorization-service** calls OPA. Domain services never hit OPA directly — they POST to authz, which evaluates:
+
+- `POST /v1/data/instruction/lifecycle/allow` — instruction lifecycle
+- `POST /v1/data/payment/lifecycle/allow` — payment lifecycle
+
+The curl examples below are for **local debugging** of Rego rules. In production, restrict OPA to an internal network reachable only from authz.
 
 ## Layout
 
@@ -39,7 +43,7 @@ Valid LOB values: `FICC`, `FX`, or `DESK_<name>`.
 
 Key rules: creator cannot approve own instruction; approver must not report directly to creator (inversion of control); approver LOB must match instruction LOB; approver title must satisfy the approval matrix.
 
-Policy denials surface as HTTP 403 and `ALERT` security events on Kafka. ILM and payment service query:
+Policy denials surface as HTTP 403 and `ALERT` security events on Kafka. Authorization-service queries:
 
 | OPA endpoint | Purpose |
 |--------------|---------|
@@ -50,7 +54,7 @@ Policy denials surface as HTTP 403 and `ALERT` security events on Kafka. ILM and
 
 The same pattern applies under `/v1/data/payment/lifecycle/…` for payments.
 
-On allow, services build `details.authorization.summary` from `allow_basis` and persist it on Mongo security events, Kafka facts, and (via ETL) Qdrant/Neo4j for RAG **Who / When / Why** answers.
+On allow, domain services build `details.authorization.summary` from `allow_basis` and persist it on Mongo security events, Kafka facts, and (via ETL) Qdrant/Neo4j for RAG **Who / When / Why** answers.
 
 ## Payment authorization
 
@@ -69,6 +73,8 @@ Key rules: payment amount within user's club ceiling and absolute $100 B limit; 
 Policy denials surface as HTTP 403 and `ALERT` security events on Kafka.
 
 ## Evaluate locally (instruction)
+
+Debug Rego directly against OPA (demo only — no auth on OPA):
 
 ```bash
 curl -s http://localhost:8181/v1/data/instruction/lifecycle/allow \
@@ -123,4 +129,4 @@ curl -s http://localhost:8181/v1/data/payment/lifecycle/allow \
 
 The `opa-policy-seed` service runs once after `opa` starts and uploads policies from the mounted `policies/` directory.
 
-OPA API: http://localhost:8181
+OPA API (unauthenticated demo): http://localhost:8181

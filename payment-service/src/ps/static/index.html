@@ -12,7 +12,7 @@
         <span class="brand-mark"></span>
         <div>
           <h1>Payment Browser</h1>
-          <p class="subtitle">MongoDB change stream · read-only</p>
+          <p class="subtitle">Admin monitor · read-only</p>
         </div>
       </div>
       <div class="status-group">
@@ -20,6 +20,13 @@
           <a href="/ui/" class="active">Payments</a>
           <a href="/ui/security-events/">Security events</a>
         </nav>
+        <div class="admin-auth">
+          <span id="auth-status" class="muted">Admin sign-in required</span>
+          <input id="auth-user" type="text" value="admin-001" aria-label="Admin user" />
+          <input id="auth-password" type="password" placeholder="Password" aria-label="Password" />
+          <button type="button" id="auth-login-btn" class="btn">Sign in</button>
+          <button type="button" id="auth-logout-btn" class="btn btn-ghost hidden">Sign out</button>
+        </div>
         <div id="load-status" class="status-pill status-connecting">Loading</div>
         <div class="stat">
           <span class="stat-label">Shown</span>
@@ -29,6 +36,16 @@
     </header>
 
     <section class="toolbar">
+      <label class="filter">
+        Instruction ID
+        <input
+          id="instruction-filter"
+          type="text"
+          placeholder="Instruction UUID"
+          spellcheck="false"
+          autocomplete="off"
+        />
+      </label>
       <label class="filter">
         Status
         <select id="status-filter">
@@ -83,6 +100,7 @@
       <div id="empty-state" class="empty-state hidden">No payments found.</div>
     </main>
 
+    <script src="/ui/static/admin-auth.js?v=1"></script>
     <script src="/ui/static/app.js"></script>
   </body>
 </html>

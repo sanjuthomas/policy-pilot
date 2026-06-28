@@ -7,7 +7,7 @@
 //
 // Source of truth in MongoDB:
 //   ssi_cash_instructions.instructions
-//   security_events.instruction-lifecycle-manager
+//   security_events.instruction-service
 //
 // Both topics carry full fact events — no API callbacks from the ETL.
 //

@@ -52,6 +52,7 @@ def test_reject_payment_request_requires_reason() -> None:
 
 def test_payment_create_sets_lifecycle_event(subject: Subject) -> None:
     payment = Payment.create(
+        payment_id="20260715-EMEA-P-1",
         instruction_id="instr-1",
         instruction_version=2,
         amount=500.0,

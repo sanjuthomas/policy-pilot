@@ -17,6 +17,13 @@
       </div>
       <div class="status-group">
         <a class="btn btn-ghost" href="/ui/">Back to browser</a>
+        <div class="admin-auth">
+          <span id="auth-status" class="muted">Admin sign-in required</span>
+          <input id="auth-user" type="text" value="admin-001" aria-label="Admin user" />
+          <input id="auth-password" type="password" placeholder="Password" aria-label="Password" />
+          <button type="button" id="auth-login-btn" class="btn">Sign in</button>
+          <button type="button" id="auth-logout-btn" class="btn btn-ghost hidden">Sign out</button>
+        </div>
       </div>
     </header>
 
@@ -38,6 +45,7 @@
       </section>
     </main>
 
+    <script src="/ui/static/admin-auth.js?v=1"></script>
     <script src="/ui/static/payment.js"></script>
   </body>
 </html>

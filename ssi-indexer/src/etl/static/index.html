@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Security Event Search</title>
+    <link rel="stylesheet" href="/static/styles.css?v=6" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark"></span>
+        <div>
+          <h1>Security Event Search</h1>
+          <p class="subtitle">Neo4j graph · Qdrant dense · BM25 · hybrid RRF</p>
+        </div>
+      </div>
+      <div class="status-group">
+        <div class="admin-auth">
+          <span id="auth-status" class="muted">Admin sign-in required</span>
+          <input id="auth-user" type="text" value="admin-001" aria-label="Admin user" />
+          <input id="auth-password" type="password" placeholder="Password" aria-label="Password" />
+          <button type="button" id="auth-login-btn" class="btn-primary">Sign in</button>
+          <button type="button" id="auth-logout-btn" class="btn btn-ghost hidden">Sign out</button>
+        </div>
+        <a class="btn btn-ghost" href="http://localhost:8000/ui/security-events/" target="_blank" rel="noopener">ILM monitor</a>
+      </div>
+    </header>
+
+    <section class="components-bar" aria-label="Connected components">
+      <div id="components-grid" class="components-grid">
+        <div class="component-card status-connecting">Loading component status…</div>
+      </div>
+    </section>
+
+    <main class="layout">
+      <section class="panel search-panel">
+        <div class="mode-tabs" role="tablist" aria-label="Search mode">
+          <button type="button" class="mode-tab active" data-mode="hybrid">Hybrid</button>
+          <button type="button" class="mode-tab" data-mode="vector">Vector</button>
+          <button type="button" class="mode-tab" data-mode="bm25">BM25</button>
+          <button type="button" class="mode-tab" data-mode="neo4j">Neo4j</button>
+        </div>
+
+        <p id="mode-hint" class="mode-hint">Dense + BM25 with reciprocal rank fusion.</p>
+
+        <form id="search-form" class="search-form">
+          <label class="field" for="query-input">
+            <span class="field-label">Query</span>
+            <textarea
+              id="query-input"
+              name="query"
+              rows="4"
+              placeholder="e.g. FICC approval denied by policy"
+              required
+            ></textarea>
+          </label>
+
+          <div class="search-controls">
+            <label class="field field-inline" for="limit-input">
+              <span class="field-label">Limit</span>
+              <input id="limit-input" type="number" min="1" max="50" value="10" />
+            </label>
+
+            <div id="neo4j-action-wrap" class="field field-inline hidden" aria-hidden="true">
+              <label class="field-label" for="neo4j-action-input">Action filter</label>
+              <input id="neo4j-action-input" type="text" placeholder="e.g. CREATE" />
+            </div>
+
+            <button type="submit" id="search-btn" class="btn-primary">Search</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel results-panel">
+        <div class="results-header">
+          <div>
+            <h2 id="results-title">Results</h2>
+            <p id="results-meta" class="muted"></p>
+          </div>
+          <button type="button" id="clear-results-btn" class="btn btn-ghost hidden">Clear</button>
+        </div>
+
+        <div id="results-empty" class="empty-state">
+          Run a search to query indexed security events.
+        </div>
+        <div id="results-list" class="results-list hidden"></div>
+        <pre id="results-detail" class="results-detail hidden" aria-label="Result detail JSON"></pre>
+      </section>
+    </main>
+
+    <!-- Text → Cypher pane -->
+    <section class="panel cypher-panel">
+      <h2>Text <span class="arrow">→</span> Cypher</h2>
+      <p class="panel-intro">
+        Translate a natural-language question into a read-only Cypher query using
+        <strong>qwen3:30b</strong>, then run it directly against Neo4j.
+        Requires the chat service to be running.
+      </p>
+
+      <form id="cypher-form" class="search-form">
+        <div class="search-controls" style="margin-bottom: 0.75rem;">
+          <label class="field field-inline" for="cypher-mode-select">
+            <span class="field-label">Graph mode</span>
+            <select id="cypher-mode-select">
+              <option value="events" selected>Security events</option>
+              <option value="instructions">Instructions</option>
+              <option value="payments">Payments</option>
+            </select>
+          </label>
+        </div>
+
+        <label class="field" for="cypher-question-input">
+          <span class="field-label">Natural language question</span>
+          <textarea
+            id="cypher-question-input"
+            rows="3"
+            placeholder="e.g. find all approvals where the approver reports to the creator"
+            required
+          ></textarea>
+        </label>
+
+        <div class="search-controls">
+          <button type="submit" id="cypher-generate-btn" class="btn-primary">Generate Cypher</button>
+          <span id="cypher-generate-status" class="muted" style="font-size:0.8rem;"></span>
+        </div>
+      </form>
+
+      <div id="cypher-output-wrap" class="hidden" style="margin-top:1rem;">
+        <label class="field" for="cypher-output">
+          <span class="field-label">Generated Cypher
+            <span id="cypher-valid-badge" class="badge" style="margin-left:0.5rem;font-size:0.7rem;"></span>
+          </span>
+          <textarea
+            id="cypher-output"
+            rows="8"
+            class="mono"
+            spellcheck="false"
+            placeholder="Cypher will appear here…"
+          ></textarea>
+        </label>
+        <div id="cypher-error-msg" class="muted hidden" style="color:var(--color-warn,#e09550);font-size:0.8rem;margin-top:0.25rem;"></div>
+
+        <div class="search-controls" style="margin-top:0.75rem;">
+          <button type="button" id="cypher-copy-btn" class="btn btn-ghost">Copy</button>
+          <button type="button" id="cypher-run-btn" class="btn-secondary">Run against Neo4j</button>
+          <span id="cypher-run-status" class="muted" style="font-size:0.8rem;"></span>
+        </div>
+      </div>
+
+      <div id="cypher-results-wrap" class="hidden" style="margin-top:1rem;">
+        <div class="results-header">
+          <h3 id="cypher-results-title">Neo4j result</h3>
+          <button type="button" id="cypher-clear-btn" class="btn btn-ghost">Clear</button>
+        </div>
+        <pre id="cypher-results-output" class="results-detail" aria-label="Cypher result JSON"></pre>
+      </div>
+    </section>
+
+    <script src="/static/admin-auth.js?v=1"></script>
+    <script src="/static/app.js?v=7"></script>
+  </body>
+</html>

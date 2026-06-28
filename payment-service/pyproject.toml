@@ -13,6 +13,10 @@ dependencies = [
     "PyJWT[crypto]>=2.10.0",
     "aiokafka>=0.12.0",
     "aiofiles>=24.1.0",
+    "platform-auth",
+    "sequence-client",
+    "authz-client",
+    "ssi-telemetry",
 ]
 
 [project.scripts]
@@ -36,4 +40,11 @@ packages = ["src/ps"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "../shared/platform_auth/src", "../shared/sequence_client/src", "../shared/authz_client/src"]
+
+[tool.coverage.run]
+source = ["ps"]
+omit = ["src/ps/main.py"]
+
+[tool.coverage.report]
+fail_under = 70

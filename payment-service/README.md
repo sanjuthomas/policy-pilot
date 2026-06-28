@@ -2,7 +2,7 @@
 
 REST API for **cash payment lifecycle** against approved SSI instructions.
 
-Middle-office users create payments on behalf of trading desks. Front-office desk users submit them for approval. Funding approvers approve or reject. OPA enforces amount limits, LOB coverage, segregation of duties, and reporting-line rules before every mutation.
+Middle-office users create payments on behalf of trading desks. Front-office desk users submit them for approval. Funding approvers approve or reject. **Authorization-service** (via OPA) enforces amount limits, LOB coverage, segregation of duties, and reporting-line rules before every mutation.
 
 ## URLs (Docker)
 
@@ -26,6 +26,25 @@ Key roles:
 
 Amount limits are enforced via ZITADEL groups (`UP_TO_100_MILLION_CLUB`, `UP_TO_1_BILLION_CLUB`, `UP_TO_100_BILLION_CLUB`).
 
+## Policy authorization
+
+Payment-service does **not** call OPA directly. Lifecycle mutations use **authorization-service** with On-Behalf-Of (`svc-payment` + user JWT), same pattern as instruction-service.
+
+Instruction reads for create/approve use **instruction-service** with OBO when a user token is present, or a service-only GET for eligibility batch paths.
+
+| Authz endpoint | When |
+|----------------|------|
+| `POST /api/v1/authorization/payments/evaluate` | Create, submit, approve, reject |
+| `POST /api/v1/authorization/payments/eligible-approvers` | Compliance “who can approve?” |
+
+### Compliance: eligible approvers
+
+```bash
+curl -s -X POST "http://localhost:8093/api/v1/payments/{payment_id}/eligible-approvers" \
+  -H "Authorization: Bearer <compliance-or-admin-token>" \
+  -H "X-Session-Id: <session-id>"
+```
+
 ## Payment lifecycle
 
 ```
@@ -33,7 +52,7 @@ DRAFT  →  SUBMITTED  →  APPROVED | REJECTED
                       ↘ CANCELLED (if instruction invalid at approval time)
 ```
 
-| Step | Actor | OPA action |
+| Step | Actor | Policy action (via authz) |
 |------|-------|--------------|
 | Create | Middle office with `covering_lobs` | `CREATE_PAYMENT` |
 | Submit | Front-office user whose `lob` matches instruction LOB | `SUBMIT_PAYMENT` |
@@ -48,10 +67,10 @@ Every authorized action or policy denial emits a document to MongoDB `security_e
 
 | Outcome | Severity | When |
 |---------|----------|------|
-| Authorized action | `INFO` | OPA allowed |
-| Policy denial | `ALERT` | OPA denied before any write |
+| Authorized action | `INFO` | Policy allowed (via authorization-service → OPA) |
+| Policy denial | `ALERT` | Policy denied before any write |
 
-Authorized actions store `details.authorization` (OPA `allow_basis`, `summary`, subject snapshot) and set `event.reason` to the summary. Same pattern as the ILM.
+Authorized actions store `details.authorization` (`allow_basis`, `summary`, subject snapshot) and set `event.reason` to the summary. Same pattern as instruction-service.
 
 Payment mutations write the payment record and matching security event in a **single MongoDB transaction** (replica set required).
 
@@ -65,7 +84,7 @@ Payment mutations write the payment record and matching security event in a **si
 
 ## Example: create payment
 
-Requires an approved instruction ID from the ILM and a ZITADEL session token for a `PAYMENT_CREATOR` user.
+Requires an approved instruction ID from instruction-service and a ZITADEL session token for a `PAYMENT_CREATOR` user.
 
 ```bash
 curl -s -X POST http://localhost:8093/api/v1/payments \
@@ -90,7 +109,12 @@ pip install -e .
 payment-service   # :8093
 ```
 
-Requires MongoDB, OPA, ILM (for instruction reads), Kafka, and ZITADEL — see root `docker-compose.yml`.
+Requires MongoDB, **authorization-service**, instruction-service (instruction reads), Kafka, and ZITADEL — see root `docker-compose.yml`.
+
+| Variable | Default |
+|----------|---------|
+| `AUTHORIZATION_SERVICE_URL` | `http://authorization-service:8094` |
+| `ILM_URL` | `http://instruction-service:8000` |
 
 ## Docker
 
