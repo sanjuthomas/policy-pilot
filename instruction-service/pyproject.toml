@@ -13,6 +13,7 @@ dependencies = [
     "PyJWT[crypto]>=2.10.0",
     "aiokafka>=0.12.0",
     "platform-auth",
+    "sequence-client",
     "ssi-telemetry",
 ]
 
@@ -24,15 +25,15 @@ dev = [
 ]
 
 [project.scripts]
-instruction-service = "ilm.main:run"
+instruction-service = "inst.main:run"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-pythonpath = ["src", "../shared/platform_auth/src"]
+pythonpath = ["src", "../shared/platform_auth/src", "../shared/sequence_client/src"]
 
 [tool.coverage.run]
-source = ["ilm"]
+source = ["inst"]
 
 [tool.coverage.report]
 fail_under = 70
@@ -42,4 +43,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/ilm"]
+packages = ["src/inst"]

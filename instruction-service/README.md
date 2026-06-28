@@ -147,7 +147,7 @@ curl -s -X POST http://localhost:8000/api/v1/instructions \
 ```bash
 cd instruction-service
 pip install -e .
-uvicorn ilm.main:app --reload --port 8000
+uvicorn inst.main:app --reload --port 8000
 ```
 
 Requires MongoDB, OPA, and (for JWT mode) ZITADEL — see root `docker-compose.yml`.

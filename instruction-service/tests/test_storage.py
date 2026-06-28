@@ -1,7 +1,7 @@
 from datetime import datetime
 
-from ilm.models.instruction import CashSettlementInstruction
-from ilm.storage import (
+from inst.models.instruction import CashSettlementInstruction
+from inst.storage import (
     document_to_versioned_instruction,
     versioned_instruction_to_document,
 )

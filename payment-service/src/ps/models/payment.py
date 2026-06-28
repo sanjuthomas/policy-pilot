@@ -50,6 +50,7 @@ class Payment(BaseModel):
     def create(
         cls,
         *,
+        payment_id: str,
         instruction_id: str,
         instruction_version: int,
         amount: float,
@@ -62,6 +63,7 @@ class Payment(BaseModel):
     ) -> "Payment":
         now = _now()
         p = cls(
+            payment_id=payment_id,
             instruction_id=instruction_id,
             instruction_version=instruction_version,
             amount=amount,

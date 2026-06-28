@@ -4,13 +4,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pymongo.errors import DuplicateKeyError, OperationFailure
 
-from ilm.models.instruction import CashSettlementInstruction
-from ilm.repository import (
+from inst.models.instruction import CashSettlementInstruction
+from inst.repository import (
     ConcurrentModificationError,
     InstructionNotFoundError,
     InstructionRepository,
 )
-from ilm.storage import (
+from inst.storage import (
     versioned_instruction_to_document,
 )
 
@@ -32,7 +32,7 @@ def mock_collection() -> MagicMock:
 
 @pytest.fixture
 def repo(mock_collection: MagicMock) -> InstructionRepository:
-    with patch("ilm.repository.get_database") as mock_get_db:
+    with patch("inst.repository.get_database") as mock_get_db:
         mock_get_db.return_value.__getitem__ = MagicMock(return_value=mock_collection)
         yield InstructionRepository()
 

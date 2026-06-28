@@ -2,9 +2,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from ilm.authorization import PolicyDecision
-from ilm.models.enums import InstructionStatus, LifecycleAction
-from ilm.security_event_repair import (
+from inst.authorization import PolicyDecision
+from inst.models.enums import InstructionStatus, LifecycleAction
+from inst.security_event_repair import (
     _instruction_for_opa_replay,
     _subject_from_actor,
     repair_security_event_authorization,

@@ -145,23 +145,6 @@ services:
     networks:
       - security-event-net
 
-  log-forwarder:
-    image: sanjuthomas/log-forwarder:latest
-    container_name: log-forwarder
-    command: ["-config", "/config/config.yaml"]
-    depends_on:
-      kafka-init:
-        condition: service_completed_successfully
-    volumes:
-      - ./log-forwarder/config.yaml:/config/config.yaml:ro
-      - log-forwarder-state:/state
-      - app-logs:/var/log/app:ro
-    ports:
-      - "8081:8080"
-    restart: unless-stopped
-    networks:
-      - security-event-net
-
   mongodb:
     image: mongo:7
     container_name: mongodb
@@ -229,9 +212,10 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_SECURITY_EVENTS_TOPIC: instruction-security-events
       KAFKA_INSTRUCTION_TOPIC: ssi-instructions
+      SEQUENCE_SERVICE_URL: http://sequence-service:8095
     volumes:
       - zitadel-bootstrap:/zitadel/bootstrap:ro
-      - ./instruction-service/src/ilm/static:/usr/local/lib/python3.12/site-packages/ilm/static:ro
+      - ./instruction-service/src/inst/static:/usr/local/lib/python3.12/site-packages/inst/static:ro
     depends_on:
       mongodb:
         condition: service_healthy
@@ -241,6 +225,8 @@ services:
         condition: service_completed_successfully
       kafka-init:
         condition: service_completed_successfully
+      sequence-service:
+        condition: service_started
     restart: unless-stopped
     networks:
       - security-event-net
@@ -331,6 +317,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_PAYMENTS_TOPIC: ssi-payments
       KAFKA_SECURITY_EVENTS_TOPIC: payment-security-events
+      SEQUENCE_SERVICE_URL: http://sequence-service:8095
     volumes:
       - zitadel-bootstrap:/zitadel/bootstrap:ro
     depends_on:
@@ -348,6 +335,8 @@ services:
         condition: service_healthy
       zitadel-login:
         condition: service_healthy
+      sequence-service:
+        condition: service_started
     restart: unless-stopped
     networks:
       - security-event-net
@@ -423,6 +412,28 @@ services:
         condition: service_started
       zitadel-api:
         condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - security-event-net
+
+  sequence-service:
+    build:
+      context: .
+      dockerfile: sequence-service/Dockerfile
+    container_name: sequence-service
+    ports:
+      - "8095:8095"
+    environment:
+      <<: *otel-environment
+      OTEL_SERVICE_NAME: sequence-service
+      MONGODB_URI: mongodb://mongodb:27017/?replicaSet=rs0
+      MONGODB_DATABASE: ssi_sequences
+      MONGODB_COLLECTION: sequence_counters
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
     restart: unless-stopped
     networks:
       - security-event-net
@@ -627,8 +638,6 @@ volumes:
   kafka-data:
   qdrant-data:
   neo4j-data:
-  log-forwarder-state:
-  app-logs:
   mongo-data:
   zitadel-postgres-data:
   zitadel-bootstrap:

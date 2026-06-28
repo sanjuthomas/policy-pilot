@@ -735,7 +735,7 @@ in a **single MongoDB multi-document transaction** per service. Kafka publish ha
 ```bash
 # ILM API
 cd instruction-service && pip install -e .
-uvicorn ilm.main:app --reload --port 8000
+uvicorn inst.main:app --reload --port 8000
 
 # SSI indexer + search console
 cd ssi-indexer && pip install -e .

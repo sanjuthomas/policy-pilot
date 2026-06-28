@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from ilm.models.api import CreateInstructionRequest, Subject
+from inst.models.api import CreateInstructionRequest, Subject
 
 
 def test_subject_to_opa_subject_includes_optional_fields() -> None:

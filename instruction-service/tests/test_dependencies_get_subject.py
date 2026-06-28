@@ -1,11 +1,11 @@
 import pytest
 from fastapi import HTTPException
 
-from ilm.dependencies import get_subject
+from inst.dependencies import get_subject
 
 
 def test_get_subject_headers_mode(monkeypatch) -> None:
-    monkeypatch.setattr("ilm.dependencies.settings.auth_mode", "headers")
+    monkeypatch.setattr("inst.dependencies.settings.auth_mode", "headers")
     subject = get_subject(
         authorization=None,
         x_session_id=None,
@@ -21,7 +21,7 @@ def test_get_subject_headers_mode(monkeypatch) -> None:
 
 
 def test_get_subject_headers_missing_raises(monkeypatch) -> None:
-    monkeypatch.setattr("ilm.dependencies.settings.auth_mode", "headers")
+    monkeypatch.setattr("inst.dependencies.settings.auth_mode", "headers")
     with pytest.raises(HTTPException) as exc_info:
         get_subject(
             authorization=None,
@@ -38,7 +38,7 @@ def test_get_subject_headers_missing_raises(monkeypatch) -> None:
 
 
 def test_get_subject_jwt_mode_requires_bearer(monkeypatch) -> None:
-    monkeypatch.setattr("ilm.dependencies.settings.auth_mode", "jwt")
+    monkeypatch.setattr("inst.dependencies.settings.auth_mode", "jwt")
     with pytest.raises(HTTPException) as exc_info:
         get_subject(
             authorization=None,

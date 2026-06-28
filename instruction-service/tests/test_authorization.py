@@ -1,13 +1,13 @@
-from ilm.authorization import (
+from inst.authorization import (
     PolicyDecision,
     build_authorization_block,
     details_with_authorization,
     instruction_resource_context,
     subject_at_decision,
 )
-from ilm.models.api import Subject
-from ilm.models.enums import LifecycleAction
-from ilm.models.instruction import CashSettlementInstruction
+from inst.models.api import Subject
+from inst.models.enums import LifecycleAction
+from inst.models.instruction import CashSettlementInstruction
 
 
 def test_build_authorization_block_allow(sample_subject: Subject) -> None:

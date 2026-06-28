@@ -2,11 +2,11 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from ilm.authorization import PolicyDecision
-from ilm.models.api import Subject
-from ilm.models.enums import LifecycleAction
-from ilm.models.instruction import CashSettlementInstruction
-from ilm.opa import OpaClient, PolicyDeniedError
+from inst.authorization import PolicyDecision
+from inst.models.api import Subject
+from inst.models.enums import LifecycleAction
+from inst.models.instruction import CashSettlementInstruction
+from inst.opa import OpaClient, PolicyDeniedError
 
 
 def test_as_string_list() -> None:

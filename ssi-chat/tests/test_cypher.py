@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 from chat_application.cypher import (
+    extract_entity_ids,
     extract_uuids,
     instruction_id_from_list_payments_question,
     is_alert_ranking_question,
@@ -239,6 +240,21 @@ class TestIsPaymentsForInstructionQuestion:
         assert instruction_id_from_list_payments_question(
             f"List payments for instruction {iid}"
         ) == iid
+
+    def test_extracts_sequence_instruction_id(self) -> None:
+        iid = "20260627-FICC-I-1"
+        assert instruction_id_from_list_payments_question(
+            f"List payments for instruction {iid}"
+        ) == iid
+        assert is_payments_for_instruction_question(
+            f"Can you list the payments for instruction {iid}?"
+        )
+
+    def test_extract_entity_ids_includes_sequence_and_uuid(self) -> None:
+        seq = "20260627-FX-P-2"
+        uid = "3bcb9b9a-9415-44ce-b707-4cc4c8281bb9"
+        text = f"payment {seq} and instruction {uid}"
+        assert extract_entity_ids(text) == [seq, uid]
 
     def test_payment_status_filter(self) -> None:
         assert payment_status_filter_from_question("List APPROVED payments") == "APPROVED"

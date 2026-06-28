@@ -16,6 +16,7 @@ pip install ruff
 for svc in \
   instruction-service \
   authorization-service \
+  sequence-service \
   ssi-chat \
   ssi-indexer \
   ssi-demo-harness \
@@ -28,6 +29,7 @@ done
 for svc in \
   instruction-service \
   authorization-service \
+  sequence-service \
   ssi-chat \
   ssi-indexer \
   ssi-demo-harness \
@@ -46,9 +48,10 @@ Every Python service **except** `ssi-demo-harness` must maintain **≥ 70% line 
 
 | Service | Coverage target (`--cov`) |
 |---------|---------------------------|
-| `instruction-service` | `ilm` |
+| `instruction-service` | `inst` |
 | `payment-service` | `ps` |
 | `authorization-service` | `authz` |
+| `sequence-service` | `seq` |
 | `ssi-indexer` | `etl` |
 | `ssi-chat` | `chat_application` |
 
@@ -62,9 +65,10 @@ From the repository root — run tests with coverage for each non-harness servic
 pip install pytest pytest-cov
 
 for spec in \
-  "instruction-service:ilm" \
+  "instruction-service:inst" \
   "payment-service:ps" \
   "authorization-service:authz" \
+  "sequence-service:seq" \
   "ssi-indexer:etl" \
   "ssi-chat:chat_application"
 do
@@ -98,6 +102,7 @@ pip install ruff
 for svc in \
   instruction-service \
   authorization-service \
+  sequence-service \
   ssi-chat \
   ssi-indexer \
   ssi-demo-harness \
@@ -133,7 +138,7 @@ It also builds Docker images for those four services. (`payment-service` is not 
 
 The same workflow runs **unit test coverage** (≥ 70% line coverage) for:
 
-- `instruction-service` (`ilm`)
+- `instruction-service` (`inst`)
 - `payment-service` (`ps`)
 - `ssi-indexer` (`etl`)
 - `ssi-chat` (`chat_application`)
@@ -162,13 +167,13 @@ Within each service, first-party imports must be sorted by module name. Examples
 
 | Wrong | Correct |
 |-------|---------|
-| `from ilm.config` then `from ilm.authorization` | `ilm.authorization` **before** `ilm.config` |
-| `from ilm.models.enums` then `from ilm.models.api` | `ilm.models.api` **before** `ilm.models.enums` |
-| `from ilm.models.instruction_fact` then `from ilm.models.instruction` | `ilm.models.instruction` **before** `ilm.models.instruction_fact` |
+| `from inst.config` then `from inst.authorization` | `inst.authorization` **before** `inst.config` |
+| `from inst.models.enums` then `from inst.models.api` | `inst.models.api` **before** `inst.models.enums` |
+| `from inst.models.instruction_fact` then `from inst.models.instruction` | `inst.models.instruction` **before** `inst.models.instruction_fact` |
 | `from ps.models.api` then `from ps.authorization` | `ps.authorization` **before** `ps.models.*` |
-| Long single-line `from ilm.authorization import a, b, c` breaking sort | Multi-line import block (ruff `--fix` formats this) |
+| Long single-line `from inst.authorization import a, b, c` breaking sort | Multi-line import block (ruff `--fix` formats this) |
 
-When adding new modules under `ilm/`, `etl/`, or `ps/`, **always run `ruff check … --fix`** on that service — do not hand-order imports unless you mirror the rules above.
+When adding new modules under `inst/`, `etl/`, or `ps/`, **always run `ruff check … --fix`** on that service — do not hand-order imports unless you mirror the rules above.
 
 When removing a symbol from code, **remove its import** in the same edit (`F401`).
 
@@ -185,8 +190,9 @@ When removing a symbol from code, **remove its import** in the same edit (`F401`
 
 | Directory | Python package | Port |
 |-----------|----------------|------|
-| `instruction-service` | `ilm` | 8000 |
+| `instruction-service` | `inst` | 8000 |
 | `payment-service` | `ps` | 8093 |
+| `sequence-service` | `seq` | 8095 |
 | `ssi-indexer` | `etl` | 8090 |
 | `ssi-chat` | `chat_application` | 8092 |
 | `ssi-demo-harness` | `harness` | 8091 |
@@ -197,6 +203,6 @@ See the root [README.md](README.md) for architecture, storage names, and demo UR
 
 - Match existing code style in each service (imports, naming, FastAPI patterns).
 - Keep changes focused; avoid unrelated refactors.
-- Maintain **≥ 70% test coverage** on `ilm`, `ps`, `etl`, and `chat_application` (see above); `ssi-demo-harness` is exempt.
+- Maintain **≥ 70% test coverage** on `inst`, `ps`, `etl`, and `chat_application` (see above); `ssi-demo-harness` is exempt.
 - Do not commit secrets (`.env`, PAT files, credentials).
 - Only create git commits when the user explicitly asks.

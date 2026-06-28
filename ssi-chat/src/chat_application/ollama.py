@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 
 import httpx
+from cypher_gen import cypher_system_prompt, extract_cypher
 
 from chat_application.config import settings
-from cypher_gen import cypher_system_prompt, extract_cypher
 
 logger = logging.getLogger(__name__)
 

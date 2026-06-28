@@ -1,7 +1,7 @@
 import pytest
 from fastapi import HTTPException
 
-from ilm.dependencies import _subject_from_headers
+from inst.dependencies import _subject_from_headers
 
 
 def test_subject_from_headers_success() -> None:

@@ -15,6 +15,7 @@ from chat_application.authorization_client import (
 )
 from chat_application.config import settings
 from chat_application.cypher import (
+    extract_entity_ids,
     extract_uuids,
     instruction_id_from_list_payments_question,
     is_alert_ranking_question,
@@ -400,6 +401,7 @@ class RagService:
             qdrant_source = None  # no filter — search everything
 
         event_ids = extract_uuids(message)
+        entity_ids = extract_entity_ids(message)
 
         vector_task = asyncio.create_task(
             self._search_vector(message, limit, source=qdrant_source)
@@ -414,13 +416,13 @@ class RagService:
             else None
         )
         instruction_exact_task = (
-            asyncio.create_task(self._lookup_exact_instruction_ids(event_ids, message))
-            if event_ids and mode == "instructions"
+            asyncio.create_task(self._lookup_exact_instruction_ids(entity_ids, message))
+            if entity_ids and mode == "instructions"
             else None
         )
         payment_exact_task = (
-            asyncio.create_task(self._lookup_exact_payment_ids(event_ids, message))
-            if event_ids and _should_lookup_payment_ids(message, event_ids, mode)
+            asyncio.create_task(self._lookup_exact_payment_ids(entity_ids, message))
+            if entity_ids and _should_lookup_payment_ids(message, entity_ids, mode)
             else None
         )
 
@@ -656,7 +658,7 @@ class RagService:
                 "panel above, then ask again with a payment ID."
             )
 
-        payment_ids = extract_uuids(message)
+        payment_ids = extract_entity_ids(message)
         if not payment_ids:
             return (
                 "Please include the payment ID in your question, e.g. "
@@ -688,7 +690,7 @@ class RagService:
                 "panel above, then ask again with an instruction ID."
             )
 
-        instruction_ids = extract_uuids(message)
+        instruction_ids = extract_entity_ids(message)
         if not instruction_ids:
             return (
                 "Please include the instruction ID in your question, e.g. "

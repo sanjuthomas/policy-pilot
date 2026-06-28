@@ -4,10 +4,10 @@ import os
 
 import pytest
 
-from ilm.models.api import CreateInstructionRequest, Subject
-from ilm.models.enums import InstructionStatus
-from ilm.models.instruction import CashSettlementInstruction, UserReference
-from ilm.service import _instruction_from_request
+from inst.models.api import CreateInstructionRequest, Subject
+from inst.models.enums import InstructionStatus
+from inst.models.instruction import CashSettlementInstruction, UserReference
+from inst.service import _instruction_from_request
 from tests.helpers import domestic_payload
 
 

@@ -1,5 +1,5 @@
-from ilm.models.enums import LifecycleAction
-from ilm.models.instruction_fact import InstructionFact
+from inst.models.enums import LifecycleAction
+from inst.models.instruction_fact import InstructionFact
 
 
 def test_instruction_fact_from_instruction(sample_subject, sample_instruction) -> None:

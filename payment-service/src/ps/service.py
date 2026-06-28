@@ -6,12 +6,15 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from platform_auth import is_platform_admin
+from sequence_client import SequenceClient
+from sequence_client.errors import SequenceClientError
 
 from ps.authorization import (
     build_authorization_block,
     details_with_authorization,
     payment_resource_context,
 )
+from ps.config import settings
 from ps.ilm_client import IlmClient, InstructionNotFoundError, InstructionStateError
 from ps.kafka_publisher import kafka_publisher
 from ps.models.api import LifecycleEvent, RejectPaymentRequest, Subject, UserReference
@@ -149,11 +152,12 @@ def _check_instruction_validity_for_approval(payment: Payment, instruction: dict
 
 
 class PaymentService:
-    def __init__(self) -> None:
+    def __init__(self, sequence_client: SequenceClient | None = None) -> None:
         self.repo = PaymentRepository()
         self.event_repo = SecurityEventRepository()
         self.opa = OpaClient()
         self.ilm = IlmClient()
+        self.sequence = sequence_client or SequenceClient(settings.sequence_service_url)
 
     async def _authorize(
         self,
@@ -242,7 +246,17 @@ class PaymentService:
         end_date = instruction.get("end_date") or ""
 
         event_id = str(uuid4())
+        business_date = datetime.now(timezone.utc).date()
+        try:
+            payment_id = await self.sequence.next_payment_id(
+                business_date=business_date,
+                owning_lob=instruction["owning_lob"],
+            )
+        except SequenceClientError as exc:
+            raise RuntimeError(f"sequence allocation failed: {exc}") from exc
+
         payment = Payment.create(
+            payment_id=payment_id,
             instruction_id=instruction_id,
             instruction_version=instruction_version,
             amount=amount,

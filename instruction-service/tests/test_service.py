@@ -3,18 +3,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from ilm.authorization import PolicyDecision
-from ilm.models.api import (
+from inst.authorization import PolicyDecision
+from inst.models.api import (
     CreateInstructionRequest,
     DeleteInstructionRequest,
     RejectInstructionRequest,
     Subject,
     UseInstructionRequest,
 )
-from ilm.models.enums import InstructionStatus, InstructionType
-from ilm.models.instruction import CashSettlementInstruction
-from ilm.service import InstructionService, InvalidStateTransitionError
-from ilm.storage import VersionedInstruction
+from inst.models.enums import InstructionStatus, InstructionType
+from inst.models.instruction import CashSettlementInstruction
+from inst.service import InstructionService, InvalidStateTransitionError
+from inst.storage import VersionedInstruction
 
 
 def _allowed_decision() -> PolicyDecision:
@@ -67,10 +67,13 @@ def service(
     mock_opa: AsyncMock,
     mock_security_events: MagicMock,
 ) -> InstructionService:
+    sequence_client = AsyncMock()
+    sequence_client.next_instruction_id = AsyncMock(return_value="instr-001")
     return InstructionService(
         repository=mock_repo,
         opa_client=mock_opa,
         security_events=mock_security_events,
+        sequence_client=sequence_client,
     )
 
 
@@ -94,10 +97,10 @@ async def test_create_success(
     saved = _versioned(sample_instruction)
     mock_repo.insert_initial = AsyncMock(return_value=saved)
 
-    with patch("ilm.service.mongo_transaction") as mock_tx:
+    with patch("inst.service.mongo_transaction") as mock_tx:
         mock_tx.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
         mock_tx.return_value.__aexit__ = AsyncMock(return_value=False)
-        with patch("ilm.service.kafka_publisher") as mock_kafka:
+        with patch("inst.service.kafka_publisher") as mock_kafka:
             mock_kafka.publish_instruction_fact = AsyncMock()
             response = await service.create(sample_create_request, sample_subject)
 
@@ -159,10 +162,10 @@ async def test_delete_soft_deletes_draft(
     deleted = sample_instruction.model_copy(update={"status": InstructionStatus.DELETED})
     mock_repo.append_version = AsyncMock(return_value=_versioned(deleted, version=2))
 
-    with patch("ilm.service.mongo_transaction") as mock_tx:
+    with patch("inst.service.mongo_transaction") as mock_tx:
         mock_tx.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
         mock_tx.return_value.__aexit__ = AsyncMock(return_value=False)
-        with patch("ilm.service.kafka_publisher") as mock_kafka:
+        with patch("inst.service.kafka_publisher") as mock_kafka:
             mock_kafka.publish_instruction_fact = AsyncMock()
             response = await service.delete(
                 "instr-001",
@@ -184,10 +187,10 @@ async def test_submit_transitions_to_pending(
     pending = sample_instruction.model_copy(update={"status": InstructionStatus.PENDING})
     mock_repo.append_version = AsyncMock(return_value=_versioned(pending, version=2))
 
-    with patch("ilm.service.mongo_transaction") as mock_tx:
+    with patch("inst.service.mongo_transaction") as mock_tx:
         mock_tx.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
         mock_tx.return_value.__aexit__ = AsyncMock(return_value=False)
-        with patch("ilm.service.kafka_publisher") as mock_kafka:
+        with patch("inst.service.kafka_publisher") as mock_kafka:
             mock_kafka.publish_instruction_fact = AsyncMock()
             response = await service.submit("instr-001", sample_subject)
 
@@ -211,10 +214,10 @@ async def test_approve_standing(
     mock_repo.get_current = AsyncMock(return_value=_versioned(pending))
     mock_repo.append_version = AsyncMock(return_value=_versioned(approved, version=2))
 
-    with patch("ilm.service.mongo_transaction") as mock_tx:
+    with patch("inst.service.mongo_transaction") as mock_tx:
         mock_tx.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
         mock_tx.return_value.__aexit__ = AsyncMock(return_value=False)
-        with patch("ilm.service.kafka_publisher") as mock_kafka:
+        with patch("inst.service.kafka_publisher") as mock_kafka:
             mock_kafka.publish_instruction_fact = AsyncMock()
             response = await service.approve("instr-001", sample_subject)
 
@@ -238,10 +241,10 @@ async def test_reject_pending(
     mock_repo.get_current = AsyncMock(return_value=_versioned(pending))
     mock_repo.append_version = AsyncMock(return_value=_versioned(rejected, version=2))
 
-    with patch("ilm.service.mongo_transaction") as mock_tx:
+    with patch("inst.service.mongo_transaction") as mock_tx:
         mock_tx.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
         mock_tx.return_value.__aexit__ = AsyncMock(return_value=False)
-        with patch("ilm.service.kafka_publisher") as mock_kafka:
+        with patch("inst.service.kafka_publisher") as mock_kafka:
             mock_kafka.publish_instruction_fact = AsyncMock()
             response = await service.reject(
                 "instr-001",
@@ -265,10 +268,10 @@ async def test_suspend_active(
     mock_repo.get_current = AsyncMock(return_value=_versioned(active))
     mock_repo.append_version = AsyncMock(return_value=_versioned(suspended, version=2))
 
-    with patch("ilm.service.mongo_transaction") as mock_tx:
+    with patch("inst.service.mongo_transaction") as mock_tx:
         mock_tx.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
         mock_tx.return_value.__aexit__ = AsyncMock(return_value=False)
-        with patch("ilm.service.kafka_publisher") as mock_kafka:
+        with patch("inst.service.kafka_publisher") as mock_kafka:
             mock_kafka.publish_instruction_fact = AsyncMock()
             response = await service.suspend("instr-001", sample_subject)
 
@@ -287,10 +290,10 @@ async def test_reactivate_suspended(
     mock_repo.get_current = AsyncMock(return_value=_versioned(suspended))
     mock_repo.append_version = AsyncMock(return_value=_versioned(active, version=2))
 
-    with patch("ilm.service.mongo_transaction") as mock_tx:
+    with patch("inst.service.mongo_transaction") as mock_tx:
         mock_tx.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
         mock_tx.return_value.__aexit__ = AsyncMock(return_value=False)
-        with patch("ilm.service.kafka_publisher") as mock_kafka:
+        with patch("inst.service.kafka_publisher") as mock_kafka:
             mock_kafka.publish_instruction_fact = AsyncMock()
             response = await service.reactivate("instr-001", sample_subject)
 
@@ -309,10 +312,10 @@ async def test_use_single_use_marks_used(
     mock_repo.get_current = AsyncMock(return_value=_versioned(active))
     mock_repo.append_version = AsyncMock(return_value=_versioned(used, version=2))
 
-    with patch("ilm.service.mongo_transaction") as mock_tx:
+    with patch("inst.service.mongo_transaction") as mock_tx:
         mock_tx.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
         mock_tx.return_value.__aexit__ = AsyncMock(return_value=False)
-        with patch("ilm.service.kafka_publisher") as mock_kafka:
+        with patch("inst.service.kafka_publisher") as mock_kafka:
             mock_kafka.publish_instruction_fact = AsyncMock()
             response = await service.use(
                 "instr-001",

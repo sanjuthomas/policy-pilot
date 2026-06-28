@@ -32,7 +32,8 @@ def _deny_decision(violation: str = "SELF_APPROVAL") -> PolicyDecision:
 
 @pytest.fixture
 def service() -> PaymentService:
-    svc = PaymentService()
+    svc = PaymentService(sequence_client=AsyncMock())
+    svc.sequence.next_payment_id = AsyncMock(return_value="20260701-CORP-P-1")
     svc.repo = AsyncMock()
     svc.event_repo = AsyncMock()
     svc.opa = AsyncMock()

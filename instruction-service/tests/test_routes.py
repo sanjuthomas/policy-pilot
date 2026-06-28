@@ -4,11 +4,11 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from ilm.dependencies import get_subject
-from ilm.maintenance_routes import router as maintenance_router
-from ilm.models.api import InstructionResponse, Subject
-from ilm.routes import get_service, router
-from ilm.service import InstructionService
+from inst.dependencies import get_subject
+from inst.maintenance_routes import router as maintenance_router
+from inst.models.api import InstructionResponse, Subject
+from inst.routes import get_service, router
+from inst.service import InstructionService
 
 
 @pytest.fixture
@@ -52,9 +52,9 @@ def api_client(sample_subject: Subject, mock_service: MagicMock) -> TestClient:
 def _sample_response() -> InstructionResponse:
     from datetime import datetime
 
-    from ilm.models.api import CreateInstructionRequest
-    from ilm.service import _instruction_from_request, _to_response
-    from ilm.storage import VersionedInstruction
+    from inst.models.api import CreateInstructionRequest
+    from inst.service import _instruction_from_request, _to_response
+    from inst.storage import VersionedInstruction
     from tests.helpers import domestic_payload
 
     req = CreateInstructionRequest.model_validate(domestic_payload())
@@ -96,7 +96,7 @@ def test_list_instructions(api_client: TestClient, mock_service: MagicMock) -> N
 
 
 def test_get_instruction_not_found(api_client: TestClient, mock_service: MagicMock) -> None:
-    from ilm.repository import InstructionNotFoundError
+    from inst.repository import InstructionNotFoundError
 
     mock_service.get.side_effect = InstructionNotFoundError("i1")
     response = api_client.get("/api/v1/instructions/i1")
@@ -104,7 +104,7 @@ def test_get_instruction_not_found(api_client: TestClient, mock_service: MagicMo
 
 
 def test_submit_invalid_state(api_client: TestClient, mock_service: MagicMock) -> None:
-    from ilm.service import InvalidStateTransitionError
+    from inst.service import InvalidStateTransitionError
 
     mock_service.submit.side_effect = InvalidStateTransitionError("bad state")
     response = api_client.post("/api/v1/instructions/i1/submit")
@@ -113,7 +113,7 @@ def test_submit_invalid_state(api_client: TestClient, mock_service: MagicMock) -
 
 @pytest.mark.asyncio
 async def test_repair_authorization_endpoint(mock_service: MagicMock) -> None:
-    from ilm.admin import get_admin_subject
+    from inst.admin import get_admin_subject
 
     admin = Subject(
         user_id="admin-001",
@@ -125,7 +125,7 @@ async def test_repair_authorization_endpoint(mock_service: MagicMock) -> None:
     app.include_router(maintenance_router, prefix="/api/v1")
     app.dependency_overrides[get_admin_subject] = lambda: admin
 
-    with patch("ilm.maintenance_routes.SecurityEventRepository") as mock_repo_cls:
+    with patch("inst.maintenance_routes.SecurityEventRepository") as mock_repo_cls:
         mock_repo = MagicMock()
         mock_repo.find_missing_authorization = AsyncMock(return_value=[])
         mock_repo_cls.return_value = mock_repo

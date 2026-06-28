@@ -16,6 +16,7 @@ class Settings(BaseSettings):
 
     opa_url: str = "http://localhost:8181"
     ilm_url: str = "http://localhost:8000"
+    sequence_service_url: str = "http://localhost:8095"
 
     # Service account used for OBO delegation calls to ILM
     service_user_id: str = "svc-payment"

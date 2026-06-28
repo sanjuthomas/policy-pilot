@@ -67,8 +67,8 @@ _LIST_PAYMENTS_FOR_INSTRUCTION = re.compile(
     re.IGNORECASE,
 )
 
-_INSTRUCTION_UUID_IN_QUESTION = re.compile(
-    r"instruction\s+([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
+_INSTRUCTION_ID_IN_QUESTION = re.compile(
+    r"instruction\s+(\d{8}-[A-Z0-9_]+-I-\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
     re.IGNORECASE,
 )
 
@@ -90,9 +90,15 @@ _HIERARCHY_QUESTION = re.compile(
     re.IGNORECASE,
 )
 
-# UUID pattern for exact-lookup detection
+# UUID pattern for security event exact-lookup detection
 _UUID_PATTERN = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+    re.IGNORECASE,
+)
+
+# Combined instruction/payment ID pattern (sequence or legacy UUID)
+_ENTITY_ID_PATTERN = re.compile(
+    r"(\d{8}-[A-Z0-9_]+-[IP]-\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
     re.IGNORECASE,
 )
 
@@ -144,7 +150,7 @@ def is_max_payments_per_instruction_question(question: str) -> bool:
 
 def is_payments_for_instruction_question(question: str) -> bool:
     q = question.lower()
-    if not extract_uuids(question):
+    if not extract_entity_ids(question):
         return False
     if is_max_payments_per_instruction_question(question):
         return False
@@ -156,11 +162,11 @@ def is_payments_for_instruction_question(question: str) -> bool:
 
 
 def instruction_id_from_list_payments_question(question: str) -> str | None:
-    match = _INSTRUCTION_UUID_IN_QUESTION.search(question)
+    match = _INSTRUCTION_ID_IN_QUESTION.search(question)
     if match:
         return match.group(1)
-    uuids = extract_uuids(question)
-    return uuids[0] if uuids else None
+    entity_ids = extract_entity_ids(question)
+    return entity_ids[0] if entity_ids else None
 
 
 def payment_status_filter_from_question(question: str) -> str | None:
@@ -289,7 +295,7 @@ def _is_instruction_approval_lookup(question: str) -> bool:
         return False
     if "payment" in q and "instruction" not in q:
         return False
-    return bool(_UUID_PATTERN.search(question)) or "instruction" in q
+    return bool(_ENTITY_ID_PATTERN.search(question)) or "instruction" in q
 
 
 def _is_payment_approval_lookup(question: str, *, mode: str) -> bool:
@@ -298,7 +304,7 @@ def _is_payment_approval_lookup(question: str, *, mode: str) -> bool:
         return False
     if "instruction" in q and "payment" not in q:
         return False
-    if not _UUID_PATTERN.search(question):
+    if not _ENTITY_ID_PATTERN.search(question):
         return False
     return "payment" in q or mode == "payments"
 
@@ -438,15 +444,15 @@ def plan_graph_queries(question: str, *, mode: str) -> list[tuple[str, str]] | N
         return _instruction_subordinate_approver_queries()
 
     if mode == "instructions" and _is_instruction_approval_lookup(question):
-        uuids = extract_uuids(question)
-        if uuids:
-            return _instruction_approval_lookup_queries(uuids[0])
+        entity_ids = extract_entity_ids(question)
+        if entity_ids:
+            return _instruction_approval_lookup_queries(entity_ids[0])
 
     if mode in ("payments", "events") and _is_payment_approval_lookup(question, mode=mode):
         if not is_payments_for_instruction_question(question):
-            uuids = extract_uuids(question)
-            if uuids:
-                return _payment_approval_lookup_queries(uuids[0])
+            entity_ids = extract_entity_ids(question)
+            if entity_ids:
+                return _payment_approval_lookup_queries(entity_ids[0])
 
     if mode in ("payments", "all") and is_payments_for_instruction_question(question):
         instruction_id = instruction_id_from_list_payments_question(question)
@@ -643,6 +649,11 @@ def records_to_rows(records: list[Any]) -> list[dict[str, Any]]:
 def extract_uuids(text: str) -> list[str]:
     """Return unique UUIDs from text in order of appearance."""
     return list(dict.fromkeys(match.group(0) for match in _UUID_PATTERN.finditer(text)))
+
+
+def extract_entity_ids(text: str) -> list[str]:
+    """Return unique instruction/payment business IDs (sequence or legacy UUID)."""
+    return list(dict.fromkeys(match.group(1) for match in _ENTITY_ID_PATTERN.finditer(text)))
 
 
 def extract_event_id(row: dict[str, Any]) -> str | None:

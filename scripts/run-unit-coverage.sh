@@ -21,7 +21,7 @@ run_project() {
 run_project shared/platform_auth platform_auth
 run_project shared/cypher_gen cypher_gen
 run_project shared/telemetry telemetry
-run_project instruction-service ilm
+run_project instruction-service inst
 run_project payment-service ps
 run_project authorization-service authz
 run_project ssi-indexer etl

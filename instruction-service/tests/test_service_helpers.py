@@ -1,15 +1,15 @@
 from datetime import datetime
 
-from ilm.models.api import CreateInstructionRequest, Subject
-from ilm.models.enums import InstructionStatus
-from ilm.models.instruction import UserReference
-from ilm.service import (
+from inst.models.api import CreateInstructionRequest, Subject
+from inst.models.enums import InstructionStatus
+from inst.models.instruction import UserReference
+from inst.service import (
     _fmt_datetime,
     _instruction_from_request,
     _parse_datetime,
     _to_response,
 )
-from ilm.storage import VersionedInstruction
+from inst.storage import VersionedInstruction
 
 
 def test_parse_datetime_z_suffix() -> None:

@@ -3,14 +3,14 @@ from datetime import datetime, timedelta
 import pytest
 from pydantic import ValidationError
 
-from ilm.models.api import CreateInstructionRequest
-from ilm.models.enums import (
+from inst.models.api import CreateInstructionRequest
+from inst.models.enums import (
     AccountIdentificationScheme,
     FinancialInstitutionIdScheme,
     InstructionType,
     WireScope,
 )
-from ilm.models.instruction import (
+from inst.models.instruction import (
     BranchAndFinancialInstitutionIdentification,
     CashAccount,
     CashSettlementInstruction,

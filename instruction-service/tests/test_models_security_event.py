@@ -1,11 +1,11 @@
-from ilm.models.api import Subject
-from ilm.models.enums import (
+from inst.models.api import Subject
+from inst.models.enums import (
     LifecycleAction,
     SecurityEventOutcome,
     SecurityEventSeverity,
 )
-from ilm.models.instruction import CashSettlementInstruction
-from ilm.models.security_event import SecurityEvent
+from inst.models.instruction import CashSettlementInstruction
+from inst.models.security_event import SecurityEvent
 
 
 def test_authorized_action(sample_subject: Subject, sample_instruction: CashSettlementInstruction) -> None:

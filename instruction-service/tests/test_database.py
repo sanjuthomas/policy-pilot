@@ -3,8 +3,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from ilm.config import Settings
-from ilm.database import (
+from inst.config import Settings
+from inst.database import (
     close,
     connect,
     get_client,
@@ -25,8 +25,8 @@ async def test_connect_and_close(monkeypatch) -> None:
     mock_client.__getitem__ = MagicMock(return_value=mock_db)
     mock_client.close = MagicMock()
 
-    with patch("ilm.database._client", None):
-        with patch("ilm.database.AsyncIOMotorClient", return_value=mock_client):
+    with patch("inst.database._client", None):
+        with patch("inst.database.AsyncIOMotorClient", return_value=mock_client):
             await connect()
             assert get_client() is mock_client
             assert get_database() is mock_db
@@ -38,7 +38,7 @@ def test_get_security_events_database(monkeypatch) -> None:
     mock_client = MagicMock()
     mock_events_db = MagicMock()
     mock_client.__getitem__ = MagicMock(return_value=mock_events_db)
-    with patch("ilm.database._client", mock_client):
+    with patch("inst.database._client", mock_client):
         assert get_security_events_database() is mock_events_db
 
 

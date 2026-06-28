@@ -17,6 +17,7 @@ jobs:
         service:
           - instruction-service
           - authorization-service
+          - sequence-service
           - ssi-chat
           - ssi-indexer
           - ssi-demo-harness
@@ -44,13 +45,16 @@ jobs:
       matrix:
         include:
           - service: instruction-service
-            package: ilm
+            package: inst
             extra: dev
           - service: payment-service
             package: ps
             extra: dev
           - service: authorization-service
             package: authz
+            extra: dev
+          - service: sequence-service
+            package: seq
             extra: dev
           - service: ssi-indexer
             package: etl
@@ -86,6 +90,9 @@ jobs:
           - service: authorization-service
             context: .
             dockerfile: authorization-service/Dockerfile
+          - service: sequence-service
+            context: .
+            dockerfile: sequence-service/Dockerfile
           - service: ssi-chat
             context: ./ssi-chat
             dockerfile: Dockerfile

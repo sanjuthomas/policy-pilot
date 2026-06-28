@@ -1,4 +1,3 @@
-import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -7,7 +6,12 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from telemetry import configure_telemetry, get_logger, instrument_app, shutdown_telemetry
+from telemetry import (
+    configure_telemetry,
+    get_logger,
+    instrument_app,
+    shutdown_telemetry,
+)
 
 from chat_application import __version__
 from chat_application.config import settings

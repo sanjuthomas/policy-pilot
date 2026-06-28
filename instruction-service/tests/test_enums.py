@@ -1,6 +1,6 @@
 import pytest
 
-from ilm.models.enums import is_valid_owning_lob
+from inst.models.enums import is_valid_owning_lob
 
 
 @pytest.mark.parametrize(

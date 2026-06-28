@@ -2,7 +2,7 @@ from datetime import datetime
 
 from bson import ObjectId
 
-from ilm.security_event_serialization import serialize_security_event
+from inst.security_event_serialization import serialize_security_event
 
 
 def test_serialize_security_event_normalizes_object_id_and_datetime() -> None:

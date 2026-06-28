@@ -47,6 +47,7 @@ def approver_subject() -> Subject:
 @pytest.fixture
 def payment(subject: Subject) -> Payment:
     return Payment.create(
+        payment_id="20260701-CORP-P-1",
         instruction_id="instr-001",
         instruction_version=1,
         amount=1_000_000.0,

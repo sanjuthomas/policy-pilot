@@ -2,12 +2,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from ilm.kafka_publisher import SecurityEventKafkaPublisher
+from inst.kafka_publisher import SecurityEventKafkaPublisher
 
 
 @pytest.mark.asyncio
 async def test_start_disabled(monkeypatch) -> None:
-    monkeypatch.setattr("ilm.kafka_publisher.settings.kafka_enabled", False)
+    monkeypatch.setattr("inst.kafka_publisher.settings.kafka_enabled", False)
     publisher = SecurityEventKafkaPublisher()
     await publisher.start()
     assert publisher._producer is None
@@ -15,13 +15,13 @@ async def test_start_disabled(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_start_and_close(monkeypatch) -> None:
-    monkeypatch.setattr("ilm.kafka_publisher.settings.kafka_enabled", True)
+    monkeypatch.setattr("inst.kafka_publisher.settings.kafka_enabled", True)
     publisher = SecurityEventKafkaPublisher()
     mock_producer = MagicMock()
     mock_producer.start = AsyncMock()
     mock_producer.stop = AsyncMock()
 
-    with patch("ilm.kafka_publisher.AIOKafkaProducer", return_value=mock_producer):
+    with patch("inst.kafka_publisher.AIOKafkaProducer", return_value=mock_producer):
         await publisher.start()
         assert publisher._producer is mock_producer
         await publisher.close()

@@ -2,7 +2,7 @@ import base64
 
 import pytest
 
-from ilm.auth import (
+from inst.auth import (
     _decode_metadata_values,
     _parse_json_list,
     _parse_roles,
@@ -74,5 +74,5 @@ def test_subject_from_metadata_invalid_lob() -> None:
 
 
 def test_zitadel_request_headers_without_issuer(monkeypatch) -> None:
-    monkeypatch.setattr("ilm.auth.settings.oidc_issuer_url", None)
+    monkeypatch.setattr("inst.auth.settings.oidc_issuer_url", None)
     assert _zitadel_request_headers() == {}
