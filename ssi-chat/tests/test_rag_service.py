@@ -89,6 +89,50 @@ class TestRagServiceAsk:
         mock_ollama.synthesize_answer.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_ask_instruction_approval_synthesis_sequence_id(
+        self, rag_service, mock_ollama, mock_qdrant, mock_neo4j
+    ) -> None:
+        iid = "20260628-FICC-I-13"
+        mock_qdrant.search_vector = MagicMock(return_value=[])
+        mock_qdrant.search_bm25 = MagicMock(return_value=[])
+        mock_qdrant.fetch_by_instruction_id = MagicMock(
+            return_value={
+                "source": "exact_instruction",
+                "instruction_id": iid,
+                "merged": {
+                    "source": "instruction_state",
+                    "instruction_id": iid,
+                    "approver_display": "Vasquez, Elena (ficc-300)",
+                    "approved_at": "2026-06-28T10:00:00Z",
+                    "authorization_summary": "OPA allowed supervisor approval",
+                    "authorization_basis": ["role FICC_SUPERVISOR"],
+                    "instruction_snapshot": {"status": "STANDING"},
+                },
+            }
+        )
+        mock_neo4j.run_cypher = AsyncMock(
+            return_value=[
+                {
+                    "instruction_id": iid,
+                    "approver_display": "Vasquez, Elena (ficc-300)",
+                    "approved_at": "2026-06-28T10:00:00Z",
+                    "authorization_summary": "OPA allowed supervisor approval",
+                    "authorization_basis": '["role FICC_SUPERVISOR"]',
+                }
+            ]
+        )
+        mock_ollama.summarize_authorization_why = AsyncMock(return_value="Elena was allowed as FICC supervisor.")
+
+        response = await rag_service.ask(
+            f"Who approved instructions like {iid} in the past?",
+            [],
+            mode="instructions",
+        )
+        assert response.answer.startswith("WHO:")
+        assert "Vasquez, Elena (ficc-300)" in response.answer
+        mock_ollama.synthesize_answer.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_ask_payment_approval_synthesis(
         self, rag_service, mock_ollama, mock_qdrant, mock_neo4j
     ) -> None:

@@ -465,11 +465,11 @@ class RagService:
         answer = None
         if _is_instruction_approval_question(message, mode):
             answer = await self._synthesize_instruction_approval_answer(
-                message, event_ids, merged, graph_result["rows"]
+                message, entity_ids, merged, graph_result["rows"]
             )
         if answer is None and _is_payment_approval_question(message, mode):
             answer = await self._synthesize_payment_approval_answer(
-                message, event_ids, merged, graph_result["rows"]
+                message, entity_ids, merged, graph_result["rows"]
             )
         if answer is None and is_max_payments_per_instruction_question(message):
             answer = _format_max_payments_per_instruction_answer(graph_result["rows"])

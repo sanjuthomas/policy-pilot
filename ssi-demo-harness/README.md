@@ -56,6 +56,22 @@ PAT=$(docker exec zitadel-login cat /zitadel/bootstrap/login-client.pat | tr -d 
 cd zitadel-seed && ZITADEL_PAT="$PAT" python3 seed.py
 ```
 
+### One-command demo seed (reset + data + ALERTs)
+
+From the repo root (or anywhere), run the harness seed script. By default it clears all volumes, starts the stack, seeds Zitadel, then creates instructions/payments with many policy-denial **ALERT** events:
+
+```bash
+./ssi-demo-harness/seed-demo-data.sh
+```
+
+Seed only (stack already running):
+
+```bash
+./ssi-demo-harness/seed-demo-data.sh --seed-only
+```
+
+Optional env overrides: `CREATE_INSTRUCTIONS`, `INSTRUCTION_POLICY_RUNS`, `PAYMENT_POLICY_RUNS`, `HARNESS_URL`, etc. Run `./ssi-demo-harness/seed-demo-data.sh --help` for details.
+
 Includes service accounts **`etl-reader`**, **`svc-instruction`**, and **`svc-payment`** (not used by the harness UI).
 
 ## Instruction payloads
