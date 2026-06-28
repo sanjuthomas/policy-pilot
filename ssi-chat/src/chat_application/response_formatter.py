@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
+
 from chat_application.formatting import format_markdown_table
 
 _KV_FIELD_RE = re.compile(r"([a-z][a-z0-9_]*)=")

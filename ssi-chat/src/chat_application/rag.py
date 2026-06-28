@@ -37,12 +37,12 @@ from chat_application.formatting import (
     humanize_authorization_text,
     humanize_policy_basis,
 )
-from chat_application.response_formatter import format_chat_response
 from chat_application.models import ChatMessage, ChatResponse, SearchMode, SourceHit
 from chat_application.neo4j import Neo4jClient
 from chat_application.ollama import OllamaClient
 from chat_application.qdrant import QdrantSearchClient
 from chat_application.reranker import RankedHit, graph_rows_to_hits, rrf_merge
+from chat_application.response_formatter import format_chat_response
 
 logger = logging.getLogger(__name__)
 
