@@ -19,7 +19,8 @@ from etl.search_text.builder import (
     profiles_dir,
 )
 from etl.search_text.context import instruction_state_context, payment_security_event_context
-from tests.test_enrichment import _sample_event, _sample_instruction
+from helpers import sample_event as _sample_event
+from helpers import sample_instruction as _sample_instruction
 
 
 def _legacy_instruction_security_event_search_text(ctx: dict) -> str:

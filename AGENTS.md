@@ -130,16 +130,20 @@ ruff check src/ --select E,F,W,I --ignore E501
 inside each service directory listed in the lint matrix:
 
 - `instruction-service`
+- `authorization-service`
+- `sequence-service`
 - `ssi-chat`
 - `ssi-indexer`
 - `ssi-demo-harness`
 
-It also builds Docker images for those four services. (`payment-service` is not in the CI lint matrix yet, but keep it clean anyway.)
+It also builds Docker images for the application services. Keep `payment-service` lint-clean even though it is not in the Docker build matrix yet.
 
 The same workflow runs **unit test coverage** (≥ 70% line coverage) for:
 
 - `instruction-service` (`inst`)
 - `payment-service` (`ps`)
+- `authorization-service` (`authz`)
+- `sequence-service` (`seq`)
 - `ssi-indexer` (`etl`)
 - `ssi-chat` (`chat_application`)
 
@@ -183,7 +187,7 @@ When removing a symbol from code, **remove its import** in the same edit (`F401`
 2. Run the **required** lint loop (`--fix` then verify) on every touched Python service.
 3. Run the **required** coverage loop (≥ 70%) on every touched non-harness service; add tests when needed.
 4. Fix any remaining errors manually — do not push with lint failures or sub-threshold coverage.
-5. Commit only when the user asks; if committing, ensure all five services pass lint and all four application services meet coverage.
+5. Commit only when the user asks; if committing, ensure all touched Python services pass lint and all non-harness application services meet coverage.
 6. After push, confirm the GitHub Actions **Build** workflow succeeds (lint, coverage, and Docker build jobs).
 
 ## Project layout

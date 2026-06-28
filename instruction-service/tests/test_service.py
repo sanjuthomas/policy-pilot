@@ -87,6 +87,24 @@ def _versioned(instruction: CashSettlementInstruction, version: int = 1) -> Vers
     )
 
 
+def _configure_repo_persist_mocks(mock_repo: MagicMock) -> None:
+    """Echo persisted instructions so lifecycle_events from the service are preserved."""
+    version_by_id: dict[str, int] = {}
+
+    async def insert_initial(instruction, session=None):
+        version_by_id[instruction.instruction_id] = 1
+        return _versioned(instruction, version=1)
+
+    async def append_version(instruction, session=None):
+        current = version_by_id.get(instruction.instruction_id, 1)
+        next_v = current + 1
+        version_by_id[instruction.instruction_id] = next_v
+        return _versioned(instruction, version=next_v)
+
+    mock_repo.insert_initial = AsyncMock(side_effect=insert_initial)
+    mock_repo.append_version = AsyncMock(side_effect=append_version)
+
+
 @pytest.mark.asyncio
 async def test_create_success(
     service: InstructionService,
@@ -95,8 +113,7 @@ async def test_create_success(
     sample_subject: Subject,
     sample_instruction: CashSettlementInstruction,
 ) -> None:
-    saved = _versioned(sample_instruction)
-    mock_repo.insert_initial = AsyncMock(return_value=saved)
+    _configure_repo_persist_mocks(mock_repo)
 
     with patch("inst.service.mongo_transaction") as mock_tx:
         mock_tx.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
@@ -160,8 +177,7 @@ async def test_delete_soft_deletes_draft(
     sample_instruction: CashSettlementInstruction,
 ) -> None:
     mock_repo.get_current = AsyncMock(return_value=_versioned(sample_instruction))
-    deleted = sample_instruction.model_copy(update={"status": InstructionStatus.DELETED})
-    mock_repo.append_version = AsyncMock(return_value=_versioned(deleted, version=2))
+    _configure_repo_persist_mocks(mock_repo)
 
     with patch("inst.service.mongo_transaction") as mock_tx:
         mock_tx.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
@@ -185,8 +201,7 @@ async def test_submit_transitions_to_pending(
     sample_instruction: CashSettlementInstruction,
 ) -> None:
     mock_repo.get_current = AsyncMock(return_value=_versioned(sample_instruction))
-    pending = sample_instruction.model_copy(update={"status": InstructionStatus.PENDING})
-    mock_repo.append_version = AsyncMock(return_value=_versioned(pending, version=2))
+    _configure_repo_persist_mocks(mock_repo)
 
     with patch("inst.service.mongo_transaction") as mock_tx:
         mock_tx.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
@@ -211,9 +226,8 @@ async def test_approve_standing(
             "instruction_type": InstructionType.STANDING,
         }
     )
-    approved = pending.model_copy(update={"status": InstructionStatus.STANDING})
     mock_repo.get_current = AsyncMock(return_value=_versioned(pending))
-    mock_repo.append_version = AsyncMock(return_value=_versioned(approved, version=2))
+    _configure_repo_persist_mocks(mock_repo)
 
     with patch("inst.service.mongo_transaction") as mock_tx:
         mock_tx.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
@@ -233,14 +247,8 @@ async def test_reject_pending(
     sample_instruction: CashSettlementInstruction,
 ) -> None:
     pending = sample_instruction.model_copy(update={"status": InstructionStatus.PENDING})
-    rejected = pending.model_copy(
-        update={
-            "status": InstructionStatus.REJECTED,
-            "rejection_reason": "bad data",
-        }
-    )
     mock_repo.get_current = AsyncMock(return_value=_versioned(pending))
-    mock_repo.append_version = AsyncMock(return_value=_versioned(rejected, version=2))
+    _configure_repo_persist_mocks(mock_repo)
 
     with patch("inst.service.mongo_transaction") as mock_tx:
         mock_tx.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
@@ -265,9 +273,8 @@ async def test_suspend_active(
     sample_instruction: CashSettlementInstruction,
 ) -> None:
     active = sample_instruction.model_copy(update={"status": InstructionStatus.STANDING})
-    suspended = active.model_copy(update={"status": InstructionStatus.SUSPENDED})
     mock_repo.get_current = AsyncMock(return_value=_versioned(active))
-    mock_repo.append_version = AsyncMock(return_value=_versioned(suspended, version=2))
+    _configure_repo_persist_mocks(mock_repo)
 
     with patch("inst.service.mongo_transaction") as mock_tx:
         mock_tx.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
@@ -287,9 +294,8 @@ async def test_reactivate_suspended(
     sample_instruction: CashSettlementInstruction,
 ) -> None:
     suspended = sample_instruction.model_copy(update={"status": InstructionStatus.SUSPENDED})
-    active = suspended.model_copy(update={"status": InstructionStatus.SINGLE_USE})
     mock_repo.get_current = AsyncMock(return_value=_versioned(suspended))
-    mock_repo.append_version = AsyncMock(return_value=_versioned(active, version=2))
+    _configure_repo_persist_mocks(mock_repo)
 
     with patch("inst.service.mongo_transaction") as mock_tx:
         mock_tx.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
@@ -309,9 +315,8 @@ async def test_use_single_use_marks_used(
     sample_instruction: CashSettlementInstruction,
 ) -> None:
     active = sample_instruction.model_copy(update={"status": InstructionStatus.SINGLE_USE})
-    used = active.model_copy(update={"status": InstructionStatus.USED, "usage_count": 1})
     mock_repo.get_current = AsyncMock(return_value=_versioned(active))
-    mock_repo.append_version = AsyncMock(return_value=_versioned(used, version=2))
+    _configure_repo_persist_mocks(mock_repo)
 
     with patch("inst.service.mongo_transaction") as mock_tx:
         mock_tx.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
