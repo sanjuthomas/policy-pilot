@@ -192,6 +192,7 @@ When removing a symbol from code, **remove its import** in the same edit (`F401`
 |-----------|----------------|------|
 | `instruction-service` | `inst` | 8000 |
 | `payment-service` | `ps` | 8093 |
+| `authorization-service` | `authz` | 8094 |
 | `sequence-service` | `seq` | 8095 |
 | `ssi-indexer` | `etl` | 8090 |
 | `ssi-chat` | `chat_application` | 8092 |

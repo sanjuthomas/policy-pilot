@@ -66,6 +66,17 @@ WHY: Elena Vasquez was authorized to approve because her Vice President title sa
 
 Requires indexed `authorization_summary` on instruction state or APPROVE security events (populated automatically on new lifecycle actions).
 
+## Live eligibility (“who can approve?”)
+
+Questions like _“Who can approve payment `<uuid>`?”_ or _“Who can approve instruction `<uuid>`?”_ **bypass RAG** and call domain services directly:
+
+| Question target | API |
+|-----------------|-----|
+| Payment | `POST http://payment-service:8093/api/v1/payments/{id}/eligible-approvers` |
+| Instruction | `POST http://instruction-service:8000/api/v1/instructions/{id}/eligible-approvers` |
+
+Requires **compliance sign-in** at http://localhost:8092 (`comp-001` / `comp-002`, or platform admin). Domain services enforce the compliance JWT, load entity context, and delegate batch OPA evaluation to authorization-service.
+
 ## Example questions
 
 See **`regression/questions.yaml`** for the full regression bank (~60 cases) and **`regression/README.md`** for how to run it.
@@ -94,6 +105,9 @@ See **`regression/questions.yaml`** for the full regression bank (~60 cases) and
 | `QDRANT_COLLECTION` | `ssi_search_index` |
 | `NEO4J_URI` | `bolt://neo4j:7687` |
 | `GRAPH_MODEL_DIR` | `/app/neo4j-graph-model` |
+| `PAYMENT_SERVICE_URL` | `http://payment-service:8093` |
+| `INSTRUCTION_SERVICE_URL` | `http://instruction-service:8000` |
+| `OIDC_ISSUER_URL` | `http://localhost:8080` |
 
 Requires Qdrant and Neo4j populated by `ssi-indexer` and **host Ollama**.
 

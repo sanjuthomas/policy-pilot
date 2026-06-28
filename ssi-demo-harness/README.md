@@ -16,7 +16,7 @@ Each action has a count field and a run button:
 
 | Action | Description |
 |--------|-------------|
-| Create instructions | Seed N instructions via ILM API (varied LOB / type / currency) |
+| Create instructions | Seed N instructions via instruction-service API (varied LOB / type / currency) |
 | Submit | Submit draft instructions |
 | Approve | Approve pending instructions (matching OPA approval matrix) |
 | Reject | Reject pending instructions |
@@ -91,4 +91,4 @@ CLI entry point: `ssi-demo-harness`
 docker compose up -d ssi-demo-harness
 ```
 
-Requires ILM, payment service, and ZITADEL running.
+Requires instruction-service, payment-service, authorization-service, and ZITADEL running.

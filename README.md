@@ -49,6 +49,7 @@ flowchart TB
     subgraph apps [Applications]
         ILM[instruction-service :8000]
         PAY[payment-service :8093]
+        AUTHZ[authorization-service :8094]
         HARNESS[ssi-demo-harness :8091]
         ETL[ssi-indexer :8090]
         CHAT[ssi-chat :8092]
@@ -72,11 +73,13 @@ flowchart TB
     ZITADEL --> ILM
     ZITADEL --> PAY
     ZITADEL --> HARNESS
-    ILM --> OPA
-    PAY --> OPA
+    ZITADEL --> CHAT
+    ILM --> AUTHZ
+    PAY --> AUTHZ
+    AUTHZ --> OPA
     ILM --> MONGO
     PAY --> MONGO
-    PAY -->|read instructions| ILM
+    PAY -->|read instructions OBO| ILM
     ILM -->|instruction-security-events| KAFKA
     ILM -->|ssi-instructions| KAFKA
     PAY -->|payment-security-events| KAFKA
@@ -88,20 +91,23 @@ flowchart TB
     CHAT --> QD
     CHAT --> NEO
     CHAT --> OLLAMA
+    CHAT -->|eligible-approvers| ILM
+    CHAT -->|eligible-approvers| PAY
     HARNESS --> ILM
     HARNESS --> PAY
 ```
 
 ### Data flow
 
-1. **ILM** — operator creates/mutates an instruction; ZITADEL JWT is validated; OPA authorizes the action (`allow` + `allow_basis`); instruction version and security event (with `details.authorization`) are written to MongoDB **in a single transaction**; two Kafka fact events are published — one to `instruction-security-events` (security event + full instruction snapshot) and one to `ssi-instructions` (instruction state fact + authorization on mutations).
-2. **Payment service** — middle-office users create payments against approved SSI instructions; OPA evaluates allow/deny with the same audit block pattern; each action writes to MongoDB and publishes to `payment-security-events` (audit) and `ssi-payments` (payment state fact).
-3. **SSI indexer** — runs four independent Kafka consumers, all **self-contained** (full snapshots embedded — no API callbacks). Denormalizes `authorization_summary`, `approved_at`, and related fields onto Qdrant and Neo4j for chat retrieval.
+1. **Instruction service** — operator creates/mutates an instruction; ZITADEL JWT is validated; the service calls **authorization-service** with On-Behalf-Of (service account `svc-instruction` + user token); authz evaluates OPA and returns `allow` + `allow_basis`; instruction version and security event (with `details.authorization`) are written to MongoDB **in a single transaction**; two Kafka fact events are published — one to `instruction-security-events` (security event + full instruction snapshot) and one to `ssi-instructions` (instruction state fact + authorization on mutations).
+2. **Payment service** — middle-office users create payments against approved SSI instructions; the same OBO → authz → OPA path applies; each action writes to MongoDB and publishes to `payment-security-events` (audit) and `ssi-payments` (payment state fact).
+3. **Authorization service** — sole runtime caller of OPA. Exposes evaluate and eligible-approvers APIs to domain services only (no MongoDB). Reads candidate approvers from `users.yaml` for batch eligibility checks.
+4. **SSI indexer** — runs four independent Kafka consumers, all **self-contained** (full snapshots embedded — no API callbacks). Denormalizes `authorization_summary`, `approved_at`, and related fields onto Qdrant and Neo4j for chat retrieval.
    - **InstructionSecurityEventPipeline** (`instruction-security-events`) → Neo4j + Qdrant `source=instruction_security_event`
    - **InstructionPipeline** (`ssi-instructions`) → instruction master graph + Qdrant `source=instruction_state`
    - **PaymentSecurityEventPipeline** (`payment-security-events`) → payment security graph + Qdrant `source=payment_security_event`
    - **PaymentFactPipeline** (`ssi-payments`) → payment master graph + Qdrant `source=payment_fact`
-4. **Chat** — selects a retrieval mode (`events` / `instructions` / `payments` / `all`), runs vector + BM25 + Neo4j in parallel, merges with reciprocal rank fusion. Count, ranking, hierarchy, and approval-by-ID questions use **deterministic planned Cypher** or exact lookups. Instruction approval audit questions return **Who / When** from indexed data and **Why** via LLM rewrite of OPA `authorization_summary`. Other questions use full Ollama synthesis.
+5. **Chat** — selects a retrieval mode (`events` / `instructions` / `payments` / `all`), runs vector + BM25 + Neo4j in parallel, merges with reciprocal rank fusion. Count, ranking, hierarchy, and approval-by-ID questions use **deterministic planned Cypher** or exact lookups. Instruction approval audit questions return **Who / When** from indexed data and **Why** via LLM rewrite of OPA `authorization_summary`. Live **who can approve?** questions bypass RAG and call instruction-service or payment-service eligible-approvers APIs (compliance JWT). Other questions use full Ollama synthesis.
 
 ---
 
@@ -140,7 +146,7 @@ In this demo Kafka runs as a single broker with no replication, which is appropr
 
 **How ZITADEL is used:**
 
-Every request to the ILM carries a ZITADEL-issued JWT Bearer token. The ILM validates it against ZITADEL's OIDC discovery endpoint (`/.well-known/openid-configuration`) and extracts the caller's identity — user ID, roles, LOB, and reporting line — from ZITADEL user metadata:
+Every request to the instruction and payment services carries a ZITADEL-issued JWT Bearer token. Each service validates it against ZITADEL's OIDC discovery endpoint (`/.well-known/openid-configuration`) and extracts the caller's identity — user ID, roles, LOB, and reporting line — from ZITADEL user metadata:
 
 | Metadata key | Meaning | Used for |
 |---|---|---|
@@ -151,7 +157,9 @@ Every request to the ILM carries a ZITADEL-issued JWT Bearer token. The ILM vali
 | `lob` | Owning profit center (FICC, FX, DESK_*) | OPA LOB ownership check |
 | `supervisor_id` | Direct manager's user ID | Inversion-of-control detection in graph |
 
-This metadata is stored in ZITADEL via the `zitadel-seed/seed.py` script, which reads `users.yaml` and calls the ZITADEL admin API to create users and attach metadata. The ILM decodes and validates this metadata on every authenticated request.
+This metadata is stored in ZITADEL via the `zitadel-seed/seed.py` script, which reads `users.yaml` and calls the ZITADEL admin API to create users and attach metadata. Domain services decode and validate this metadata on every authenticated request.
+
+**Service accounts** (`svc-instruction`, `svc-payment`) authenticate to authorization-service and (for payment) instruction-service using machine tokens. On user-initiated lifecycle calls, the domain service forwards the user's JWT in `X-On-Behalf-Of` so OPA evaluates policy for the real actor, not the service account.
 
 **Why ZITADEL over a simpler alternative:** ZITADEL provides a **user metadata API** that allows arbitrary key-value pairs per user (roles, LOB, supervisor). This means identity attributes that drive authorization policy (LOB ownership, seniority, org hierarchy) live in the identity layer — not hard-coded in the application or duplicated across services. Any service that validates the JWT can read the same canonical user attributes without a separate user-profile API call.
 
@@ -163,7 +171,15 @@ This metadata is stored in ZITADEL via the `zitadel-seed/seed.py` script, which 
 
 **How OPA is used:**
 
-Before every instruction mutation, the ILM submits a structured authorization query to OPA:
+Only **authorization-service** calls OPA at runtime. Domain services build structured policy input and POST to authz; authz forwards to OPA's Data API:
+
+```
+instruction-service / payment-service
+  → authorization-service  (svc-* token + X-On-Behalf-Of: user JWT)
+  → OPA POST /v1/data/{instruction|payment}/lifecycle/allow
+```
+
+Example input (built by the domain service, evaluated by authz → OPA):
 
 ```json
 {
@@ -175,7 +191,9 @@ Before every instruction mutation, the ILM submits a structured authorization qu
 }
 ```
 
-OPA evaluates the Rego policy bundle and returns `allow` / `deny`. On success the ILM and payment service also call **`allow_basis`** (human-readable allow reasons) and **`violations`** / **`is_alert`** on denials. The result is stored on every security event as `details.authorization` and copied to `event.reason` for authorized actions.
+OPA evaluates the Rego policy bundle and returns `allow` / `deny`. Authorization-service also queries **`allow_basis`**, **`violations`**, and **`is_alert`**. Domain services store the result on every security event as `details.authorization` and copy `authorization.summary` to `event.reason` for authorized actions.
+
+**OPA security in this demo:** OPA listens on `:8181` with no authentication (typical for a local policy sidecar). The trust boundary is **authorization-service**, which requires `svc-instruction` or `svc-payment` bearer tokens. Do not expose OPA to untrusted networks in production — keep it on an internal network reachable only from authz.
 
 Example authorization block on an APPROVE security event:
 
@@ -208,7 +226,7 @@ Example authorization block on an APPROVE security event:
 
 **Why policy-as-code matters for this demo:** Allows and denials both produce structured audit records in Kafka → Neo4j → Qdrant. Denials surface as `ALERT` events for fraud-pattern questions (_"which users triggered the most policy denial alerts?"_). Allows carry `details.authorization` so the chat can answer approval audit questions with **Who / When / Why**, not just a name from instruction state.
 
-**Why OPA over embedding auth in the ILM:** Policy logic changes independently of application logic. Adding a new rule (e.g. "MD-level approval required for international wire > $10M") requires editing a `.rego` file and reloading OPA — not rebuilding and redeploying the ILM. The `opa-policy-seed` container loads policies from the `opa-policy-seed/policies/` directory at startup.
+**Why OPA over embedding auth in domain services:** Policy logic changes independently of application logic. Adding a new rule (e.g. "MD-level approval required for international wire > $10M") requires editing a `.rego` file and reloading OPA — not rebuilding instruction-service or payment-service. The `opa-policy-seed` container loads policies from the `opa-policy-seed/policies/` directory at startup.
 
 ---
 
@@ -327,7 +345,7 @@ Embedding throughput with `bge-m3` is approximately **80–120 documents/second*
 | http://localhost:8090 | SSI indexer | Search console — vector / BM25 / hybrid / Neo4j |
 | http://localhost:8091 | Demo harness | Generate instruction + payment lifecycle traffic |
 | http://localhost:8092 | SSI chat | Natural-language Q&A (four search modes) |
-| http://localhost:8094 | Authorization service | User directory UI + live OPA policy queries |
+| http://localhost:8094 | Authorization service | OPA evaluation API (service accounts) + user directory UI |
 | http://localhost:8094/ui/ | Authorization service | Read-only user directory (roles, groups, LOBs, managers) |
 | http://localhost:7474/browser/ | Neo4j | Graph browser — `neo4j` / `devpassword` |
 | http://localhost:8080/ui/console | ZITADEL | Identity admin console |
@@ -338,11 +356,11 @@ Embedding throughput with `bge-m3` is approximately **80–120 documents/second*
 
 | Directory | Role |
 |-----------|------|
-| `instruction-service` | FastAPI lifecycle API — OPA authorization with `details.authorization` audit block, Mongo persistence, Kafka publishing |
-| `payment-service` | Cash payment lifecycle against approved SSI instructions — OPA authorization (amount limits, LOB coverage, segregation of duties), Mongo persistence, Kafka publishing, payment and security event UIs |
+| `instruction-service` | FastAPI lifecycle API — routes policy checks to authorization-service (OBO), `details.authorization` audit block, Mongo persistence, Kafka publishing, compliance eligible-approvers API |
+| `payment-service` | Cash payment lifecycle against approved SSI instructions — same authz/OBO pattern, Mongo persistence, Kafka publishing, payment and security event UIs, compliance eligible-approvers API |
 | `ssi-indexer` | Four Kafka consumers — instruction + payment security events and state facts → Neo4j graph writer + Qdrant hybrid indexer (`ssi_search_index`) + search console UI |
 | `ssi-chat` | RAG chat — four search modes, triple retrieval, Who/When/Why approval audit (deterministic facts + LLM WHY rewrite), planned Cypher, regression suite; compliance sign-in for live **who can approve?** via payment-service and instruction-service |
-| `authorization-service` | OPA policy evaluation and user directory UI — no database; domain services route eligibility and lifecycle checks here |
+| `authorization-service` | Stateless OPA gateway — lifecycle evaluate + batch eligible-approvers; user directory UI; reads `users.yaml`; no database |
 | `ssi-demo-harness` | ZITADEL-authenticated UI to drive lifecycles and OPA policy scenarios |
 | `neo4j-graph-model` | Graph schema docs, Cypher constraints/indexes, example queries |
 | `opa-policy-seed` | Rego policies — `instruction/` + `payment/` packages with `allow_basis`, `violations`, lifecycle rules |
@@ -463,9 +481,9 @@ All passwords are `Password1!`. Login names follow `{user_id}@ssi.local`.
 | `svc-instruction` | — | Service account — instruction service → authorization-service (OBO) | — |
 | `svc-payment` | — | Service account — payment service → authorization-service and ILM (OBO) | — |
 | `admin-001` | Platform Administrator | **Platform admin** — secured UIs (harness, browsers, ETL console, user directory) and **ssi-chat** | — |
-| `comp-001` / `comp-002` | Compliance analysts | **ssi-chat** and live OPA eligibility questions | — |
+| `comp-001` / `comp-002` | Compliance analysts | **ssi-chat** and live eligible-approvers questions (via domain services) | — |
 
-**Platform admin (`admin-001`)** — sign in at any secured admin UI (test harness, instruction browser, payment browser, ETL indexer, authorization user directory) and at **ssi-chat** (`http://localhost:8092`). Requires `PLATFORM_ADMIN` role and `ADMIN` group. All `/api/ui/*` and harness `/api/*` routes require this login; chat and authorization eligibility APIs accept `PLATFORM_ADMIN` in addition to compliance roles. Business lifecycle APIs still use their respective seeded users via Zitadel JWT.
+**Platform admin (`admin-001`)** — sign in at any secured admin UI (test harness, instruction browser, payment browser, ETL indexer, authorization user directory) and at **ssi-chat** (`http://localhost:8092`). Requires `PLATFORM_ADMIN` role and `ADMIN` group. All `/api/ui/*` and harness `/api/*` routes require this login; chat and domain-service eligible-approvers APIs accept `PLATFORM_ADMIN` in addition to compliance roles. Business lifecycle APIs still use their respective seeded users via ZITADEL JWT.
 
 After changing `users.yaml`, re-seed Zitadel (`zitadel-seed` container or manual seed script).
 
@@ -754,8 +772,10 @@ Each service reads configuration from environment variables (see its own README 
 ```
 .
 ├── docker-compose.yml
-├── instruction-service/             # ILM API + instruction / security UIs
-├── payment-service/                 # Payment API + payment / security UIs
+├── instruction-service/             # Instruction lifecycle API + UIs
+├── payment-service/                 # Payment lifecycle API + UIs
+├── authorization-service/           # OPA gateway + user directory UI
+├── shared/authz_client/             # HTTP client used by domain services → authz
 ├── ssi-indexer/                     # Kafka indexer + search console
 ├── ssi-chat/                        # RAG chat + compliance policy Q&A
 ├── ssi-demo-harness/                # Demo scenario harness UI

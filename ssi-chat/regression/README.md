@@ -59,7 +59,7 @@ Use `CHAT_REGRESSION_SEED=1` to run harness seed steps before the suite.
 
 ## API smoke (cross-service)
 
-Before chat cases, the runner executes **API smoke checks** across all six services (health, auth gates, admin UI APIs, indexer search/graph/cypher, authorization eligibility). Use:
+Before chat cases, the runner executes **API smoke checks** across services (health, auth gates, admin UI APIs, indexer search/graph/cypher, payment/instruction eligible-approvers). Use:
 
 ```bash
 # Smoke only (fast, no Ollama chat cases)
@@ -89,6 +89,7 @@ RUN_API_SMOKE=1 pytest tests/test_api_smoke.py -v
 | **payment-service** | UI list (admin), REST auth gate; lifecycle via harness seed |
 | **ssi-indexer** | Stats, vector search, graph events, cypher run/generate, auth gates |
 | **ssi-chat** | Compliance login, `/api/chat` (~60 YAML cases), compliance-users |
+| **authorization-service** | Health, service-auth gate on evaluate endpoints |
 | **payment-service** / **instruction-service** | Payment/instruction eligible-approvers (compliance JWT), auth gate |
 
 Chat cases exercise RAG end-to-end; they do not call ILM/payment REST APIs directly. Indexer and authz are covered by API smoke, not chat YAML.

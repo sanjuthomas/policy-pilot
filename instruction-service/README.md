@@ -30,6 +30,29 @@ For local header-based testing without JWT, set `AUTH_MODE=headers` and pass sub
 
 Demo users are defined in `zitadel-seed/users.yaml` (password `Password1!`).
 
+## Policy authorization
+
+Instruction-service does **not** call OPA directly. Lifecycle mutations delegate to **authorization-service** via `shared/authz_client`:
+
+1. Service account `svc-instruction` authenticates at startup.
+2. On each lifecycle call, if the request includes `Authorization: Bearer <user-token>`, authz receives OBO headers (`svc-*` token + `X-On-Behalf-Of`).
+3. Authz evaluates OPA and returns allow/deny, `allow_basis`, and violations.
+
+| Authz endpoint | When |
+|----------------|------|
+| `POST /api/v1/authorization/instructions/evaluate` | Create, update, submit, approve, reject, suspend, reactivate, use, view |
+| `POST /api/v1/authorization/instructions/eligible-approvers` | Compliance “who can approve?” (service token only) |
+
+### Compliance: eligible approvers
+
+```bash
+curl -s -X POST "http://localhost:8000/api/v1/instructions/{instruction_id}/eligible-approvers" \
+  -H "Authorization: Bearer <compliance-or-admin-token>" \
+  -H "X-Session-Id: <session-id>"
+```
+
+Requires `COMPLIANCE_ANALYST`, `COMPLIANCE_OFFICER`, or `PLATFORM_ADMIN`. The service loads the instruction, then calls authz for batch OPA evaluation.
+
 ## Owning profit center (`owning_lob`)
 
 | Value | Meaning |
@@ -59,8 +82,8 @@ Every authorized create/read/mutation emits a document to MongoDB `security_even
 
 | Outcome | Severity | When |
 |---------|----------|------|
-| Authorized action | `INFO` | OPA allowed |
-| Policy denial | `ALERT` | OPA denied before any write |
+| Authorized action | `INFO` | Policy allowed (via authorization-service → OPA) |
+| Policy denial | `ALERT` | Policy denied before any write |
 
 Key OPA rules include: creator cannot approve own instruction; approver must not report directly to creator (inversion of control); approver LOB must match instruction LOB.
 
@@ -68,7 +91,7 @@ Events use ECS-style fields (`event`, `actor`, `resource`, `source`).
 
 ### Authorization audit block
 
-On every OPA decision the ILM stores `details.authorization`:
+On every policy decision the service stores `details.authorization`:
 
 | Field | Content |
 |-------|---------|
@@ -139,4 +162,8 @@ pip install -e .
 uvicorn inst.main:app --reload --port 8000
 ```
 
-Requires MongoDB, OPA, and (for JWT mode) ZITADEL — see root `docker-compose.yml`.
+Requires MongoDB, **authorization-service**, and (for JWT mode) ZITADEL — see root `docker-compose.yml`.
+
+| Variable | Default |
+|----------|---------|
+| `AUTHORIZATION_SERVICE_URL` | `http://authorization-service:8094` |
