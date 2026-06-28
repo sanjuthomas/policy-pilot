@@ -5,12 +5,14 @@ import logging
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from authz_client import AuthzClient
+
 from inst.admin import get_admin_subject
+from inst.config import settings
 from inst.kafka_publisher import kafka_publisher
 from inst.models.enums import LifecycleAction
 from inst.models.instruction import CashSettlementInstruction
 from inst.models.instruction_fact import InstructionFact
-from inst.opa import OpaClient
 from inst.security_event_repair import (
     _subject_from_actor,
     repair_security_event_authorization,
@@ -35,9 +37,9 @@ async def repair_authorization(
     limit: int = 500,
     _admin=Depends(get_admin_subject),
 ) -> RepairAuthorizationResponse:
-    """Backfill missing OPA authorization on historical success security events."""
+    """Backfill missing authorization on historical success security events."""
     repo = SecurityEventRepository()
-    opa = OpaClient()
+    authz = AuthzClient(settings.authorization_service_url)
     documents = await repo.find_missing_authorization(limit=limit)
 
     repaired = 0
@@ -49,7 +51,7 @@ async def repair_authorization(
         event_id = document.get("event_id", "?")
         action = (document.get("event") or {}).get("action", "?")
         try:
-            fixed = await repair_security_event_authorization(document, opa=opa)
+            fixed = await repair_security_event_authorization(document, authz=authz)
         except Exception as exc:
             skipped += 1
             logs.append(f"{event_id} ({action}) error: {exc}")

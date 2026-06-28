@@ -9,6 +9,8 @@ from platform_auth import is_platform_admin
 from sequence_client import SequenceClient
 from sequence_client.errors import SequenceClientError
 
+from authz_client import AuthzClient
+
 from ps.authorization import (
     build_authorization_block,
     details_with_authorization,
@@ -21,9 +23,9 @@ from ps.models.api import LifecycleEvent, RejectPaymentRequest, Subject, UserRef
 from ps.models.enums import PaymentAction, PaymentStatus
 from ps.models.payment import Payment
 from ps.models.security_event import PaymentSecurityEvent
-from ps.opa import OpaClient
 from ps.repository import PaymentNotFoundError, PaymentRepository
 from ps.security_event_repository import SecurityEventRepository
+from ps.service_identity import service_identity
 
 logger = logging.getLogger(__name__)
 
@@ -155,9 +157,43 @@ class PaymentService:
     def __init__(self, sequence_client: SequenceClient | None = None) -> None:
         self.repo = PaymentRepository()
         self.event_repo = SecurityEventRepository()
-        self.opa = OpaClient()
+        self.authz = AuthzClient(settings.authorization_service_url)
         self.ilm = IlmClient()
         self.sequence = sequence_client or SequenceClient(settings.sequence_service_url)
+
+    async def _evaluate_policy(
+        self,
+        action: PaymentAction,
+        subject: Subject,
+        payment: Payment,
+        *,
+        instruction_end_date: str = "",
+        instruction_status: str = "",
+        bearer_token: str | None = None,
+        session_id: str | None = None,
+    ):
+        await service_identity.ensure_logged_in()
+        common = {
+            "action": action.value,
+            "payment": payment.to_opa_payment(
+                instruction_end_date=instruction_end_date,
+                instruction_status=instruction_status,
+            ),
+            "instruction_end_date": instruction_end_date,
+            "instruction_status": instruction_status,
+            "service_token": service_identity.token,
+            "service_session_id": service_identity.session_id,
+        }
+        if bearer_token and service_identity.token:
+            return await self.authz.evaluate_payment(
+                **common,
+                user_token=bearer_token,
+                user_session_id=session_id,
+            )
+        return await self.authz.evaluate_payment(
+            **common,
+            subject=subject.model_dump(mode="json"),
+        )
 
     async def _authorize(
         self,
@@ -167,13 +203,17 @@ class PaymentService:
         *,
         instruction_end_date: str = "",
         instruction_status: str = "",
+        bearer_token: str | None = None,
+        session_id: str | None = None,
     ) -> dict:
-        decision = await self.opa.evaluate(
+        decision = await self._evaluate_policy(
             action,
             subject,
             payment,
             instruction_end_date=instruction_end_date,
             instruction_status=instruction_status,
+            bearer_token=bearer_token,
+            session_id=session_id,
         )
         authorization = build_authorization_block(
             decision,
@@ -275,6 +315,8 @@ class PaymentService:
                 payment,
                 instruction_end_date=end_date,
                 instruction_status=instruction_status,
+                bearer_token=bearer_token,
+                session_id=session_id,
             )
         except PermissionError:
             raise
@@ -356,6 +398,8 @@ class PaymentService:
                 payment,
                 instruction_end_date=instruction_end_date,
                 instruction_status=instruction_status,
+                bearer_token=bearer_token,
+                session_id=session_id,
             )
         except PermissionError:
             raise
@@ -427,6 +471,8 @@ class PaymentService:
                 payment,
                 instruction_end_date=instruction_end_date,
                 instruction_status=instruction_status,
+                bearer_token=bearer_token,
+                session_id=session_id,
             )
         except PermissionError:
             raise
@@ -493,6 +539,8 @@ class PaymentService:
                 payment,
                 instruction_end_date=instruction_end_date,
                 instruction_status=instruction_status,
+                bearer_token=bearer_token,
+                session_id=session_id,
             )
         except PermissionError:
             raise

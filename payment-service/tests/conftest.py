@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from ps.models.api import Subject
@@ -12,6 +13,15 @@ from ps.models.payment import Payment
 @pytest.fixture(scope="session", autouse=True)
 def disable_open_telemetry_for_tests() -> None:
     os.environ["OTEL_SDK_DISABLED"] = "true"
+
+
+@pytest.fixture(autouse=True)
+def mock_service_identity():
+    with patch("ps.service.service_identity") as identity:
+        identity.token = "svc-payment-token"
+        identity.session_id = "svc-payment-session"
+        identity.ensure_logged_in = AsyncMock()
+        yield identity
 
 
 @pytest.fixture

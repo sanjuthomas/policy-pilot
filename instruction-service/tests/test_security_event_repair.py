@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -86,17 +86,22 @@ async def test_repair_success(sample_instruction) -> None:
         violations=[],
         is_alert=False,
     )
-    mock_opa = AsyncMock()
-    mock_opa.evaluate = AsyncMock(return_value=decision)
+    mock_authz = AsyncMock()
+    mock_authz.evaluate_instruction = AsyncMock(return_value=decision)
 
-    repaired = await repair_security_event_authorization(document, opa=mock_opa)
+    with patch("inst.security_event_repair.service_identity") as mock_identity:
+        mock_identity.token = "svc-token"
+        mock_identity.session_id = "sess-1"
+        mock_identity.ensure_logged_in = AsyncMock()
+        repaired = await repair_security_event_authorization(document, authz=mock_authz)
+
     assert repaired is not None
     assert repaired["details"]["authorization"]["decision"] == "allow"
     assert repaired["event"]["reason"] is not None
 
 
 @pytest.mark.asyncio
-async def test_repair_returns_none_when_opa_denies(sample_instruction) -> None:
+async def test_repair_returns_none_when_policy_denies(sample_instruction) -> None:
     document = {
         "event_id": "evt-2",
         "event": {"outcome": "success", "action": "SUBMIT"},
@@ -110,7 +115,11 @@ async def test_repair_returns_none_when_opa_denies(sample_instruction) -> None:
         violations=["INVALID_STATE_TRANSITION"],
         is_alert=False,
     )
-    mock_opa = AsyncMock()
-    mock_opa.evaluate = AsyncMock(return_value=decision)
+    mock_authz = AsyncMock()
+    mock_authz.evaluate_instruction = AsyncMock(return_value=decision)
 
-    assert await repair_security_event_authorization(document, opa=mock_opa) is None
+    with patch("inst.security_event_repair.service_identity") as mock_identity:
+        mock_identity.token = "svc-token"
+        mock_identity.session_id = "sess-1"
+        mock_identity.ensure_logged_in = AsyncMock()
+        assert await repair_security_event_authorization(document, authz=mock_authz) is None

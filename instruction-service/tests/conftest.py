@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -14,6 +15,15 @@ from tests.helpers import domestic_payload
 @pytest.fixture(scope="session", autouse=True)
 def disable_open_telemetry_for_tests() -> None:
     os.environ["OTEL_SDK_DISABLED"] = "true"
+
+
+@pytest.fixture(autouse=True)
+def mock_service_identity():
+    with patch("inst.service.service_identity") as identity:
+        identity.token = "svc-instruction-token"
+        identity.session_id = "svc-instruction-session"
+        identity.ensure_logged_in = AsyncMock()
+        yield identity
 
 
 @pytest.fixture

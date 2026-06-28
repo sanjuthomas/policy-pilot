@@ -31,10 +31,19 @@ class Settings(BaseSettings):
     auth_mode: str = "auto"
 
     compliance_roles: str = "COMPLIANCE_ANALYST,COMPLIANCE_OFFICER,PLATFORM_ADMIN"
+    authorized_service_user_ids: str = "svc-instruction,svc-payment"
 
     @property
     def compliance_role_set(self) -> set[str]:
         return {role.strip() for role in self.compliance_roles.split(",") if role.strip()}
+
+    @property
+    def authorized_service_user_id_set(self) -> set[str]:
+        return {
+            user_id.strip()
+            for user_id in self.authorized_service_user_ids.split(",")
+            if user_id.strip()
+        }
 
     @model_validator(mode="after")
     def load_service_pat_from_file(self) -> "Settings":

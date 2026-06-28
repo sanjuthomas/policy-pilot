@@ -1,19 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
+
+from authz_client import PolicyDecision
 
 from inst.models.api import Subject
 from inst.models.enums import LifecycleAction
 from inst.models.instruction import CashSettlementInstruction
-
-
-@dataclass(frozen=True)
-class PolicyDecision:
-    allowed: bool
-    allow_basis: list[str]
-    violations: list[str]
-    is_alert: bool
 
 
 VIOLATION_LABELS: dict[str, str] = {

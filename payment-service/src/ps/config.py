@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     security_events_collection: str = "payment-service"
     application_name: str = "payment-service"
 
-    opa_url: str = "http://localhost:8181"
+    authorization_service_url: str = "http://localhost:8094"
     ilm_url: str = "http://localhost:8000"
     sequence_service_url: str = "http://localhost:8095"
 

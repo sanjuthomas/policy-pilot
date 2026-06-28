@@ -237,3 +237,36 @@ def subject_from_bearer_token(access_token: str, *, session_id: str | None = Non
             ) from exc
 
     raise HTTPException(status_code=401, detail="invalid access token")
+
+
+def subject_from_obo_call(
+    service_token: str,
+    user_token: str,
+    *,
+    service_session_id: str | None = None,
+    user_session_id: str | None = None,
+) -> Subject:
+    try:
+        service_subject = subject_from_bearer_token(
+            service_token, session_id=service_session_id
+        )
+    except HTTPException as exc:
+        raise HTTPException(
+            status_code=401,
+            detail=f"OBO service token invalid: {exc.detail}",
+        ) from exc
+
+    try:
+        user_subject = subject_from_bearer_token(user_token, session_id=user_session_id)
+    except HTTPException as exc:
+        raise HTTPException(
+            status_code=401,
+            detail=f"OBO user token invalid: {exc.detail}",
+        ) from exc
+
+    return user_subject.model_copy(
+        update={
+            "delegated_by": service_subject.user_id,
+            "delegated_by_roles": service_subject.roles,
+        }
+    )

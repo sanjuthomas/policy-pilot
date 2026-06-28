@@ -45,10 +45,10 @@ def mock_repo() -> MagicMock:
 
 
 @pytest.fixture
-def mock_opa() -> AsyncMock:
-    opa = AsyncMock()
-    opa.evaluate = AsyncMock(return_value=_allowed_decision())
-    return opa
+def mock_authz() -> AsyncMock:
+    authz = AsyncMock()
+    authz.evaluate_instruction = AsyncMock(return_value=_allowed_decision())
+    return authz
 
 
 @pytest.fixture
@@ -64,14 +64,14 @@ def mock_security_events() -> MagicMock:
 @pytest.fixture
 def service(
     mock_repo: MagicMock,
-    mock_opa: AsyncMock,
+    mock_authz: AsyncMock,
     mock_security_events: MagicMock,
 ) -> InstructionService:
     sequence_client = AsyncMock()
     sequence_client.next_instruction_id = AsyncMock(return_value="instr-001")
     return InstructionService(
         repository=mock_repo,
-        opa_client=mock_opa,
+        authz_client=mock_authz,
         security_events=mock_security_events,
         sequence_client=sequence_client,
     )
@@ -111,12 +111,12 @@ async def test_create_success(
 @pytest.mark.asyncio
 async def test_create_denied_records_policy_denial(
     service: InstructionService,
-    mock_opa: AsyncMock,
+    mock_authz: AsyncMock,
     mock_security_events: MagicMock,
     sample_create_request: CreateInstructionRequest,
     sample_subject: Subject,
 ) -> None:
-    mock_opa.evaluate = AsyncMock(return_value=_denied_decision())
+    mock_authz.evaluate_instruction = AsyncMock(return_value=_denied_decision())
 
     with pytest.raises(PermissionError):
         await service.create(sample_create_request, sample_subject)
@@ -331,12 +331,14 @@ async def test_use_single_use_marks_used(
 async def test_list_skips_denied(
     service: InstructionService,
     mock_repo: MagicMock,
-    mock_opa: AsyncMock,
+    mock_authz: AsyncMock,
     sample_subject: Subject,
     sample_instruction: CashSettlementInstruction,
 ) -> None:
     mock_repo.list_current = AsyncMock(return_value=[_versioned(sample_instruction)])
-    mock_opa.evaluate = AsyncMock(side_effect=[_denied_decision(), _allowed_decision()])
+    mock_authz.evaluate_instruction = AsyncMock(
+        side_effect=[_denied_decision(), _allowed_decision()]
+    )
     mock_repo.get_current = AsyncMock(return_value=_versioned(sample_instruction))
 
     visible = await service.list(sample_subject)

@@ -10,6 +10,7 @@ from telemetry import configure_telemetry, get_logger, instrument_app, shutdown_
 
 from authz import __version__
 from authz.auth_routes import router as auth_router
+from authz.authorization_routes import router as authorization_router
 from authz.config import settings
 from authz.eligibility import EligibilityService
 from authz.ilm_client import IlmClient
@@ -67,6 +68,7 @@ app = FastAPI(
 )
 
 app.include_router(auth_router)
+app.include_router(authorization_router, prefix=settings.api_prefix)
 app.include_router(router, prefix=settings.api_prefix)
 app.include_router(ui_router)
 app.mount("/ui/static", StaticFiles(directory=STATIC_DIR), name="ui-static")

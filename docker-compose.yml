@@ -202,7 +202,9 @@ services:
       MONGODB_DATABASE: ssi_cash_instructions
       SECURITY_EVENTS_DATABASE: security_events
       SECURITY_EVENTS_COLLECTION: instruction-service
-      OPA_URL: http://opa:8181
+      AUTHORIZATION_SERVICE_URL: http://authorization-service:8094
+      SERVICE_USER_ID: svc-instruction
+      SERVICE_USER_PASSWORD: Password1!
       OIDC_ISSUER_URL: http://localhost:8080
       OIDC_INTERNAL_URL: http://zitadel-proxy
       ZITADEL_INTERNAL_URL: http://zitadel-proxy
@@ -304,7 +306,7 @@ services:
       MONGODB_COLLECTION: payments
       SECURITY_EVENTS_DATABASE: security_events
       SECURITY_EVENTS_COLLECTION: payment-service
-      OPA_URL: http://opa:8181
+      AUTHORIZATION_SERVICE_URL: http://authorization-service:8094
       ILM_URL: http://instruction-service:8000
       SERVICE_USER_ID: svc-payment
       SERVICE_USER_PASSWORD: Password1!
@@ -330,6 +332,8 @@ services:
       kafka-init:
         condition: service_completed_successfully
       instruction-service:
+        condition: service_started
+      authorization-service:
         condition: service_started
       zitadel-api:
         condition: service_healthy

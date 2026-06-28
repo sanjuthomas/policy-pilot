@@ -4,15 +4,19 @@ import copy
 import logging
 from typing import Any
 
+from authz_client import AuthzClient
+
 from inst.authorization import (
+    PolicyDecision,
     build_authorization_block,
     details_with_authorization,
     instruction_resource_context,
 )
+from inst.config import settings
 from inst.models.api import Subject
 from inst.models.enums import InstructionStatus, LifecycleAction
 from inst.models.instruction import CashSettlementInstruction
-from inst.opa import OpaClient
+from inst.service_identity import service_identity
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +52,7 @@ def _instruction_for_opa_replay(
     snapshot: dict[str, Any],
     action: LifecycleAction,
 ) -> CashSettlementInstruction:
-    """Rewind post-mutation snapshots so OPA sees pre-transition instruction state."""
+    """Rewind post-mutation snapshots so policy evaluation sees pre-transition state."""
     snap = copy.deepcopy(snapshot)
 
     if action == LifecycleAction.APPROVE:
@@ -84,9 +88,9 @@ def _instruction_for_opa_replay(
 async def repair_security_event_authorization(
     document: dict[str, Any],
     *,
-    opa: OpaClient | None = None,
+    authz: AuthzClient | None = None,
 ) -> dict[str, Any] | None:
-    """Recompute and attach missing OPA authorization on a stored security event."""
+    """Recompute and attach missing authorization on a stored security event."""
     details = document.get("details") or {}
     if details.get("authorization"):
         return None
@@ -112,10 +116,24 @@ async def repair_security_event_authorization(
     if not snapshot or not actor.get("user_id"):
         return None
 
-    client = opa or OpaClient()
+    await service_identity.ensure_logged_in()
+    client = authz or AuthzClient(settings.authorization_service_url)
     subject = _subject_from_actor(actor)
     instruction = _instruction_for_opa_replay(snapshot, action)
-    decision = await client.evaluate(action, subject, instruction)
+    raw = await client.evaluate_instruction(
+        action=action.value,
+        instruction=instruction.to_opa_instruction(),
+        account=instruction.to_opa_account(),
+        service_token=service_identity.token,
+        service_session_id=service_identity.session_id,
+        subject=subject.model_dump(mode="json"),
+    )
+    decision = PolicyDecision(
+        allowed=raw.allowed,
+        allow_basis=list(raw.allow_basis),
+        violations=list(raw.violations),
+        is_alert=raw.is_alert,
+    )
     authorization = build_authorization_block(
         decision,
         subject,
@@ -125,7 +143,7 @@ async def repair_security_event_authorization(
 
     if not decision.allowed:
         logger.warning(
-            "authorization repair OPA replay denied action=%s event_id=%s summary=%s",
+            "authorization repair replay denied action=%s event_id=%s summary=%s",
             action.value,
             document.get("event_id"),
             authorization.get("summary"),

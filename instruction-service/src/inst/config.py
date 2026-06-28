@@ -12,7 +12,9 @@ class Settings(BaseSettings):
     security_events_database: str = "security_events"
     security_events_collection: str = "instruction-service"
     application_name: str = "instruction-service"
-    opa_url: str = "http://localhost:8181"
+    authorization_service_url: str = "http://localhost:8094"
+    service_user_id: str = "svc-instruction"
+    service_user_password: str = "Password1!"
     api_prefix: str = "/api/v1"
     oidc_issuer_url: str | None = None
     oidc_internal_url: str | None = None

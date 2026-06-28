@@ -13,6 +13,8 @@ class Subject(BaseModel):
     groups: list[str] = Field(default_factory=list)
     supervisor_id: str | None = None
     covering_lobs: list[str] = Field(default_factory=list)
+    delegated_by: str | None = None
+    delegated_by_roles: list[str] = Field(default_factory=list)
 
     def to_opa_subject(self) -> dict:
         payload: dict = {
@@ -21,6 +23,7 @@ class Subject(BaseModel):
             "roles": self.roles,
             "groups": self.groups,
             "covering_lobs": self.covering_lobs,
+            "delegated_by_roles": self.delegated_by_roles,
         }
         if self.lob is not None:
             payload["lob"] = self.lob
@@ -163,3 +166,25 @@ class UserDirectoryResponse(BaseModel):
     count: int
     email_domain: str
     users: list[UserDirectoryRow]
+
+
+class PolicyDecisionResponse(BaseModel):
+    allowed: bool
+    allow_basis: list[str] = Field(default_factory=list)
+    violations: list[str] = Field(default_factory=list)
+    is_alert: bool = False
+
+
+class InstructionEvaluateRequest(BaseModel):
+    action: str
+    instruction: dict
+    account: dict
+    subject: Subject | None = None
+
+
+class PaymentEvaluateRequest(BaseModel):
+    action: str
+    payment: dict
+    instruction_end_date: str = ""
+    instruction_status: str = ""
+    subject: Subject | None = None

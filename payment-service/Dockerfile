@@ -10,6 +10,10 @@ COPY shared/sequence_client/pyproject.toml shared/sequence_client/pyproject.toml
 COPY shared/sequence_client/src shared/sequence_client/src
 RUN pip install --no-cache-dir ./shared/sequence_client
 
+COPY shared/authz_client/pyproject.toml shared/authz_client/pyproject.toml
+COPY shared/authz_client/src shared/authz_client/src
+RUN pip install --no-cache-dir ./shared/authz_client
+
 COPY shared/telemetry/pyproject.toml shared/telemetry/pyproject.toml
 COPY shared/telemetry/src shared/telemetry/src
 RUN pip install --no-cache-dir ./shared/telemetry

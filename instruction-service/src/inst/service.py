@@ -4,6 +4,8 @@ from uuid import uuid4
 from sequence_client import SequenceClient
 from sequence_client.errors import SequenceClientError
 
+from authz_client import AuthzClient
+
 from inst.authorization import (
     build_authorization_block,
     details_with_authorization,
@@ -33,9 +35,9 @@ from inst.models.instruction import (
 )
 from inst.models.instruction_fact import InstructionFact
 from inst.models.security_event import SecurityEvent
-from inst.opa import OpaClient
 from inst.repository import InstructionRepository
 from inst.security_event_repository import SecurityEventRepository
+from inst.service_identity import service_identity
 from inst.storage import VersionedInstruction
 
 
@@ -157,12 +159,12 @@ class InstructionService:
     def __init__(
         self,
         repository: InstructionRepository | None = None,
-        opa_client: OpaClient | None = None,
+        authz_client: AuthzClient | None = None,
         security_events: SecurityEventRepository | None = None,
         sequence_client: SequenceClient | None = None,
     ) -> None:
         self.repository = repository or InstructionRepository()
-        self.opa = opa_client or OpaClient()
+        self.authz = authz_client or AuthzClient(settings.authorization_service_url)
         self.security_events = security_events or SecurityEventRepository()
         self.sequence = sequence_client or SequenceClient(settings.sequence_service_url)
 
@@ -170,16 +172,52 @@ class InstructionService:
     def _should_record_security_event(subject: Subject) -> bool:
         return subject.user_id not in settings.security_event_excluded_user_id_set
 
+    async def _evaluate_policy(
+        self,
+        action: LifecycleAction,
+        subject: Subject,
+        instruction: CashSettlementInstruction,
+        *,
+        bearer_token: str | None = None,
+        session_id: str | None = None,
+    ):
+        await service_identity.ensure_logged_in()
+        common = {
+            "action": action.value,
+            "instruction": instruction.to_opa_instruction(),
+            "account": instruction.to_opa_account(),
+            "service_token": service_identity.token,
+            "service_session_id": service_identity.session_id,
+        }
+        if bearer_token and service_identity.token:
+            return await self.authz.evaluate_instruction(
+                **common,
+                user_token=bearer_token,
+                user_session_id=session_id,
+            )
+        return await self.authz.evaluate_instruction(
+            **common,
+            subject=subject.model_dump(mode="json"),
+        )
+
     async def _authorize(
         self,
         action: LifecycleAction,
         subject: Subject,
         instruction: CashSettlementInstruction,
         *,
+        bearer_token: str | None = None,
+        session_id: str | None = None,
         record_security_event: bool = False,
         security_event_details: dict | None = None,
     ) -> dict:
-        decision = await self.opa.evaluate(action, subject, instruction)
+        decision = await self._evaluate_policy(
+            action,
+            subject,
+            instruction,
+            bearer_token=bearer_token,
+            session_id=session_id,
+        )
         authorization = build_authorization_block(
             decision,
             subject,
@@ -287,6 +325,8 @@ class InstructionService:
         subject: Subject,
         details: dict | None = None,
         *,
+        bearer_token: str | None = None,
+        session_id: str | None = None,
         skip_authorize: bool = False,
     ) -> VersionedInstruction:
         if not skip_authorize:
@@ -294,6 +334,8 @@ class InstructionService:
                 action,
                 subject,
                 instruction,
+                bearer_token=bearer_token,
+                session_id=session_id,
                 record_security_event=True,
                 security_event_details=details,
             )
@@ -307,7 +349,12 @@ class InstructionService:
         )
 
     async def create(
-        self, request: CreateInstructionRequest, subject: Subject
+        self,
+        request: CreateInstructionRequest,
+        subject: Subject,
+        *,
+        bearer_token: str | None = None,
+        session_id: str | None = None,
     ) -> InstructionResponse:
         business_date = datetime.now(timezone.utc).date()
         try:
@@ -327,6 +374,8 @@ class InstructionService:
             LifecycleAction.CREATE,
             subject,
             instruction,
+            bearer_token=bearer_token,
+            session_id=session_id,
             record_security_event=True,
         )
         details = details_with_authorization(None, authorization)
@@ -345,6 +394,9 @@ class InstructionService:
         instruction_id: str,
         request: UpdateInstructionRequest,
         subject: Subject,
+        *,
+        bearer_token: str | None = None,
+        session_id: str | None = None,
     ) -> InstructionResponse:
         current = await self.repository.get_current(instruction_id)
         instruction = current.instruction
@@ -376,6 +428,8 @@ class InstructionService:
             updated,
             LifecycleAction.UPDATE,
             subject,
+            bearer_token=bearer_token,
+            session_id=session_id,
         )
         return _to_response(saved)
 
@@ -384,6 +438,9 @@ class InstructionService:
         instruction_id: str,
         subject: Subject,
         request: DeleteInstructionRequest | None = None,
+        *,
+        bearer_token: str | None = None,
+        session_id: str | None = None,
     ) -> InstructionResponse:
         current = await self.repository.get_current(instruction_id)
         instruction = current.instruction.model_copy(deep=True)
@@ -406,15 +463,26 @@ class InstructionService:
             LifecycleAction.DELETE,
             subject,
             details,
+            bearer_token=bearer_token,
+            session_id=session_id,
         )
         return _to_response(saved)
 
-    async def get(self, instruction_id: str, subject: Subject) -> InstructionResponse:
+    async def get(
+        self,
+        instruction_id: str,
+        subject: Subject,
+        *,
+        bearer_token: str | None = None,
+        session_id: str | None = None,
+    ) -> InstructionResponse:
         record = await self.repository.get_current(instruction_id)
         authorization = await self._authorize(
             LifecycleAction.VIEW,
             subject,
             record.instruction,
+            bearer_token=bearer_token,
+            session_id=session_id,
             record_security_event=True,
         )
         await self._record_authorized_action(
@@ -427,9 +495,19 @@ class InstructionService:
         return _to_response(record)
 
     async def list_versions(
-        self, instruction_id: str, subject: Subject
+        self,
+        instruction_id: str,
+        subject: Subject,
+        *,
+        bearer_token: str | None = None,
+        session_id: str | None = None,
     ) -> list[InstructionResponse]:
-        await self.get(instruction_id, subject)
+        await self.get(
+            instruction_id,
+            subject,
+            bearer_token=bearer_token,
+            session_id=session_id,
+        )
         records = await self.repository.list_versions(instruction_id)
         return [_to_response(record) for record in records]
 
@@ -441,6 +519,8 @@ class InstructionService:
         status: str | None = None,
         limit: int = 100,
         include_deleted: bool = False,
+        bearer_token: str | None = None,
+        session_id: str | None = None,
     ) -> list[InstructionResponse]:
         records = await self.repository.list_current(
             owning_lob=owning_lob, status=status, limit=limit
@@ -457,6 +537,8 @@ class InstructionService:
                     LifecycleAction.VIEW,
                     subject,
                     record.instruction,
+                    bearer_token=bearer_token,
+                    session_id=session_id,
                     record_security_event=True,
                 )
             except PermissionError:
@@ -471,7 +553,14 @@ class InstructionService:
             visible.append(_to_response(record))
         return visible
 
-    async def submit(self, instruction_id: str, subject: Subject) -> InstructionResponse:
+    async def submit(
+        self,
+        instruction_id: str,
+        subject: Subject,
+        *,
+        bearer_token: str | None = None,
+        session_id: str | None = None,
+    ) -> InstructionResponse:
         current = await self.repository.get_current(instruction_id)
         instruction = current.instruction.model_copy(deep=True)
         if instruction.status != InstructionStatus.DRAFT:
@@ -481,6 +570,8 @@ class InstructionService:
             LifecycleAction.SUBMIT,
             subject,
             instruction,
+            bearer_token=bearer_token,
+            session_id=session_id,
             record_security_event=True,
         )
         instruction.status = InstructionStatus.PENDING
@@ -491,11 +582,20 @@ class InstructionService:
             LifecycleAction.SUBMIT,
             subject,
             details=details,
+            bearer_token=bearer_token,
+            session_id=session_id,
             skip_authorize=True,
         )
         return _to_response(saved)
 
-    async def approve(self, instruction_id: str, subject: Subject) -> InstructionResponse:
+    async def approve(
+        self,
+        instruction_id: str,
+        subject: Subject,
+        *,
+        bearer_token: str | None = None,
+        session_id: str | None = None,
+    ) -> InstructionResponse:
         current = await self.repository.get_current(instruction_id)
         instruction = current.instruction.model_copy(deep=True)
         if instruction.status != InstructionStatus.PENDING:
@@ -505,6 +605,8 @@ class InstructionService:
             LifecycleAction.APPROVE,
             subject,
             instruction,
+            bearer_token=bearer_token,
+            session_id=session_id,
             record_security_event=True,
         )
         instruction.status = (
@@ -528,6 +630,8 @@ class InstructionService:
             LifecycleAction.APPROVE,
             subject,
             details=details,
+            bearer_token=bearer_token,
+            session_id=session_id,
             skip_authorize=True,
         )
         return _to_response(saved)
@@ -537,6 +641,9 @@ class InstructionService:
         instruction_id: str,
         subject: Subject,
         request: RejectInstructionRequest,
+        *,
+        bearer_token: str | None = None,
+        session_id: str | None = None,
     ) -> InstructionResponse:
         current = await self.repository.get_current(instruction_id)
         instruction = current.instruction.model_copy(deep=True)
@@ -547,6 +654,8 @@ class InstructionService:
             LifecycleAction.REJECT,
             subject,
             instruction,
+            bearer_token=bearer_token,
+            session_id=session_id,
             record_security_event=True,
             security_event_details={"reason": request.reason},
         )
@@ -568,11 +677,20 @@ class InstructionService:
             LifecycleAction.REJECT,
             subject,
             details=details,
+            bearer_token=bearer_token,
+            session_id=session_id,
             skip_authorize=True,
         )
         return _to_response(saved)
 
-    async def suspend(self, instruction_id: str, subject: Subject) -> InstructionResponse:
+    async def suspend(
+        self,
+        instruction_id: str,
+        subject: Subject,
+        *,
+        bearer_token: str | None = None,
+        session_id: str | None = None,
+    ) -> InstructionResponse:
         current = await self.repository.get_current(instruction_id)
         instruction = current.instruction.model_copy(deep=True)
         if instruction.status not in {
@@ -587,6 +705,8 @@ class InstructionService:
             LifecycleAction.SUSPEND,
             subject,
             instruction,
+            bearer_token=bearer_token,
+            session_id=session_id,
             record_security_event=True,
         )
         instruction.status = InstructionStatus.SUSPENDED
@@ -598,11 +718,20 @@ class InstructionService:
             LifecycleAction.SUSPEND,
             subject,
             details=details,
+            bearer_token=bearer_token,
+            session_id=session_id,
             skip_authorize=True,
         )
         return _to_response(saved)
 
-    async def reactivate(self, instruction_id: str, subject: Subject) -> InstructionResponse:
+    async def reactivate(
+        self,
+        instruction_id: str,
+        subject: Subject,
+        *,
+        bearer_token: str | None = None,
+        session_id: str | None = None,
+    ) -> InstructionResponse:
         current = await self.repository.get_current(instruction_id)
         instruction = current.instruction.model_copy(deep=True)
         if instruction.status != InstructionStatus.SUSPENDED:
@@ -612,6 +741,8 @@ class InstructionService:
             LifecycleAction.REACTIVATE,
             subject,
             instruction,
+            bearer_token=bearer_token,
+            session_id=session_id,
             record_security_event=True,
         )
         instruction.status = (
@@ -627,6 +758,8 @@ class InstructionService:
             LifecycleAction.REACTIVATE,
             subject,
             details=details,
+            bearer_token=bearer_token,
+            session_id=session_id,
             skip_authorize=True,
         )
         return _to_response(saved)
@@ -636,6 +769,9 @@ class InstructionService:
         instruction_id: str,
         subject: Subject,
         request: UseInstructionRequest,
+        *,
+        bearer_token: str | None = None,
+        session_id: str | None = None,
     ) -> InstructionResponse:
         current = await self.repository.get_current(instruction_id)
         instruction = current.instruction.model_copy(deep=True)
@@ -659,6 +795,8 @@ class InstructionService:
             LifecycleAction.USE,
             subject,
             instruction,
+            bearer_token=bearer_token,
+            session_id=session_id,
             record_security_event=True,
             security_event_details=use_details,
         )

@@ -24,6 +24,7 @@ from inst.security_ui_routes import (
 from inst.security_ui_routes import (
     router as security_ui_router,
 )
+from inst.service_identity import service_identity
 from inst.ui_routes import STATIC_DIR
 from inst.ui_routes import router as ui_router
 
@@ -37,6 +38,7 @@ async def lifespan(app: FastAPI):
     instrument_app(app)
     await connect()
     await kafka_publisher.start()
+    await service_identity.login()
     await security_event_ui_store.connect()
     logger.info("instruction browser and security event monitor ready")
     yield

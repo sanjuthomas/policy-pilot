@@ -1,11 +1,20 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
 
 from authz.config import settings
 from authz.models import PaymentRecord, Subject
+
+
+@dataclass(frozen=True)
+class PolicyDecision:
+    allowed: bool
+    allow_basis: list[str]
+    violations: list[str]
+    is_alert: bool
 
 
 class OpaClient:
@@ -24,6 +33,87 @@ class OpaClient:
             response.raise_for_status()
             body: dict[str, Any] = response.json()
         return body.get("result")
+
+    @staticmethod
+    def _as_string_list(value: Any) -> list[str]:
+        if isinstance(value, list):
+            return [str(item) for item in value]
+        return []
+
+    @staticmethod
+    def _violation_codes(value: Any) -> list[str]:
+        if not isinstance(value, dict):
+            return []
+        return sorted(key for key, enabled in value.items() if enabled)
+
+    async def _evaluate(
+        self,
+        package: str,
+        payload: dict[str, Any],
+    ) -> PolicyDecision:
+        allowed = bool(await self._post_data(f"{package}/allow", payload))
+        if allowed:
+            basis = self._as_string_list(
+                await self._post_data(f"{package}/allow_basis", payload)
+            )
+            return PolicyDecision(
+                allowed=True,
+                allow_basis=basis,
+                violations=[],
+                is_alert=False,
+            )
+
+        violations = self._violation_codes(
+            await self._post_data(f"{package}/violations", payload)
+        )
+        is_alert = bool(await self._post_data(f"{package}/is_alert", payload))
+        return PolicyDecision(
+            allowed=False,
+            allow_basis=[],
+            violations=violations,
+            is_alert=is_alert,
+        )
+
+    async def evaluate_instruction(
+        self,
+        *,
+        action: str,
+        subject: Subject,
+        instruction: dict[str, Any],
+        account: dict[str, Any],
+    ) -> PolicyDecision:
+        payload = {
+            "input": {
+                "action": action,
+                "subject": subject.to_opa_subject(),
+                "instruction": instruction,
+                "account": account,
+            }
+        }
+        return await self._evaluate(self._INSTRUCTION_PACKAGE, payload)
+
+    async def evaluate_payment(
+        self,
+        *,
+        action: str,
+        subject: Subject,
+        payment: dict[str, Any],
+        instruction_end_date: str = "",
+        instruction_status: str = "",
+    ) -> PolicyDecision:
+        payment_input = dict(payment)
+        if instruction_end_date:
+            payment_input["instruction_end_date"] = instruction_end_date
+        if instruction_status:
+            payment_input["instruction_status"] = instruction_status
+        payload = {
+            "input": {
+                "action": action,
+                "subject": subject.to_opa_subject(),
+                "payment": payment_input,
+            }
+        }
+        return await self._evaluate(self._PAYMENT_PACKAGE, payload)
 
     def _build_payment_payload(
         self,
@@ -59,12 +149,6 @@ class OpaClient:
                 "account": opa_account,
             }
         }
-
-    @staticmethod
-    def _as_string_list(value: Any) -> list[str]:
-        if isinstance(value, list):
-            return [str(item) for item in value]
-        return []
 
     async def can_approve_payment(
         self,

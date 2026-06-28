@@ -166,6 +166,19 @@ users:
     supervisor_id: rates-201
 
   # ═══════════════════════════════════════════════════════════════════════════
+  # Instruction service account
+  # Used for service-to-service calls from instruction-service → authorization-service (OBO).
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - user_id: svc-instruction
+    given_name: Instruction
+    family_name: Service
+    title: Service Account
+    roles:
+      - INSTRUCTION_VIEWER
+    groups: []
+
+  # ═══════════════════════════════════════════════════════════════════════════
   # Payment service account
   # Used for service-to-service calls from payment-service → ILM (OBO pattern).
   # Holds only INSTRUCTION_VIEWER so it can read instructions but cannot mutate them.
