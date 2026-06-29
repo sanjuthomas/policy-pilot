@@ -2,7 +2,25 @@
 
 A monorepo demonstrating how to build a **retrieval-augmented generation (RAG) system over financial security events** using a fully local, containerized stack.
 
-The domain is **Security Settlement Instructions (SSI)** and **cash payments** against approved instructions in a capital-markets middle-office context. Every instruction or payment mutation — create, submit, approve, reject, and policy denial — is recorded as a structured security event, streamed through Kafka, indexed into Qdrant and Neo4j, and made queryable via a natural-language chat interface powered by a local Ollama LLM.
+**PolicyPilot** — the chat application in this repo — gives supervisors and compliance officers a single conversational surface over the cash leg of the Standard Settlement Instructions (SSI).
+
+## Why this exists
+
+In a large bank, middle-office supervisors and compliance officers are accountable for **enforcing firm policy and regulation** — segregation of duties, approval limits, LOB boundaries, and the rules that govern who may move money. In practice, answering even simple questions is painfully slow:
+
+- *Are there any instances of approving each other's instructions?*
+- *Are there any instructions approved by someone who reports directly to the creator of the instructions?*
+- *Who can approve this payment when two approvers are out sick?*
+- *Why was this person allowed to approve an instruction from another line of business?*
+- *Why was someone permitted to create a payment above $25 million?*
+
+The answers rarely live in one place. Some rules sit in **LDAP**, some in an **OPA** or local rule engine, some are **hard-coded in application services**, and others linger in **database configuration** that only one team understands. Policy-based access control may exist on paper, but enforcement is partial — so investigators open tickets across operations, technology, and compliance, then spend days stitching fragments into a story everyone will trust.
+
+Worse, **what the permission model says** and **what actually happened** can diverge. A user may lack a role in one system yet still approve a payment because a downstream check passed, a stale entitlement was cached, or an exception path fired. For audit and supervision, the decisive record is not the org chart or the role matrix — it is the **security event**: the immutable fact that an action occurred, who performed it, whether policy allowed or denied it, and **why** (the OPA decision context captured at decision time).
+
+This demo models that reality end to end. Every instruction or payment mutation — create, submit, approve, reject, and policy denial — is recorded as a structured security event, streamed through Kafka, indexed into Qdrant and Neo4j, and made queryable in **natural language**. Stakeholders do not need to know which database, topic, or team owns the answer; they ask in conversation and get a **holistic, evidence-backed view** grounded in what the system actually did.
+
+The technical approach is **hybrid RAG** (vector search, BM25, and Neo4j) with **query-adaptive routing** — the assistant picks the right retrieval path and answer strategy for each question (planned graph queries, exact lookups, live eligibility checks, or full synthesis) instead of forcing every query through a single retrieval pattern.
 
 ## Demo questions
 
@@ -663,6 +681,8 @@ See `neo4j-graph-model/` for the full property catalog and schema.
 ---
 
 ## RAG pipeline detail
+
+PolicyPilot uses **hybrid RAG** (vector, BM25, and Neo4j) with **rule-based query routing** to select the right retrieval and answer path per question — planned Cypher for aggregates and relationship traversals, exact ID lookups for audit trails, live OPA eligibility for “who can approve?”, and LLM synthesis when exploratory search is needed.
 
 ```
 User question + search mode (events | instructions | payments | all)

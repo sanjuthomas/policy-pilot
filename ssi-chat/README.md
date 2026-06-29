@@ -1,8 +1,14 @@
 # PolicyPilot (`ssi-chat`)
 
 **PolicyPilot** is the conversational assistant for policy Q&A over indexed security events,
-instructions, and payments. Modeled after
-[sec-edgar-filings-chat](https://github.com/sanjuthomas/sec-edgar-filings-chat), but retrieval always runs **vector + BM25 + Neo4j** — no store picker in the UI.
+instructions, and payments — built for **middle-office supervisors** and **compliance officers**
+who need a truthful, cross-system view of cash SSI and cash payment activity without opening
+tickets across half the bank.
+
+Modeled after
+[sec-edgar-filings-chat](https://github.com/sanjuthomas/sec-edgar-filings-chat), retrieval always runs **vector + BM25 + Neo4j** with **query-adaptive routing** (planned Cypher, exact lookups, live eligibility, or full synthesis) — no store picker in the UI.
+
+See the root [README.md](../README.md#why-this-exists) for the problem narrative and stakeholder context.
 
 ## URL
 
