@@ -220,6 +220,34 @@ def test_search_text_chunk_stats_returns_top_chunks(store: QdrantHybridStore):
     assert stats["by_source"]["instruction_security_event"]["count"] == 1
 
 
+def test_search_text_chunk_stats_ranks_by_estimated_tokens(store: QdrantHybridStore):
+    store._client.collection_exists.return_value = True
+
+    char_heavy = MagicMock()
+    char_heavy.id = "p-chars"
+    char_heavy.payload = {
+        "source": "instruction_state",
+        "instruction_id": "i-chars",
+        "search_text": "x" * 500,
+    }
+
+    token_heavy = MagicMock()
+    token_heavy.id = "p-tokens"
+    token_heavy.payload = {
+        "source": "instruction_security_event",
+        "event_id": "evt-tokens",
+        "search_text": "word " * 80,
+    }
+
+    store._client.scroll.side_effect = [
+        ([char_heavy, token_heavy], None),
+    ]
+
+    stats = store.search_text_chunk_stats(top_n=2)
+    assert stats["top_chunks"][0]["event_id"] == "evt-tokens"
+    assert stats["top_chunks"][0]["estimated_tokens"] >= stats["top_chunks"][1]["estimated_tokens"]
+
+
 def test_patch_instruction_state_authorization(store: QdrantHybridStore):
     record = MagicMock()
     record.payload = {"search_text": "base", "approved_at": None}

@@ -169,7 +169,7 @@ class QdrantHybridStore:
                 "avg_chars": round(sum(source_chars) / len(source_chars)) if source_chars else 0,
             }
 
-        top_chunks = sorted(rows, key=lambda row: row["char_count"], reverse=True)[:top_n]
+        top_chunks = sorted(rows, key=lambda row: row["estimated_tokens"], reverse=True)[:top_n]
         for index, row in enumerate(top_chunks, start=1):
             row["rank"] = index
 
