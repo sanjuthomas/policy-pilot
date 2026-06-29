@@ -359,15 +359,17 @@ Embedding throughput with `qwen3-embedding:0.6b` is sufficient for real-time ETL
 
 | URL | Service | Purpose |
 |-----|---------|---------|
-| http://localhost:8000/ui/ | ILM | Instruction browser |
-| http://localhost:8000/ui/security-events/ | ILM | Live security event monitor (SSE) |
+| http://localhost:8092 | SSI chat | Natural-language Q&A (four search modes) |
+| http://localhost:8000/ui/ | Instruction service | Instruction browser |
+| http://localhost:8000/ui/security-events/ | Instruction service | Live security event monitor (SSE) |
+| http://localhost:8000/docs | Instruction service | OpenAPI |
 | http://localhost:8093/ui/ | Payment service | Payment browser |
 | http://localhost:8093/ui/security-events/ | Payment service | Live payment security event monitor (SSE) |
-| http://localhost:8000/docs | ILM | OpenAPI |
+| http://localhost:8093/docs | Payment service | OpenAPI |
 | http://localhost:8090 | SSI indexer | Search console — vector / BM25 / hybrid / Neo4j |
 | http://localhost:8091 | Demo harness | Generate instruction + payment lifecycle traffic |
-| http://localhost:8092 | SSI chat | Natural-language Q&A (four search modes) |
-| http://localhost:8094 | Authorization service | OPA evaluation API (service accounts) + user directory UI |
+| http://localhost:8094 | Authorization service | OPA evaluation API (service accounts) |
+| http://localhost:8094/docs | Authorization service | OpenAPI |
 | http://localhost:8094/ui/ | Authorization service | Read-only user directory (roles, groups, LOBs, managers) |
 | http://localhost:7474/browser/ | Neo4j | Graph browser — `neo4j` / `devpassword` |
 | http://localhost:8080/ui/console | ZITADEL | Identity admin console |
