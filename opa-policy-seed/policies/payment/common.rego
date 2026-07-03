@@ -28,9 +28,9 @@ covers_lob(lob) if {
 # ---------------------------------------------------------------------------
 
 # A payment may only be initiated or approved against a fully-approved
-# instruction.  In the SSI lifecycle that means status STANDING or SINGLE_USE.
+# instruction (lifecycle status APPROVED).
 instruction_is_approved if {
-    input.payment.instruction_status in {"STANDING", "SINGLE_USE"}
+    input.payment.instruction_status == "APPROVED"
 }
 
 # Instruction must not be expired.

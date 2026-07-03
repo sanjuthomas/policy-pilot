@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from ps.authorization import PolicyDecision
-from ps.ilm_client import InstructionNotFoundError, InstructionStateError
+from ps.instruction_client import InstructionNotFoundError, InstructionStateError
 from ps.models.api import RejectPaymentRequest, Subject
 from ps.models.enums import PaymentAction, PaymentStatus
 from ps.models.payment import Payment
@@ -50,7 +50,7 @@ def service() -> PaymentService:
     svc.event_repo.allocate_event_id = AsyncMock(return_value="20260701-CORP-P-1-SE-1")
     svc.event_repo.insert_document = AsyncMock(return_value={})
     svc.authz = AsyncMock()
-    svc.ilm = AsyncMock()
+    svc.instruction_service = AsyncMock()
 
     async def _insert_initial(payment: Payment, session=None) -> VersionedPayment:
         return _versioned(payment, version=1)
@@ -77,7 +77,7 @@ async def test_create_standing_payment_success(
     subject: Subject,
     standing_instruction: dict,
 ) -> None:
-    service.ilm.get_instruction.return_value = standing_instruction
+    service.instruction_service.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _allow_decision()
     service.event_repo.record_authorized_action = AsyncMock()
 
@@ -94,7 +94,7 @@ async def test_create_standing_payment_success(
     service.repo.insert_initial.assert_awaited_once()
     service.event_repo.allocate_event_id.assert_awaited_once()
     service.event_repo.insert_document.assert_awaited_once()
-    service.ilm.mark_used.assert_not_awaited()
+    service.instruction_service.mark_used.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -103,10 +103,10 @@ async def test_create_single_use_runs_saga(
     subject: Subject,
     standing_instruction: dict,
 ) -> None:
-    standing_instruction["status"] = "SINGLE_USE"
-    service.ilm.get_instruction.return_value = standing_instruction
+    standing_instruction["instruction_type"] = "SINGLE_USE"
+    service.instruction_service.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _allow_decision()
-    service.ilm.mark_used.return_value = {"status": "USED"}
+    service.instruction_service.mark_used.return_value = {"status": "USED"}
 
     with _patched_txn():
         record = await service.create(
@@ -116,7 +116,7 @@ async def test_create_single_use_runs_saga(
             subject=subject,
         )
 
-    service.ilm.mark_used.assert_awaited_once()
+    service.instruction_service.mark_used.assert_awaited_once()
     assert record.payment.instruction_type == "SINGLE_USE"
 
 
@@ -125,7 +125,7 @@ async def test_create_instruction_not_found(
     service: PaymentService,
     subject: Subject,
 ) -> None:
-    service.ilm.get_instruction.side_effect = InstructionNotFoundError("missing")
+    service.instruction_service.get_instruction.side_effect = InstructionNotFoundError("missing")
     with pytest.raises(InstructionNotFoundError):
         await service.create(
             instruction_id="missing",
@@ -142,7 +142,7 @@ async def test_create_rejects_unapproved_instruction(
     standing_instruction: dict,
 ) -> None:
     standing_instruction["status"] = "DRAFT"
-    service.ilm.get_instruction.return_value = standing_instruction
+    service.instruction_service.get_instruction.return_value = standing_instruction
     with pytest.raises(ValueError, match="not in an approved state"):
         await service.create(
             instruction_id="instr-001",
@@ -159,7 +159,7 @@ async def test_create_policy_denied(
     standing_instruction: dict,
     payment: Payment,
 ) -> None:
-    service.ilm.get_instruction.return_value = standing_instruction
+    service.instruction_service.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _deny_decision()
 
     with pytest.raises(PermissionError):
@@ -180,10 +180,10 @@ async def test_create_single_use_mark_used_state_error(
     subject: Subject,
     standing_instruction: dict,
 ) -> None:
-    standing_instruction["status"] = "SINGLE_USE"
-    service.ilm.get_instruction.return_value = standing_instruction
+    standing_instruction["instruction_type"] = "SINGLE_USE"
+    service.instruction_service.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _allow_decision()
-    service.ilm.mark_used.side_effect = InstructionStateError("already used")
+    service.instruction_service.mark_used.side_effect = InstructionStateError("already used")
 
     with pytest.raises(ValueError, match="already used"):
         await service.create(
@@ -202,10 +202,10 @@ async def test_create_single_use_mark_used_runtime_error(
     subject: Subject,
     standing_instruction: dict,
 ) -> None:
-    standing_instruction["status"] = "SINGLE_USE"
-    service.ilm.get_instruction.return_value = standing_instruction
+    standing_instruction["instruction_type"] = "SINGLE_USE"
+    service.instruction_service.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _allow_decision()
-    service.ilm.mark_used.side_effect = RuntimeError("network down")
+    service.instruction_service.mark_used.side_effect = RuntimeError("network down")
 
     with pytest.raises(RuntimeError, match="Could not mark instruction"):
         await service.create(
@@ -224,7 +224,7 @@ async def test_submit_success(
     standing_instruction: dict,
 ) -> None:
     service.repo.get_current.return_value = _versioned(payment)
-    service.ilm.get_instruction.return_value = standing_instruction
+    service.instruction_service.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _allow_decision()
 
     with _patched_txn():
@@ -254,7 +254,7 @@ async def test_submit_instruction_not_found(
     payment: Payment,
 ) -> None:
     service.repo.get_current.return_value = _versioned(payment)
-    service.ilm.get_instruction.side_effect = InstructionNotFoundError("missing")
+    service.instruction_service.get_instruction.side_effect = InstructionNotFoundError("missing")
     with pytest.raises(ValueError, match="backing instruction"):
         await service.submit(payment.payment_id, subject)
 
@@ -267,7 +267,7 @@ async def test_submit_policy_denied(
     standing_instruction: dict,
 ) -> None:
     service.repo.get_current.return_value = _versioned(payment)
-    service.ilm.get_instruction.return_value = standing_instruction
+    service.instruction_service.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _deny_decision("NO_LIMIT_GROUP_ASSIGNED")
 
     with pytest.raises(PermissionError):
@@ -282,7 +282,7 @@ async def test_approve_success(
     standing_instruction: dict,
 ) -> None:
     service.repo.get_current.return_value = _versioned(submitted_payment)
-    service.ilm.get_instruction.return_value = standing_instruction
+    service.instruction_service.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _allow_decision(basis=["approver authorized"])
 
     with _patched_txn():
@@ -310,7 +310,7 @@ async def test_approve_cancels_when_instruction_missing(
     submitted_payment: Payment,
 ) -> None:
     service.repo.get_current.return_value = _versioned(submitted_payment)
-    service.ilm.get_instruction.side_effect = InstructionNotFoundError("gone")
+    service.instruction_service.get_instruction.side_effect = InstructionNotFoundError("gone")
 
     with _patched_txn():
         result = await service.approve(submitted_payment.payment_id, approver_subject)
@@ -329,7 +329,7 @@ async def test_approve_cancels_on_instruction_invalidity(
 ) -> None:
     standing_instruction["version_number"] = 99
     service.repo.get_current.return_value = _versioned(submitted_payment)
-    service.ilm.get_instruction.return_value = standing_instruction
+    service.instruction_service.get_instruction.return_value = standing_instruction
 
     with _patched_txn():
         result = await service.approve(submitted_payment.payment_id, approver_subject)
@@ -346,7 +346,7 @@ async def test_approve_policy_denied(
     standing_instruction: dict,
 ) -> None:
     service.repo.get_current.return_value = _versioned(submitted_payment)
-    service.ilm.get_instruction.return_value = standing_instruction
+    service.instruction_service.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _deny_decision("ALERT_SUBORDINATE_APPROVING_CREATOR")
 
     with pytest.raises(PermissionError):
@@ -361,7 +361,7 @@ async def test_reject_success(
     standing_instruction: dict,
 ) -> None:
     service.repo.get_current.return_value = _versioned(submitted_payment)
-    service.ilm.get_instruction.return_value = standing_instruction
+    service.instruction_service.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _allow_decision()
     request = RejectPaymentRequest(reason="Insufficient documentation")
 
@@ -394,7 +394,7 @@ async def test_reject_instruction_not_found(
     submitted_payment: Payment,
 ) -> None:
     service.repo.get_current.return_value = _versioned(submitted_payment)
-    service.ilm.get_instruction.side_effect = InstructionNotFoundError("missing")
+    service.instruction_service.get_instruction.side_effect = InstructionNotFoundError("missing")
     with pytest.raises(ValueError, match="backing instruction"):
         await service.reject(
             submitted_payment.payment_id,
@@ -411,7 +411,7 @@ async def test_reject_policy_denied(
     standing_instruction: dict,
 ) -> None:
     service.repo.get_current.return_value = _versioned(submitted_payment)
-    service.ilm.get_instruction.return_value = standing_instruction
+    service.instruction_service.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _deny_decision()
 
     with pytest.raises(PermissionError):

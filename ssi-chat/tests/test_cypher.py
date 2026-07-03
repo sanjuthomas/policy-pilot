@@ -6,12 +6,11 @@ import pytest
 from chat_application.cypher import (
     extract_entity_ids,
     extract_uuids,
+    instruction_count_filters_from_question,
     instruction_id_from_list_payments_question,
     is_alert_ranking_question,
     is_count_question,
     is_max_payments_per_instruction_question,
-    is_payment_count_aggregate_question,
-    is_payment_total_amount_question,
     is_payments_for_instruction_question,
     load_graph_schema,
     lob_filter_from_question,
@@ -254,13 +253,37 @@ class TestPlanGraphQueries:
         assert "count(DISTINCT i.instruction_id)" in planned[0][1]
         assert "[:CURRENT]->" in planned[0][1]
 
-    def test_instruction_count_pending_approval(self) -> None:
+    def test_instruction_count_submitted(self) -> None:
         planned = plan_graph_queries(
-            "How many instructions are in PENDING_APPROVAL?",
+            "How many instructions are submitted?",
             mode="instructions",
         )
         assert planned is not None
-        assert "v.status = 'PENDING_APPROVAL'" in planned[0][1]
+        assert "v.status = 'SUBMITTED'" in planned[0][1]
+
+    def test_instruction_count_single_use_natural_language(self) -> None:
+        assert instruction_count_filters_from_question(
+            "How many single use instructions are there?"
+        ) == (None, "SINGLE_USE")
+        planned = plan_graph_queries(
+            "How many single use instructions are there?",
+            mode="instructions",
+        )
+        assert planned is not None
+        assert "v.instruction_type = 'SINGLE_USE'" in planned[0][1]
+        assert "v.status = 'SINGLE_USE'" not in planned[0][1]
+
+    def test_instruction_count_single_use_by_type(self) -> None:
+        assert instruction_count_filters_from_question(
+            "How many single use instructions were created?"
+        ) == (None, "SINGLE_USE")
+        planned = plan_graph_queries(
+            "How many single use instructions were created?",
+            mode="instructions",
+        )
+        assert planned is not None
+        assert "v.instruction_type = 'SINGLE_USE'" in planned[0][1]
+        assert "v.status = 'SINGLE_USE'" not in planned[0][1]
 
     def test_instruction_count_per_lob(self) -> None:
         planned = plan_graph_queries(

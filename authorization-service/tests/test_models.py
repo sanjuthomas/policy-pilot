@@ -15,7 +15,7 @@ def test_payment_to_opa_payment() -> None:
 
     payload = payment.to_opa_payment(
         instruction_end_date="2027-01-01",
-        instruction_status="STANDING",
+        instruction_status="APPROVED",
     )
 
     assert payload["instruction_owning_lob"] == "FX"

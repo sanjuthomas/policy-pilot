@@ -124,6 +124,8 @@ def format_instruction_eligible_approvers_answer(data: dict[str, Any]) -> str:
     owning_lob = data.get("owning_lob", "")
     created_by = data.get("created_by_user_id", "")
     creator_title = data.get("created_by_title", "")
+    approval_blocked_reason = data.get("approval_blocked_reason")
+    prospective = data.get("prospective_eligible") or []
 
     header = (
         f"Live OPA evaluation for instruction {instruction_id} "
@@ -131,11 +133,34 @@ def format_instruction_eligible_approvers_answer(data: dict[str, Any]) -> str:
         f"created by {created_by} / {creator_title})."
     )
 
+    if approval_blocked_reason:
+        parts = [header, "", approval_blocked_reason]
+        if prospective:
+            parts.append(
+                format_eligible_approvers_section(
+                    header="After submission (DRAFT → SUBMITTED), these users would satisfy APPROVE policy:",
+                    section_title="",
+                    eligible=prospective,
+                    empty_message="No users would satisfy APPROVE policy after submission.",
+                    candidate_role_label="INSTRUCTION_APPROVER",
+                    candidates_evaluated=data.get("candidates_evaluated"),
+                )
+            )
+        return "\n\n".join(parts)
+
     return format_eligible_approvers_section(
         header=header,
         section_title="Users who can approve this instruction:",
         eligible=data.get("eligible") or [],
-        empty_message="No users currently satisfy APPROVE policy for this instruction.",
+        empty_message=_instruction_eligible_empty_message(status),
         candidate_role_label="INSTRUCTION_APPROVER",
         candidates_evaluated=data.get("candidates_evaluated"),
     )
+
+
+def _instruction_eligible_empty_message(status: str) -> str:
+    if status == "APPROVED":
+        return "This instruction is already APPROVED."
+    if status in {"REJECTED", "USED", "EXPIRED", "DELETED"}:
+        return f"This instruction is {status} and cannot be approved."
+    return "No users currently satisfy APPROVE policy for this instruction."

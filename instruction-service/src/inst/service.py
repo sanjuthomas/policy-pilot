@@ -198,7 +198,7 @@ class InstructionService:
             "service_token": service_identity.token,
             "service_session_id": service_identity.session_id,
         }
-        if bearer_token and service_identity.token:
+        if bearer_token and service_identity.token and not subject.delegated_by:
             return await self.authz.evaluate_instruction(
                 **common,
                 user_token=bearer_token,
@@ -447,14 +447,23 @@ class InstructionService:
 
         if instruction.status not in {
             InstructionStatus.DRAFT,
-            InstructionStatus.PENDING,
+            InstructionStatus.SUBMITTED,
         }:
             raise InvalidStateTransitionError(
-                "only DRAFT or PENDING instructions can be soft deleted"
+                "only DRAFT or SUBMITTED instructions can be deleted"
             )
 
-        instruction.status = InstructionStatus.DELETED
         details = {"reason": request.reason} if request and request.reason else {}
+        await self._authorize(
+            LifecycleAction.DELETE,
+            subject,
+            instruction,
+            bearer_token=bearer_token,
+            session_id=session_id,
+            record_security_event=True,
+            security_event_details=details,
+        )
+        instruction.status = InstructionStatus.DELETED
         saved = await self._persist_new_version(
             instruction,
             LifecycleAction.DELETE,
@@ -462,6 +471,7 @@ class InstructionService:
             details,
             bearer_token=bearer_token,
             session_id=session_id,
+            skip_authorize=True,
         )
         return _to_response(saved)
 
@@ -585,7 +595,7 @@ class InstructionService:
             session_id=session_id,
             record_security_event=True,
         )
-        instruction.status = InstructionStatus.PENDING
+        instruction.status = InstructionStatus.SUBMITTED
         instruction.submitted_at = datetime.utcnow()
         details = details_with_authorization(None, authorization)
         saved = await self._persist_new_version(
@@ -609,8 +619,8 @@ class InstructionService:
     ) -> InstructionResponse:
         current = await self.repository.get_current(instruction_id)
         instruction = current.instruction.model_copy(deep=True)
-        if instruction.status != InstructionStatus.PENDING:
-            raise InvalidStateTransitionError("only PENDING instructions can be approved")
+        if instruction.status != InstructionStatus.SUBMITTED:
+            raise InvalidStateTransitionError("only SUBMITTED instructions can be approved")
 
         authorization = await self._authorize(
             LifecycleAction.APPROVE,
@@ -620,11 +630,7 @@ class InstructionService:
             session_id=session_id,
             record_security_event=True,
         )
-        instruction.status = (
-            InstructionStatus.STANDING
-            if instruction.instruction_type == InstructionType.STANDING
-            else InstructionStatus.SINGLE_USE
-        )
+        instruction.status = InstructionStatus.APPROVED
         instruction.approved_by = UserReference(
             user_id=subject.user_id,
             given_name=subject.given_name,
@@ -658,8 +664,8 @@ class InstructionService:
     ) -> InstructionResponse:
         current = await self.repository.get_current(instruction_id)
         instruction = current.instruction.model_copy(deep=True)
-        if instruction.status != InstructionStatus.PENDING:
-            raise InvalidStateTransitionError("only PENDING instructions can be rejected")
+        if instruction.status != InstructionStatus.SUBMITTED:
+            raise InvalidStateTransitionError("only SUBMITTED instructions can be rejected")
 
         authorization = await self._authorize(
             LifecycleAction.REJECT,
@@ -704,12 +710,9 @@ class InstructionService:
     ) -> InstructionResponse:
         current = await self.repository.get_current(instruction_id)
         instruction = current.instruction.model_copy(deep=True)
-        if instruction.status not in {
-            InstructionStatus.STANDING,
-            InstructionStatus.SINGLE_USE,
-        }:
+        if instruction.status != InstructionStatus.APPROVED:
             raise InvalidStateTransitionError(
-                "only active STANDING or SINGLE_USE instructions can be suspended"
+                "only APPROVED instructions can be suspended"
             )
 
         authorization = await self._authorize(
@@ -756,11 +759,7 @@ class InstructionService:
             session_id=session_id,
             record_security_event=True,
         )
-        instruction.status = (
-            InstructionStatus.STANDING
-            if instruction.instruction_type == InstructionType.STANDING
-            else InstructionStatus.SINGLE_USE
-        )
+        instruction.status = InstructionStatus.APPROVED
         instruction.suspended_by = None
         instruction.suspended_at = None
         details = details_with_authorization(None, authorization)
@@ -786,12 +785,9 @@ class InstructionService:
     ) -> InstructionResponse:
         current = await self.repository.get_current(instruction_id)
         instruction = current.instruction.model_copy(deep=True)
-        if instruction.status not in {
-            InstructionStatus.STANDING,
-            InstructionStatus.SINGLE_USE,
-        }:
+        if instruction.status != InstructionStatus.APPROVED:
             raise InvalidStateTransitionError(
-                "only active STANDING or SINGLE_USE instructions can be used"
+                "only APPROVED instructions can be used"
             )
 
         instruction.usage_count += 1

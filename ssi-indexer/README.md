@@ -10,7 +10,7 @@ http://localhost:8090
 
 ## Pipelines
 
-Four independent consumers run in the same process. Kafka messages are published by **MongoDB Kafka Connect** (`publish.full.document.only=true`) from the domain Mongo collections — the ETL makes no API calls to ILM or the payment service. `etl.mongo_cdc` normalizes versioned Mongo rows and security-event `_id` values into the shapes the pipelines expect. `etl.kafka_deserialize` unwraps JSON values from the broker (handles both `StringConverter` and legacy double-encoded records).
+Four independent consumers run in the same process. Kafka messages are published by **MongoDB Kafka Connect** (`publish.full.document.only=true`) from the domain Mongo collections — the ETL makes no API calls to instruction-service or the payment service. `etl.mongo_cdc` normalizes versioned Mongo rows and security-event `_id` values into the shapes the pipelines expect. `etl.kafka_deserialize` unwraps JSON values from the broker (handles both `StringConverter` and legacy double-encoded records).
 
 ```mermaid
 flowchart TB

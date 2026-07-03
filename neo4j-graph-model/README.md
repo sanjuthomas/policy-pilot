@@ -18,7 +18,7 @@ relationships.cypher  — node labels, properties, relationships (documentation)
 | `PaymentSecurityEventPipeline` | `payment_security_events` (4 partitions) | `payment-security-event-etl` | SecurityEvent (payment), User (actor), Payment, Instruction |
 | `PaymentFactPipeline` | `payments` (4 partitions) | `payment-fact-etl` | Payment, User (creator/submitter/approver/rejector), Instruction, HAS_PAYMENT |
 
-All topics carry **full Mongo documents** via Kafka Connect — the ETL makes no API calls to ILM or the payment service.
+All topics carry **full Mongo documents** via Kafka Connect — the ETL makes no API calls to instruction-service or the payment service.
 
 ## Graph model
 
@@ -147,8 +147,8 @@ RETURN v.instruction_id, v.approved_at,
        v.authorization_summary, v.authorization_basis
 LIMIT 1;
 
-// All STANDING instructions for LOB FICC with creator and approver
-MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion {status: 'STANDING', owning_lob: 'FICC'})
+// All approved STANDING-type instructions for LOB FICC with creator and approver
+MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion {status: 'APPROVED', instruction_type: 'STANDING', owning_lob: 'FICC'})
 OPTIONAL MATCH (cu:User {user_id: v.creator_user_id})
 OPTIONAL MATCH (au:User {user_id: v.approver_user_id})
 RETURN v.instruction_id, v.currency, v.wire_scope,

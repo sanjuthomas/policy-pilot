@@ -88,7 +88,7 @@ class SkipCheck(Exception):
 def run_api_smoke(
     *,
     harness_url: str,
-    ilm_url: str,
+    instruction_service_url: str,
     payment_url: str,
     indexer_url: str,
     chat_url: str,
@@ -113,7 +113,7 @@ def run_api_smoke(
 
         for service, url in [
             ("harness", harness_url),
-            ("instruction-service", ilm_url),
+            ("instruction-service", instruction_service_url),
             ("payment-service", payment_url),
             ("ssi-indexer", indexer_url),
             ("ssi-chat", chat_url),
@@ -233,9 +233,9 @@ def run_api_smoke(
             harness_suspend_route_auth,
         )
 
-        def ilm_ui_list() -> None:
+        def instruction_service_ui_list() -> None:
             response = client.get(
-                f"{ilm_url.rstrip('/')}/api/ui/instructions",
+                f"{instruction_service_url.rstrip('/')}/api/ui/instructions",
                 params={"limit": 10},
                 headers=admin_headers,
             )
@@ -249,36 +249,36 @@ def run_api_smoke(
 
         _run_check(
             result,
-            "ilm_ui_instructions",
+            "instruction_service_ui_instructions",
             "instruction-service",
             "GET /api/ui/instructions (admin)",
-            ilm_ui_list,
+            instruction_service_ui_list,
         )
 
-        def ilm_ui_auth() -> None:
-            response = client.get(f"{ilm_url.rstrip('/')}/api/ui/instructions")
+        def instruction_service_ui_auth() -> None:
+            response = client.get(f"{instruction_service_url.rstrip('/')}/api/ui/instructions")
             if response.status_code != 401:
                 raise RuntimeError(f"expected 401 without auth, got {response.status_code}")
 
         _run_check(
             result,
-            "ilm_ui_auth",
+            "instruction_service_ui_auth",
             "instruction-service",
             "GET /api/ui/instructions rejects unauthenticated",
-            ilm_ui_auth,
+            instruction_service_ui_auth,
         )
 
-        def ilm_rest_auth() -> None:
-            response = client.get(f"{ilm_url.rstrip('/')}/api/v1/instructions")
+        def instruction_service_rest_auth() -> None:
+            response = client.get(f"{instruction_service_url.rstrip('/')}/api/v1/instructions")
             if response.status_code != 401:
                 raise RuntimeError(f"expected 401 without auth, got {response.status_code}")
 
         _run_check(
             result,
-            "ilm_rest_auth",
+            "instruction_service_rest_auth",
             "instruction-service",
             "GET /api/v1/instructions rejects unauthenticated",
-            ilm_rest_auth,
+            instruction_service_rest_auth,
         )
 
         def payment_ui_list() -> None:
@@ -476,7 +476,7 @@ def run_api_smoke(
             if not instruction_id:
                 raise SkipCheck("no approved_instruction_id in context (run with --seed first)")
             response = client.post(
-                f"{ilm_url.rstrip('/')}/api/v1/instructions/{instruction_id}/eligible-approvers",
+                f"{instruction_service_url.rstrip('/')}/api/v1/instructions/{instruction_id}/eligible-approvers",
                 headers=compliance_headers,
             )
             if response.status_code not in {200, 404}:

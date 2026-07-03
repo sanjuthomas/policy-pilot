@@ -82,7 +82,7 @@ Fixtures build the **SSI route template** schema (`currency` field, no payment a
 
 | Variable | Default |
 |----------|---------|
-| `ILM_URL` | `http://instruction-service:8000` |
+| `INSTRUCTION_SERVICE_URL` | `http://instruction-service:8000` |
 | `PAYMENT_SERVICE_URL` | `http://payment-service:8093` |
 | `ZITADEL_URL` | `http://zitadel-proxy` |
 | `ZITADEL_HOST_HEADER` | `localhost` |

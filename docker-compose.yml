@@ -369,7 +369,7 @@ services:
       SECURITY_EVENTS_DATABASE: security_events
       SECURITY_EVENTS_COLLECTION: payment_service
       AUTHORIZATION_SERVICE_URL: http://authorization-service:8094
-      ILM_URL: http://instruction-service:8000
+      INSTRUCTION_SERVICE_URL: http://instruction-service:8000
       SERVICE_USER_ID: svc-payment
       SERVICE_USER_PASSWORD: Password1!
       OIDC_ISSUER_URL: http://localhost:8080
@@ -410,7 +410,7 @@ services:
     ports:
       - "8091:8091"
     environment:
-      ILM_URL: http://instruction-service:8000
+      INSTRUCTION_SERVICE_URL: http://instruction-service:8000
       PAYMENT_SERVICE_URL: http://payment-service:8093
       MONGODB_URI: mongodb://mongodb:27017/?replicaSet=rs0
       OIDC_ISSUER_URL: http://localhost:8080

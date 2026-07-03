@@ -2,7 +2,7 @@
 
 Stateless **OPA gateway** for the demo stack. Only this service talks to OPA at runtime.
 
-Domain services (instruction-service, payment-service) call authz for lifecycle allow/deny and batch eligible-approvers evaluation. Authz reads candidate users from `zitadel-seed/users.yaml` — it has **no MongoDB** and does not call ILM or payment APIs.
+Domain services (instruction-service, payment-service) call authz for lifecycle allow/deny and batch eligible-approvers evaluation. Authz reads candidate users from `zitadel-seed/users.yaml` — it has **no MongoDB** and does not call instruction-service or payment APIs.
 
 ## URLs (Docker)
 

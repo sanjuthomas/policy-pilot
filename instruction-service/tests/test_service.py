@@ -2,7 +2,6 @@ from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from inst.authorization import PolicyDecision
 from inst.models.api import (
     CreateInstructionRequest,
@@ -11,7 +10,7 @@ from inst.models.api import (
     Subject,
     UseInstructionRequest,
 )
-from inst.models.enums import InstructionStatus, InstructionType
+from inst.models.enums import InstructionStatus, InstructionType, LifecycleAction
 from inst.models.instruction import CashSettlementInstruction
 from inst.service import InstructionService, InvalidStateTransitionError
 from inst.storage import VersionedInstruction
@@ -160,8 +159,8 @@ async def test_update_rejects_non_draft(
     sample_subject: Subject,
     sample_instruction: CashSettlementInstruction,
 ) -> None:
-    pending = sample_instruction.model_copy(update={"status": InstructionStatus.PENDING})
-    mock_repo.get_current = AsyncMock(return_value=_versioned(pending))
+    submitted = sample_instruction.model_copy(update={"status": InstructionStatus.SUBMITTED})
+    mock_repo.get_current = AsyncMock(return_value=_versioned(submitted))
 
     with pytest.raises(InvalidStateTransitionError, match="DRAFT"):
         await service.update("instr-001", sample_create_request, sample_subject)
@@ -190,7 +189,76 @@ async def test_delete_soft_deletes_draft(
 
 
 @pytest.mark.asyncio
-async def test_submit_transitions_to_pending(
+async def test_delete_soft_deletes_submitted(
+    service: InstructionService,
+    mock_repo: MagicMock,
+    sample_subject: Subject,
+    sample_instruction: CashSettlementInstruction,
+) -> None:
+    submitted = sample_instruction.model_copy(update={"status": InstructionStatus.SUBMITTED})
+    mock_repo.get_current = AsyncMock(return_value=_versioned(submitted))
+    _configure_repo_persist_mocks(mock_repo)
+
+    with patch("inst.service.mongo_transaction") as mock_tx:
+        mock_tx.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
+        mock_tx.return_value.__aexit__ = AsyncMock(return_value=False)
+        response = await service.delete(
+            "instr-001",
+            sample_subject,
+            DeleteInstructionRequest(reason="withdrawn"),
+        )
+
+    assert response.status == "DELETED"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "status",
+    [
+        InstructionStatus.APPROVED,
+        InstructionStatus.SUSPENDED,
+        InstructionStatus.REJECTED,
+        InstructionStatus.USED,
+    ],
+)
+async def test_delete_rejects_non_draft_or_submitted(
+    service: InstructionService,
+    mock_repo: MagicMock,
+    sample_subject: Subject,
+    sample_instruction: CashSettlementInstruction,
+    status: InstructionStatus,
+) -> None:
+    blocked = sample_instruction.model_copy(update={"status": status})
+    mock_repo.get_current = AsyncMock(return_value=_versioned(blocked))
+
+    with pytest.raises(InvalidStateTransitionError, match="DRAFT or SUBMITTED"):
+        await service.delete("instr-001", sample_subject)
+
+
+@pytest.mark.asyncio
+async def test_delete_authorizes_before_status_change(
+    service: InstructionService,
+    mock_authz: AsyncMock,
+    mock_repo: MagicMock,
+    sample_subject: Subject,
+    sample_instruction: CashSettlementInstruction,
+) -> None:
+    mock_repo.get_current = AsyncMock(return_value=_versioned(sample_instruction))
+    _configure_repo_persist_mocks(mock_repo)
+
+    with patch("inst.service.mongo_transaction") as mock_tx:
+        mock_tx.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
+        mock_tx.return_value.__aexit__ = AsyncMock(return_value=False)
+        await service.delete("instr-001", sample_subject)
+
+    evaluate_call = mock_authz.evaluate_instruction.await_args
+    assert evaluate_call is not None
+    assert evaluate_call.kwargs["action"] == LifecycleAction.DELETE.value
+    assert evaluate_call.kwargs["instruction"]["status"] == InstructionStatus.DRAFT.value
+
+
+@pytest.mark.asyncio
+async def test_submit_transitions_to_submitted(
     service: InstructionService,
     mock_repo: MagicMock,
     sample_subject: Subject,
@@ -204,7 +272,7 @@ async def test_submit_transitions_to_pending(
         mock_tx.return_value.__aexit__ = AsyncMock(return_value=False)
         response = await service.submit("instr-001", sample_subject)
 
-    assert response.status == "PENDING"
+    assert response.status == "SUBMITTED"
 
 
 @pytest.mark.asyncio
@@ -214,13 +282,13 @@ async def test_approve_standing(
     sample_subject: Subject,
     sample_instruction: CashSettlementInstruction,
 ) -> None:
-    pending = sample_instruction.model_copy(
+    submitted = sample_instruction.model_copy(
         update={
-            "status": InstructionStatus.PENDING,
+            "status": InstructionStatus.SUBMITTED,
             "instruction_type": InstructionType.STANDING,
         }
     )
-    mock_repo.get_current = AsyncMock(return_value=_versioned(pending))
+    mock_repo.get_current = AsyncMock(return_value=_versioned(submitted))
     _configure_repo_persist_mocks(mock_repo)
 
     with patch("inst.service.mongo_transaction") as mock_tx:
@@ -228,18 +296,18 @@ async def test_approve_standing(
         mock_tx.return_value.__aexit__ = AsyncMock(return_value=False)
         response = await service.approve("instr-001", sample_subject)
 
-    assert response.status == "STANDING"
+    assert response.status == "APPROVED"
 
 
 @pytest.mark.asyncio
-async def test_reject_pending(
+async def test_reject_submitted(
     service: InstructionService,
     mock_repo: MagicMock,
     sample_subject: Subject,
     sample_instruction: CashSettlementInstruction,
 ) -> None:
-    pending = sample_instruction.model_copy(update={"status": InstructionStatus.PENDING})
-    mock_repo.get_current = AsyncMock(return_value=_versioned(pending))
+    submitted = sample_instruction.model_copy(update={"status": InstructionStatus.SUBMITTED})
+    mock_repo.get_current = AsyncMock(return_value=_versioned(submitted))
     _configure_repo_persist_mocks(mock_repo)
 
     with patch("inst.service.mongo_transaction") as mock_tx:
@@ -262,7 +330,7 @@ async def test_suspend_active(
     sample_subject: Subject,
     sample_instruction: CashSettlementInstruction,
 ) -> None:
-    active = sample_instruction.model_copy(update={"status": InstructionStatus.STANDING})
+    active = sample_instruction.model_copy(update={"status": InstructionStatus.APPROVED})
     mock_repo.get_current = AsyncMock(return_value=_versioned(active))
     _configure_repo_persist_mocks(mock_repo)
 
@@ -290,7 +358,7 @@ async def test_reactivate_suspended(
         mock_tx.return_value.__aexit__ = AsyncMock(return_value=False)
         response = await service.reactivate("instr-001", sample_subject)
 
-    assert response.status == "SINGLE_USE"
+    assert response.status == "APPROVED"
 
 
 @pytest.mark.asyncio
@@ -300,7 +368,7 @@ async def test_use_single_use_marks_used(
     sample_subject: Subject,
     sample_instruction: CashSettlementInstruction,
 ) -> None:
-    active = sample_instruction.model_copy(update={"status": InstructionStatus.SINGLE_USE})
+    active = sample_instruction.model_copy(update={"status": InstructionStatus.APPROVED})
     mock_repo.get_current = AsyncMock(return_value=_versioned(active))
     _configure_repo_persist_mocks(mock_repo)
 
@@ -315,6 +383,39 @@ async def test_use_single_use_marks_used(
 
     assert response.status == "USED"
     assert response.usage_count == 1
+
+
+@pytest.mark.asyncio
+async def test_evaluate_policy_obo_uses_resolved_subject(
+    service: InstructionService,
+    mock_authz: AsyncMock,
+    sample_subject: Subject,
+    sample_instruction: CashSettlementInstruction,
+) -> None:
+    obo_subject = sample_subject.model_copy(
+        update={
+            "delegated_by": "svc-payment",
+            "delegated_by_roles": ["INSTRUCTION_VIEWER", "INSTRUCTION_MARKER"],
+        }
+    )
+    with patch("inst.service.service_identity") as mock_identity:
+        mock_identity.ensure_logged_in = AsyncMock()
+        mock_identity.token = "svc-instruction-token"
+        mock_identity.session_id = "svc-instruction-session"
+
+        await service._evaluate_policy(
+            LifecycleAction.USE,
+            obo_subject,
+            sample_instruction,
+            bearer_token="svc-payment-token",
+            session_id="svc-payment-session",
+        )
+
+    mock_authz.evaluate_instruction.assert_awaited_once()
+    kwargs = mock_authz.evaluate_instruction.await_args.kwargs
+    assert kwargs["subject"]["delegated_by"] == "svc-payment"
+    assert "INSTRUCTION_MARKER" in kwargs["subject"]["delegated_by_roles"]
+    assert "user_token" not in kwargs
 
 
 @pytest.mark.asyncio
@@ -460,16 +561,16 @@ async def test_delete_already_deleted(
 
 
 @pytest.mark.asyncio
-async def test_delete_rejects_non_draft_or_pending(
+async def test_delete_rejects_non_draft_or_submitted_blocked_status(
     service: InstructionService,
     mock_repo: MagicMock,
     sample_subject: Subject,
     sample_instruction: CashSettlementInstruction,
 ) -> None:
-    standing = sample_instruction.model_copy(update={"status": InstructionStatus.STANDING})
-    mock_repo.get_current = AsyncMock(return_value=_versioned(standing))
+    approved = sample_instruction.model_copy(update={"status": InstructionStatus.APPROVED})
+    mock_repo.get_current = AsyncMock(return_value=_versioned(approved))
 
-    with pytest.raises(InvalidStateTransitionError, match="soft deleted"):
+    with pytest.raises(InvalidStateTransitionError, match="DRAFT or SUBMITTED"):
         await service.delete("instr-001", sample_subject)
 
 
@@ -515,7 +616,7 @@ async def test_approve_single_use(
 ) -> None:
     pending = sample_instruction.model_copy(
         update={
-            "status": InstructionStatus.PENDING,
+            "status": InstructionStatus.SUBMITTED,
             "instruction_type": InstructionType.SINGLE_USE,
         }
     )
@@ -527,7 +628,7 @@ async def test_approve_single_use(
         mock_tx.return_value.__aexit__ = AsyncMock(return_value=False)
         response = await service.approve("instr-001", sample_subject)
 
-    assert response.status == "SINGLE_USE"
+    assert response.status == "APPROVED"
 
 
 @pytest.mark.asyncio
@@ -537,8 +638,8 @@ async def test_submit_rejects_non_draft(
     sample_subject: Subject,
     sample_instruction: CashSettlementInstruction,
 ) -> None:
-    pending = sample_instruction.model_copy(update={"status": InstructionStatus.PENDING})
-    mock_repo.get_current = AsyncMock(return_value=_versioned(pending))
+    submitted = sample_instruction.model_copy(update={"status": InstructionStatus.SUBMITTED})
+    mock_repo.get_current = AsyncMock(return_value=_versioned(submitted))
 
     with pytest.raises(InvalidStateTransitionError, match="DRAFT"):
         await service.submit("instr-001", sample_subject)
@@ -552,7 +653,7 @@ async def test_use_standing_increments_usage_without_used_status(
     sample_instruction: CashSettlementInstruction,
 ) -> None:
     active = sample_instruction.model_copy(
-        update={"status": InstructionStatus.STANDING, "instruction_type": InstructionType.STANDING}
+        update={"status": InstructionStatus.APPROVED, "instruction_type": InstructionType.STANDING}
     )
     mock_repo.get_current = AsyncMock(return_value=_versioned(active))
     _configure_repo_persist_mocks(mock_repo)
@@ -566,5 +667,5 @@ async def test_use_standing_increments_usage_without_used_status(
             UseInstructionRequest(payment_reference="pay-1"),
         )
 
-    assert response.status == "STANDING"
+    assert response.status == "APPROVED"
     assert response.usage_count == 1

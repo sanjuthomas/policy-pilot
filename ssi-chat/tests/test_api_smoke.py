@@ -24,8 +24,11 @@ def test_api_smoke_suite() -> None:
         os.environ.get("CHAT_URL", "http://localhost:8092"),
         "--harness-url",
         os.environ.get("HARNESS_URL", "http://localhost:8091"),
-        "--ilm-url",
-        os.environ.get("ILM_URL", "http://localhost:8000"),
+        "--instruction-service-url",
+        os.environ.get(
+            "INSTRUCTION_SERVICE_URL",
+            os.environ.get("ILM_URL", "http://localhost:8000"),
+        ),
         "--payment-url",
         os.environ.get("PAYMENT_URL", "http://localhost:8093"),
         "--indexer-url",

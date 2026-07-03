@@ -3,10 +3,10 @@ from __future__ import annotations
 from authz.instruction_opa import build_instruction_opa_context
 
 
-def test_build_instruction_opa_context_maps_ilm_document() -> None:
+def test_build_instruction_opa_context_maps_instruction_document() -> None:
     instruction, account = build_instruction_opa_context(
         {
-            "status": "PENDING",
+            "status": "SUBMITTED",
             "instruction_type": "STANDING",
             "owning_lob": "FICC",
             "effective_date": "2026-01-01T00:00:00",
@@ -21,7 +21,7 @@ def test_build_instruction_opa_context_maps_ilm_document() -> None:
         }
     )
 
-    assert instruction["status"] == "PENDING"
+    assert instruction["status"] == "SUBMITTED"
     assert instruction["type"] == "STANDING"
     assert instruction["created_by"]["title"] == "Analyst"
     assert instruction["effective_date"].endswith("Z")

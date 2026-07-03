@@ -33,7 +33,7 @@
           <span id="stat-payments" class="stat-value">—</span>
         </div>
         <div class="stat">
-          <span class="stat-label">ILM events</span>
+          <span class="stat-label">Instruction events</span>
           <span id="stat-events" class="stat-value">—</span>
         </div>
         <div class="stat">
@@ -47,7 +47,7 @@
       <section class="panel">
         <h2>Instruction actions</h2>
         <p class="panel-intro">
-          Enter a count and run an action. Each button drives the ILM API with seeded ZITADEL users.
+          Enter a count and run an action. Each button drives the instruction-service API with seeded ZITADEL users.
         </p>
 
         <div class="action-grid" id="action-grid">
@@ -71,7 +71,7 @@
 
           <article class="action-card" data-action="approve-instructions">
             <h3>Approve instructions</h3>
-            <p>Submit (if needed) and approve up to N DRAFT/PENDING instructions.</p>
+            <p>Submit (if needed) and approve up to N DRAFT/SUBMITTED instructions.</p>
             <div class="action-controls">
               <input type="number" min="1" max="500" value="2" aria-label="Count" />
               <button type="button" class="btn-primary">Approve</button>
@@ -80,7 +80,7 @@
 
           <article class="action-card" data-action="reject-instructions">
             <h3>Reject instructions</h3>
-            <p>Reject up to N PENDING instructions with a seeded approver.</p>
+            <p>Reject up to N SUBMITTED instructions with a seeded approver.</p>
             <div class="action-controls">
               <input type="number" min="1" max="500" value="1" aria-label="Count" />
               <button type="button" class="btn-warn">Reject</button>
@@ -89,7 +89,7 @@
 
           <article class="action-card" data-action="suspend-instructions">
             <h3>Suspend instructions</h3>
-            <p>Suspend up to N STANDING or SINGLE_USE instructions.</p>
+            <p>Suspend up to N APPROVED instructions.</p>
             <div class="action-controls">
               <input type="number" min="1" max="500" value="2" aria-label="Count" />
               <button type="button" class="btn-warn">Suspend</button>

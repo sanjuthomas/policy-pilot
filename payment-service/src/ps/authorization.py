@@ -53,7 +53,7 @@ def payment_resource_context(
         "payment_id": payment.payment_id,
         "instruction_id": payment.instruction_id,
         "instruction_owning_lob": payment.owning_lob,
-        "instruction_status": instruction_status or payment.instruction_type,
+        "instruction_status": instruction_status or "APPROVED",
         "instruction_end_date": instruction_end_date,
         "payment_amount": payment.amount,
         "payment_currency": payment.currency,

@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
-from authz.instruction_opa import build_instruction_opa_context
+from authz.instruction_opa import (
+    instruction_opa_context_after_submission,
+    instruction_opa_context_for_approval_eligibility,
+)
 from authz.models import (
     EligibleApprover,
     InstructionEligibleApproversEvaluateRequest,
@@ -26,6 +30,32 @@ class EligibilityService:
     ) -> None:
         self._users = users
         self._opa = opa
+
+    async def _eligible_instruction_approvers_for_context(
+        self,
+        candidates: list,
+        *,
+        opa_instruction: dict[str, Any],
+        opa_account: dict[str, Any],
+    ) -> list[EligibleApprover]:
+        eligible: list[EligibleApprover] = []
+        for candidate in candidates:
+            allowed, basis = await self._opa.can_approve_instruction(
+                candidate,
+                opa_instruction=opa_instruction,
+                opa_account=opa_account,
+            )
+            if allowed:
+                eligible.append(
+                    EligibleApprover(
+                        user_id=candidate.user_id,
+                        display_name=candidate.display_name,
+                        title=candidate.title,
+                        allow_basis=basis,
+                    )
+                )
+        eligible.sort(key=lambda row: row.display_name)
+        return eligible
 
     @staticmethod
     def _payment_record(context: PaymentEligibilityContext) -> PaymentRecord:
@@ -96,28 +126,27 @@ class EligibilityService:
         owning_lob = str(instruction.get("owning_lob") or "")
         created_by = instruction.get("created_by") or {}
         instruction_id = str(instruction.get("instruction_id") or "")
-        opa_instruction, opa_account = build_instruction_opa_context(instruction)
+        opa_instruction, opa_account, approval_blocked_reason = (
+            instruction_opa_context_for_approval_eligibility(instruction)
+        )
 
         candidates = self._users.instruction_approver_candidates(owning_lob)
-        eligible: list[EligibleApprover] = []
+        eligible = await self._eligible_instruction_approvers_for_context(
+            candidates,
+            opa_instruction=opa_instruction,
+            opa_account=opa_account,
+        )
 
-        for candidate in candidates:
-            allowed, basis = await self._opa.can_approve_instruction(
-                candidate,
-                opa_instruction=opa_instruction,
-                opa_account=opa_account,
+        prospective_eligible: list[EligibleApprover] = []
+        prospective_opa, prospective_account = instruction_opa_context_after_submission(
+            instruction
+        )
+        if prospective_opa is not None and prospective_account is not None:
+            prospective_eligible = await self._eligible_instruction_approvers_for_context(
+                candidates,
+                opa_instruction=prospective_opa,
+                opa_account=prospective_account,
             )
-            if allowed:
-                eligible.append(
-                    EligibleApprover(
-                        user_id=candidate.user_id,
-                        display_name=candidate.display_name,
-                        title=candidate.title,
-                        allow_basis=basis,
-                    )
-                )
-
-        eligible.sort(key=lambda row: row.display_name)
 
         return InstructionEligibleApproversResponse(
             instruction_id=instruction_id,
@@ -128,5 +157,7 @@ class EligibilityService:
             created_by_title=str(created_by.get("title") or ""),
             evaluated_at=datetime.now(UTC).isoformat(),
             eligible=eligible,
+            prospective_eligible=prospective_eligible,
             candidates_evaluated=len(candidates),
+            approval_blocked_reason=approval_blocked_reason,
         )

@@ -246,6 +246,20 @@ class TestPaymentAggregateAnswers:
         )
         assert answer == "There are 10 instructions in the store."
 
+    def test_formats_instruction_count_single_use(self) -> None:
+        answer = _format_instruction_count_aggregate_answer(
+            "How many single use instructions are there?",
+            [{"total": 2}],
+        )
+        assert answer == "There are 2 instructions in the store (type SINGLE_USE)."
+
+    def test_formats_instruction_count_single_use_by_type(self) -> None:
+        answer = _format_instruction_count_aggregate_answer(
+            "How many single use instructions were created?",
+            [{"total": 5}],
+        )
+        assert answer == "There are 5 instructions in the store (type SINGLE_USE)."
+
 
 class TestDisplayFromSnapUser:
     def test_formats_family_given_and_id(self) -> None:
@@ -275,9 +289,9 @@ class TestInstructionLifecyclePartyLines:
         assert "rejected_by=Chen, Sarah (mo-100)" in lines
         assert "rejection_reason=Invalid creditor" in lines
 
-    def test_standing_instruction(self) -> None:
+    def test_approved_instruction(self) -> None:
         payload = {"approver_display": "Torres, Michael (ficc-201)", "approved_at": "2026-01-01"}
-        snap = {"status": "STANDING"}
+        snap = {"status": "APPROVED"}
         lines = _instruction_lifecycle_party_lines(payload, snap)
         assert "approver=Torres, Michael (ficc-201)" in lines
         assert "approved_at=2026-01-01" in lines
@@ -325,7 +339,7 @@ class TestRagServiceBuildContext:
                 "authorization_summary": "Allowed",
                 "authorization_basis": ["role match"],
                 "instruction_snapshot": {
-                    "status": "STANDING",
+                    "status": "APPROVED",
                     "instruction_type": "STANDING",
                     "owning_lob": "FX",
                     "currency": "USD",

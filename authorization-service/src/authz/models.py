@@ -143,7 +143,9 @@ class InstructionEligibleApproversResponse(BaseModel):
     created_by_title: str
     evaluated_at: str
     eligible: list[EligibleApprover]
+    prospective_eligible: list[EligibleApprover] = Field(default_factory=list)
     candidates_evaluated: int
+    approval_blocked_reason: str | None = None
 
 
 class UserDirectoryRow(BaseModel):

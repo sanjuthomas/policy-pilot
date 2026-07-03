@@ -42,7 +42,7 @@ def test_payment_eligible_approvers_requires_service_auth(client: TestClient) ->
                 "owning_lob": "FICC",
                 "created_by_user_id": "pay-101",
             },
-            "instruction_status": "STANDING",
+            "instruction_status": "APPROVED",
         },
     )
     assert response.status_code == 401
@@ -57,7 +57,7 @@ def test_payment_eligible_approvers_success(client: TestClient) -> None:
         "amount": 100.0,
         "currency": "USD",
         "owning_lob": "FICC",
-        "instruction_status": "STANDING",
+        "instruction_status": "APPROVED",
         "evaluated_at": "2026-01-01T00:00:00Z",
         "eligible": [],
         "candidates_evaluated": 0,
@@ -83,7 +83,7 @@ def test_payment_eligible_approvers_success(client: TestClient) -> None:
                     owning_lob="FICC",
                     created_by_user_id="pay-101",
                 ).model_dump(mode="json"),
-                "instruction_status": "STANDING",
+                "instruction_status": "APPROVED",
             },
         )
     finally:

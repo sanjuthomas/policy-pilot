@@ -11,7 +11,7 @@ default allow := false
 #   2. Be a member of the MIDDLE_OFFICE group.
 #   3. Have the instruction's owning LOB listed in their covering_lobs
 #      (desk-coverage assignment in ZITADEL).
-#   4. The backing instruction must be approved (STANDING or SINGLE_USE)
+#   4. The backing instruction must be approved (status APPROVED)
 #      and not expired.
 #   5. The payment amount must be positive and within the creator's club ceiling.
 #

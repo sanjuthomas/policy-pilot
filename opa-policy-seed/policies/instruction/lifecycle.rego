@@ -52,7 +52,7 @@ allow if {
 }
 
 #
-# DELETE — soft delete draft or pending instructions
+# DELETE — soft delete draft or submitted instructions only
 #
 
 allow if {
@@ -68,10 +68,7 @@ allow if {
 
     is_valid_profit_center
 
-    input.instruction.status in {
-        "DRAFT",
-        "PENDING"
-    }
+    valid_transition
 }
 
 #
@@ -197,10 +194,7 @@ allow if {
 
     not_expired
 
-    input.instruction.status in {
-        "STANDING",
-        "SINGLE_USE"
-    }
+    input.instruction.status == "APPROVED"
 }
 
 #

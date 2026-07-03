@@ -49,8 +49,8 @@ violations["NO_LIMIT_GROUP_ASSIGNED"] if {
 
 # ── Unapproved instruction ────────────────────────────────────────────────────
 # Rule:     The instruction referenced by the payment has not completed the SSI
-#           approval lifecycle (status must be STANDING or SINGLE_USE).
-#           Using a DRAFT or PENDING instruction to route a real payment
+#           approval lifecycle (status must be APPROVED).
+#           Using a DRAFT or SUBMITTED instruction to route a real payment
 #           bypasses the four-eyes control on instruction setup.
 # Severity: ALERT — potential fraud or controls bypass.
 

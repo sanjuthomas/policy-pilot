@@ -17,7 +17,11 @@ from ps.authorization import (
 )
 from ps.config import settings
 from ps.database import mongo_transaction
-from ps.ilm_client import IlmClient, InstructionNotFoundError, InstructionStateError
+from ps.instruction_client import (
+    InstructionNotFoundError,
+    InstructionServiceClient,
+    InstructionStateError,
+)
 from ps.models.api import (
     DeletePaymentRequest,
     LifecycleEvent,
@@ -39,7 +43,7 @@ from ps.storage import VersionedPayment
 
 logger = logging.getLogger(__name__)
 
-_APPROVED_STATUSES = {"STANDING", "SINGLE_USE"}
+_APPROVED_STATUSES = {"APPROVED"}
 
 
 class InvalidStateTransitionError(Exception):
@@ -90,7 +94,7 @@ def _validate_instruction_at_create(instruction: dict) -> None:
     if status not in _APPROVED_STATUSES:
         raise ValueError(
             f"instruction is not in an approved state (status={status}). "
-            "Only STANDING or SINGLE_USE instructions can be used for payments."
+            "Only APPROVED instructions can be used for payments."
         )
     end_date_raw = instruction.get("end_date") or ""
     if end_date_raw:
@@ -116,7 +120,7 @@ def _check_instruction_validity_for_approval(payment: Payment, instruction: dict
     if status not in _APPROVED_STATUSES:
         return (
             f"instruction is no longer in an approvable state "
-            f"(current status={status!r}); it must be STANDING or SINGLE_USE to approve a payment"
+            f"(current status={status!r}); it must be APPROVED to approve a payment"
         )
 
     end_date_raw = instruction.get("end_date") or ""
@@ -147,7 +151,8 @@ def _check_instruction_validity_for_approval(payment: Payment, instruction: dict
         except ValueError:
             return f"instruction has an unparseable effective_date value: {effective_date_raw!r}"
 
-    current_type = instruction.get("instruction_type") or instruction.get("status") or ""
+    # Instruction type consistency (status is separate from type).
+    current_type = instruction.get("instruction_type") or ""
     if current_type and payment.instruction_type and current_type != payment.instruction_type:
         return (
             f"instruction type changed since payment creation "
@@ -162,7 +167,7 @@ class PaymentService:
         self.repo = PaymentRepository()
         self.event_repo = SecurityEventRepository()
         self.authz = AuthzClient(settings.authorization_service_url)
-        self.ilm = IlmClient()
+        self.instruction_service = InstructionServiceClient()
         self.sequence = sequence_client or SequenceClient(settings.sequence_service_url)
 
     async def _evaluate_policy(
@@ -333,7 +338,7 @@ class PaymentService:
         session_id: str | None = None,
     ) -> VersionedPayment:
         try:
-            instruction = await self.ilm.get_instruction(
+            instruction = await self.instruction_service.get_instruction(
                 instruction_id, bearer_token=bearer_token, session_id=session_id
             )
         except InstructionNotFoundError:
@@ -342,6 +347,7 @@ class PaymentService:
         _validate_instruction_at_create(instruction)
 
         instruction_status = instruction["status"]
+        instruction_type = instruction["instruction_type"]
         instruction_version = int(instruction.get("version_number") or 1)
         end_date = instruction.get("end_date") or ""
 
@@ -363,7 +369,7 @@ class PaymentService:
             currency=instruction["currency"],
             value_date=value_date,
             owning_lob=instruction["owning_lob"],
-            instruction_type=instruction_status,
+            instruction_type=instruction_type,
             subject=subject,
             event_id=lifecycle_event_id,
         )
@@ -381,9 +387,10 @@ class PaymentService:
         except PermissionError:
             raise
 
-        if instruction_status == "SINGLE_USE":
+        # Saga: for SINGLE_USE type mark instruction USED first
+        if instruction_type == "SINGLE_USE":
             try:
-                await self.ilm.mark_used(
+                await self.instruction_service.mark_used(
                     instruction_id,
                     payment.payment_id,
                     bearer_token=bearer_token,
@@ -403,7 +410,7 @@ class PaymentService:
                     PaymentAction.CREATE_PAYMENT,
                     subject,
                     payment,
-                    reason=f"Saga step failed — ILM unreachable: {exc}",
+                    reason=f"Saga step failed — instruction-service unreachable: {exc}",
                     details={"saga_step": "mark_used", "saga_error": str(exc)},
                 )
                 raise RuntimeError(
@@ -443,7 +450,7 @@ class PaymentService:
             )
 
         try:
-            instruction = await self.ilm.get_instruction(
+            instruction = await self.instruction_service.get_instruction(
                 payment.instruction_id, bearer_token=bearer_token, session_id=session_id
             )
         except InstructionNotFoundError:
@@ -487,7 +494,7 @@ class PaymentService:
             )
 
         try:
-            instruction = await self.ilm.get_instruction(
+            instruction = await self.instruction_service.get_instruction(
                 payment.instruction_id, bearer_token=bearer_token, session_id=session_id
             )
         except InstructionNotFoundError:
@@ -539,7 +546,7 @@ class PaymentService:
             )
 
         try:
-            instruction = await self.ilm.get_instruction(
+            instruction = await self.instruction_service.get_instruction(
                 payment.instruction_id, bearer_token=bearer_token, session_id=session_id
             )
         except InstructionNotFoundError:
@@ -589,7 +596,7 @@ class PaymentService:
             )
 
         try:
-            instruction = await self.ilm.get_instruction(
+            instruction = await self.instruction_service.get_instruction(
                 payment.instruction_id, bearer_token=bearer_token, session_id=session_id
             )
         except InstructionNotFoundError:
@@ -646,7 +653,7 @@ class PaymentService:
     async def eligible_approvers(self, payment_id: str) -> dict:
         record = await self._get_current_or_404(payment_id)
         payment = record.payment
-        instruction = await self.ilm.get_instruction_as_service(payment.instruction_id)
+        instruction = await self.instruction_service.get_instruction_as_service(payment.instruction_id)
         await service_identity.ensure_logged_in()
         return await self.authz.eligible_payment_approvers(
             payment={

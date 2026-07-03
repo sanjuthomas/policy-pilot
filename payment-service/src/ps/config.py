@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import model_validator
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,10 +15,13 @@ class Settings(BaseSettings):
     application_name: str = "payment-service"
 
     authorization_service_url: str = "http://localhost:8094"
-    ilm_url: str = "http://localhost:8000"
+    instruction_service_url: str = Field(
+        default="http://localhost:8000",
+        validation_alias=AliasChoices("instruction_service_url", "INSTRUCTION_SERVICE_URL", "ILM_URL"),
+    )
     sequence_service_url: str = "http://localhost:8095"
 
-    # Service account used for OBO delegation calls to ILM
+    # Service account used for OBO delegation calls to instruction-service
     service_user_id: str = "svc-payment"
     service_user_password: str = "Password1!"
 

@@ -40,7 +40,7 @@ Instruction-service does **not** call OPA directly. Lifecycle mutations delegate
 
 | Authz endpoint | When |
 |----------------|------|
-| `POST /api/v1/authorization/instructions/evaluate` | Create, update, submit, approve, reject, suspend, reactivate, use, view |
+| `POST /api/v1/authorization/instructions/evaluate` | Create, update, submit, approve, reject, suspend, reactivate, use, delete, view |
 | `POST /api/v1/authorization/instructions/eligible-approvers` | Compliance “who can approve?” (service token only) |
 
 ### Compliance: eligible approvers
@@ -52,6 +52,14 @@ curl -s -X POST "http://localhost:8000/api/v1/instructions/{instruction_id}/elig
 ```
 
 Requires `COMPLIANCE_ANALYST`, `COMPLIANCE_OFFICER`, or `PLATFORM_ADMIN`. The service loads the instruction, then calls authz for batch OPA evaluation.
+
+## Lifecycle and soft delete
+
+Status flow: `DRAFT` → `SUBMITTED` → `APPROVED` or `REJECTED`; approved instructions may become `SUSPENDED`, `USED`, or `EXPIRED`.
+
+**Soft delete** (`POST /api/v1/instructions/{id}/delete`) is allowed only while status is **`DRAFT`** or **`SUBMITTED`**. The instruction moves to `DELETED`; it cannot be approved, used, or deleted again. Middle-office creators with `INSTRUCTION_CREATOR` may delete drafts they created; OPA enforces title and LOB rules.
+
+Approve and reject require `SUBMITTED`. Instructions in `APPROVED`, `REJECTED`, `SUSPENDED`, `USED`, or `EXPIRED` cannot be soft-deleted.
 
 ## Owning profit center (`owning_lob`)
 

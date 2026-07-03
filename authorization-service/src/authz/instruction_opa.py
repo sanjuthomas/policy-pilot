@@ -14,7 +14,7 @@ def _ensure_rfc3339_z(value: str) -> str:
 
 
 def build_instruction_opa_context(instruction: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Map an ILM instruction document to OPA instruction/account inputs."""
+    """Map an instruction-service document to OPA instruction/account inputs."""
     created_by = instruction.get("created_by") or {}
     funding_account = instruction.get("funding_account") or {}
     owning_lob = instruction.get("owning_lob", "")
@@ -36,3 +36,29 @@ def build_instruction_opa_context(instruction: dict[str, Any]) -> tuple[dict[str
         "owning_lob": funding_account.get("owning_lob") or owning_lob,
     }
     return opa_instruction, opa_account
+
+
+def instruction_opa_context_for_approval_eligibility(
+    instruction: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any], str | None]:
+    """Build OPA inputs for who can approve *right now* (actual lifecycle status)."""
+    opa_instruction, opa_account = build_instruction_opa_context(instruction)
+    status = str(instruction.get("status") or "")
+    if status != "DRAFT":
+        return opa_instruction, opa_account, None
+
+    return opa_instruction, opa_account, (
+        "Approval is not permitted while status is DRAFT. Submit the instruction first."
+    )
+
+
+def instruction_opa_context_after_submission(
+    instruction: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]] | tuple[None, None]:
+    """Hypothetical OPA inputs for DRAFT instructions once submitted."""
+    status = str(instruction.get("status") or "")
+    if status != "DRAFT":
+        return None, None
+
+    opa_instruction, opa_account = build_instruction_opa_context(instruction)
+    return {**opa_instruction, "status": "SUBMITTED"}, opa_account

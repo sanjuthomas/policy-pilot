@@ -21,11 +21,11 @@ from harness.helpers import (
     build_payment_seed_plan,
     build_scenario,
     build_seed_plan,
-    ilm_client,
+    instruction_service_client,
     payment_client,
     payment_submitter_for_lob,
 )
-from harness.ilm_client import InstructionLifecycleClient
+from harness.instruction_client import InstructionServiceClient
 from harness.payment_client import PaymentServiceClient
 from harness.results import HarnessActionResult
 from harness.zitadel_auth import SessionCredentials, ZitadelAuthClient
@@ -37,11 +37,11 @@ def _require_pat(settings: Settings) -> str | None:
     return "ZITADEL_SERVICE_PAT is required for session login"
 
 
-def _clients(settings: Settings) -> tuple[SeedFile, ZitadelAuthClient, InstructionLifecycleClient]:
+def _clients(settings: Settings) -> tuple[SeedFile, ZitadelAuthClient, InstructionServiceClient]:
     seed = load_users(settings.users_file)
     auth = auth_client(settings)
-    ilm = ilm_client(settings)
-    return seed, auth, ilm
+    instruction_service = instruction_service_client(settings)
+    return seed, auth, instruction_service
 
 
 def create_instructions(
@@ -55,7 +55,7 @@ def create_instructions(
         result.ok = False
         return result
 
-    seed, auth, ilm = _clients(settings)
+    seed, auth, instruction_service = _clients(settings)
     result.logs.append(f"Creating {count} instruction(s)")
 
     for index, (user_id, owning_lob, instruction_type, currency) in enumerate(
@@ -71,7 +71,7 @@ def create_instructions(
             f"[{index}] create {instruction_type} {owning_lob} "
             f"currency={currency} user={user_id}"
         )
-        response = ilm.create_instruction(session, payload)
+        response = instruction_service.create_instruction(session, payload)
         if response.status_code == 201:
             result.succeeded += 1
             result.logs.append(f"  -> HTTP 201 created {response.json()['instruction_id']}")
@@ -100,7 +100,7 @@ def submit_instructions(
         result.ok = False
         return result
 
-    seed, auth, ilm = _clients(settings)
+    seed, auth, instruction_service = _clients(settings)
     drafts = _fetch_api_instructions(settings, admin_session, status="DRAFT")
     to_process = drafts[:count]
 
@@ -117,7 +117,7 @@ def submit_instructions(
         result.logs.append(
             f"[{index}] {instruction_id} lob={instruction['owning_lob']} status=DRAFT"
         )
-        response = ilm.submit_instruction(submit_session, instruction_id)
+        response = instruction_service.submit_instruction(submit_session, instruction_id)
         if response.status_code in range(200, 300):
             result.succeeded += 1
             result.logs.append(f"  -> submit HTTP {response.status_code} OK")
@@ -146,14 +146,14 @@ def approve_instructions(
         result.ok = False
         return result
 
-    seed, auth, ilm = _clients(settings)
+    seed, auth, instruction_service = _clients(settings)
     submitter_id = _instruction_submitter(seed)
 
     drafts = _fetch_api_instructions(settings, admin_session, status="DRAFT")
-    pending = _fetch_api_instructions(settings, admin_session, status="PENDING")
-    candidates = drafts + pending
+    submitted = _fetch_api_instructions(settings, admin_session, status="SUBMITTED")
+    candidates = drafts + submitted
     if not candidates:
-        result.logs.append("No DRAFT or PENDING instructions available to approve.")
+        result.logs.append("No DRAFT or SUBMITTED instructions available to approve.")
         return result
 
     def _created_by(instruction: dict) -> dict:
@@ -205,7 +205,7 @@ def approve_instructions(
 
         if status == "DRAFT":
             submit_session = _session_for_user(auth, seed, settings, submitter_id)
-            submit_response = ilm.submit_instruction(submit_session, instruction_id)
+            submit_response = instruction_service.submit_instruction(submit_session, instruction_id)
             if submit_response.status_code not in range(200, 300):
                 result.failed += 1
                 result.logs.append(f"  -> submit HTTP {submit_response.status_code} FAIL")
@@ -216,7 +216,7 @@ def approve_instructions(
             result.logs.append(f"  -> submit HTTP {submit_response.status_code} OK")
 
         approve_session = _session_for_user(auth, seed, settings, approver_id)
-        approve_response = ilm.approve_instruction(approve_session, instruction_id)
+        approve_response = instruction_service.approve_instruction(approve_session, instruction_id)
         if approve_response.status_code in range(200, 300):
             result.succeeded += 1
             final_status = approve_response.json().get("status", "APPROVED")
@@ -246,12 +246,12 @@ def reject_instructions(
         result.ok = False
         return result
 
-    seed, auth, ilm = _clients(settings)
-    pending = _fetch_api_instructions(settings, admin_session, status="PENDING")
-    to_process = pending[:count]
+    seed, auth, instruction_service = _clients(settings)
+    submitted = _fetch_api_instructions(settings, admin_session, status="SUBMITTED")
+    to_process = submitted[:count]
 
     if not to_process:
-        result.logs.append("No PENDING instructions available to reject.")
+        result.logs.append("No SUBMITTED instructions available to reject.")
         return result
 
     result.logs.append(f"Rejecting up to {len(to_process)} instruction(s)")
@@ -282,7 +282,7 @@ def reject_instructions(
             f"[{index}] {instruction_id} lob={owning_lob} reject as {approver_id}"
         )
         session = _session_for_user(auth, seed, settings, approver_id)
-        response = ilm.reject_instruction(
+        response = instruction_service.reject_instruction(
             session,
             instruction_id,
             reason="Rejected via test harness UI",
@@ -314,7 +314,7 @@ def run_policy_scenario(
         result.ok = False
         return result
 
-    seed, auth, ilm = _clients(settings)
+    seed, auth, instruction_service = _clients(settings)
     instruction_id: str | None = None
     failures = 0
 
@@ -328,31 +328,31 @@ def run_policy_scenario(
         )
 
         if operation == Operation.CREATE:
-            response = ilm.create_instruction(session, build_instruction_payload(owning_lob="FICC"))
+            response = instruction_service.create_instruction(session, build_instruction_payload(owning_lob="FICC"))
             if expect_success and response.status_code == 201:
                 instruction_id = response.json()["instruction_id"]
         elif operation == Operation.GET:
             if not instruction_id:
                 result.logs.append("  skip: no instruction_id")
                 continue
-            response = ilm.get_instruction(session, instruction_id)
+            response = instruction_service.get_instruction(session, instruction_id)
         elif operation == Operation.LIST:
-            response = ilm.list_instructions(session)
+            response = instruction_service.list_instructions(session)
         elif operation == Operation.SUBMIT:
             if not instruction_id:
                 result.logs.append("  skip: no instruction_id")
                 continue
-            response = ilm.submit_instruction(session, instruction_id)
+            response = instruction_service.submit_instruction(session, instruction_id)
         elif operation == Operation.APPROVE:
             if not instruction_id:
                 result.logs.append("  skip: no instruction_id")
                 continue
-            response = ilm.approve_instruction(session, instruction_id)
+            response = instruction_service.approve_instruction(session, instruction_id)
         elif operation == Operation.LIST_VERSIONS:
             if not instruction_id:
                 result.logs.append("  skip: no instruction_id")
                 continue
-            response = ilm.list_versions(session, instruction_id)
+            response = instruction_service.list_versions(session, instruction_id)
         else:
             raise RuntimeError(f"unsupported operation: {operation}")
 
@@ -398,13 +398,13 @@ def create_payments(
     seed, auth, ps = _payment_clients(settings)
 
     approved = _fetch_approved_instructions(settings, admin_session)
-    # Prefer STANDING so we can reuse them; fall back to SINGLE_USE
-    standing = [i for i in approved if i.get("status") == "STANDING"]
+    # Prefer STANDING type so we can reuse them; fall back to SINGLE_USE type.
+    standing = [i for i in approved if i.get("instruction_type") == "STANDING"]
     pool = standing if standing else approved
 
     if not pool:
         result.logs.append(
-            "No approved STANDING or SINGLE_USE instructions found. "
+            "No APPROVED instructions found. "
             "Run approve-instructions first."
         )
         result.ok = False
@@ -680,7 +680,7 @@ def run_payment_policy_scenario(
     ficc_instructions = [
         i for i in approved
         if i.get("owning_lob") == "FICC"
-        and i.get("status") == "STANDING"
+        and i.get("instruction_type") == "STANDING"
     ]
     if not ficc_instructions:
         ficc_instructions = [i for i in approved if i.get("owning_lob") == "FICC"]
@@ -779,16 +779,14 @@ def suspend_instructions(
         result.ok = False
         return result
 
-    standing = _fetch_api_instructions(settings, admin_session, status="STANDING")
-    single_use = _fetch_api_instructions(settings, admin_session, status="SINGLE_USE")
-    candidates = standing + single_use
+    candidates = _fetch_api_instructions(settings, admin_session, status="APPROVED")
     to_process = candidates[:count]
 
     if not to_process:
-        result.logs.append("No STANDING or SINGLE_USE instructions available to suspend.")
+        result.logs.append("No APPROVED instructions available to suspend.")
         return result
 
-    ilm = ilm_client(settings)
+    instruction_service = instruction_service_client(settings)
     result.logs.append(f"Suspending up to {len(to_process)} instruction(s)")
 
     for index, instruction in enumerate(to_process, start=1):
@@ -798,7 +796,7 @@ def suspend_instructions(
         result.logs.append(
             f"[{index}] {instruction_id} lob={owning_lob} status={status}"
         )
-        response = ilm.suspend_instruction(admin_session, instruction_id)
+        response = instruction_service.suspend_instruction(admin_session, instruction_id)
         if response.status_code in range(200, 300):
             result.succeeded += 1
             result.logs.append(f"  -> suspend HTTP {response.status_code} OK")
@@ -834,14 +832,14 @@ def reactivate_instructions(
         result.logs.append("No SUSPENDED instructions available to reactivate.")
         return result
 
-    ilm = ilm_client(settings)
+    instruction_service = instruction_service_client(settings)
     result.logs.append(f"Reactivating up to {len(to_process)} instruction(s)")
 
     for index, instruction in enumerate(to_process, start=1):
         instruction_id = instruction["instruction_id"]
         owning_lob = instruction.get("owning_lob", "?")
         result.logs.append(f"[{index}] {instruction_id} lob={owning_lob} status=SUSPENDED")
-        response = ilm.reactivate_instruction(admin_session, instruction_id)
+        response = instruction_service.reactivate_instruction(admin_session, instruction_id)
         if response.status_code in range(200, 300):
             result.succeeded += 1
             final_status = response.json().get("status", "REACTIVATED")

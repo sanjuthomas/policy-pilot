@@ -7,7 +7,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from ps.dependencies import get_subject
-from ps.ilm_client import InstructionNotFoundError
+from ps.instruction_client import InstructionNotFoundError
 from ps.models.api import Subject
 from ps.models.enums import PaymentStatus
 from ps.routes import get_service, router
@@ -77,7 +77,7 @@ def test_create_payment_conflict(api_client: TestClient) -> None:
 
 
 def test_create_payment_bad_gateway(api_client: TestClient) -> None:
-    api_client.mock_service.create.side_effect = RuntimeError("ilm down")
+    api_client.mock_service.create.side_effect = RuntimeError("instruction-service down")
     response = api_client.post(
         "/api/v1/payments",
         json={"instruction_id": "instr-001", "value_date": "2026-07-01", "amount": 100.0},

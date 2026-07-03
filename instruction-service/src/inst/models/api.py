@@ -28,7 +28,7 @@ class Subject(BaseModel):
     groups: list[str] = Field(default_factory=list)
     supervisor_id: str | None = None
     # Populated when the request arrives via an On-Behalf-Of delegation
-    # (e.g. payment-service calling ILM on behalf of a human user).
+    # (e.g. payment-service calling instruction-service on behalf of a human user).
     delegated_by: str | None = None
     # Roles held by the delegating service account.  Empty for direct calls.
     # OPA policies can gate actions on specific service roles (e.g. INSTRUCTION_MARKER)
@@ -202,4 +202,6 @@ class InstructionEligibleApproversResponse(BaseModel):
     created_by_title: str
     evaluated_at: str
     eligible: list[EligibleApproverResponse]
+    prospective_eligible: list[EligibleApproverResponse] = Field(default_factory=list)
     candidates_evaluated: int
+    approval_blocked_reason: str | None = None

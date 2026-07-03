@@ -41,7 +41,7 @@ omit = [
   "src/harness/actions.py",
   "src/harness/auth.py",
   "src/harness/zitadel_auth.py",
-  "src/harness/ilm_client.py",
+  "src/harness/instruction_client.py",
   "src/harness/payment_client.py",
 ]
 

@@ -4,6 +4,7 @@ import os
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from chat_application.rag import RagService
 from fastapi.testclient import TestClient
 
 
@@ -47,6 +48,12 @@ def mock_neo4j():
     client.run_cypher = AsyncMock(return_value=[])
     client.lookup_instruction_for_event = AsyncMock(return_value=[])
     return client
+
+
+@pytest.fixture
+def rag_service(mock_ollama, mock_multimodal, mock_neo4j, monkeypatch):
+    monkeypatch.setattr("chat_application.rag.load_graph_schema", lambda: "schema")
+    return RagService(ollama=mock_ollama, multimodal=mock_multimodal, neo4j=mock_neo4j)
 
 
 @pytest.fixture

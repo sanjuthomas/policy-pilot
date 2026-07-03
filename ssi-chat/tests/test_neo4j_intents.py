@@ -3,7 +3,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from chat_application.models import SearchMode
 from chat_application.neo4j_formatters import (
     format_instruction_creator_by_id,
     format_instruction_status_by_id,
@@ -54,6 +53,18 @@ class TestNeo4jDirectMatching:
         assert match is not None
         assert match.intent_id == "events.alerts_today_count"
 
+    def test_planned_graph_count_single_use_via_direct_path(self) -> None:
+        question = "How many single use instructions are there?"
+        match = match_neo4j_direct_intent(question, mode="instructions")
+        assert match is None
+        from chat_application.neo4j_intents import match_planned_graph_intent
+
+        planned = match_planned_graph_intent(question, mode="instructions")
+        assert planned is not None
+        assert planned.intent_id == "planned_graph"
+        assert "v.instruction_type = 'SINGLE_USE'" in planned.planned[0][1]
+        assert "v.status = 'SINGLE_USE'" not in planned.planned[0][1]
+
     def test_no_match_for_vague_question(self) -> None:
         assert match_neo4j_direct_intent("Tell me about instructions", mode="instructions") is None
 
@@ -88,7 +99,7 @@ class TestNeo4jDirectFormatters:
 
 class TestNeo4jDirectExecution:
     @pytest.mark.asyncio
-    async def test_try_neo4j_direct_answer(self) -> None:
+    async def test_try_neo4j_direct_answer_creator(self) -> None:
         neo4j = AsyncMock()
         neo4j.run_cypher = AsyncMock(
             return_value=[
@@ -108,11 +119,25 @@ class TestNeo4jDirectExecution:
         assert result.intent_id == "instruction.creator_by_id"
         neo4j.run_cypher.assert_awaited()
 
+    @pytest.mark.asyncio
+    async def test_try_neo4j_direct_answer_single_use_count(self) -> None:
+        neo4j = AsyncMock()
+        neo4j.run_cypher = AsyncMock(return_value=[{"total": 2}])
+        result = await try_neo4j_direct_answer(
+            neo4j,
+            "How many single use instructions are there?",
+            mode="instructions",
+        )
+        assert result is not None
+        assert "2" in result.answer
+        assert result.intent_id == "planned_graph"
+        neo4j.run_cypher.assert_awaited()
+
 
 class TestRagNeo4jDirectEarlyExit:
     @pytest.mark.asyncio
     async def test_ask_uses_neo4j_direct_without_llm(
-        self, rag_service, mock_ollama, mock_qdrant, mock_neo4j
+        self, rag_service, mock_ollama, mock_multimodal, mock_neo4j
     ) -> None:
         mock_neo4j.run_cypher = AsyncMock(
             return_value=[
@@ -122,8 +147,8 @@ class TestRagNeo4jDirectEarlyExit:
                 }
             ]
         )
-        mock_qdrant.search_vector = AsyncMock(return_value=[])
-        mock_qdrant.search_bm25 = MagicMock(return_value=[])
+        mock_multimodal.search_vector = AsyncMock(return_value=[])
+        mock_multimodal.search_bm25 = AsyncMock(return_value=[])
         mock_ollama.embed = AsyncMock(return_value=[0.1, 0.2])
         mock_ollama.synthesize_answer = AsyncMock(return_value="should not be called")
 

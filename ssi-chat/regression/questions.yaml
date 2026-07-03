@@ -355,7 +355,7 @@ cases:
   tags:
   - counts
   - pending
-  question: How many instructions are in PENDING_APPROVAL?
+  question: How many instructions are in SUBMITTED?
   expect:
     answer_has_number: true
 - id: instructions_single_use
@@ -588,7 +588,7 @@ cases:
   tags:
   - inventory
   - pending
-  question: List all PENDING_APPROVAL instructions.
+  question: List all SUBMITTED instructions.
   expect:
     answer_contains_any:
     - pending

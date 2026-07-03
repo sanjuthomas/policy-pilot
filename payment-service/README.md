@@ -61,7 +61,7 @@ DRAFT / SUBMITTED  →  DELETED (soft delete)
 | Reject | Funding approver covering the instruction LOB | `REJECT_PAYMENT` |
 | Soft delete | Authorized roles while `DRAFT` or `SUBMITTED` | `DELETE_PAYMENT` |
 
-At create time the service validates the linked instruction is `STANDING` or `SINGLE_USE` and not expired. At approval time it re-checks instruction version drift, status, and dates — invalid instructions auto-cancel the payment.
+At create time the service validates the linked instruction is `APPROVED` and not expired. At approval time it re-checks instruction version drift, status, and dates — invalid instructions auto-cancel the payment.
 
 Terminal states (`APPROVED`, `REJECTED`, `CANCELLED`, `DELETED`) block further mutations.
 
@@ -134,7 +134,7 @@ Requires MongoDB (replica set), **authorization-service**, **instruction-service
 |----------|---------|
 | `MONGODB_URI` | `mongodb://localhost:27017/?replicaSet=rs0` |
 | `AUTHORIZATION_SERVICE_URL` | `http://authorization-service:8094` |
-| `ILM_URL` | `http://instruction-service:8000` |
+| `INSTRUCTION_SERVICE_URL` | `http://instruction-service:8000` |
 | `SEQUENCE_SERVICE_URL` | `http://localhost:8095` |
 
 ## Docker

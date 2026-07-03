@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Self
 
-from pydantic import model_validator
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,8 +19,18 @@ class Settings(BaseSettings):
     zitadel_service_pat: str = ""
     zitadel_service_pat_file: Path | None = None
     admin_user_id: str = "admin-001"
-    ilm_url: str = "http://localhost:8000"
-    ilm_api_prefix: str = "/api/v1"
+    instruction_service_url: str = Field(
+        default="http://localhost:8000",
+        validation_alias=AliasChoices("instruction_service_url", "INSTRUCTION_SERVICE_URL", "ILM_URL"),
+    )
+    instruction_service_api_prefix: str = Field(
+        default="/api/v1",
+        validation_alias=AliasChoices(
+            "instruction_service_api_prefix",
+            "INSTRUCTION_SERVICE_API_PREFIX",
+            "ILM_API_PREFIX",
+        ),
+    )
     users_file: Path = Path(__file__).resolve().parents[3] / "zitadel-seed" / "users.yaml"
     default_password: str = "Password1!"
     email_domain: str = "ssi.local"

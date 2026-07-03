@@ -33,12 +33,12 @@ def test_build_merged_context_uses_instruction_snapshot():
     event["instruction_snapshot"] = {
         "instruction_id": "snap-id",
         "version_number": 9,
-        "status": "PENDING",
+        "status": "SUBMITTED",
         "created_by": {"user_id": "snap-creator"},
     }
     merged = build_merged_context(event, None)
     assert merged["instruction_id"] == "instr-1"  # resource id still used
-    assert merged["status"] == "PENDING"
+    assert merged["status"] == "SUBMITTED"
     assert merged["creator_user_id"] == "snap-creator"
 
 

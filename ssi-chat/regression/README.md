@@ -107,7 +107,7 @@ RUN_API_SMOKE=1 pytest tests/test_api_smoke.py -v
 | **authorization-service** | Health, service-auth gate on evaluate endpoints |
 | **payment-service** / **instruction-service** | Payment/instruction eligible-approvers (compliance JWT), auth gate |
 
-Chat cases exercise RAG end-to-end; they do not call ILM/payment REST APIs directly. Indexer and authz are covered by API smoke, not chat YAML.
+Chat cases exercise RAG end-to-end; they do not call instruction-service/payment REST APIs directly. Indexer and authz are covered by API smoke, not chat YAML.
 
 ## Files
 
@@ -135,7 +135,7 @@ Chat cases exercise RAG end-to-end; they do not call ILM/payment REST APIs direc
     answer_contains_any: ["allowed", "because", "role"]
 ```
 
-Context placeholders are filled from ILM/payment UI APIs after seeding.
+Context placeholders are filled from instruction-service/payment UI APIs after seeding.
 
 ## Exit codes
 

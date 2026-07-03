@@ -72,7 +72,7 @@ async def status(
             status_name = instruction.get("status", "UNKNOWN")
             instruction_counts[status_name] = instruction_counts.get(status_name, 0) + 1
     except httpx.HTTPError as exc:
-        logger.warning("failed to fetch instructions from ILM: %s", exc)
+        logger.warning("failed to fetch instructions from instruction-service: %s", exc)
 
     payment_counts: dict[str, int] = {}
     total_payments = 0
@@ -102,7 +102,7 @@ async def status(
         logger.warning("failed to count payment security events: %s", exc)
 
     return {
-        "ilm_url": settings.ilm_url,
+        "instruction_service_url": settings.instruction_service_url,
         "payment_service_url": settings.payment_service_url,
         "zitadel_configured": bool(settings.zitadel_service_pat),
         "instruction_total": total_instructions,

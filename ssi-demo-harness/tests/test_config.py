@@ -15,4 +15,4 @@ def test_settings_load_service_pat_from_file(tmp_path: Path) -> None:
 def test_settings_defaults() -> None:
     settings = Settings()
     assert settings.port == 8091
-    assert settings.ilm_api_prefix == "/api/v1"
+    assert settings.instruction_service_api_prefix == "/api/v1"

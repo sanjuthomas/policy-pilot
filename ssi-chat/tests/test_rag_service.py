@@ -3,24 +3,21 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from chat_application.rag import RagService
-
-
-@pytest.fixture
-def rag_service(mock_ollama, mock_multimodal, mock_neo4j, monkeypatch):
-    monkeypatch.setattr("chat_application.rag.load_graph_schema", lambda: "schema")
-    return RagService(ollama=mock_ollama, multimodal=mock_multimodal, neo4j=mock_neo4j)
 
 
 class TestRagServiceAsk:
     @pytest.mark.asyncio
-    async def test_ask_returns_chat_response(self, rag_service, mock_ollama, mock_multimodal) -> None:
+    async def test_ask_returns_chat_response(
+        self, rag_service, mock_ollama, mock_multimodal, mock_neo4j
+    ) -> None:
         mock_multimodal.search_vector = AsyncMock(return_value=[])
         mock_multimodal.search_bm25 = AsyncMock(return_value=[])
+        mock_neo4j.run_cypher = AsyncMock(return_value=[{"total": 0}])
         mock_ollama.synthesize_answer = AsyncMock(return_value="There were 0 alerts.")
 
         response = await rag_service.ask("How many alerts?", [], mode="events")
-        assert response.answer == "There were 0 alerts."
+        assert response.answer == "The count is 0."
+        mock_ollama.synthesize_answer.assert_not_called()
         assert response.retrieval_ms is not None
         assert response.generation_ms is not None
 
@@ -66,7 +63,7 @@ class TestRagServiceAsk:
                     "approved_at": "2026-01-01",
                     "authorization_summary": "OPA allowed",
                     "authorization_basis": ["role match"],
-                    "instruction_snapshot": {"status": "STANDING"},
+                    "instruction_snapshot": {"status": "APPROVED"},
                 },
             }
         )
@@ -85,7 +82,9 @@ class TestRagServiceAsk:
 
         response = await rag_service.ask(f"Who approved instruction {iid}?", [], mode="instructions")
         assert response.answer.startswith("WHO:")
-        assert "Readable why." in response.answer
+        assert "WHY:" in response.answer
+        assert "OPA allowed" in response.answer
+        mock_ollama.summarize_authorization_why.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_ask_instruction_approval_synthesis_sequence_id(
@@ -105,7 +104,7 @@ class TestRagServiceAsk:
                     "approved_at": "2026-06-28T10:00:00Z",
                     "authorization_summary": "OPA allowed supervisor approval",
                     "authorization_basis": ["role FICC_SUPERVISOR"],
-                    "instruction_snapshot": {"status": "STANDING"},
+                    "instruction_snapshot": {"status": "APPROVED"},
                 },
             }
         )

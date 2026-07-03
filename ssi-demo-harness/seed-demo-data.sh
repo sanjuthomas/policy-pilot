@@ -162,7 +162,7 @@ seed_extra_alerts() {
   log "Extra policy denials (instruction + payment ALERTs)"
   docker exec ssi-demo-harness python3 -u -c "
 import os, traceback
-os.environ['ILM_URL'] = 'http://instruction-service:8000'
+os.environ['INSTRUCTION_SERVICE_URL'] = 'http://instruction-service:8000'
 os.environ['PAYMENT_SERVICE_URL'] = 'http://payment-service:8093'
 os.environ['ZITADEL_INTERNAL_URL'] = 'http://zitadel-proxy'
 os.environ['ZITADEL_HOST_HEADER'] = 'localhost'
@@ -175,7 +175,7 @@ try:
     from harness.helpers import (
         _session_for_user,
         auth_client,
-        ilm_client,
+        instruction_service_client,
         payment_client,
         _fetch_api_instructions,
         _fetch_api_payments,
@@ -183,15 +183,15 @@ try:
     settings = Settings()
     seed = load_users(settings.users_file)
     auth = auth_client(settings)
-    ilm = ilm_client(settings)
+    instruction_service = instruction_service_client(settings)
     ps = payment_client(settings)
     admin = _session_for_user(auth, seed, settings, 'admin-001')
-    pending = [i for i in _fetch_api_instructions(settings, admin, status='PENDING')]
+    pending = [i for i in _fetch_api_instructions(settings, admin, status='SUBMITTED')]
     inst_alerts = pay_alerts = 0
 
     for _ in range(15):
         s = _session_for_user(auth, seed, settings, 'ficc-201')
-        if ilm.create_instruction(s, build_instruction_payload(owning_lob='FICC')).status_code == 403:
+        if instruction_service.create_instruction(s, build_instruction_payload(owning_lob='FICC')).status_code == 403:
             inst_alerts += 1
 
     for instr in pending[:20]:
@@ -199,17 +199,17 @@ try:
         if not creator:
             continue
         s = _session_for_user(auth, seed, settings, creator)
-        if ilm.approve_instruction(s, instr['instruction_id']).status_code == 403:
+        if instruction_service.approve_instruction(s, instr['instruction_id']).status_code == 403:
             inst_alerts += 1
 
     for instr in pending[:15]:
         s = _session_for_user(auth, seed, settings, 'fx-201')
-        if ilm.approve_instruction(s, instr['instruction_id']).status_code == 403:
+        if instruction_service.approve_instruction(s, instr['instruction_id']).status_code == 403:
             inst_alerts += 1
 
     approved = [
         i for i in _fetch_api_instructions(settings, admin)
-        if i.get('status') in ('STANDING', 'SINGLE_USE')
+        if i.get('status') == 'APPROVED'
     ]
     ficc = [i for i in approved if i.get('owning_lob') == 'FICC']
     vd = (date.today() + timedelta(days=1)).isoformat()

@@ -341,7 +341,7 @@ class Neo4jGraphWriter:
                             WHERE other.creditor_account_id = $creditor_account_id
                               AND other.currency = $currency
                               AND other.instruction_id <> $instruction_id
-                              AND other.status IN ['STANDING', 'SINGLE_USE', 'PENDING']
+                              AND other.status IN ['APPROVED', 'SUBMITTED']
                             MERGE (v)-[:CONFLICTS_WITH]->(other)
                             MERGE (other)-[:CONFLICTS_WITH]->(v)
                             """,
@@ -882,8 +882,8 @@ class Neo4jGraphWriter:
             MATCH (i1:Instruction {instruction_id: $instruction_id})-[:CURRENT]->(cv1:InstructionVersion)
             MATCH (i2:Instruction)-[:CURRENT]->(v1)
             WHERE i2.instruction_id <> $instruction_id
-              AND cv1.status IN ['STANDING', 'SUBMITTED', 'PENDING_APPROVAL']
-              AND v1.status  IN ['STANDING', 'SUBMITTED', 'PENDING_APPROVAL']
+              AND cv1.status IN ['APPROVED', 'SUBMITTED']
+              AND v1.status  IN ['APPROVED', 'SUBMITTED']
             MERGE (i1)-[:CONFLICTS_WITH]->(i2)
             MERGE (i2)-[:CONFLICTS_WITH]->(i1)
             """

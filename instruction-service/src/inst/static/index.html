@@ -16,7 +16,7 @@
         </div>
       </div>
       <div class="status-group">
-        <nav class="nav-links" aria-label="ILM views">
+        <nav class="nav-links" aria-label="Instruction service views">
           <a href="/ui/" class="active">Instructions</a>
           <a href="/ui/security-events/">Instruction security events</a>
         </nav>
@@ -62,19 +62,15 @@
           <dl class="status-help-list">
             <div>
               <dt>DRAFT</dt>
-              <dd>Created and editable; not yet submitted for approval.</dd>
+              <dd>Created and editable; may be soft-deleted or submitted for approval.</dd>
             </div>
             <div>
-              <dt>PENDING</dt>
-              <dd>Submitted and awaiting an approver decision.</dd>
+              <dt>SUBMITTED</dt>
+              <dd>Submitted and awaiting approval; may be soft-deleted, approved, or rejected.</dd>
             </div>
             <div>
-              <dt>STANDING</dt>
-              <dd>Approved recurring instruction; available for payment until the end date.</dd>
-            </div>
-            <div>
-              <dt>SINGLE_USE</dt>
-              <dd>Approved one-time instruction; available until used or expired.</dd>
+              <dt>APPROVED</dt>
+              <dd>Approved instruction; available for payment until suspended, used, or expired.</dd>
             </div>
             <div>
               <dt>SUSPENDED</dt>
@@ -94,7 +90,7 @@
             </div>
             <div>
               <dt>DELETED</dt>
-              <dd>Soft-deleted while draft or pending.</dd>
+              <dd>Soft-deleted from DRAFT or SUBMITTED only.</dd>
             </div>
           </dl>
         </div>

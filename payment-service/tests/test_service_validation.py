@@ -12,15 +12,15 @@ from ps.service import (
 
 
 def test_approved_statuses_constant() -> None:
-    assert _APPROVED_STATUSES == {"STANDING", "SINGLE_USE"}
+    assert _APPROVED_STATUSES == {"APPROVED"}
 
 
-def test_validate_instruction_at_create_standing(standing_instruction: dict) -> None:
+def test_validate_instruction_at_create_approved(standing_instruction: dict) -> None:
     _validate_instruction_at_create(standing_instruction)
 
 
 def test_validate_instruction_at_create_single_use(standing_instruction: dict) -> None:
-    standing_instruction["status"] = "SINGLE_USE"
+    standing_instruction["instruction_type"] = "SINGLE_USE"
     _validate_instruction_at_create(standing_instruction)
 
 
@@ -117,7 +117,6 @@ def test_check_instruction_validity_empty_type_skips_check(
     standing_instruction: dict,
 ) -> None:
     standing_instruction.pop("instruction_type", None)
-    standing_instruction["status"] = "STANDING"
     assert _check_instruction_validity_for_approval(payment, standing_instruction) is None
 
 

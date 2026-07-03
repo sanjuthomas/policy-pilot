@@ -16,7 +16,7 @@ from chat_application.cypher import (
     _instruction_approval_lookup_queries,
     _instruction_detail_by_id_queries,
     _instruction_duplicate_routes_queries,
-    _instruction_list_by_status_queries,
+    _instruction_list_by_type_queries,
     _instruction_mutual_approval_queries,
     _instruction_security_event_timeline_queries,
     _instruction_self_approval_queries,
@@ -78,7 +78,7 @@ def _build_instruction_approval_lookup(context: dict[str, Any], _question: str, 
 
 def _build_instruction_list_single_use(context: dict[str, Any], question: str, _mode: SearchMode):
     lob = lob_filter_from_question(question)
-    return _instruction_list_by_status_queries(status="SINGLE_USE", lob=lob)
+    return _instruction_list_by_type_queries(instruction_type="SINGLE_USE", lob=lob)
 
 
 def _build_instructions_created_by_user(context: dict[str, Any], _question: str, _mode: SearchMode):
@@ -164,11 +164,15 @@ def extract_user_ids(text: str) -> list[str]:
 
 
 def build_match_context(question: str) -> dict[str, Any]:
-    instruction_ids = extract_instruction_ids(question) or [
-        entity_id
-        for entity_id in extract_entity_ids(question)
-        if "-I-" in entity_id.upper()
-    ]
+    instruction_ids = list(extract_instruction_ids(question))
+    if not instruction_ids:
+        mentions_instruction = bool(re.search(r"\binstruction\b", question, re.IGNORECASE))
+        for entity_id in extract_entity_ids(question):
+            if "-I-" in entity_id.upper():
+                instruction_ids.append(entity_id)
+            elif mentions_instruction and "-P-" not in entity_id.upper():
+                instruction_ids.append(entity_id)
+    instruction_ids = list(dict.fromkeys(instruction_ids))
     payment_ids = extract_payment_ids(question) or [
         entity_id
         for entity_id in extract_entity_ids(question)
@@ -301,14 +305,19 @@ def _format_planned_graph_answer(
             return _format_payments_for_instruction_answer(instruction_id, rows)
 
     if "approval_lookup" in labels or "payment_approval_lookup" in labels:
+        from chat_application.formatting import humanize_authorization_text
+
         row = rows[0] if rows else None
         if not row:
-            return "No approval record was found in the graph."
+            return None
         approver = row.get("approver_display") or "unknown"
         when = row.get("approved_at") or row.get("v.approved_at")
+        summary = row.get("v.authorization_summary") or row.get("authorization_summary")
         lines = [f"WHO: {approver}"]
         if when:
             lines.append(f"WHEN: {when}")
+        if summary:
+            lines.append(f"WHY: {humanize_authorization_text(str(summary))}")
         return "\n".join(lines)
 
     if "count" in labels and is_count_question(question):
@@ -366,6 +375,8 @@ async def try_neo4j_direct_answer(
     mode: SearchMode,
 ) -> Neo4jDirectResult | None:
     match = match_neo4j_direct_intent(question, mode=mode)
+    if match is None:
+        match = match_planned_graph_intent(question, mode=mode)
     if match is None:
         return None
 

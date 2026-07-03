@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from chat_application.models import ChatMessage
 from chat_application.rag import RagService
 
 
@@ -55,7 +53,7 @@ async def test_answer_payment_eligible_approvers_calls_authorization_client(
         "amount": 1_000_000,
         "currency": "USD",
         "owning_lob": "FICC",
-        "instruction_status": "STANDING",
+        "instruction_status": "APPROVED",
         "eligible": [],
         "candidates_evaluated": 1,
     }
@@ -81,7 +79,7 @@ async def test_ask_short_circuits_eligibility_question(rag_service: RagService) 
         "amount": 500_000,
         "currency": "USD",
         "owning_lob": "FX",
-        "instruction_status": "STANDING",
+        "instruction_status": "APPROVED",
         "eligible": [
             {
                 "user_id": "pay-201",
@@ -113,7 +111,7 @@ async def test_answer_instruction_eligible_approvers_calls_authorization_client(
     rag_service._eligibility = AsyncMock()
     rag_service._eligibility.eligible_approvers_for_instruction.return_value = {
         "instruction_id": instruction_id,
-        "instruction_status": "PENDING",
+        "instruction_status": "SUBMITTED",
         "instruction_type": "STANDING",
         "owning_lob": "FICC",
         "created_by_user_id": "ficc-101",
@@ -148,7 +146,7 @@ async def test_ask_short_circuits_instruction_eligibility_question(
     rag_service._eligibility = AsyncMock()
     rag_service._eligibility.eligible_approvers_for_instruction.return_value = {
         "instruction_id": instruction_id,
-        "instruction_status": "PENDING",
+        "instruction_status": "SUBMITTED",
         "instruction_type": "STANDING",
         "owning_lob": "FICC",
         "created_by_user_id": "ficc-101",

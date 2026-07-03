@@ -9,7 +9,7 @@ def test_format_eligible_approvers_answer_lists_users() -> None:
             "amount": 1_000_000,
             "currency": "USD",
             "owning_lob": "FICC",
-            "instruction_status": "STANDING",
+            "instruction_status": "APPROVED",
             "candidates_evaluated": 3,
             "eligible": [
                 {
@@ -38,7 +38,7 @@ def test_format_eligible_approvers_answer_humanizes_scientific_amounts() -> None
             "amount": 1_000_000,
             "currency": "USD",
             "owning_lob": "FICC",
-            "instruction_status": "STANDING",
+            "instruction_status": "APPROVED",
             "candidates_evaluated": 2,
             "eligible": [
                 {
@@ -68,7 +68,7 @@ def test_format_eligible_approvers_answer_empty() -> None:
             "amount": 100,
             "currency": "USD",
             "owning_lob": "FICC",
-            "instruction_status": "STANDING",
+            "instruction_status": "APPROVED",
             "eligible": [],
         }
     )

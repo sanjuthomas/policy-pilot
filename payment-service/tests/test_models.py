@@ -82,12 +82,12 @@ def test_payment_create_sets_lifecycle_event(subject: Subject) -> None:
 def test_payment_to_opa_payment(payment: Payment) -> None:
     payload = payment.to_opa_payment(
         instruction_end_date="2026-12-31",
-        instruction_status="STANDING",
+        instruction_status="APPROVED",
     )
     assert payload["payment_id"] == payment.payment_id
     assert payload["instruction_id"] == "instr-001"
     assert payload["amount"] == 1_000_000.0
-    assert payload["instruction_status"] == "STANDING"
+    assert payload["instruction_status"] == "APPROVED"
     assert payload["created_by"]["user_id"] == "alice"
 
 

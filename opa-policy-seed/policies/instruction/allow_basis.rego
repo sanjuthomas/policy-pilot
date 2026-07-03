@@ -3,7 +3,7 @@ package instruction.lifecycle
 # ---------------------------------------------------------------------------
 # allow_basis — human-readable reasons returned when allow=true.
 #
-# ILM queries /v1/data/instruction/lifecycle/allow_basis and persists each
+# instruction-service queries /v1/data/instruction/lifecycle/allow_basis and persists each
 # entry on the success SecurityEvent (details.authorization).
 # ---------------------------------------------------------------------------
 
@@ -152,10 +152,9 @@ allow_basis contains "instruction not expired" if {
     not_expired
 }
 
-allow_basis contains msg if {
+allow_basis contains "instruction status APPROVED" if {
     input.action == "USE"
-    input.instruction.status in {"STANDING", "SINGLE_USE"}
-    msg := sprintf("instruction status %v", [input.instruction.status])
+    input.instruction.status == "APPROVED"
 }
 
 # ── VIEW ──────────────────────────────────────────────────────────────────────

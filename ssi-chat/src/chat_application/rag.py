@@ -17,8 +17,8 @@ from chat_application.cypher import (
     extract_entity_ids,
     extract_payment_ids,
     extract_uuids,
+    instruction_count_filters_from_question,
     instruction_id_from_list_payments_question,
-    instruction_status_filter_from_question,
     is_alert_ranking_question,
     is_instruction_approver_via_payment_question,
     is_instruction_count_aggregate_question,
@@ -256,13 +256,15 @@ def _format_instruction_count_aggregate_answer(
         )
 
     total = int(graph_rows[0].get("total") or 0) if graph_rows else 0
-    status = instruction_status_filter_from_question(message)
+    status, instruction_type = instruction_count_filters_from_question(message)
     lob = lob_filter_from_question(message)
     period = payment_aggregate_period_label(message)
 
     qualifiers: list[str] = []
     if status:
         qualifiers.append(f"status {status}")
+    if instruction_type:
+        qualifiers.append(f"type {instruction_type}")
     if lob:
         qualifiers.append(f"LOB {lob}")
     if period != "all time":
@@ -355,7 +357,7 @@ def _instruction_lifecycle_party_lines(payload: dict[str, Any], snap: dict[str, 
         reason = payload.get("rejection_reason") or snap.get("rejection_reason")
         if reason:
             lines.append(f"rejection_reason={reason}")
-    elif status in ("STANDING", "SINGLE_USE", "USED", "SUSPENDED"):
+    elif status in ("APPROVED", "USED", "SUSPENDED"):
         approver = payload.get("approver_display") or _display_from_snap_user(snap, "approved_by")
         if approver:
             lines.append(f"approver={approver}")

@@ -10,7 +10,7 @@ from harness.fixtures import (
     build_instruction_payload,
     load_users,
 )
-from harness.ilm_client import InstructionLifecycleClient
+from harness.instruction_client import InstructionServiceClient
 from harness.payment_client import PaymentServiceClient
 from harness.zitadel_auth import SessionCredentials, ZitadelAuthClient
 
@@ -204,7 +204,7 @@ def _fetch_api_instructions(
     *,
     status: str | None = None,
 ) -> list[dict]:
-    response = ilm_client(settings).list_instructions(session, status=status, limit=500)
+    response = instruction_service_client(settings).list_instructions(session, status=status, limit=500)
     response.raise_for_status()
     payload = response.json()
     if isinstance(payload, list):
@@ -220,8 +220,8 @@ def auth_client(settings: Settings) -> ZitadelAuthClient:
     )
 
 
-def ilm_client(settings: Settings) -> InstructionLifecycleClient:
-    return InstructionLifecycleClient(settings)
+def instruction_service_client(settings: Settings) -> InstructionServiceClient:
+    return InstructionServiceClient(settings)
 
 
 def payment_client(settings: Settings) -> PaymentServiceClient:
@@ -425,11 +425,11 @@ def _fetch_approved_instructions(
     settings: Settings,
     session: SessionCredentials,
 ) -> list[dict]:
-    """Return STANDING and SINGLE_USE instructions from the ILM REST API."""
+    """Return approved instructions from the instruction-service REST API."""
     all_instructions = _fetch_api_instructions(settings, session)
     return [
         i for i in all_instructions
-        if i.get("status") in {"STANDING", "SINGLE_USE"}
+        if i.get("status") == "APPROVED"
     ]
 
 
@@ -475,6 +475,6 @@ __all__ = [
     "_fetch_api_payments",
     "_session_for_user",
     "auth_client",
-    "ilm_client",
+    "instruction_service_client",
     "load_users",
 ]

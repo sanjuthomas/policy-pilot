@@ -1,7 +1,7 @@
 """Manages the payment-service's own Zitadel session.
 
 At startup the service logs in as ``svc-payment`` and caches the session token.
-This token is sent as the ``Authorization: Bearer`` header when calling ILM,
+This token is sent as the ``Authorization: Bearer`` header when calling instruction-service,
 while the original user's token travels in ``X-On-Behalf-Of``.
 """
 from __future__ import annotations
@@ -33,7 +33,7 @@ def _host_header() -> dict[str, str]:
 
 
 class ServiceIdentity:
-    """Holds the payment-service's own session token for ILM delegation calls."""
+    """Holds the payment-service's own session token for instruction-service delegation calls."""
 
     def __init__(self) -> None:
         self._session_token: str | None = None

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from authz.models import PaymentRecord, Subject, UserReference
 from authz.opa import OpaClient
 
@@ -29,7 +28,7 @@ async def test_can_approve_payment_returns_basis() -> None:
             subject,
             payment,
             instruction_end_date="2027-01-01",
-            instruction_status="STANDING",
+            instruction_status="APPROVED",
         )
 
     assert allowed is True
@@ -56,7 +55,7 @@ async def test_can_approve_payment_denied() -> None:
             subject,
             payment,
             instruction_end_date="2027-01-01",
-            instruction_status="STANDING",
+            instruction_status="APPROVED",
         )
 
     assert allowed is False
@@ -68,7 +67,7 @@ async def test_can_approve_instruction_returns_basis() -> None:
     client = OpaClient(base_url="http://opa.test")
     subject = Subject(user_id="ficc-300", title="Vice President", roles=["INSTRUCTION_APPROVER"], lob="FICC")
     opa_instruction = {
-        "status": "PENDING",
+        "status": "SUBMITTED",
         "type": "STANDING",
         "owning_lob": "FICC",
         "effective_date": "2026-01-01T00:00:00Z",

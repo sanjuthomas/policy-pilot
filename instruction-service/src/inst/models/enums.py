@@ -24,10 +24,11 @@ class InstructionType(StrEnum):
 
 
 class InstructionStatus(StrEnum):
+    """Lifecycle state — orthogonal to instruction_type (STANDING vs SINGLE_USE)."""
+
     DRAFT = "DRAFT"
-    PENDING = "PENDING"
-    STANDING = "STANDING"
-    SINGLE_USE = "SINGLE_USE"
+    SUBMITTED = "SUBMITTED"
+    APPROVED = "APPROVED"
     SUSPENDED = "SUSPENDED"
     REJECTED = "REJECTED"
     USED = "USED"

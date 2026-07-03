@@ -1,4 +1,4 @@
-"""HTTP client for calling the Instruction Lifecycle Manager."""
+"""HTTP client for calling the instruction service."""
 from __future__ import annotations
 
 import logging
@@ -11,27 +11,27 @@ from ps.config import settings
 logger = logging.getLogger(__name__)
 
 
-class IlmError(Exception):
+class InstructionServiceClientError(Exception):
     pass
 
 
-class InstructionNotFoundError(IlmError):
+class InstructionNotFoundError(InstructionServiceClientError):
     pass
 
 
-class InstructionStateError(IlmError):
+class InstructionStateError(InstructionServiceClientError):
     """Instruction is in the wrong state (e.g. already USED, expired)."""
 
 
-class IlmClient:
-    """Thin async HTTP client over the ILM REST API.
+class InstructionServiceClient:
+    """Thin async HTTP client over the instruction-service REST API.
 
-    Forwards the caller's Bearer token (+ optional X-Session-Id) to ILM so that
-    service-to-service calls work regardless of whether ILM runs in jwt or auto mode.
+    Forwards the caller's Bearer token (+ optional X-Session-Id) so that
+    service-to-service calls work regardless of auth mode.
     """
 
     def __init__(self) -> None:
-        self._base = settings.ilm_url.rstrip("/")
+        self._base = settings.instruction_service_url.rstrip("/")
 
     async def _auth_headers(
         self,
@@ -57,7 +57,6 @@ class IlmClient:
         svc_token = service_identity.token
 
         if svc_token and bearer_token:
-            # Full OBO delegation — service identifies itself, user rides in OBO header
             headers: dict[str, str] = {"Authorization": f"Bearer {svc_token}"}
             if service_identity.session_id:
                 headers["X-Session-Id"] = service_identity.session_id
@@ -66,7 +65,6 @@ class IlmClient:
                 headers["X-On-Behalf-Of-Session-Id"] = session_id
             return headers
 
-        # Fallback: no service token yet — forward the user's token directly
         headers = {}
         if bearer_token:
             headers["Authorization"] = f"Bearer {bearer_token}"
@@ -120,7 +118,7 @@ class IlmClient:
         bearer_token: str | None = None,
         session_id: str | None = None,
     ) -> dict[str, Any]:
-        """Call ILM USE endpoint for SINGLE_USE instructions (Saga step 1)."""
+        """Call instruction-service USE endpoint for SINGLE_USE instructions (Saga step 1)."""
         url = f"{self._base}/api/v1/instructions/{instruction_id}/use"
         body = {
             "payment_reference": payment_id,

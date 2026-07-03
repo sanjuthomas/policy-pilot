@@ -9,7 +9,7 @@ valid_transition if {
     input.action == "DELETE"
     input.instruction.status in {
         "DRAFT",
-        "PENDING"
+        "SUBMITTED"
     }
 }
 
@@ -20,20 +20,17 @@ valid_transition if {
 
 valid_transition if {
     input.action == "APPROVE"
-    input.instruction.status == "PENDING"
+    input.instruction.status == "SUBMITTED"
 }
 
 valid_transition if {
     input.action == "REJECT"
-    input.instruction.status == "PENDING"
+    input.instruction.status == "SUBMITTED"
 }
 
 valid_transition if {
     input.action == "SUSPEND"
-    input.instruction.status in {
-        "STANDING",
-        "SINGLE_USE"
-    }
+    input.instruction.status == "APPROVED"
 }
 
 valid_transition if {

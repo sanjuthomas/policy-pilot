@@ -47,7 +47,7 @@ def _instruction_fact(**overrides) -> dict:
         "actor_given_name": "Act",
         "actor_family_name": "Or",
         "instruction_snapshot": {
-            "status": "PENDING",
+            "status": "SUBMITTED",
             "instruction_type": "WIRE",
             "owning_lob": "LOB1",
             "created_by": {"user_id": "c1", "given_name": "C", "family_name": "One"},
@@ -109,7 +109,7 @@ async def test_instruction_pipeline_merges_existing_payload(mock_neo4j, mock_oll
     fact = _instruction_fact(
         action="UPDATE",
         instruction_snapshot={
-            "status": "PENDING",
+            "status": "SUBMITTED",
             "instruction_type": "WIRE",
             "owning_lob": "LOB1",
             "created_by": {"user_id": "c1", "given_name": "C", "family_name": "One"},
@@ -121,7 +121,7 @@ async def test_instruction_pipeline_merges_existing_payload(mock_neo4j, mock_oll
 
     payload = mock_neo4j.upsert_instruction_fact.call_args.kwargs["multimodal"].payload
     assert payload["instruction_id"] == "instr-merge"
-    assert payload["status"] == "PENDING"
+    assert payload["status"] == "SUBMITTED"
     assert payload["authorization_summary"] == "prev summary"
     assert payload["authorization_basis"] == ["old-rule"]
     assert payload["approved_at"] == "2023-12-01"

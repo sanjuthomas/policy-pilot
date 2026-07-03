@@ -19,7 +19,7 @@ def _display_name(user: dict[str, Any]) -> str:
 
 
 class EnrichedSecurityEventDocument(BaseModel):
-    """Security event merged with the current instruction from ILM API."""
+    """Security event merged with the current instruction from instruction-service API."""
 
     event_id: str
     instruction_id: str

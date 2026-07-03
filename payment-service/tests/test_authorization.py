@@ -30,7 +30,7 @@ def test_payment_resource_context_defaults(payment: Payment) -> None:
     assert ctx["payment_id"] == payment.payment_id
     assert ctx["instruction_id"] == "instr-001"
     assert ctx["instruction_owning_lob"] == "CORP"
-    assert ctx["instruction_status"] == "STANDING"
+    assert ctx["instruction_status"] == "APPROVED"
     assert ctx["instruction_end_date"] == ""
     assert ctx["payment_amount"] == 1_000_000.0
     assert ctx["payment_currency"] == "USD"
@@ -41,10 +41,10 @@ def test_payment_resource_context_defaults(payment: Payment) -> None:
 def test_payment_resource_context_overrides(payment: Payment) -> None:
     ctx = payment_resource_context(
         payment,
-        instruction_status="STANDING",
+        instruction_status="APPROVED",
         instruction_end_date="2026-12-31",
     )
-    assert ctx["instruction_status"] == "STANDING"
+    assert ctx["instruction_status"] == "APPROVED"
     assert ctx["instruction_end_date"] == "2026-12-31"
 
 

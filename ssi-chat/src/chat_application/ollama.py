@@ -45,7 +45,8 @@ Answer the user's question using ONLY the provided context (instruction state gr
 - Be concise and factual.
 - When listing instructions, enumerate each one clearly with:
   instruction_id, owning_lob, status, currency, wire_scope, creditor, creator, effective/end dates.
-  For approved statuses (STANDING, SINGLE_USE, USED, SUSPENDED) include approver and approved_at.
+  For lifecycle status APPROVED (and USED or SUSPENDED when approver fields are present) include
+  approver and approved_at. instruction_type (STANDING vs SINGLE_USE) is separate from status.
   For REJECTED status show rejected_by (use the label "Rejected by" in your answer), rejected_at,
   and rejection_reason when present — never show an empty approver field for rejected instructions.
 - For "who approved" / "why was this allowed" / "when was it approved" questions, use INSTRUCTION rows

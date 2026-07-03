@@ -46,13 +46,13 @@ def main(argv: list[str] | None = None) -> int:
         "--approve-instructions",
         type=int,
         metavar="N",
-        help="submit and approve up to N DRAFT/PENDING instructions",
+        help="submit and approve up to N DRAFT/SUBMITTED instructions",
     )
     parser.add_argument(
         "--reject-instructions",
         type=int,
         metavar="N",
-        help="reject up to N PENDING instructions",
+        help="reject up to N SUBMITTED instructions",
     )
     args = parser.parse_args(argv)
     settings = Settings()

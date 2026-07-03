@@ -8,10 +8,10 @@ from harness.config import Settings
 from harness.zitadel_auth import SessionCredentials
 
 
-class InstructionLifecycleClient:
+class InstructionServiceClient:
     def __init__(self, settings: Settings) -> None:
-        self.base_url = settings.ilm_url.rstrip("/")
-        self.api_prefix = settings.ilm_api_prefix.rstrip("/")
+        self.base_url = settings.instruction_service_url.rstrip("/")
+        self.api_prefix = settings.instruction_service_api_prefix.rstrip("/")
 
     def _url(self, path: str) -> str:
         return f"{self.base_url}{self.api_prefix}{path}"

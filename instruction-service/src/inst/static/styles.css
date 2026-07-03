@@ -335,13 +335,12 @@ tbody tr.row-new {
   background: rgba(147, 197, 253, 0.14);
 }
 
-.badge-PENDING {
+.badge-SUBMITTED {
   color: #fbbf24;
   background: rgba(251, 191, 36, 0.14);
 }
 
-.badge-STANDING,
-.badge-SINGLE_USE {
+.badge-APPROVED {
   color: #2dd4bf;
   background: rgba(45, 212, 191, 0.14);
 }

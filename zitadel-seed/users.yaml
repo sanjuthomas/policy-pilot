@@ -180,7 +180,7 @@ users:
 
   # ═══════════════════════════════════════════════════════════════════════════
   # Payment service account
-  # Used for OBO calls from payment-service → authorization-service and ILM.
+  # Used for OBO calls from payment-service → authorization-service and instruction-service.
   # INSTRUCTION_MARKER is required for marking instructions USED during payment create.
   # ═══════════════════════════════════════════════════════════════════════════
 

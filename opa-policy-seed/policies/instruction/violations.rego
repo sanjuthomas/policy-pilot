@@ -3,14 +3,14 @@ package instruction.lifecycle
 # ---------------------------------------------------------------------------
 # violations — named denial reasons returned alongside allow=false.
 #
-# ILM queries /v1/data/instruction/lifecycle/violations and maps
+# instruction-service queries /v1/data/instruction/lifecycle/violations and maps
 # each key to a SecurityEvent message and severity level.
 #
 # Naming convention:
 #   ALERT_*   →  escalation-worthy violation (is_alert=true in authorization details)
 #   <others>  →  policy denial recorded as SecurityEvent severity=ALERT
 #
-# ILM can also query the convenience boolean `is_alert` to check whether at
+# instruction-service can also query the convenience boolean `is_alert` to check whether at
 # least one ALERT-severity violation is present without iterating the full set:
 #   POST /v1/data/instruction/lifecycle/is_alert
 # ---------------------------------------------------------------------------
@@ -94,7 +94,7 @@ violations["INVALID_INSTRUCTION_STATUS"] if {
 
 violations["INVALID_INSTRUCTION_STATUS"] if {
     input.action == "DELETE"
-    not input.instruction.status in {"DRAFT", "PENDING"}
+    not input.instruction.status in {"DRAFT", "SUBMITTED"}
 }
 
 # ── Three-year duration ceiling ───────────────────────────────────────────────
@@ -197,7 +197,7 @@ violations["ALERT_UNAUTHORIZED_SERVICE"] if {
 
 violations["ALERT_UNAPPROVED_INSTRUCTION"] if {
     input.action == "USE"
-    not input.instruction.status in {"STANDING", "SINGLE_USE"}
+    not input.instruction.status == "APPROVED"
 }
 
 violations["ALERT_EXPIRED_INSTRUCTION"] if {
@@ -216,7 +216,7 @@ violations["VIEWER_ACCESS_DENIED"] if {
 # is_alert — convenience rule
 #
 # True when at least one ALERT-level violation is present.
-# ILM can query this directly to decide SecurityEvent severity without
+# instruction-service can query this directly to decide SecurityEvent severity without
 # iterating the full violations set.
 #
 #   POST /v1/data/instruction/lifecycle/is_alert   { "input": { ... } }

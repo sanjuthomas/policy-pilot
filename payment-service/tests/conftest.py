@@ -94,7 +94,7 @@ def standing_instruction() -> dict:
     past = datetime.now(timezone.utc) - timedelta(days=1)
     return {
         "instruction_id": "instr-001",
-        "status": "STANDING",
+        "status": "APPROVED",
         "version_number": 1,
         "currency": "USD",
         "owning_lob": "CORP",

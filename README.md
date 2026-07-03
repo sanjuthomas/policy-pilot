@@ -65,7 +65,7 @@ flowchart TB
     end
 
     subgraph apps [Applications]
-        ILM[instruction-service :8000]
+        INST[instruction-service :8000]
         PAY[payment-service :8093]
         AUTHZ[authorization-service :8094]
         HARNESS[ssi-demo-harness :8091]
@@ -88,16 +88,16 @@ flowchart TB
         OLLAMA[Ollama — qwen3-embed + neo4j-gemma-3-27b]
     end
 
-    ZITADEL --> ILM
+    ZITADEL --> INST
     ZITADEL --> PAY
     ZITADEL --> HARNESS
     ZITADEL --> CHAT
-    ILM --> AUTHZ
+    INST --> AUTHZ
     PAY --> AUTHZ
     AUTHZ --> OPA
-    ILM --> MONGO
+    INST --> MONGO
     PAY --> MONGO
-    PAY -->|read instructions OBO| ILM
+    PAY -->|read instructions OBO| INST
     MONGO --> CONNECT
     CONNECT -->|CDC full documents| KAFKA
     KAFKA --> ETL
@@ -105,9 +105,9 @@ flowchart TB
     ETL --> OLLAMA
     CHAT --> NEO
     CHAT --> OLLAMA
-    CHAT -->|eligible-approvers| ILM
+    CHAT -->|eligible-approvers| INST
     CHAT -->|eligible-approvers| PAY
-    HARNESS --> ILM
+    HARNESS --> INST
     HARNESS --> PAY
 ```
 
@@ -172,7 +172,7 @@ Example input (built by the domain service, evaluated by authz → OPA):
   "input": {
     "action": "APPROVE",
     "subject": { "user_id": "mo-100", "title": "Analyst", "roles": ["INSTRUCTION_CREATOR"], "lob": null },
-    "resource": { "instruction_id": "...", "owning_lob": "FICC", "created_by": "mo-100", "status": "PENDING" }
+    "resource": { "instruction_id": "...", "owning_lob": "FICC", "created_by": "mo-100", "status": "SUBMITTED" }
   }
 }
 ```
@@ -207,7 +207,7 @@ Example authorization block on an APPROVE security event:
 | Creator cannot approve | `subject.user_id != resource.created_by` | Self-approval (cross-approval collusion) |
 | Subordinate cannot approve | `approver.supervisor_id != creator.user_id` | Manager approving subordinate's instruction (inversion of control) |
 | LOB ownership | `subject.lob == resource.owning_lob` | Wrong-desk approval (e.g. FX desk approving FICC instruction) |
-| Status gate | `resource.status == "PENDING"` | Approving an instruction not yet submitted |
+| Status gate | `resource.status == "SUBMITTED"` | Approving an instruction not yet submitted |
 | Role segregation | `"INSTRUCTION_CREATOR" not in subject.roles` | Middle-office creator accounts cannot approve |
 
 **Why policy-as-code matters for this demo:** Allows and denials both produce structured audit records in Kafka → Neo4j multimodal store. Denials surface as `ALERT` events for fraud-pattern questions (_"which users triggered the most policy denial alerts?"_). Allows carry `details.authorization` so the chat can answer approval audit questions with **Who / When / Why**, not just a name from instruction state.
@@ -225,7 +225,7 @@ MongoDB fits naturally because:
 - **Schemaless documents** — each event is stored as-is with no schema migration when new fields are added. New event types or enrichment fields can be introduced without downtime.
 - **Long-term retention** — MongoDB's native **TTL indexes** allow per-collection expiry policies. Security events for regulatory audit trails can be retained for years on cheap storage (or tiered to Atlas Online Archive), while transient operational events expire automatically. A single `db.createIndex({"timestamp": 1}, {expireAfterSeconds: N})` declaration governs the lifecycle.
 - **Bi-temporal versioning** — instructions are stored as versioned documents (`version_number`, `in`/`out` timestamps). MongoDB's document model stores the entire version as a self-contained snapshot alongside its lifecycle metadata without JOIN complexity.
-- **Change Streams** — the ILM's live security-event monitor and the `SecurityEventWatcher` for real-time UI updates both consume MongoDB Change Streams, which provide ordered, resumable change feeds without an external CDC layer.
+- **Change Streams** — the instruction-service live security-event monitor and the `SecurityEventWatcher` for real-time UI updates both consume MongoDB Change Streams, which provide ordered, resumable change feeds without an external CDC layer.
 - **Replica set transactions** — writing an instruction version and its security event in a single ACID multi-document transaction requires a MongoDB replica set, which `docker-compose.yml` initialises automatically as `rs0`.
 
 ---
@@ -239,7 +239,7 @@ Key reasons:
 - **Fan-out with no coupling** — any new consumer (compliance reporting tool, real-time fraud detector, ML feature pipeline) can subscribe to the domain topics independently without any change to instruction-service or payment-service. Connect publishes once per Mongo insert; consumers scale independently.
 - **Durable replay** — Kafka retains events on disk for a configurable retention window. If the ETL falls behind, restarts, or needs to reprocess a backfill, it can seek back to any offset and replay without touching the domain APIs.
 - **Ordered delivery per partition** — events for the same key arrive in order, which matters for the ETL's `CURRENT` relationship management in Neo4j (it only promotes a new version if its `version_number` is higher than the current one).
-- **Backpressure isolation** — a spike in instruction activity does not block the ILM. The ETL processes at its own pace; the Kafka topic absorbs the burst.
+- **Backpressure isolation** — a spike in instruction activity does not block instruction-service. The ETL processes at its own pace; the Kafka topic absorbs the burst.
 
 In this demo Kafka runs as a single broker with no replication, which is appropriate for local development. A production deployment would use a multi-broker cluster with `replication.factor=3` and `min.insync.replicas=2`.
 
@@ -501,7 +501,7 @@ All passwords are `Password1!`. Login names follow `{user_id}@ssi.local`.
 | `fo-fx-101` | Jordan Blake | Analyst — front-office submitter | FX |
 | `etl-reader` | — | Service account — excluded from **all** security event emission (`SECURITY_EVENT_EXCLUDED_USER_IDS`) | — |
 | `svc-instruction` | — | Service account — instruction service → authorization-service (OBO) | — |
-| `svc-payment` | — | Service account — payment service → authorization-service and ILM (OBO) | — |
+| `svc-payment` | — | Service account — payment service → authorization-service and instruction-service (OBO) | — |
 | `admin-001` | Platform Administrator | **Platform admin** — secured UIs (harness, browsers, ETL console, user directory) and **PolicyPilot** | — |
 | `comp-001` / `comp-002` | Compliance analysts | **PolicyPilot** and live eligible-approvers questions (via domain services) | — |
 
@@ -528,7 +528,7 @@ effective_date      template validity start
 end_date            template validity end
 ```
 
-Lifecycle: `DRAFT` → `PENDING` → `STANDING | SINGLE_USE` or `REJECTED` → `SUSPENDED` → reactivated or `USED`.
+Lifecycle: `DRAFT` → `SUBMITTED` → `APPROVED` or `REJECTED`; approved instructions may become `SUSPENDED`, `USED`, `EXPIRED`, or `DELETED`. `STANDING` and `SINGLE_USE` remain instruction types, not lifecycle statuses.
 
 ---
 
@@ -537,7 +537,7 @@ Lifecycle: `DRAFT` → `PENDING` → `STANDING | SINGLE_USE` or `REJECTED` → `
 A **payment** is a cash transfer request against an approved SSI instruction. Middle-office users create payments; front-office desk users submit them; funding approvers approve or reject.
 
 ```
-instruction_id      linked SSI route (must be STANDING or SINGLE_USE)
+instruction_id      linked approved SSI route
 amount              payment amount (USD in demo)
 currency            ISO 4217
 value_date          settlement date
@@ -559,7 +559,7 @@ Policy denials (self-approval, wrong LOB, amount over club limit, subordinate ap
 | Multimodal `source` | `instruction_security_event`, `instruction_state`, `payment_security_event`, `payment_fact` | Document type filter for chat modes |
 | MongoDB | `ssi_cash_instructions.instructions` | Instruction versions |
 | MongoDB | `ssi_cash_activities.payments` | Payment records |
-| MongoDB | `security_events.instruction_service` | ILM security events |
+| MongoDB | `security_events.instruction_service` | instruction-service security events |
 | MongoDB | `security_events.payment_service` | Payment security events |
 | Kafka | `instruction_security_events` | Instruction security events (Mongo CDC) |
 | Kafka | `instructions` | Instruction version rows (Mongo CDC) |
@@ -763,7 +763,7 @@ in a **single MongoDB multi-document transaction** per service. **Kafka Connect*
 ## Local development
 
 ```bash
-# ILM API
+# instruction-service API
 cd instruction-service && pip install -e .
 uvicorn inst.main:app --reload --port 8000
 

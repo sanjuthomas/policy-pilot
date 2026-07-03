@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from inst.dependencies import get_compliance_subject, get_subject
 from inst.models.api import (
     CreateInstructionRequest,
+    DeleteInstructionRequest,
     InstructionEligibleApproversResponse,
     InstructionResponse,
     RejectInstructionRequest,
@@ -152,6 +153,25 @@ async def approve_instruction(
         service.approve,
         instruction_id,
         subject,
+        bearer_token=_bearer_token(authorization),
+        session_id=x_session_id,
+    )
+
+
+@router.post("/{instruction_id}/delete", response_model=InstructionResponse)
+async def delete_instruction(
+    instruction_id: str,
+    request: DeleteInstructionRequest | None = None,
+    subject: Subject = Depends(get_subject),
+    service: InstructionService = Depends(get_service),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+) -> InstructionResponse:
+    return await _lifecycle_action(
+        service.delete,
+        instruction_id,
+        subject,
+        request,
         bearer_token=_bearer_token(authorization),
         session_id=x_session_id,
     )

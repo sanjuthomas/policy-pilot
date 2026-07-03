@@ -145,7 +145,7 @@ def wait_for_index(
 def fetch_context(
     *,
     harness_url: str,
-    ilm_url: str,
+    instruction_service_url: str,
     payment_url: str,
 ) -> dict[str, str]:
     context: dict[str, str] = {}
@@ -153,7 +153,7 @@ def fetch_context(
     with httpx.Client(timeout=30.0) as client:
         auth_headers = admin_auth_headers(client, harness_url)
         instructions_response = client.get(
-            f"{ilm_url.rstrip('/')}/api/ui/instructions",
+            f"{instruction_service_url.rstrip('/')}/api/ui/instructions",
             params={"limit": 500},
             headers=auth_headers,
         )
@@ -181,16 +181,16 @@ def fetch_context(
     approved_instructions = [
         item
         for item in instructions
-        if item.get("status") in {"STANDING", "SINGLE_USE"}
+        if item.get("status") == "APPROVED"
         and item.get("approved_by")
     ]
     pending_instructions = [
-        item for item in instructions if item.get("status") == "PENDING"
+        item for item in instructions if item.get("status") == "SUBMITTED"
     ]
     ficc_standing = [
         item
         for item in approved_instructions
-        if item.get("owning_lob") == "FICC" and item.get("status") == "STANDING"
+        if item.get("owning_lob") == "FICC" and item.get("instruction_type") == "STANDING"
     ]
     approved_payments = [
         item for item in payments if item.get("status") == "APPROVED"

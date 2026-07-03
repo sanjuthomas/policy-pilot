@@ -8,18 +8,17 @@ from chat_application.response_formatter import (
     records_to_markdown_table,
 )
 
-
-STANDING_INSTRUCTIONS_ANSWER = """1. instruction_id=20260628-FICC-I-1, owning_lob=FICC, status=STANDING, currency=USD, wire_scope=DOMESTIC, creditor=Counterparty LLC, creator=Walsh, Patricia (mo-010), effective=2026-06-28T00:00:00, end=2027-06-28T00:00:00, approver=Nguyen, Caroline (ficc-500), approved_at=2026-06-28T13:53:16.560562
-2. instruction_id=20260628-FICC-I-12, owning_lob=FICC, status=STANDING, currency=USD, wire_scope=DOMESTIC, creditor=Counterparty LLC, creator=Chen, Sarah (mo-100), effective=2026-06-28T00:00:00, end=2027-06-28T00:00:00, approver=Vasquez, Elena (ficc-300), approved_at=2026-06-28T13:53:26.070029"""
+STANDING_INSTRUCTIONS_ANSWER = """1. instruction_id=20260628-FICC-I-1, owning_lob=FICC, status=APPROVED, instruction_type=STANDING, currency=USD, wire_scope=DOMESTIC, creditor=Counterparty LLC, creator=Walsh, Patricia (mo-010), effective=2026-06-28T00:00:00, end=2027-06-28T00:00:00, approver=Nguyen, Caroline (ficc-500), approved_at=2026-06-28T13:53:16.560562
+2. instruction_id=20260628-FICC-I-12, owning_lob=FICC, status=APPROVED, instruction_type=STANDING, currency=USD, wire_scope=DOMESTIC, creditor=Counterparty LLC, creator=Chen, Sarah (mo-100), effective=2026-06-28T00:00:00, end=2027-06-28T00:00:00, approver=Vasquez, Elena (ficc-300), approved_at=2026-06-28T13:53:26.070029"""
 
 
 class TestParseKeyValueRecord:
     def test_parses_commas_inside_display_names(self) -> None:
         record = parse_key_value_record(
-            "creator=Walsh, Patricia (mo-010), status=STANDING, approver=Nguyen, Caroline (ficc-500)"
+            "creator=Walsh, Patricia (mo-010), status=APPROVED, approver=Nguyen, Caroline (ficc-500)"
         )
         assert record["creator"] == "Walsh, Patricia (mo-010)"
-        assert record["status"] == "STANDING"
+        assert record["status"] == "APPROVED"
         assert record["approver"] == "Nguyen, Caroline (ficc-500)"
 
 
@@ -70,8 +69,8 @@ class TestFormatChatResponse:
 
     def test_formats_plain_key_value_lines(self) -> None:
         text = (
-            "instruction_id=20260628-FICC-I-1, status=STANDING, owning_lob=FICC\n"
-            "instruction_id=20260628-FICC-I-12, status=STANDING, owning_lob=FICC"
+            "instruction_id=20260628-FICC-I-1, status=APPROVED, owning_lob=FICC\n"
+            "instruction_id=20260628-FICC-I-12, status=APPROVED, owning_lob=FICC"
         )
         formatted = format_chat_response(text)
         assert "| Instruction ID" in formatted
@@ -93,7 +92,7 @@ class TestRecordsToMarkdownTable:
         table = records_to_markdown_table(
             [
                 {
-                    "status": "STANDING",
+                    "status": "APPROVED",
                     "instruction_id": "20260628-FICC-I-1",
                     "owning_lob": "FICC",
                 }

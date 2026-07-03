@@ -206,17 +206,77 @@ def is_instruction_count_aggregate_question(question: str) -> bool:
     return "instruction" in q
 
 
+def instruction_type_filter_from_question(question: str) -> str | None:
+    """Return instruction_type filter for standing/single-use wording."""
+    upper = question.upper()
+    if "SINGLE_USE" in upper:
+        return "SINGLE_USE"
+    q = question.lower()
+    if re.search(r"\bsingle[\s_-]?use\b", q):
+        return "SINGLE_USE"
+    if "STANDING" in upper or re.search(r"\bstanding\b", q):
+        return "STANDING"
+    return None
+
+
+def _instruction_count_type_cue(question: str) -> bool:
+    q = question.lower()
+    type_cues = (
+        r"\bcreated\s+as\b",
+        r"\b(of|with)\s+type\b",
+        r"\binstruction\s+type\b",
+        r"\b(standing|single[\s_-]?use)\s+type\b",
+        r"\btype\s+(standing|single[\s_-]?use)\b",
+        r"\b(were|was)\s+created\b",
+    )
+    return any(re.search(pattern, q) for pattern in type_cues)
+
+
+def instruction_count_filters_from_question(question: str) -> tuple[str | None, str | None]:
+    """Return (status_filter, type_filter) for instruction count queries.
+
+    Standing and single-use questions are instruction_type filters. Lifecycle
+    words such as approved, submitted, or draft are status filters.
+    """
+    status = instruction_status_filter_from_question(question)
+    if status:
+        return status, None
+    instruction_type = instruction_type_filter_from_question(question)
+    if instruction_type:
+        return None, instruction_type
+    return None, None
+
+
 def instruction_status_filter_from_question(question: str) -> str | None:
     upper = question.upper()
     for status in (
-        "PENDING_APPROVAL",
-        "STANDING",
+        "SUBMITTED",
+        "APPROVED",
         "REJECTED",
         "SUSPENDED",
+        "EXPIRED",
         "DELETED",
         "DRAFT",
+        "USED",
     ):
         if status in upper:
+            return status
+
+    q = question.lower()
+    natural_status_patterns = (
+        (r"\bpending[\s_-]?approval\b", "SUBMITTED"),
+        (r"\bpending\b", "SUBMITTED"),
+        (r"\bsubmitted\b", "SUBMITTED"),
+        (r"\bapproved\b", "APPROVED"),
+        (r"\bsuspended\b", "SUSPENDED"),
+        (r"\brejected\b", "REJECTED"),
+        (r"\bexpired\b", "EXPIRED"),
+        (r"\bdeleted\b", "DELETED"),
+        (r"\bdraft\b", "DRAFT"),
+        (r"\bused\b", "USED"),
+    )
+    for pattern, status in natural_status_patterns:
+        if re.search(pattern, q):
             return status
     return None
 
@@ -637,9 +697,10 @@ def _instruction_count_queries(
     question: str, flags: dict[str, bool]
 ) -> list[tuple[str, str]]:
     """Count distinct instructions via CURRENT version (Mongo-aligned business key)."""
-    status = instruction_status_filter_from_question(question)
+    status, instruction_type = instruction_count_filters_from_question(question)
     lob = lob_filter_from_question(question)
     status_clause = f"AND v.status = '{status}'" if status else ""
+    type_clause = f"AND v.instruction_type = '{instruction_type}'" if instruction_type else ""
     lob_clause = f"AND v.owning_lob = '{lob}'" if lob else ""
 
     time_clause = ""
@@ -657,7 +718,7 @@ def _instruction_count_queries(
             (
                 "count_by_lob",
                 f"""MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion)
-WHERE true {status_clause} {time_clause}
+WHERE true {status_clause} {type_clause} {time_clause}
 RETURN v.owning_lob AS lob, count(DISTINCT i.instruction_id) AS total
 ORDER BY lob
 LIMIT 20""",
@@ -668,14 +729,14 @@ LIMIT 20""",
         (
             "count",
             f"""MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion)
-WHERE true {status_clause} {lob_clause} {time_clause}
+WHERE true {status_clause} {type_clause} {lob_clause} {time_clause}
 RETURN count(DISTINCT i.instruction_id) AS total LIMIT 1""",
         ),
         (
             "details",
             f"""MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion)
-WHERE true {status_clause} {lob_clause} {time_clause}
-RETURN v.instruction_id, v.status, v.owning_lob, v.currency, v.wire_scope,
+WHERE true {status_clause} {type_clause} {lob_clause} {time_clause}
+RETURN v.instruction_id, v.status, v.instruction_type, v.owning_lob, v.currency, v.wire_scope,
        v.version_number
 ORDER BY v.instruction_id
 LIMIT 200""",
@@ -761,6 +822,31 @@ LIMIT 200""",
     ]
 
 
+def _instruction_list_by_type_queries(*, instruction_type: str, lob: str | None = None) -> list[tuple[str, str]]:
+    lob_clause = f"AND v.owning_lob = '{_escape_cypher_literal(lob)}'" if lob else ""
+    safe_type = _escape_cypher_literal(instruction_type)
+    return [
+        (
+            "instruction_inventory",
+            f"""MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion {{instruction_type: '{safe_type}'}})
+WHERE true {lob_clause}
+OPTIONAL MATCH (creator:User {{user_id: v.creator_user_id}})
+OPTIONAL MATCH (approver:User {{user_id: v.approver_user_id}})
+RETURN v.instruction_id AS instruction_id,
+       v.status AS status,
+       v.instruction_type AS instruction_type,
+       v.owning_lob AS owning_lob,
+       v.currency AS currency,
+       v.wire_scope AS wire_scope,
+       coalesce(creator.display_name, v.creator_user_id, '') AS creator_display,
+       coalesce(approver.display_name, v.approver_user_id, '') AS approver_display,
+       v.approved_at AS approved_at
+ORDER BY v.instruction_id
+LIMIT 200""",
+        ),
+    ]
+
+
 def _instructions_created_by_user_queries(user_id: str) -> list[tuple[str, str]]:
     safe_user = _escape_cypher_literal(user_id)
     return [
@@ -833,8 +919,8 @@ def _instruction_duplicate_routes_queries(*, lob: str | None = None) -> list[tup
 WHERE elementId(i1) < elementId(i2)
 MATCH (i1)-[:CURRENT]->(v1:InstructionVersion)
 MATCH (i2)-[:CURRENT]->(v2:InstructionVersion)
-WHERE v1.status IN ['STANDING', 'SINGLE_USE', 'PENDING_APPROVAL']
-  AND v2.status IN ['STANDING', 'SINGLE_USE', 'PENDING_APPROVAL']
+WHERE v1.status IN ['APPROVED', 'SUBMITTED']
+  AND v2.status IN ['APPROVED', 'SUBMITTED']
   {lob_clause}
 RETURN i1.instruction_id AS instruction_id_a,
        i2.instruction_id AS instruction_id_b,

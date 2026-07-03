@@ -21,7 +21,7 @@ def test_instruction_build_search_text():
         "actor_lob": "LOB1",
         "instruction_snapshot": {
             "instruction_id": "i-1",
-            "status": "PENDING",
+            "status": "SUBMITTED",
             "instruction_type": "WIRE",
             "owning_lob": "LOB1",
             "wire_scope": "DOMESTIC",
@@ -40,7 +40,7 @@ def test_instruction_build_search_text():
         },
         "authorization": {
             "summary": "submitted",
-            "decision": "PENDING",
+            "decision": "SUBMITTED",
             "allow_basis": ["rule"],
         },
     }

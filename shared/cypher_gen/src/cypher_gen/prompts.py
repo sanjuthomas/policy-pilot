@@ -246,8 +246,8 @@ RETURN e.event_id, e.timestamp, e.action, e.outcome, e.message,
 ORDER BY e.timestamp DESC
 LIMIT 50
 
-Example — PENDING instructions by LOB / profit center:
-MATCH (v:InstructionVersion {status: 'PENDING'})
+Example — SUBMITTED instructions by LOB / profit center:
+MATCH (v:InstructionVersion {status: 'SUBMITTED'})
 OPTIONAL MATCH (e:SecurityEvent)-[:TARGETS_VERSION]->(v) WHERE e.action = 'SUBMIT'
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
 OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
@@ -392,10 +392,11 @@ Rules:
     OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
     OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
     OPTIONAL MATCH (rejectorUser:User {user_id: v.rejector_user_id})
-- instruction status values: DRAFT, PENDING_APPROVAL, STANDING, REJECTED, SUSPENDED, DELETED.
+- instruction status values: DRAFT, SUBMITTED, APPROVED, USED, SUSPENDED, REJECTED, EXPIRED, DELETED.
+- instruction_type is STANDING or SINGLE_USE; never use these as lifecycle status filters.
 
 Example — active STANDING instructions for LOB FICC:
-MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion {status: 'STANDING', owning_lob: 'FICC'})
+MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion {status: 'APPROVED', instruction_type: 'STANDING', owning_lob: 'FICC'})
 OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
 OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
 RETURN v.instruction_id, v.owning_lob, v.status, v.currency, v.wire_scope,
@@ -467,7 +468,7 @@ RETURN v.instruction_id, v.status, v.approved_at,
 LIMIT 1
 
 Example — how many STANDING instructions for LOB FX:
-MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion {status: 'STANDING', owning_lob: 'FX'})
+MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion {status: 'APPROVED', instruction_type: 'STANDING', owning_lob: 'FX'})
 RETURN count(i) AS total, collect(v.instruction_id)[..20] AS instruction_ids
 LIMIT 1
 
@@ -477,8 +478,8 @@ RETURN v.status AS status, count(i) AS total
 ORDER BY total DESC
 LIMIT 20
 
-Example — list all PENDING_APPROVAL instructions:
-MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion {status: 'PENDING_APPROVAL'})
+Example — list all SUBMITTED instructions:
+MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion {status: 'SUBMITTED'})
 OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
 OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
 RETURN v.instruction_id, v.owning_lob, v.currency, v.wire_scope,

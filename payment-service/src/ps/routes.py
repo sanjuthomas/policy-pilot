@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
 from ps.dependencies import get_compliance_subject, get_subject
-from ps.ilm_client import InstructionNotFoundError
+from ps.instruction_client import InstructionNotFoundError
 from ps.models.api import (
     CreatePaymentRequest,
     DeletePaymentRequest,

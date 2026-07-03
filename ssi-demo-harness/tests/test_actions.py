@@ -35,7 +35,7 @@ def test_create_instructions_success() -> None:
 
     with patch("harness.actions.load_users") as mock_seed, patch(
         "harness.actions.auth_client"
-    ) as mock_auth_factory, patch("harness.actions.ilm_client") as mock_ilm_factory, patch(
+    ) as mock_auth_factory, patch("harness.actions.instruction_service_client") as mock_instruction_factory, patch(
         "harness.actions._session_for_user",
         return_value=SessionCredentials(session_id="u", session_token="t"),
     ), patch(
@@ -46,9 +46,9 @@ def test_create_instructions_success() -> None:
         return_value={"instruction_type": "SINGLE_USE"},
     ):
         mock_seed.return_value = MagicMock(defaults={"password": "Password1!"})
-        mock_ilm = MagicMock()
-        mock_ilm.create_instruction.return_value = response
-        mock_ilm_factory.return_value = mock_ilm
+        mock_instruction_service = MagicMock()
+        mock_instruction_service.create_instruction.return_value = response
+        mock_instruction_factory.return_value = mock_instruction_service
         mock_auth_factory.return_value = MagicMock()
 
         result = create_instructions(settings, 1, admin)

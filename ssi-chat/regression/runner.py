@@ -203,7 +203,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--questions", type=Path, default=DEFAULT_QUESTIONS)
     parser.add_argument("--chat-url", default="http://localhost:8092")
     parser.add_argument("--harness-url", default="http://localhost:8091")
-    parser.add_argument("--ilm-url", default="http://localhost:8000")
+    parser.add_argument(
+        "--instruction-service-url",
+        "--ilm-url",
+        dest="instruction_service_url",
+        default="http://localhost:8000",
+        help="instruction-service base URL (ILM_URL / --ilm-url accepted for compatibility)",
+    )
     parser.add_argument("--payment-url", default="http://localhost:8093")
     parser.add_argument("--indexer-url", default="http://localhost:8090")
     parser.add_argument("--authz-url", default="http://localhost:8094")
@@ -263,7 +269,7 @@ def main(argv: list[str] | None = None) -> int:
 
     context = fetch_context(
         harness_url=args.harness_url,
-        ilm_url=args.ilm_url,
+        instruction_service_url=args.instruction_service_url,
         payment_url=args.payment_url,
     )
     logger.info("resolved context keys: %s", sorted(context))
@@ -273,7 +279,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.skip_api_smoke:
         smoke_result = run_api_smoke(
             harness_url=args.harness_url,
-            ilm_url=args.ilm_url,
+            instruction_service_url=args.instruction_service_url,
             payment_url=args.payment_url,
             indexer_url=args.indexer_url,
             chat_url=args.chat_url,

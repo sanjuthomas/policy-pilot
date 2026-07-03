@@ -4,12 +4,10 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
-
 from authz.eligibility import EligibilityService
 from authz.models import (
     PaymentEligibilityContext,
     PaymentEligibleApproversEvaluateRequest,
-    UserReference,
 )
 from authz.user_directory import UserDirectory
 
@@ -74,7 +72,7 @@ users:
     result = await service.eligible_approvers_for_payment(
         PaymentEligibleApproversEvaluateRequest(
             payment=sample_payment_context,
-            instruction_status="STANDING",
+            instruction_status="APPROVED",
             instruction_end_date=datetime.now(UTC).isoformat(),
         )
     )

@@ -68,7 +68,7 @@ On allow, domain services build `details.authorization.summary` from `allow_basi
 
 `CREATE_PAYMENT`, `SUBMIT_PAYMENT`, `APPROVE_PAYMENT`, `REJECT_PAYMENT`
 
-Key rules: payment amount within user's club ceiling and absolute $100 B limit; instruction must be `STANDING` or `SINGLE_USE` and not expired; creator cannot approve own payment; approver must not report directly to creator; approver must cover the instruction LOB.
+Key rules: payment amount within user's club ceiling and absolute $100 B limit; instruction status must be `APPROVED` and not expired; creator cannot approve own payment; approver must not report directly to creator; approver must cover the instruction LOB.
 
 Policy denials surface as HTTP 403 and `ALERT` security events in Mongo (streamed to Kafka by Connect).
 
@@ -117,7 +117,7 @@ curl -s http://localhost:8181/v1/data/payment/lifecycle/allow \
       "payment": {
         "amount": 1000000,
         "instruction_owning_lob": "FICC",
-        "instruction_status": "STANDING",
+        "instruction_status": "APPROVED",
         "instruction_end_date": "2027-06-24T00:00:00Z",
         "created_by": { "user_id": "pay-101" }
       }
