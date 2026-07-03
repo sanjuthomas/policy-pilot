@@ -62,7 +62,9 @@ Stored in the multimodal document payload (and used for search text):
 | Instruction state (`instructions`) | `approved_at`, `authorization_summary`, `authorization_basis` on multimodal doc + Neo4j `InstructionVersion` |
 | Payment security events / facts | Same denormalization pattern |
 
-On APPROVE instruction security events, the pipeline **patches** the existing `instruction_state` multimodal document with approval authorization. Non-APPROVE instruction facts preserve existing approval fields when upserting.
+On APPROVE instruction security events, the pipeline **patches** the existing `instruction_state` multimodal document with approval authorization in the **same Neo4j transaction** as the security-event graph + vector write. Non-APPROVE instruction facts preserve existing approval fields when upserting.
+
+Each pipeline message is processed as: **build search text → Ollama embed → one Neo4j transaction** (graph nodes/relationships + `MultimodalDocument` vector/fulltext payload).
 
 ## Search Console
 

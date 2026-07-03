@@ -13,6 +13,7 @@ from etl.authorization_context import (
 )
 from etl.config import settings
 from etl.enrichment import EnrichedSecurityEventDocument
+from etl.multimodal_write import MultimodalWrite, upsert_multimodal_writes_in_tx
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +86,13 @@ class Neo4jGraphWriter:
         self._schema_applied = True
         logger.info("applied %s Neo4j schema statement(s)", len(statements))
 
-    async def upsert(self, document: EnrichedSecurityEventDocument) -> None:
+    async def upsert(
+        self,
+        document: EnrichedSecurityEventDocument,
+        *,
+        multimodal: MultimodalWrite | None = None,
+        extra_multimodal: list[MultimodalWrite] | None = None,
+    ) -> None:
         if self._driver is None:
             raise RuntimeError("Neo4j writer not connected")
 
@@ -505,6 +512,7 @@ class Neo4jGraphWriter:
                         owning_lob=owning_lob,
                     )
 
+                await upsert_multimodal_writes_in_tx(tx, multimodal, extra_multimodal)
                 await tx.commit()
             except Exception:
                 await tx.rollback()
@@ -629,7 +637,12 @@ class Neo4jGraphWriter:
                 "events":    [dict(n) for n in record["events"]    if n],
             }
 
-    async def upsert_instruction_fact(self, fact: dict[str, Any]) -> None:
+    async def upsert_instruction_fact(
+        self,
+        fact: dict[str, Any],
+        *,
+        multimodal: MultimodalWrite | None = None,
+    ) -> None:
         """Upsert instruction state from an InstructionFact event (instructions topic).
 
         Maintains:
@@ -860,12 +873,7 @@ class Neo4jGraphWriter:
             **auth_params,
         }
 
-        async with self._driver.session() as session:
-            await session.run(query, **params)
-
-        # ── CONFLICTS_WITH: same creditor_account + currency across instructions ──
-        if creditor_account.get("identification") and currency:
-            conflict_query = """
+        conflict_query = """
             MATCH (v1:InstructionVersion {
                 creditor_account: $creditor_account,
                 currency:         $currency
@@ -879,13 +887,23 @@ class Neo4jGraphWriter:
             MERGE (i1)-[:CONFLICTS_WITH]->(i2)
             MERGE (i2)-[:CONFLICTS_WITH]->(i1)
             """
-            async with self._driver.session() as session:
-                await session.run(
-                    conflict_query,
-                    creditor_account=creditor_account["identification"],
-                    currency=currency,
-                    instruction_id=instruction_id,
-                )
+
+        async with self._driver.session() as session:
+            tx = await session.begin_transaction()
+            try:
+                await tx.run(query, **params)
+                if creditor_account.get("identification") and currency:
+                    await tx.run(
+                        conflict_query,
+                        creditor_account=creditor_account["identification"],
+                        currency=currency,
+                        instruction_id=instruction_id,
+                    )
+                await upsert_multimodal_writes_in_tx(tx, multimodal)
+                await tx.commit()
+            except Exception:
+                await tx.rollback()
+                raise
 
         logger.debug(
             "upserted instruction fact instruction_id=%s action=%s version=%s",
@@ -894,7 +912,12 @@ class Neo4jGraphWriter:
             version_number,
         )
 
-    async def upsert_payment_security_event(self, event: dict[str, Any]) -> None:
+    async def upsert_payment_security_event(
+        self,
+        event: dict[str, Any],
+        *,
+        multimodal: MultimodalWrite | None = None,
+    ) -> None:
         """Write a PaymentSecurityEvent into Neo4j.
 
         Creates/merges:
@@ -1039,12 +1062,18 @@ class Neo4jGraphWriter:
                         owning_lob=owning_lob,
                     )
 
+                await upsert_multimodal_writes_in_tx(tx, multimodal)
                 await tx.commit()
             except Exception:
                 await tx.rollback()
                 raise
 
-    async def upsert_payment_fact(self, fact: dict[str, Any]) -> None:
+    async def upsert_payment_fact(
+        self,
+        fact: dict[str, Any],
+        *,
+        multimodal: MultimodalWrite | None = None,
+    ) -> None:
         """Write a Payment fact (from payments topic) into Neo4j.
 
         Maintains:
@@ -1226,19 +1255,27 @@ class Neo4jGraphWriter:
         }
 
         async with self._driver.session() as session:
-            await session.run(query, **params)
+            tx = await session.begin_transaction()
+            try:
+                await tx.run(query, **params)
 
-            for user in (created_by, submitted_by, approved_by, rejected_by):
-                if user.get("user_id") and user.get("supervisor_id"):
-                    await session.run(
-                        """
-                        MERGE (u:User {user_id: $user_id})
-                        MERGE (s:User {user_id: $supervisor_id})
-                        MERGE (u)-[:REPORTS_TO]->(s)
-                        """,
-                        user_id=user["user_id"],
-                        supervisor_id=user["supervisor_id"],
-                    )
+                for user in (created_by, submitted_by, approved_by, rejected_by):
+                    if user.get("user_id") and user.get("supervisor_id"):
+                        await tx.run(
+                            """
+                            MERGE (u:User {user_id: $user_id})
+                            MERGE (s:User {user_id: $supervisor_id})
+                            MERGE (u)-[:REPORTS_TO]->(s)
+                            """,
+                            user_id=user["user_id"],
+                            supervisor_id=user["supervisor_id"],
+                        )
+
+                await upsert_multimodal_writes_in_tx(tx, multimodal)
+                await tx.commit()
+            except Exception:
+                await tx.rollback()
+                raise
 
         logger.debug(
             "upserted payment fact payment_id=%s status=%s version=%s",

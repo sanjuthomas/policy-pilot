@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 from etl.instruction_security_event_pipeline import InstructionSecurityEventPipeline
+from etl.multimodal_write import MultimodalWrite
 
 
 def _security_event(**overrides) -> dict:
@@ -32,7 +33,6 @@ async def test_process_instruction_security_event():
     ollama.embed = AsyncMock(return_value=[0.1, 0.2, 0.3, 0.4])
     multimodal = MagicMock()
     multimodal.ensure_indexes = AsyncMock()
-    multimodal.upsert = AsyncMock()
 
     pipeline = InstructionSecurityEventPipeline(
         neo4j_writer=neo4j,
@@ -44,17 +44,22 @@ async def test_process_instruction_security_event():
 
     neo4j.upsert.assert_awaited_once()
     ollama.warmup.assert_awaited_once()
-    multimodal.upsert.assert_awaited_once()
+    ollama.embed.assert_awaited_once()
+    call_kwargs = neo4j.upsert.call_args.kwargs
+    assert isinstance(call_kwargs["multimodal"], MultimodalWrite)
+    assert call_kwargs["multimodal"].dense_vector == [0.1, 0.2, 0.3, 0.4]
 
 
-async def test_process_approve_patches_authorization():
+async def test_process_approve_patches_authorization_in_same_tx():
     neo4j = AsyncMock()
+    neo4j.upsert = AsyncMock()
     ollama = AsyncMock()
     ollama.dimension = 2
-    ollama.embed = AsyncMock(return_value=[0.5, 0.5])
+    ollama.embed = AsyncMock(side_effect=[[0.5, 0.5], [0.6, 0.6]])
     multimodal = MagicMock()
-    multimodal.upsert = AsyncMock()
-    multimodal.patch_instruction_state_authorization = AsyncMock()
+    multimodal.build_instruction_state_authorization_patch = AsyncMock(
+        return_value=("doc-1", "patched search text", {"instruction_id": "instr-1"})
+    )
 
     pipeline = InstructionSecurityEventPipeline(
         neo4j_writer=neo4j,
@@ -79,9 +84,13 @@ async def test_process_approve_patches_authorization():
     )
     await pipeline.process_instruction_security_event(event)
 
-    multimodal.patch_instruction_state_authorization.assert_awaited_once_with(
+    multimodal.build_instruction_state_authorization_patch.assert_awaited_once_with(
         "instr-1",
         approved_at="2024-06-01",
         authorization_summary="approved by manager",
         authorization_basis=["role-match"],
     )
+    assert ollama.embed.await_count == 2
+    extra = neo4j.upsert.call_args.kwargs["extra_multimodal"]
+    assert len(extra) == 1
+    assert extra[0].search_text == "patched search text"

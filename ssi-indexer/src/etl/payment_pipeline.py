@@ -16,6 +16,7 @@ from etl.multimodal_store import (
     event_document_id,
     payment_document_id,
 )
+from etl.multimodal_write import MultimodalWrite
 from etl.neo4j_client import Neo4jGraphWriter
 from etl.ollama_client import OllamaEmbeddingClient
 from etl.search_text.builder import build_search_text_from_profile
@@ -71,8 +72,6 @@ class PaymentSecurityEventPipeline:
             logger.warning("payment security event missing event_id — skipping")
             return
 
-        await self.neo4j_writer.upsert_payment_security_event(event)
-
         if not self._multimodal_ready:
             await self.ollama_client.warmup()
             await self.multimodal_store.ensure_indexes(self.ollama_client.dimension)
@@ -111,13 +110,13 @@ class PaymentSecurityEventPipeline:
             "security_event": event,
         }
 
-        point_id = event_document_id(event_id)
-        await self.multimodal_store.upsert_payment_point(
-            point_id=point_id,
+        multimodal = MultimodalWrite(
+            document_id=event_document_id(event_id),
             search_text=search_text,
             payload=payload,
             dense_vector=dense_vector,
         )
+        await self.neo4j_writer.upsert_payment_security_event(event, multimodal=multimodal)
 
         logger.info(
             "processed payment security event event_id=%s payment_id=%s",
@@ -146,8 +145,6 @@ class PaymentFactPipeline:
         if not payment_id:
             logger.warning("payment fact missing payment_id — skipping")
             return
-
-        await self.neo4j_writer.upsert_payment_fact(fact)
 
         if not self._multimodal_ready:
             await self.ollama_client.warmup()
@@ -178,13 +175,13 @@ class PaymentFactPipeline:
             "payment_snapshot": fact,
         }
 
-        point_id = payment_document_id(payment_id)
-        await self.multimodal_store.upsert_payment_point(
-            point_id=point_id,
+        multimodal = MultimodalWrite(
+            document_id=payment_document_id(payment_id),
             search_text=search_text,
             payload=payload,
             dense_vector=dense_vector,
         )
+        await self.neo4j_writer.upsert_payment_fact(fact, multimodal=multimodal)
 
         logger.info(
             "processed payment fact payment_id=%s status=%s",
