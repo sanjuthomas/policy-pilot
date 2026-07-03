@@ -7,6 +7,7 @@ class PaymentStatus(StrEnum):
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
     CANCELLED = "CANCELLED"
+    DELETED = "DELETED"
 
 
 class PaymentAction(StrEnum):
@@ -15,6 +16,7 @@ class PaymentAction(StrEnum):
     APPROVE_PAYMENT = "APPROVE_PAYMENT"
     REJECT_PAYMENT = "REJECT_PAYMENT"
     CANCEL_PAYMENT = "CANCEL_PAYMENT"
+    DELETE_PAYMENT = "DELETE_PAYMENT"
 
 
 class SecurityEventSeverity(StrEnum):

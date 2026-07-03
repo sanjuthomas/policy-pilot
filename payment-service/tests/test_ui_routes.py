@@ -24,10 +24,10 @@ def ui_client(payment) -> TestClient:
 
 @patch("ps.ui_routes.PaymentRepository")
 def test_ui_list_payments_instruction_filter(
-    mock_repo_cls: AsyncMock, ui_client: TestClient
+    mock_repo_cls: AsyncMock, ui_client: TestClient, versioned_payment
 ) -> None:
     mock_repo = AsyncMock()
-    mock_repo.list.return_value = [ui_client.payment]
+    mock_repo.list_current.return_value = [versioned_payment]
     mock_repo_cls.return_value = mock_repo
 
     instruction_id = "3bcb9b9a-9415-44ce-b707-4cc4c8281bb9"
@@ -40,7 +40,7 @@ def test_ui_list_payments_instruction_filter(
     payload = response.json()
     assert payload["count"] == 1
     assert payload["payments"][0]["instruction_id"] == ui_client.payment.instruction_id
-    mock_repo.list.assert_awaited_once_with(
+    mock_repo.list_current.assert_awaited_once_with(
         status=None,
         instruction_id=instruction_id,
         limit=200,

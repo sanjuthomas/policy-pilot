@@ -14,10 +14,7 @@ from ps import __version__
 from ps.auth_routes import router as auth_router
 from ps.config import settings
 from ps.database import close, connect
-from ps.kafka_publisher import kafka_publisher
-from ps.repository import PaymentRepository
 from ps.routes import router
-from ps.security_event_repository import SecurityEventRepository
 from ps.security_ui_routes import (
     SECURITY_EVENTS_STATIC_DIR,
     security_event_ui_store,
@@ -35,14 +32,10 @@ async def lifespan(app: FastAPI):
     configure_telemetry("payment-service", service_version=__version__)
     instrument_app(app)
     await connect()
-    await PaymentRepository().ensure_indexes()
-    await SecurityEventRepository().ensure_indexes()
-    await kafka_publisher.start()
     await service_identity.login()
     await security_event_ui_store.connect()
     logger.info("payment browser and security event monitor ready")
     yield
-    await kafka_publisher.close()
     await close()
     shutdown_telemetry()
 

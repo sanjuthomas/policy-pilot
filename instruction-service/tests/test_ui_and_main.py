@@ -1,9 +1,14 @@
+import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-from inst.security_event_ui_store import SecurityEventUiStore, _merge_recent_documents
+from inst.security_event_ui_store import (
+    SecurityEventUiStore,
+    _document_id,
+    _merge_recent_documents,
+)
 
 
 @pytest.mark.asyncio
@@ -13,7 +18,7 @@ async def test_security_event_ui_store_list_recent() -> None:
 
     async def _notable_iter():
         yield {
-            "event_id": "e-denial",
+            "_id": "e-denial",
             "timestamp": "2025-01-02T00:00:00Z",
             "severity": "ALERT",
             "event": {"outcome": "failure"},
@@ -21,7 +26,7 @@ async def test_security_event_ui_store_list_recent() -> None:
 
     async def _info_iter():
         yield {
-            "event_id": "e1",
+            "_id": "e1",
             "timestamp": "2025-01-01T00:00:00Z",
             "severity": "INFO",
         }
@@ -43,16 +48,16 @@ async def test_security_event_ui_store_list_recent() -> None:
 def test_merge_recent_documents_prefers_notable_events() -> None:
     merged = _merge_recent_documents(
         [
-            {"event_id": "denial", "timestamp": "2025-01-02T00:00:00Z"},
+            {"_id": "denial", "timestamp": "2025-01-02T00:00:00Z"},
         ],
         [
-            {"event_id": "info-new", "timestamp": "2025-01-03T00:00:00Z"},
-            {"event_id": "info-old", "timestamp": "2025-01-01T00:00:00Z"},
-            {"event_id": "denial", "timestamp": "2025-01-02T00:00:00Z"},
+            {"_id": "info-new", "timestamp": "2025-01-03T00:00:00Z"},
+            {"_id": "info-old", "timestamp": "2025-01-01T00:00:00Z"},
+            {"_id": "denial", "timestamp": "2025-01-02T00:00:00Z"},
         ],
         limit=2,
     )
-    assert [doc["event_id"] for doc in merged] == ["info-new", "denial"]
+    assert [_document_id(doc) for doc in merged] == ["info-new", "denial"]
 
 
 def test_security_event_ui_store_remember_helpers() -> None:
@@ -64,15 +69,24 @@ def test_security_event_ui_store_remember_helpers() -> None:
 
 
 def test_main_health_endpoint() -> None:
-    with patch("inst.main.connect", AsyncMock()), \
-         patch("inst.main.close", AsyncMock()), \
-         patch("inst.main.kafka_publisher.start", AsyncMock()), \
-         patch("inst.main.kafka_publisher.close", AsyncMock()), \
-         patch("inst.main.security_event_ui_store.connect", AsyncMock()):
+    telemetry = MagicMock()
+    telemetry.configure_telemetry = lambda *args, **kwargs: None
+    telemetry.instrument_app = lambda app: app
+    telemetry.get_logger = lambda name: __import__("logging").getLogger(name)
+    telemetry.shutdown_telemetry = lambda: None
 
-        from inst.main import app
+    with patch.dict(sys.modules, {"telemetry": telemetry}):
+        import importlib
 
-        with TestClient(app) as client:
-            response = client.get("/health")
-            assert response.status_code == 200
-            assert response.json()["status"] == "UP"
+        import inst.main as main
+
+        importlib.reload(main)
+        with patch.object(main, "connect", AsyncMock()), \
+             patch.object(main, "close", AsyncMock()), \
+             patch.object(main.security_event_ui_store, "connect", AsyncMock()), \
+             patch.object(main.service_identity, "login", AsyncMock()):
+
+            with TestClient(main.app) as client:
+                response = client.get("/health")
+                assert response.status_code == 200
+                assert response.json()["status"] == "UP"

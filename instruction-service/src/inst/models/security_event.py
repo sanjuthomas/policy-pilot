@@ -54,9 +54,12 @@ class SecurityEventSource(BaseModel):
 
 
 class SecurityEvent(BaseModel):
-    """Canonical security event stored in the security_events database."""
+    """Canonical security event stored in the security_events database.
 
-    event_id: str
+    Mongo ``_id`` is the sequence-allocated security event id (see
+    ``security_event_to_document``); it is not a field on this model.
+    """
+
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     severity: SecurityEventSeverity
     message: str
@@ -67,7 +70,7 @@ class SecurityEvent(BaseModel):
     details: dict[str, Any] = Field(default_factory=dict)
     instruction_snapshot: dict[str, Any] | None = Field(
         default=None,
-        description="Full instruction state at the time of this event — carried in the Kafka fact event so ETL needs no API callback",
+        description="Full instruction state at the time of this event for downstream indexing",
     )
 
     @classmethod
@@ -131,7 +134,6 @@ class SecurityEvent(BaseModel):
         subject: Subject,
         instruction: CashSettlementInstruction,
         *,
-        event_id: str,
         version_number: int | None = None,
         details: dict[str, Any] | None = None,
     ) -> "SecurityEvent":
@@ -143,7 +145,6 @@ class SecurityEvent(BaseModel):
         authorization = event_details.get("authorization") or {}
         reason = authorization.get("summary")
         return cls(
-            event_id=event_id,
             severity=SecurityEventSeverity.INFO,
             message=(
                 f"Authorized {action.value} on instruction "
@@ -170,7 +171,6 @@ class SecurityEvent(BaseModel):
         subject: Subject,
         instruction: CashSettlementInstruction,
         *,
-        event_id: str,
         reason: str,
         details: dict[str, Any] | None = None,
         severity: SecurityEventSeverity | None = None,
@@ -183,7 +183,6 @@ class SecurityEvent(BaseModel):
             "policy_engine": "opa",
         }
         return cls(
-            event_id=event_id,
             severity=severity or SecurityEventSeverity.ALERT,
             message=(
                 f"Policy denied {action.value} on instruction "

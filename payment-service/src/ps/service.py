@@ -16,20 +16,40 @@ from ps.authorization import (
     payment_resource_context,
 )
 from ps.config import settings
+from ps.database import mongo_transaction
 from ps.ilm_client import IlmClient, InstructionNotFoundError, InstructionStateError
-from ps.kafka_publisher import kafka_publisher
-from ps.models.api import LifecycleEvent, RejectPaymentRequest, Subject, UserReference
+from ps.models.api import (
+    DeletePaymentRequest,
+    LifecycleEvent,
+    RejectPaymentRequest,
+    Subject,
+    UserReference,
+)
 from ps.models.enums import PaymentAction, PaymentStatus
-from ps.models.enums import PaymentAction
 from ps.models.payment import Payment
-from ps.models.payment_fact import PaymentFact
-from ps.repository import PaymentNotFoundError, PaymentRepository
+from ps.models.security_event import PaymentSecurityEvent
+from ps.repository import (
+    PaymentNotFoundError,
+    PaymentRepository,
+)
 from ps.security_event_repository import SecurityEventRepository
+from ps.security_event_serialization import security_event_to_document
 from ps.service_identity import service_identity
+from ps.storage import VersionedPayment
 
 logger = logging.getLogger(__name__)
 
 _APPROVED_STATUSES = {"STANDING", "SINGLE_USE"}
+
+
+class InvalidStateTransitionError(Exception):
+    pass
+
+
+def _fmt_datetime(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    return value.isoformat() + "Z"
 
 
 def _covers_payment_lob(subject: Subject, owning_lob: str) -> bool:
@@ -80,21 +100,9 @@ def _validate_instruction_at_create(instruction: dict) -> None:
 
 
 def _check_instruction_validity_for_approval(payment: Payment, instruction: dict) -> str | None:
-    """Comprehensive instruction validity check at approval time.
-
-    Returns a human-readable cancellation reason if the instruction is invalid,
-    or ``None`` if everything looks good.
-
-    Checks (in order):
-      1. Version drift — instruction was modified after the payment was created.
-      2. Status — instruction is still in an approvable state.
-      3. Expiry — instruction end_date has not passed.
-      4. Effective date — instruction is already in effect.
-      5. Instruction type consistency — type matches the snapshot stored on creation.
-    """
+    """Comprehensive instruction validity check at approval time."""
     now = datetime.now(timezone.utc)
 
-    # 1. Version drift
     current_version = int(instruction.get("version_number") or 0)
     if current_version != payment.instruction_version:
         return (
@@ -104,7 +112,6 @@ def _check_instruction_validity_for_approval(payment: Payment, instruction: dict
             "please review the instruction changes and create a new payment if still valid"
         )
 
-    # 2. Status
     status = instruction.get("status", "")
     if status not in _APPROVED_STATUSES:
         return (
@@ -112,7 +119,6 @@ def _check_instruction_validity_for_approval(payment: Payment, instruction: dict
             f"(current status={status!r}); it must be STANDING or SINGLE_USE to approve a payment"
         )
 
-    # 3. Expiry
     end_date_raw = instruction.get("end_date") or ""
     if end_date_raw:
         try:
@@ -127,7 +133,6 @@ def _check_instruction_validity_for_approval(payment: Payment, instruction: dict
         except ValueError:
             return f"instruction has an unparseable end_date value: {end_date_raw!r}"
 
-    # 4. Effective date
     effective_date_raw = instruction.get("effective_date") or ""
     if effective_date_raw:
         try:
@@ -142,7 +147,6 @@ def _check_instruction_validity_for_approval(payment: Payment, instruction: dict
         except ValueError:
             return f"instruction has an unparseable effective_date value: {effective_date_raw!r}"
 
-    # 5. Instruction type consistency
     current_type = instruction.get("instruction_type") or instruction.get("status") or ""
     if current_type and payment.instruction_type and current_type != payment.instruction_type:
         return (
@@ -236,47 +240,85 @@ class PaymentService:
             raise PermissionError(authorization["summary"])
         return authorization
 
-    async def _record_success(
+    async def _save_payment_with_security_event(
         self,
+        payment: Payment,
         action: PaymentAction,
         subject: Subject,
-        payment: Payment,
         *,
         details: dict | None = None,
-    ) -> None:
-        await self.event_repo.record_authorized_action(
-            action,
-            subject,
-            payment,
-            details=details,
-        )
-        await self._publish_payment_fact(
-            action,
-            subject,
-            payment,
-            authorization=(details or {}).get("authorization"),
-        )
+        initial: bool = False,
+    ) -> VersionedPayment:
+        """Persist payment version and matching security event atomically."""
+        async with mongo_transaction() as session:
+            if initial:
+                saved = await self.repo.insert_initial(payment, session=session)
+            else:
+                saved = await self.repo.append_version(payment, session=session)
 
-    async def _publish_payment_fact(
+            event_id = await self.event_repo.allocate_event_id(payment.payment_id)
+            event = PaymentSecurityEvent.authorized_action(
+                action,
+                subject,
+                saved.payment,
+                version_number=saved.version_number,
+                details=details,
+            )
+            await self.event_repo.insert_document(
+                security_event_to_document(event, document_id=event_id),
+                session=session,
+            )
+
+        return saved
+
+    async def _persist_new_version(
         self,
+        payment: Payment,
         action: PaymentAction,
         subject: Subject,
-        payment: Payment,
+        details: dict | None = None,
         *,
-        authorization: dict | None = None,
-    ) -> None:
-        try:
-            fact = PaymentFact.from_payment(
+        instruction_end_date: str = "",
+        instruction_status: str = "",
+        bearer_token: str | None = None,
+        session_id: str | None = None,
+        skip_authorize: bool = False,
+    ) -> VersionedPayment:
+        if not skip_authorize:
+            authorization = await self._authorize(
                 action,
                 subject,
                 payment,
-                authorization=authorization,
+                instruction_end_date=instruction_end_date,
+                instruction_status=instruction_status,
+                bearer_token=bearer_token,
+                session_id=session_id,
             )
-            await kafka_publisher.publish_payment(fact.to_kafka_value())
-        except Exception:
-            logger.exception(
-                "failed to publish payment fact %s to Kafka", payment.payment_id
+            details = details_with_authorization(details, authorization)
+        self._record_event(payment, action, subject, details)
+        return await self._save_payment_with_security_event(
+            payment,
+            action,
+            subject,
+            details=details,
+        )
+
+    def _record_event(
+        self,
+        payment: Payment,
+        action: PaymentAction,
+        subject: Subject,
+        details: dict | None = None,
+    ) -> None:
+        payment.lifecycle_events.append(
+            LifecycleEvent(
+                event_id=str(uuid4()),
+                action=action.value,
+                actor_user_id=subject.user_id,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                details=details or {},
             )
+        )
 
     # ── Create ────────────────────────────────────────────────────────────────
 
@@ -289,7 +331,7 @@ class PaymentService:
         subject: Subject,
         bearer_token: str | None = None,
         session_id: str | None = None,
-    ) -> Payment:
+    ) -> VersionedPayment:
         try:
             instruction = await self.ilm.get_instruction(
                 instruction_id, bearer_token=bearer_token, session_id=session_id
@@ -339,7 +381,6 @@ class PaymentService:
         except PermissionError:
             raise
 
-        # Saga: for SINGLE_USE mark instruction USED first
         if instruction_status == "SINGLE_USE":
             try:
                 await self.ilm.mark_used(
@@ -369,20 +410,21 @@ class PaymentService:
                     f"Could not mark instruction as USED before creating payment: {exc}"
                 ) from exc
 
-        await self.repo.insert(payment)
-
-        await self._record_success(
+        details = details_with_authorization(None, authorization)
+        self._record_event(payment, PaymentAction.CREATE_PAYMENT, subject, details)
+        saved = await self._save_payment_with_security_event(
+            payment,
             PaymentAction.CREATE_PAYMENT,
             subject,
-            payment,
-            details=details_with_authorization(None, authorization),
+            details=details,
+            initial=True,
         )
 
         logger.info(
             "payment created (DRAFT) payment_id=%s instruction_id=%s amount=%s currency=%s",
             payment.payment_id, instruction_id, amount, payment.currency,
         )
-        return payment
+        return saved
 
     # ── Submit ────────────────────────────────────────────────────────────────
 
@@ -392,12 +434,14 @@ class PaymentService:
         subject: Subject,
         bearer_token: str | None = None,
         session_id: str | None = None,
-    ) -> Payment:
-        payment = await self._get_or_404(payment_id)
+    ) -> VersionedPayment:
+        current = await self._get_current_or_404(payment_id)
+        payment = current.payment.model_copy(deep=True)
         if payment.status != PaymentStatus.DRAFT:
-            raise ValueError(f"payment cannot be submitted (current status={payment.status}); only DRAFT payments can be submitted")
+            raise InvalidStateTransitionError(
+                "only DRAFT payments can be submitted"
+            )
 
-        # Fetch instruction to give OPA full context
         try:
             instruction = await self.ilm.get_instruction(
                 payment.instruction_id, bearer_token=bearer_token, session_id=session_id
@@ -408,45 +452,23 @@ class PaymentService:
         instruction_end_date = instruction.get("end_date") or ""
         instruction_status = instruction.get("status", "")
 
-        try:
-            authorization = await self._authorize(
-                PaymentAction.SUBMIT_PAYMENT,
-                subject,
-                payment,
-                instruction_end_date=instruction_end_date,
-                instruction_status=instruction_status,
-                bearer_token=bearer_token,
-                session_id=session_id,
-            )
-        except PermissionError:
-            raise
-
         now = datetime.now(timezone.utc)
-        lifecycle_event_id = str(uuid4())
         payment.status = PaymentStatus.SUBMITTED
         payment.submitted_by = _user_ref(subject)
         payment.updated_at = now
-        payment.lifecycle_events.append(
-            LifecycleEvent(
-                event_id=lifecycle_event_id,
-                action="SUBMIT_PAYMENT",
-                actor_user_id=subject.user_id,
-                timestamp=now.isoformat(),
-            )
-        )
-        payment.sync_version_number()
 
-        await self.repo.update(payment)
-
-        await self._record_success(
+        saved = await self._persist_new_version(
+            payment,
             PaymentAction.SUBMIT_PAYMENT,
             subject,
-            payment,
-            details=details_with_authorization(None, authorization),
+            instruction_end_date=instruction_end_date,
+            instruction_status=instruction_status,
+            bearer_token=bearer_token,
+            session_id=session_id,
         )
 
         logger.info("payment submitted payment_id=%s by=%s", payment_id, subject.user_id)
-        return payment
+        return saved
 
     # ── Approve ───────────────────────────────────────────────────────────────
 
@@ -456,24 +478,24 @@ class PaymentService:
         subject: Subject,
         bearer_token: str | None = None,
         session_id: str | None = None,
-    ) -> Payment:
-        payment = await self._get_or_404(payment_id)
+    ) -> VersionedPayment:
+        current = await self._get_current_or_404(payment_id)
+        payment = current.payment.model_copy(deep=True)
         if payment.status != PaymentStatus.SUBMITTED:
-            raise ValueError(
-                f"payment cannot be approved (current status={payment.status}); "
+            raise InvalidStateTransitionError(
                 "only SUBMITTED payments can be approved"
             )
 
-        # Fetch the latest instruction version for validity check
         try:
             instruction = await self.ilm.get_instruction(
                 payment.instruction_id, bearer_token=bearer_token, session_id=session_id
             )
         except InstructionNotFoundError:
-            cancellation_reason = f"backing instruction {payment.instruction_id} could not be found at approval time"
+            cancellation_reason = (
+                f"backing instruction {payment.instruction_id} could not be found at approval time"
+            )
             return await self._cancel(payment, subject, cancellation_reason)
 
-        # Comprehensive validity check — version drift, status, expiry, effective date
         invalid_reason = _check_instruction_validity_for_approval(payment, instruction)
         if invalid_reason:
             return await self._cancel(payment, subject, invalid_reason)
@@ -481,45 +503,23 @@ class PaymentService:
         instruction_end_date = instruction.get("end_date") or ""
         instruction_status = instruction.get("status", "")
 
-        try:
-            authorization = await self._authorize(
-                PaymentAction.APPROVE_PAYMENT,
-                subject,
-                payment,
-                instruction_end_date=instruction_end_date,
-                instruction_status=instruction_status,
-                bearer_token=bearer_token,
-                session_id=session_id,
-            )
-        except PermissionError:
-            raise
-
         now = datetime.now(timezone.utc)
-        lifecycle_event_id = str(uuid4())
         payment.status = PaymentStatus.APPROVED
         payment.approved_by = _user_ref(subject)
         payment.updated_at = now
-        payment.lifecycle_events.append(
-            LifecycleEvent(
-                event_id=lifecycle_event_id,
-                action="APPROVE_PAYMENT",
-                actor_user_id=subject.user_id,
-                timestamp=now.isoformat(),
-            )
-        )
-        payment.sync_version_number()
 
-        await self.repo.update(payment)
-
-        await self._record_success(
+        saved = await self._persist_new_version(
+            payment,
             PaymentAction.APPROVE_PAYMENT,
             subject,
-            payment,
-            details=details_with_authorization(None, authorization),
+            instruction_end_date=instruction_end_date,
+            instruction_status=instruction_status,
+            bearer_token=bearer_token,
+            session_id=session_id,
         )
 
         logger.info("payment approved payment_id=%s by=%s", payment_id, subject.user_id)
-        return payment
+        return saved
 
     # ── Reject ────────────────────────────────────────────────────────────────
 
@@ -530,15 +530,14 @@ class PaymentService:
         request: RejectPaymentRequest,
         bearer_token: str | None = None,
         session_id: str | None = None,
-    ) -> Payment:
-        payment = await self._get_or_404(payment_id)
+    ) -> VersionedPayment:
+        current = await self._get_current_or_404(payment_id)
+        payment = current.payment.model_copy(deep=True)
         if payment.status != PaymentStatus.SUBMITTED:
-            raise ValueError(
-                f"payment cannot be rejected (current status={payment.status}); "
+            raise InvalidStateTransitionError(
                 "only SUBMITTED payments can be rejected"
             )
 
-        # Fetch instruction for OPA context (status and expiry)
         try:
             instruction = await self.ilm.get_instruction(
                 payment.instruction_id, bearer_token=bearer_token, session_id=session_id
@@ -549,55 +548,81 @@ class PaymentService:
         instruction_end_date = instruction.get("end_date") or ""
         instruction_status = instruction.get("status", "")
 
-        try:
-            authorization = await self._authorize(
-                PaymentAction.REJECT_PAYMENT,
-                subject,
-                payment,
-                instruction_end_date=instruction_end_date,
-                instruction_status=instruction_status,
-                bearer_token=bearer_token,
-                session_id=session_id,
-            )
-        except PermissionError:
-            raise
-
         now = datetime.now(timezone.utc)
-        lifecycle_event_id = str(uuid4())
         payment.status = PaymentStatus.REJECTED
         payment.rejected_by = _user_ref(subject)
         payment.rejection_reason = request.reason
         payment.updated_at = now
-        payment.lifecycle_events.append(
-            LifecycleEvent(
-                event_id=lifecycle_event_id,
-                action="REJECT_PAYMENT",
-                actor_user_id=subject.user_id,
-                timestamp=now.isoformat(),
-                details={"reason": request.reason},
-            )
-        )
-        payment.sync_version_number()
 
-        await self.repo.update(payment)
-
-        await self._record_success(
+        saved = await self._persist_new_version(
+            payment,
             PaymentAction.REJECT_PAYMENT,
             subject,
-            payment,
-            details=details_with_authorization({"reason": request.reason}, authorization),
+            details={"reason": request.reason},
+            instruction_end_date=instruction_end_date,
+            instruction_status=instruction_status,
+            bearer_token=bearer_token,
+            session_id=session_id,
         )
 
         logger.info("payment rejected payment_id=%s by=%s", payment_id, subject.user_id)
-        return payment
+        return saved
+
+    async def delete(
+        self,
+        payment_id: str,
+        subject: Subject,
+        request: DeletePaymentRequest | None = None,
+        *,
+        bearer_token: str | None = None,
+        session_id: str | None = None,
+    ) -> VersionedPayment:
+        current = await self._get_current_or_404(payment_id)
+        payment = current.payment.model_copy(deep=True)
+
+        if payment.status == PaymentStatus.DELETED:
+            raise InvalidStateTransitionError("payment is already deleted")
+
+        if payment.status not in {PaymentStatus.DRAFT, PaymentStatus.SUBMITTED}:
+            raise InvalidStateTransitionError(
+                "only DRAFT or SUBMITTED payments can be soft deleted"
+            )
+
+        try:
+            instruction = await self.ilm.get_instruction(
+                payment.instruction_id, bearer_token=bearer_token, session_id=session_id
+            )
+        except InstructionNotFoundError:
+            raise ValueError(f"backing instruction {payment.instruction_id} not found")
+
+        instruction_end_date = instruction.get("end_date") or ""
+        instruction_status = instruction.get("status", "")
+
+        payment.status = PaymentStatus.DELETED
+        payment.updated_at = datetime.now(timezone.utc)
+        details = {"reason": request.reason} if request and request.reason else {}
+
+        saved = await self._persist_new_version(
+            payment,
+            PaymentAction.DELETE_PAYMENT,
+            subject,
+            details=details,
+            instruction_end_date=instruction_end_date,
+            instruction_status=instruction_status,
+            bearer_token=bearer_token,
+            session_id=session_id,
+        )
+
+        logger.info("payment soft-deleted payment_id=%s by=%s", payment_id, subject.user_id)
+        return saved
 
     # ── Read ──────────────────────────────────────────────────────────────────
 
-    async def get(self, payment_id: str, subject: Subject) -> Payment:
-        payment = await self._get_or_404(payment_id)
-        if not _can_view_payment(subject, payment):
+    async def get(self, payment_id: str, subject: Subject) -> VersionedPayment:
+        record = await self._get_current_or_404(payment_id)
+        if not _can_view_payment(subject, record.payment):
             raise PermissionError("not authorized to view payment")
-        return payment
+        return record
 
     async def list(
         self,
@@ -606,16 +631,21 @@ class PaymentService:
         instruction_id: str | None = None,
         status: str | None = None,
         limit: int = 100,
-    ) -> list[Payment]:
-        payments = await self.repo.list(
+    ) -> list[VersionedPayment]:
+        records = await self.repo.list_current(
             instruction_id=instruction_id,
             status=status,
             limit=limit,
         )
-        return [payment for payment in payments if _can_view_payment(subject, payment)]
+        visible = []
+        for record in records:
+            if _can_view_payment(subject, record.payment):
+                visible.append(record)
+        return visible
 
     async def eligible_approvers(self, payment_id: str) -> dict:
-        payment = await self._get_or_404(payment_id)
+        record = await self._get_current_or_404(payment_id)
+        payment = record.payment
         instruction = await self.ilm.get_instruction_as_service(payment.instruction_id)
         await service_identity.ensure_logged_in()
         return await self.authz.eligible_payment_approvers(
@@ -638,31 +668,24 @@ class PaymentService:
 
     # ── Internal helpers ──────────────────────────────────────────────────────
 
-    async def _cancel(self, payment: Payment, subject: Subject, reason: str) -> Payment:
+    async def _cancel(self, payment: Payment, subject: Subject, reason: str) -> VersionedPayment:
         """Move a payment to CANCELLED and record a security event with the approver's identity."""
         now = datetime.now(timezone.utc)
-        lifecycle_event_id = str(uuid4())
         payment.status = PaymentStatus.CANCELLED
         payment.cancelled_by = _user_ref(subject)
         payment.cancellation_reason = reason
         payment.updated_at = now
-        payment.lifecycle_events.append(
-            LifecycleEvent(
-                event_id=lifecycle_event_id,
-                action="CANCEL_PAYMENT",
-                actor_user_id=subject.user_id,
-                timestamp=now.isoformat(),
-                details={"reason": reason},
-            )
-        )
-        payment.sync_version_number()
-
-        await self.repo.update(payment)
-
-        await self._record_success(
+        self._record_event(
+            payment,
             PaymentAction.CANCEL_PAYMENT,
             subject,
+            details={"reason": reason},
+        )
+
+        saved = await self._save_payment_with_security_event(
             payment,
+            PaymentAction.CANCEL_PAYMENT,
+            subject,
             details={"reason": reason},
         )
 
@@ -670,10 +693,10 @@ class PaymentService:
             "payment cancelled payment_id=%s by=%s reason=%s",
             payment.payment_id, subject.user_id, reason,
         )
-        return payment
+        return saved
 
-    async def _get_or_404(self, payment_id: str) -> Payment:
+    async def _get_current_or_404(self, payment_id: str) -> VersionedPayment:
         try:
-            return await self.repo.find_by_id(payment_id)
+            return await self.repo.get_current(payment_id)
         except PaymentNotFoundError as exc:
             raise LookupError(f"payment {payment_id} not found") from exc

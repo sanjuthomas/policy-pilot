@@ -30,6 +30,7 @@ class SecurityEventResource(BaseModel):
     status: str
     amount: float
     currency: str
+    version_number: int | None = None
 
 
 class SecurityEventContext(BaseModel):
@@ -48,7 +49,12 @@ class SecurityEventSource(BaseModel):
 
 
 class PaymentSecurityEvent(BaseModel):
-    event_id: str
+    """Canonical payment security event stored in the security_events database.
+
+    Mongo ``_id`` is the sequence-allocated security event id (see
+    ``security_event_to_document``); it is not a field on this model.
+    """
+
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     severity: SecurityEventSeverity
     message: str
@@ -74,7 +80,12 @@ class PaymentSecurityEvent(BaseModel):
         )
 
     @classmethod
-    def _resource(cls, payment: Payment) -> SecurityEventResource:
+    def _resource(
+        cls,
+        payment: Payment,
+        *,
+        version_number: int | None = None,
+    ) -> SecurityEventResource:
         return SecurityEventResource(
             id=payment.payment_id,
             instruction_id=payment.instruction_id,
@@ -82,6 +93,7 @@ class PaymentSecurityEvent(BaseModel):
             status=payment.status.value,
             amount=payment.amount,
             currency=payment.currency,
+            version_number=version_number,
         )
 
     @classmethod
@@ -96,6 +108,8 @@ class PaymentSecurityEvent(BaseModel):
     def _event_types_for_action(cls, action: PaymentAction) -> list[str]:
         if action == PaymentAction.CREATE_PAYMENT:
             return ["creation"]
+        if action == PaymentAction.DELETE_PAYMENT:
+            return ["deletion"]
         return ["change"]
 
     @classmethod
@@ -105,16 +119,18 @@ class PaymentSecurityEvent(BaseModel):
         subject: Subject,
         payment: Payment,
         *,
-        event_id: str,
+        version_number: int | None = None,
         details: dict[str, Any] | None = None,
     ) -> "PaymentSecurityEvent":
         event_details = dict(details or {})
         authorization = event_details.get("authorization") or {}
         reason = authorization.get("summary")
         return cls(
-            event_id=event_id,
             severity=SecurityEventSeverity.INFO,
-            message=f"Authorized {action.value} on payment {payment.payment_id} by {subject.user_id}",
+            message=(
+                f"Authorized {action.value} on payment {payment.payment_id} "
+                f"by {subject.user_id}"
+            ),
             event=SecurityEventContext(
                 type=cls._event_types_for_action(action),
                 action=action.value,
@@ -122,10 +138,10 @@ class PaymentSecurityEvent(BaseModel):
                 reason=reason,
             ),
             actor=cls._actor(subject),
-            resource=cls._resource(payment),
+            resource=cls._resource(payment, version_number=version_number),
             source=cls._source(),
             details=details or {},
-            payment_snapshot=payment.to_mongo(),
+            payment_snapshot=payment.model_dump(mode="json"),
         )
 
     @classmethod
@@ -135,7 +151,6 @@ class PaymentSecurityEvent(BaseModel):
         subject: Subject,
         payment: Payment,
         *,
-        event_id: str,
         reason: str,
         details: dict[str, Any] | None = None,
         severity: SecurityEventSeverity | None = None,
@@ -143,9 +158,11 @@ class PaymentSecurityEvent(BaseModel):
         event_details = dict(details or {})
         event_details["policy_engine"] = "opa"
         return cls(
-            event_id=event_id,
             severity=severity or SecurityEventSeverity.ALERT,
-            message=f"Policy denied {action.value} on payment {payment.payment_id} by {subject.user_id}",
+            message=(
+                f"Policy denied {action.value} on payment {payment.payment_id} "
+                f"by {subject.user_id}"
+            ),
             event=SecurityEventContext(
                 type=["access", "denied"],
                 action=action.value,
@@ -156,5 +173,5 @@ class PaymentSecurityEvent(BaseModel):
             resource=cls._resource(payment),
             source=cls._source(),
             details=event_details,
-            payment_snapshot=payment.to_mongo(),
+            payment_snapshot=payment.model_dump(mode="json"),
         )

@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     mongodb_uri: str = "mongodb://localhost:27017/?replicaSet=rs0"
     mongodb_database: str = "ssi_cash_instructions"
     security_events_database: str = "security_events"
-    security_events_collection: str = "instruction-service"
+    security_events_collection: str = "instruction_service"
     application_name: str = "instruction-service"
     authorization_service_url: str = "http://localhost:8094"
     service_user_id: str = "svc-instruction"
@@ -31,10 +31,6 @@ class Settings(BaseSettings):
 
     ui_initial_instruction_limit: int = 200
     ui_initial_security_event_limit: int = 200
-    kafka_enabled: bool = True
-    kafka_bootstrap_servers: str = "kafka:9092"
-    kafka_security_events_topic: str = "instruction-security-events"
-    kafka_instruction_topic: str = "ssi-instructions"
     sequence_service_url: str = "http://localhost:8095"
     security_event_excluded_user_ids: str = "etl-reader"
 

@@ -1,15 +1,26 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from contextlib import contextmanager
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from ps.authorization import PolicyDecision
 from ps.ilm_client import InstructionNotFoundError, InstructionStateError
 from ps.models.api import RejectPaymentRequest, Subject
-from ps.models.enums import PaymentStatus
+from ps.models.enums import PaymentAction, PaymentStatus
 from ps.models.payment import Payment
 from ps.repository import PaymentNotFoundError
-from ps.service import PaymentService
+from ps.service import InvalidStateTransitionError, PaymentService
+from ps.storage import VersionedPayment
+
+
+def _versioned(payment: Payment, version: int = 1) -> VersionedPayment:
+    return VersionedPayment(
+        payment=payment,
+        version_number=version,
+        valid_in=payment.created_at.replace(tzinfo=None),
+        valid_out=None,
+    )
 
 
 def _allow_decision(*, basis: list[str] | None = None) -> PolicyDecision:
@@ -36,9 +47,28 @@ def service() -> PaymentService:
     svc.sequence.next_payment_id = AsyncMock(return_value="20260701-CORP-P-1")
     svc.repo = AsyncMock()
     svc.event_repo = AsyncMock()
+    svc.event_repo.allocate_event_id = AsyncMock(return_value="20260701-CORP-P-1-SE-1")
+    svc.event_repo.insert_document = AsyncMock(return_value={})
     svc.authz = AsyncMock()
     svc.ilm = AsyncMock()
+
+    async def _insert_initial(payment: Payment, session=None) -> VersionedPayment:
+        return _versioned(payment, version=1)
+
+    async def _append_version(payment: Payment, session=None) -> VersionedPayment:
+        return _versioned(payment, version=2)
+
+    svc.repo.insert_initial = AsyncMock(side_effect=_insert_initial)
+    svc.repo.append_version = AsyncMock(side_effect=_append_version)
     return svc
+
+
+@contextmanager
+def _patched_txn():
+    with patch("ps.service.mongo_transaction") as mock_tx:
+        mock_tx.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
+        mock_tx.return_value.__aexit__ = AsyncMock(return_value=False)
+        yield mock_tx
 
 
 @pytest.mark.asyncio
@@ -49,21 +79,21 @@ async def test_create_standing_payment_success(
 ) -> None:
     service.ilm.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _allow_decision()
-    service.repo.insert.return_value = None
     service.event_repo.record_authorized_action = AsyncMock()
 
-    with patch("ps.service.kafka_publisher.publish_payment", new_callable=AsyncMock):
-        payment = await service.create(
+    with _patched_txn():
+        record = await service.create(
             instruction_id="instr-001",
             value_date="2026-07-01",
             amount=500_000.0,
             subject=subject,
         )
 
-    assert payment.status == PaymentStatus.DRAFT
-    assert payment.amount == 500_000.0
-    service.repo.insert.assert_awaited_once()
-    service.event_repo.record_authorized_action.assert_awaited_once()
+    assert record.payment.status == PaymentStatus.DRAFT
+    assert record.payment.amount == 500_000.0
+    service.repo.insert_initial.assert_awaited_once()
+    service.event_repo.allocate_event_id.assert_awaited_once()
+    service.event_repo.insert_document.assert_awaited_once()
     service.ilm.mark_used.assert_not_awaited()
 
 
@@ -78,8 +108,8 @@ async def test_create_single_use_runs_saga(
     service.authz.evaluate_payment.return_value = _allow_decision()
     service.ilm.mark_used.return_value = {"status": "USED"}
 
-    with patch("ps.service.kafka_publisher.publish_payment", new_callable=AsyncMock):
-        payment = await service.create(
+    with _patched_txn():
+        record = await service.create(
             instruction_id="instr-001",
             value_date="2026-07-01",
             amount=100.0,
@@ -87,7 +117,7 @@ async def test_create_single_use_runs_saga(
         )
 
     service.ilm.mark_used.assert_awaited_once()
-    assert payment.instruction_type == "SINGLE_USE"
+    assert record.payment.instruction_type == "SINGLE_USE"
 
 
 @pytest.mark.asyncio
@@ -141,7 +171,7 @@ async def test_create_policy_denied(
         )
 
     service.event_repo.record_policy_denial.assert_awaited_once()
-    service.repo.insert.assert_not_awaited()
+    service.repo.insert_initial.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -193,16 +223,17 @@ async def test_submit_success(
     payment: Payment,
     standing_instruction: dict,
 ) -> None:
-    service.repo.find_by_id.return_value = payment
+    service.repo.get_current.return_value = _versioned(payment)
     service.ilm.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _allow_decision()
 
-    with patch("ps.service.kafka_publisher.publish_payment", new_callable=AsyncMock):
+    with _patched_txn():
         result = await service.submit(payment.payment_id, subject)
 
-    assert result.status == PaymentStatus.SUBMITTED
-    assert result.submitted_by is not None
-    service.repo.update.assert_awaited_once()
+    assert result.payment.status == PaymentStatus.SUBMITTED
+    assert result.payment.submitted_by is not None
+    service.repo.append_version.assert_awaited_once()
+    service.event_repo.insert_document.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -211,8 +242,8 @@ async def test_submit_wrong_status(
     subject: Subject,
     submitted_payment: Payment,
 ) -> None:
-    service.repo.find_by_id.return_value = submitted_payment
-    with pytest.raises(ValueError, match="only DRAFT"):
+    service.repo.get_current.return_value = _versioned(submitted_payment)
+    with pytest.raises(InvalidStateTransitionError, match="only DRAFT"):
         await service.submit(submitted_payment.payment_id, subject)
 
 
@@ -222,7 +253,7 @@ async def test_submit_instruction_not_found(
     subject: Subject,
     payment: Payment,
 ) -> None:
-    service.repo.find_by_id.return_value = payment
+    service.repo.get_current.return_value = _versioned(payment)
     service.ilm.get_instruction.side_effect = InstructionNotFoundError("missing")
     with pytest.raises(ValueError, match="backing instruction"):
         await service.submit(payment.payment_id, subject)
@@ -235,7 +266,7 @@ async def test_submit_policy_denied(
     payment: Payment,
     standing_instruction: dict,
 ) -> None:
-    service.repo.find_by_id.return_value = payment
+    service.repo.get_current.return_value = _versioned(payment)
     service.ilm.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _deny_decision("NO_LIMIT_GROUP_ASSIGNED")
 
@@ -250,15 +281,15 @@ async def test_approve_success(
     submitted_payment: Payment,
     standing_instruction: dict,
 ) -> None:
-    service.repo.find_by_id.return_value = submitted_payment
+    service.repo.get_current.return_value = _versioned(submitted_payment)
     service.ilm.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _allow_decision(basis=["approver authorized"])
 
-    with patch("ps.service.kafka_publisher.publish_payment", new_callable=AsyncMock):
+    with _patched_txn():
         result = await service.approve(submitted_payment.payment_id, approver_subject)
 
-    assert result.status == PaymentStatus.APPROVED
-    assert result.approved_by is not None
+    assert result.payment.status == PaymentStatus.APPROVED
+    assert result.payment.approved_by is not None
 
 
 @pytest.mark.asyncio
@@ -267,8 +298,8 @@ async def test_approve_wrong_status(
     approver_subject: Subject,
     payment: Payment,
 ) -> None:
-    service.repo.find_by_id.return_value = payment
-    with pytest.raises(ValueError, match="only SUBMITTED"):
+    service.repo.get_current.return_value = _versioned(payment)
+    with pytest.raises(InvalidStateTransitionError, match="only SUBMITTED"):
         await service.approve(payment.payment_id, approver_subject)
 
 
@@ -278,15 +309,15 @@ async def test_approve_cancels_when_instruction_missing(
     approver_subject: Subject,
     submitted_payment: Payment,
 ) -> None:
-    service.repo.find_by_id.return_value = submitted_payment
+    service.repo.get_current.return_value = _versioned(submitted_payment)
     service.ilm.get_instruction.side_effect = InstructionNotFoundError("gone")
 
-    with patch("ps.service.kafka_publisher.publish_payment", new_callable=AsyncMock):
+    with _patched_txn():
         result = await service.approve(submitted_payment.payment_id, approver_subject)
 
-    assert result.status == PaymentStatus.CANCELLED
-    assert result.cancellation_reason is not None
-    assert "could not be found" in result.cancellation_reason
+    assert result.payment.status == PaymentStatus.CANCELLED
+    assert result.payment.cancellation_reason is not None
+    assert "could not be found" in result.payment.cancellation_reason
 
 
 @pytest.mark.asyncio
@@ -297,14 +328,14 @@ async def test_approve_cancels_on_instruction_invalidity(
     standing_instruction: dict,
 ) -> None:
     standing_instruction["version_number"] = 99
-    service.repo.find_by_id.return_value = submitted_payment
+    service.repo.get_current.return_value = _versioned(submitted_payment)
     service.ilm.get_instruction.return_value = standing_instruction
 
-    with patch("ps.service.kafka_publisher.publish_payment", new_callable=AsyncMock):
+    with _patched_txn():
         result = await service.approve(submitted_payment.payment_id, approver_subject)
 
-    assert result.status == PaymentStatus.CANCELLED
-    assert "version" in (result.cancellation_reason or "").lower()
+    assert result.payment.status == PaymentStatus.CANCELLED
+    assert "version" in (result.payment.cancellation_reason or "").lower()
 
 
 @pytest.mark.asyncio
@@ -314,7 +345,7 @@ async def test_approve_policy_denied(
     submitted_payment: Payment,
     standing_instruction: dict,
 ) -> None:
-    service.repo.find_by_id.return_value = submitted_payment
+    service.repo.get_current.return_value = _versioned(submitted_payment)
     service.ilm.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _deny_decision("ALERT_SUBORDINATE_APPROVING_CREATOR")
 
@@ -329,16 +360,16 @@ async def test_reject_success(
     submitted_payment: Payment,
     standing_instruction: dict,
 ) -> None:
-    service.repo.find_by_id.return_value = submitted_payment
+    service.repo.get_current.return_value = _versioned(submitted_payment)
     service.ilm.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _allow_decision()
     request = RejectPaymentRequest(reason="Insufficient documentation")
 
-    with patch("ps.service.kafka_publisher.publish_payment", new_callable=AsyncMock):
+    with _patched_txn():
         result = await service.reject(submitted_payment.payment_id, approver_subject, request)
 
-    assert result.status == PaymentStatus.REJECTED
-    assert result.rejection_reason == "Insufficient documentation"
+    assert result.payment.status == PaymentStatus.REJECTED
+    assert result.payment.rejection_reason == "Insufficient documentation"
 
 
 @pytest.mark.asyncio
@@ -347,8 +378,8 @@ async def test_reject_wrong_status(
     approver_subject: Subject,
     payment: Payment,
 ) -> None:
-    service.repo.find_by_id.return_value = payment
-    with pytest.raises(ValueError, match="only SUBMITTED"):
+    service.repo.get_current.return_value = _versioned(payment)
+    with pytest.raises(InvalidStateTransitionError, match="only SUBMITTED"):
         await service.reject(
             payment.payment_id,
             approver_subject,
@@ -362,7 +393,7 @@ async def test_reject_instruction_not_found(
     approver_subject: Subject,
     submitted_payment: Payment,
 ) -> None:
-    service.repo.find_by_id.return_value = submitted_payment
+    service.repo.get_current.return_value = _versioned(submitted_payment)
     service.ilm.get_instruction.side_effect = InstructionNotFoundError("missing")
     with pytest.raises(ValueError, match="backing instruction"):
         await service.reject(
@@ -379,7 +410,7 @@ async def test_reject_policy_denied(
     submitted_payment: Payment,
     standing_instruction: dict,
 ) -> None:
-    service.repo.find_by_id.return_value = submitted_payment
+    service.repo.get_current.return_value = _versioned(submitted_payment)
     service.ilm.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _deny_decision()
 
@@ -393,11 +424,11 @@ async def test_reject_policy_denied(
 
 @pytest.mark.asyncio
 async def test_get_and_list(service: PaymentService, payment: Payment, subject: Subject) -> None:
-    service.repo.find_by_id.return_value = payment
-    service.repo.list.return_value = [payment]
+    service.repo.get_current.return_value = _versioned(payment)
+    service.repo.list_current.return_value = [_versioned(payment)]
 
     got = await service.get(payment.payment_id, subject)
-    assert got.payment_id == payment.payment_id
+    assert got.payment.payment_id == payment.payment_id
 
     items = await service.list(
         subject,
@@ -406,7 +437,7 @@ async def test_get_and_list(service: PaymentService, payment: Payment, subject: 
         limit=10,
     )
     assert len(items) == 1
-    service.repo.list.assert_awaited_once_with(
+    service.repo.list_current.assert_awaited_once_with(
         instruction_id="instr-001",
         status="DRAFT",
         limit=10,
@@ -418,7 +449,7 @@ async def test_get_denied_for_unrelated_subject(
     service: PaymentService,
     payment: Payment,
 ) -> None:
-    service.repo.find_by_id.return_value = payment
+    service.repo.get_current.return_value = _versioned(payment)
     outsider = Subject(
         user_id="outsider",
         title="Analyst",
@@ -440,34 +471,34 @@ async def test_list_filters_to_viewable_payments(
     hidden.payment_id = "pay-hidden"
     hidden.owning_lob = "FX"
     hidden.created_by = hidden.created_by.model_copy(update={"user_id": "someone-else"})
-    service.repo.list.return_value = [payment, hidden]
+    service.repo.list_current.return_value = [_versioned(payment), _versioned(hidden)]
 
     items = await service.list(subject)
-    assert [item.payment_id for item in items] == [payment.payment_id]
+    assert [item.payment.payment_id for item in items] == [payment.payment_id]
 
 
 @pytest.mark.asyncio
 async def test_get_not_found(service: PaymentService, subject: Subject) -> None:
-    service.repo.find_by_id.side_effect = PaymentNotFoundError("pay-missing")
+    service.repo.get_current.side_effect = PaymentNotFoundError("pay-missing")
     with pytest.raises(LookupError, match="pay-missing"):
         await service.get("pay-missing", subject)
 
 
 @pytest.mark.asyncio
-async def test_publish_payment_fact_swallows_kafka_errors(
+async def test_save_payment_with_security_event_uses_transaction(
     service: PaymentService,
-    payment: Payment,
     subject: Subject,
+    payment: Payment,
 ) -> None:
-    from ps.models.enums import PaymentAction
-
-    with patch(
-        "ps.service.kafka_publisher.publish_payment",
-        new_callable=AsyncMock,
-        side_effect=RuntimeError("kafka down"),
-    ):
-        await service._publish_payment_fact(
+    with _patched_txn() as mock_tx:
+        result = await service._save_payment_with_security_event(
+            payment,
             PaymentAction.CREATE_PAYMENT,
             subject,
-            payment,
+            initial=True,
         )
+
+    assert result.payment.payment_id == payment.payment_id
+    mock_tx.assert_called_once()
+    service.repo.insert_initial.assert_awaited_once()
+    service.event_repo.insert_document.assert_awaited_once()

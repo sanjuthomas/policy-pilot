@@ -6,11 +6,11 @@ from sequence_client.errors import SequenceClientError
 
 from inst.config import settings
 from inst.database import get_security_events_database
-from inst.kafka_publisher import kafka_publisher
 from inst.models.api import Subject
 from inst.models.enums import LifecycleAction
 from inst.models.instruction import CashSettlementInstruction
 from inst.models.security_event import SecurityEvent
+from inst.security_event_serialization import security_event_to_document
 
 
 class SecurityEventRepository:
@@ -43,16 +43,11 @@ class SecurityEventRepository:
         await self.collection.insert_one(document, session=session)
         return document
 
-    async def publish(self, document: dict[str, Any]) -> None:
-        await kafka_publisher.publish(document)
-
     async def insert(self, event: SecurityEvent) -> SecurityEvent:
-        event_id = await self.allocate_event_id(event.resource.id)
-        stored = event.model_copy(update={"event_id": event_id})
-        document = stored.model_dump(mode="json")
+        document_id = await self.allocate_event_id(event.resource.id)
+        document = security_event_to_document(event, document_id=document_id)
         await self.insert_document(document)
-        await self.publish(document)
-        return stored
+        return event
 
     async def record_authorized_action(
         self,
@@ -63,18 +58,16 @@ class SecurityEventRepository:
         version_number: int | None = None,
         details: dict[str, Any] | None = None,
     ) -> SecurityEvent:
-        event_id = await self.allocate_event_id(instruction.instruction_id)
+        document_id = await self.allocate_event_id(instruction.instruction_id)
         event = SecurityEvent.authorized_action(
             action,
             subject,
             instruction,
-            event_id=event_id,
             version_number=version_number,
             details=details,
         )
-        document = event.model_dump(mode="json")
+        document = security_event_to_document(event, document_id=document_id)
         await self.insert_document(document)
-        await self.publish(document)
         return event
 
     async def record_policy_denial(
@@ -86,16 +79,14 @@ class SecurityEventRepository:
         reason: str,
         details: dict[str, Any] | None = None,
     ) -> SecurityEvent:
-        event_id = await self.allocate_event_id(instruction.instruction_id)
+        document_id = await self.allocate_event_id(instruction.instruction_id)
         event = SecurityEvent.policy_denial(
             action,
             subject,
             instruction,
-            event_id=event_id,
             reason=reason,
             details=details,
         )
-        document = event.model_dump(mode="json")
+        document = security_event_to_document(event, document_id=document_id)
         await self.insert_document(document)
-        await self.publish(document)
         return event

@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     mongodb_database: str = "ssi_cash_activities"
     mongodb_collection: str = "payments"
     security_events_database: str = "security_events"
-    security_events_collection: str = "payment-service"
+    security_events_collection: str = "payment_service"
     application_name: str = "payment-service"
 
     authorization_service_url: str = "http://localhost:8094"
@@ -31,11 +31,6 @@ class Settings(BaseSettings):
     zitadel_service_pat_file: Path | None = None
     auth_mode: str = "auto"
     compliance_roles: str = "COMPLIANCE_ANALYST,COMPLIANCE_OFFICER,PLATFORM_ADMIN"
-
-    kafka_enabled: bool = True
-    kafka_bootstrap_servers: str = "kafka:9092"
-    kafka_payments_topic: str = "ssi-payments"
-    kafka_security_events_topic: str = "payment-security-events"
 
     ui_initial_security_event_limit: int = 200
 

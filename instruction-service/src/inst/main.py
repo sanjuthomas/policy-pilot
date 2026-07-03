@@ -14,7 +14,6 @@ from inst import __version__
 from inst.auth_routes import router as auth_router
 from inst.config import settings
 from inst.database import close, connect
-from inst.kafka_publisher import kafka_publisher
 from inst.routes import router
 from inst.security_ui_routes import (
     SECURITY_EVENTS_STATIC_DIR,
@@ -36,12 +35,10 @@ async def lifespan(app: FastAPI):
     configure_telemetry("instruction-service", service_version=__version__)
     instrument_app(app)
     await connect()
-    await kafka_publisher.start()
     await service_identity.login()
     await security_event_ui_store.connect()
     logger.info("instruction browser and security event monitor ready")
     yield
-    await kafka_publisher.close()
     await close()
     shutdown_telemetry()
 

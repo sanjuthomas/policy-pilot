@@ -21,8 +21,41 @@ def test_get_security_events_db_raises_when_not_connected() -> None:
 
 
 @pytest.mark.asyncio
+async def test_mongo_transaction_yields_session() -> None:
+    mock_session = MagicMock()
+    mock_session.start_transaction = MagicMock()
+    mock_session.start_transaction.return_value.__aenter__ = AsyncMock(return_value=None)
+    mock_session.start_transaction.return_value.__aexit__ = AsyncMock(return_value=False)
+
+    mock_client = MagicMock()
+    mock_client.start_session = AsyncMock(return_value=mock_session)
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=False)
+
+    with patch.object(database, "_client", mock_client):
+        async with database.mongo_transaction() as session:
+            assert session is mock_session
+
+    mock_client.start_session.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_mongo_transaction_requires_connected_client() -> None:
+    with patch.object(database, "_client", None):
+        with pytest.raises(RuntimeError, match="MongoDB not connected"):
+            async with database.mongo_transaction():
+                pass
+
+
+@pytest.mark.asyncio
 async def test_connect_and_close() -> None:
     mock_client = MagicMock()
+    mock_client.admin.command = AsyncMock()
+    mock_db = MagicMock()
+    mock_collection = MagicMock()
+    mock_collection.create_index = AsyncMock()
+    mock_client.__getitem__ = MagicMock(return_value=mock_db)
+    mock_db.__getitem__ = MagicMock(return_value=mock_collection)
     with patch("ps.database.AsyncIOMotorClient", return_value=mock_client):
         await database.connect()
         assert database._client is mock_client

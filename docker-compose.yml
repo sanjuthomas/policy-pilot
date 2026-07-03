@@ -214,7 +214,7 @@ services:
       MONGODB_URI: mongodb://mongodb:27017/?replicaSet=rs0
       MONGODB_DATABASE: ssi_cash_instructions
       SECURITY_EVENTS_DATABASE: security_events
-      SECURITY_EVENTS_COLLECTION: instruction-service
+      SECURITY_EVENTS_COLLECTION: instruction_service
       AUTHORIZATION_SERVICE_URL: http://authorization-service:8094
       SERVICE_USER_ID: svc-instruction
       SERVICE_USER_PASSWORD: Password1!
@@ -223,10 +223,6 @@ services:
       ZITADEL_INTERNAL_URL: http://zitadel-proxy
       ZITADEL_SERVICE_PAT_FILE: /zitadel/bootstrap/login-client.pat
       AUTH_MODE: jwt
-      KAFKA_ENABLED: "true"
-      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      KAFKA_SECURITY_EVENTS_TOPIC: instruction-security-events
-      KAFKA_INSTRUCTION_TOPIC: ssi-instructions
       SEQUENCE_SERVICE_URL: http://sequence-service:8095
     volumes:
       - zitadel-bootstrap:/zitadel/bootstrap:ro
@@ -237,8 +233,6 @@ services:
       mongo-init:
         condition: service_completed_successfully
       opa-policy-seed:
-        condition: service_completed_successfully
-      kafka-init:
         condition: service_completed_successfully
       sequence-service:
         condition: service_started
@@ -316,7 +310,7 @@ services:
       MONGODB_DATABASE: ssi_cash_activities
       MONGODB_COLLECTION: payments
       SECURITY_EVENTS_DATABASE: security_events
-      SECURITY_EVENTS_COLLECTION: payment-service
+      SECURITY_EVENTS_COLLECTION: payment_service
       AUTHORIZATION_SERVICE_URL: http://authorization-service:8094
       ILM_URL: http://instruction-service:8000
       SERVICE_USER_ID: svc-payment
@@ -326,10 +320,6 @@ services:
       ZITADEL_INTERNAL_URL: http://zitadel-proxy
       ZITADEL_SERVICE_PAT_FILE: /zitadel/bootstrap/login-client.pat
       AUTH_MODE: jwt
-      KAFKA_ENABLED: "true"
-      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      KAFKA_PAYMENTS_TOPIC: ssi-payments
-      KAFKA_SECURITY_EVENTS_TOPIC: payment-security-events
       SEQUENCE_SERVICE_URL: http://sequence-service:8095
     volumes:
       - zitadel-bootstrap:/zitadel/bootstrap:ro
@@ -340,8 +330,6 @@ services:
       mongo-init:
         condition: service_completed_successfully
       opa-policy-seed:
-        condition: service_completed_successfully
-      kafka-init:
         condition: service_completed_successfully
       instruction-service:
         condition: service_started

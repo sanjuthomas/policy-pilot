@@ -54,7 +54,7 @@ class SecurityEventUiStore:
         return events
 
     async def get_by_event_id(self, event_id: str) -> dict[str, Any] | None:
-        document = await self.collection.find_one({"event_id": event_id})
+        document = await self.collection.find_one({"_id": event_id})
         if document is None:
             return None
         return serialize_security_event(document)
@@ -87,9 +87,9 @@ def _merge_recent_documents(
 ) -> list[dict[str, Any]]:
     notable_by_id: dict[str, dict[str, Any]] = {}
     for doc in notable_docs:
-        event_id = doc.get("event_id")
-        if event_id and event_id not in notable_by_id:
-            notable_by_id[event_id] = doc
+        document_id = _document_id(doc)
+        if document_id and document_id not in notable_by_id:
+            notable_by_id[document_id] = doc
     notable = sorted(notable_by_id.values(), key=_document_timestamp, reverse=True)[:limit]
 
     info_slots = max(0, limit - len(notable))
@@ -99,10 +99,18 @@ def _merge_recent_documents(
     info_candidates = [
         doc
         for doc in info_docs
-        if doc.get("event_id") and doc["event_id"] not in notable_by_id
+        if _document_id(doc) and _document_id(doc) not in notable_by_id
     ]
     info = sorted(info_candidates, key=_document_timestamp, reverse=True)[:info_slots]
     return sorted(notable + info, key=_document_timestamp, reverse=True)
+
+
+def _document_id(doc: dict[str, Any]) -> str | None:
+    key = doc.get("_id")
+    if key is not None:
+        return str(key)
+    legacy_id = doc.get("event_id")
+    return str(legacy_id) if legacy_id is not None else None
 
 
 def _document_timestamp(doc: dict[str, Any]) -> datetime:
