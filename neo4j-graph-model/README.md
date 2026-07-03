@@ -18,8 +18,7 @@ relationships.cypher  — node labels, properties, relationships (documentation)
 | `PaymentSecurityEventPipeline` | `payment_security_events` (4 partitions) | `payment-security-event-etl` | SecurityEvent (payment), User (actor), Payment, Instruction |
 | `PaymentFactPipeline` | `payments` (4 partitions) | `payment-fact-etl` | Payment, User (creator/submitter/approver/rejector), Instruction, HAS_PAYMENT |
 
-All topics carry **full fact events** — the ETL makes no API calls to ILM or the payment service.
-Partition key is `user_id` so all actions by the same user arrive in order.
+All topics carry **full Mongo documents** via Kafka Connect — the ETL makes no API calls to ILM or the payment service.
 
 ## Graph model
 

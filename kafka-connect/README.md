@@ -1,6 +1,6 @@
 # Kafka Connect (MongoDB source)
 
-Distributed **Kafka Connect** worker with the [MongoDB Kafka Connector](https://www.mongodb.com/docs/kafka-connector/) plugin. Watches MongoDB change streams and publishes **full documents** to the domain Kafka topics.
+Distributed **Kafka Connect** worker with the [MongoDB Kafka Connector](https://www.mongodb.com/docs/kafka-connector/) plugin (**1.16.0** on Confluent Hub). Watches MongoDB change streams and publishes **full documents** to the domain Kafka topics. This is the **only** producer for the four application topics — instruction-service and payment-service write Mongo only.
 
 ## Connectors
 
@@ -16,11 +16,13 @@ All connectors set:
 - `publish.full.document.only=true` — message value is the Mongo document only
 - `copy.existing=true` — backfill existing collection data on first run
 - `topic.namespace.map` — route each collection to its topic
+- `value.converter=StringConverter` — Mongo connector already serializes JSON; avoids double-encoding at the broker
 
 **No field mapping or SMTs** — Kafka messages are verbatim Mongo documents. For example,
 instruction rows use composite `_id` (`{instruction_id}|{version_number}`) and do **not**
 include a top-level `instruction_id` field. The **ssi-indexer** consumer maps that shape
-to pipeline payloads in `ssi-indexer/src/etl/mongo_cdc.py` at consume time.
+to pipeline payloads in `ssi-indexer/src/etl/mongo_cdc.py` at consume time (see also
+`etl/kafka_deserialize.py` for legacy double-encoded records).
 
 Connector configs live in `connectors/`. `register-connectors.sh` registers them via the Connect REST API (`POST /connectors`) after the worker is healthy.
 

@@ -99,6 +99,8 @@ Security event documents:
 
 Authorized actions store `details.authorization` (`allow_basis`, `summary`, subject snapshot) and set `event.reason` to the summary. Same pattern as instruction-service.
 
+Downstream indexing is **Mongo → Kafka Connect → Kafka → ssi-indexer**; this service does not publish to Kafka.
+
 ## Example: create payment
 
 Requires an approved instruction ID from instruction-service and a ZITADEL session token for a `PAYMENT_CREATOR` user.

@@ -17,9 +17,10 @@ PolicyPilot still runs dense vector search **in parallel** for every case except
 
 ## Prerequisites
 
-- Full stack running (`docker compose up -d`)
+- Full stack running (`docker compose up -d`), including **Kafka Connect** and **ssi-indexer**
 - Host **Ollama** with `qwen3-embedding:0.6b` and `hmahmood/neo4j-gemma-3-27b-inst-q8` (or models configured in `.env`)
 - Harness reachable at http://localhost:8091 (for `--seed`)
+- Neo4j populated by the indexer (run harness seed or `./ssi-demo-harness/seed-demo-data.sh` before `--seed`)
 
 ## Quick run
 

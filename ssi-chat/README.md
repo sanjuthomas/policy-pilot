@@ -111,7 +111,8 @@ Copy `.env.example` to `.env` at the repo root to override defaults. Docker Comp
 |----------|---------|
 | `OLLAMA_EMBEDDING_MODEL` | `qwen3-embedding:0.6b` |
 | `OLLAMA_CHAT_MODEL` | `hmahmood/neo4j-gemma-3-27b-inst-q8` |
-| `QDRANT_COLLECTION` | `ssi_search_index` |
+| `MULTIMODAL_VECTOR_INDEX` | `multimodal_embedding` |
+| `MULTIMODAL_FULLTEXT_INDEX` | `multimodal_search_text` |
 | `NEO4J_URI` | `bolt://neo4j:7687` |
 | `GRAPH_MODEL_DIR` | `/app/neo4j-graph-model` |
 | `PAYMENT_SERVICE_URL` | `http://payment-service:8093` |
