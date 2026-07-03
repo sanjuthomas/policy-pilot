@@ -13,10 +13,10 @@ relationships.cypher  — node labels, properties, relationships (documentation)
 
 | Pipeline | Kafka topic | Consumer group | Writes |
 |---|---|---|---|
-| `InstructionSecurityEventPipeline` | `instruction-security-events` (4 partitions) | `instruction-security-event-etl` | SecurityEvent, User (actor), Instruction, InstructionVersion, ProfitCenter |
-| `InstructionPipeline` | `ssi-instructions` (4 partitions) | `ssi-instruction-etl` | Instruction, InstructionVersion, User (creator/approver/rejector/actor), ProfitCenter, CONFLICTS_WITH |
-| `PaymentSecurityEventPipeline` | `payment-security-events` (4 partitions) | `payment-security-event-etl` | SecurityEvent (payment), User (actor), Payment, Instruction |
-| `PaymentFactPipeline` | `ssi-payments` (4 partitions) | `payment-fact-etl` | Payment, User (creator/submitter/approver/rejector), Instruction, HAS_PAYMENT |
+| `InstructionSecurityEventPipeline` | `instruction_security_events` (4 partitions) | `instruction-security-event-etl` | SecurityEvent, User (actor), Instruction, InstructionVersion, ProfitCenter |
+| `InstructionPipeline` | `instructions` (4 partitions) | `ssi-instruction-etl` | Instruction, InstructionVersion, User (creator/approver/rejector/actor), ProfitCenter, CONFLICTS_WITH |
+| `PaymentSecurityEventPipeline` | `payment_security_events` (4 partitions) | `payment-security-event-etl` | SecurityEvent (payment), User (actor), Payment, Instruction |
+| `PaymentFactPipeline` | `payments` (4 partitions) | `payment-fact-etl` | Payment, User (creator/submitter/approver/rejector), Instruction, HAS_PAYMENT |
 
 All topics carry **full fact events** — the ETL makes no API calls to ILM or the payment service.
 Partition key is `user_id` so all actions by the same user arrive in order.
@@ -100,11 +100,11 @@ flowchart TB
 
 **Planned but not yet written:** `SUPERSEDES` (version chain).
 
-## Qdrant points (four source tags)
+## Multimodal documents (four source tags)
 
-The ETL also writes to Qdrant (`ssi_search_index` collection). Each point has a `source` tag:
+The ETL writes searchable `MultimodalDocument` nodes in Neo4j (vector + fulltext). Each document has a `source` tag:
 
-| `source` tag | Point ID | One per | Written by |
+| `source` tag | Document ID | One per | Written by |
 |---|---|---|---|
 | `instruction_security_event` | `uuid5(event_id)` | Security event | InstructionSecurityEventPipeline |
 | `instruction_state` | `uuid5("instruction:" + instruction_id)` | Instruction (upserted on every mutation) | InstructionPipeline |
@@ -113,7 +113,7 @@ The ETL also writes to Qdrant (`ssi_search_index` collection). Each point has a 
 
 The chat API filters by source based on the selected mode:
 
-| Chat mode | Qdrant filter | Neo4j focus |
+| Chat mode | Multimodal filter | Neo4j focus |
 |---|---|---|
 | `events` | `instruction_security_event` + `payment_security_event` | Both security event graphs |
 | `instructions` | `instruction_state` | Instruction master graph |

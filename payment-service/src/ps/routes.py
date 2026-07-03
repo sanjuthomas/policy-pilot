@@ -4,13 +4,15 @@ from ps.dependencies import get_compliance_subject, get_subject
 from ps.ilm_client import InstructionNotFoundError
 from ps.models.api import (
     CreatePaymentRequest,
+    DeletePaymentRequest,
     PaymentEligibleApproversResponse,
     PaymentResponse,
     RejectPaymentRequest,
     Subject,
 )
-from ps.models.payment import Payment
-from ps.service import PaymentService
+from ps.repository import ConcurrentModificationError
+from ps.service import InvalidStateTransitionError, PaymentService
+from ps.storage import VersionedPayment
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -25,27 +27,43 @@ def _bearer_token(authorization: str | None) -> str | None:
     return None
 
 
-def _to_response(p: Payment) -> PaymentResponse:
+def _fmt_datetime(value) -> str | None:
+    if value is None:
+        return None
+    return value.isoformat() + "Z"
+
+
+def _to_response(record: VersionedPayment) -> PaymentResponse:
+    from ps.constants import PAYMENT_CURRENT_OUT
+
+    payment = record.payment
     return PaymentResponse(
-        payment_id=p.payment_id,
-        instruction_id=p.instruction_id,
-        instruction_version=p.instruction_version,
-        status=p.status.value,
-        amount=p.amount,
-        currency=p.currency,
-        value_date=p.value_date,
-        owning_lob=p.owning_lob,
-        instruction_type=p.instruction_type,
-        created_by=p.created_by,
-        submitted_by=p.submitted_by,
-        approved_by=p.approved_by,
-        rejected_by=p.rejected_by,
-        cancelled_by=p.cancelled_by,
-        rejection_reason=p.rejection_reason,
-        cancellation_reason=p.cancellation_reason,
-        created_at=p.created_at.isoformat(),
-        updated_at=p.updated_at.isoformat(),
-        lifecycle_events=p.lifecycle_events,
+        payment_id=payment.payment_id,
+        version_number=record.version_number,
+        record_in=_fmt_datetime(record.valid_in) or "",
+        record_out=(
+            PAYMENT_CURRENT_OUT
+            if record.valid_out is None
+            else _fmt_datetime(record.valid_out)
+        ),
+        instruction_id=payment.instruction_id,
+        instruction_version=payment.instruction_version,
+        status=payment.status.value,
+        amount=payment.amount,
+        currency=payment.currency,
+        value_date=payment.value_date,
+        owning_lob=payment.owning_lob,
+        instruction_type=payment.instruction_type,
+        created_by=payment.created_by,
+        submitted_by=payment.submitted_by,
+        approved_by=payment.approved_by,
+        rejected_by=payment.rejected_by,
+        cancelled_by=payment.cancelled_by,
+        rejection_reason=payment.rejection_reason,
+        cancellation_reason=payment.cancellation_reason,
+        created_at=payment.created_at.isoformat(),
+        updated_at=payment.updated_at.isoformat(),
+        lifecycle_events=payment.lifecycle_events,
     )
 
 
@@ -58,7 +76,7 @@ async def create_payment(
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
 ) -> PaymentResponse:
     try:
-        payment = await service.create(
+        record = await service.create(
             instruction_id=request.instruction_id,
             value_date=request.value_date,
             amount=request.amount,
@@ -66,7 +84,7 @@ async def create_payment(
             bearer_token=_bearer_token(authorization),
             session_id=x_session_id,
         )
-        return _to_response(payment)
+        return _to_response(record)
     except InstructionNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except PermissionError as exc:
@@ -85,13 +103,13 @@ async def list_payments(
     subject: Subject = Depends(get_subject),
     service: PaymentService = Depends(get_service),
 ) -> list[PaymentResponse]:
-    payments = await service.list(
+    records = await service.list(
         subject,
         instruction_id=instruction_id,
         status=status,
         limit=limit,
     )
-    return [_to_response(p) for p in payments]
+    return [_to_response(record) for record in records]
 
 
 @router.get("/{payment_id}", response_model=PaymentResponse)
@@ -116,21 +134,13 @@ async def submit_payment(
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
 ) -> PaymentResponse:
-    try:
-        return _to_response(
-            await service.submit(
-                payment_id,
-                subject,
-                bearer_token=_bearer_token(authorization),
-                session_id=x_session_id,
-            )
-        )
-    except LookupError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except PermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return await _lifecycle_action(
+        service.submit,
+        payment_id,
+        subject,
+        bearer_token=_bearer_token(authorization),
+        session_id=x_session_id,
+    )
 
 
 @router.post("/{payment_id}/approve", response_model=PaymentResponse)
@@ -141,21 +151,13 @@ async def approve_payment(
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
 ) -> PaymentResponse:
-    try:
-        return _to_response(
-            await service.approve(
-                payment_id,
-                subject,
-                bearer_token=_bearer_token(authorization),
-                session_id=x_session_id,
-            )
-        )
-    except LookupError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except PermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return await _lifecycle_action(
+        service.approve,
+        payment_id,
+        subject,
+        bearer_token=_bearer_token(authorization),
+        session_id=x_session_id,
+    )
 
 
 @router.post("/{payment_id}/reject", response_model=PaymentResponse)
@@ -167,22 +169,33 @@ async def reject_payment(
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
 ) -> PaymentResponse:
-    try:
-        return _to_response(
-            await service.reject(
-                payment_id,
-                subject,
-                request,
-                bearer_token=_bearer_token(authorization),
-                session_id=x_session_id,
-            )
-        )
-    except LookupError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except PermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return await _lifecycle_action(
+        service.reject,
+        payment_id,
+        subject,
+        request,
+        bearer_token=_bearer_token(authorization),
+        session_id=x_session_id,
+    )
+
+
+@router.post("/{payment_id}/delete", response_model=PaymentResponse)
+async def delete_payment(
+    payment_id: str,
+    request: DeletePaymentRequest | None = None,
+    subject: Subject = Depends(get_subject),
+    service: PaymentService = Depends(get_service),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+) -> PaymentResponse:
+    return await _lifecycle_action(
+        service.delete,
+        payment_id,
+        subject,
+        request,
+        bearer_token=_bearer_token(authorization),
+        session_id=x_session_id,
+    )
 
 
 @router.post("/{payment_id}/eligible-approvers", response_model=PaymentEligibleApproversResponse)
@@ -198,3 +211,32 @@ async def payment_eligible_approvers(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except InstructionNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+async def _lifecycle_action(
+    handler,
+    payment_id: str,
+    subject: Subject,
+    *args,
+    bearer_token: str | None = None,
+    session_id: str | None = None,
+):
+    try:
+        record = await handler(
+            payment_id,
+            subject,
+            *args,
+            bearer_token=bearer_token,
+            session_id=session_id,
+        )
+        return _to_response(record)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except InvalidStateTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ConcurrentModificationError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc

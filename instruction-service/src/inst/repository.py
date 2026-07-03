@@ -1,9 +1,11 @@
+import re
 from datetime import datetime
 from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorClientSession
 from pymongo.errors import DuplicateKeyError, OperationFailure
 
+from inst.constants import INSTRUCTION_CURRENT_OUT
 from inst.database import get_database
 from inst.models.instruction import CashSettlementInstruction
 from inst.storage import (
@@ -32,6 +34,10 @@ class InstructionRepository:
     def collection(self):
         return get_database()[self.collection_name]
 
+    @staticmethod
+    def _instruction_id_filter(instruction_id: str) -> dict[str, Any]:
+        return {"_id": {"$regex": f"^{re.escape(instruction_id)}\\|\\d+$"}}
+
     async def insert_initial(
         self,
         instruction: CashSettlementInstruction,
@@ -55,7 +61,7 @@ class InstructionRepository:
     ) -> VersionedInstruction:
         now = datetime.utcnow()
         current = await self.collection.find_one(
-            {"instruction_id": instruction.instruction_id, "out": None},
+            {**self._instruction_id_filter(instruction.instruction_id), "out": INSTRUCTION_CURRENT_OUT},
             session=session,
         )
         if current is None:
@@ -71,12 +77,14 @@ class InstructionRepository:
         )
 
         try:
-            # Optimistic locking: close the current version only if its version_number
-            # still matches what we read.  A concurrent writer will have already
-            # incremented it, so modified_count will be 0.
+            closed_out = now.isoformat() + "Z"
             result = await self.collection.update_one(
-                {"_id": current["_id"], "version_number": current_version, "out": None},
-                {"$set": {"out": now.isoformat() + "Z"}},
+                {
+                    "_id": current["_id"],
+                    "version_number": current_version,
+                    "out": INSTRUCTION_CURRENT_OUT,
+                },
+                {"$set": {"out": closed_out}},
                 session=session,
             )
             if result.modified_count != 1:
@@ -89,12 +97,8 @@ class InstructionRepository:
             )
             await self.collection.insert_one(document, session=session)
         except DuplicateKeyError as exc:
-            # The partial unique index on (instruction_id, out=None) fired — another
-            # transaction already inserted the next version while we were in flight.
             raise ConcurrentModificationError(_conflict_msg) from exc
         except OperationFailure as exc:
-            # MongoDB raises WriteConflict (code 112) with label TransientTransactionError
-            # when two transactions race to write the same document.
             if exc.code == 112 or "TransientTransactionError" in (exc.details or {}).get(
                 "errorLabels", []
             ):
@@ -103,13 +107,28 @@ class InstructionRepository:
 
         return document_to_versioned_instruction(document)
 
-    async def get_current(self, instruction_id: str) -> VersionedInstruction:
+    async def get_one(
+        self,
+        instruction_id: str,
+        *,
+        out: str,
+        session: AsyncIOMotorClientSession | None = None,
+    ) -> VersionedInstruction:
+        if not out:
+            raise ValueError("out is required for single-document instruction lookup")
         document = await self.collection.find_one(
-            {"instruction_id": instruction_id, "out": None}
+            {**self._instruction_id_filter(instruction_id), "out": out},
+            session=session,
         )
         if document is None:
             raise InstructionNotFoundError(instruction_id)
         return document_to_versioned_instruction(document)
+
+    async def get_current(self, instruction_id: str) -> VersionedInstruction:
+        return await self.get_one(
+            instruction_id,
+            out=INSTRUCTION_CURRENT_OUT,
+        )
 
     async def list_current(
         self,
@@ -118,7 +137,7 @@ class InstructionRepository:
         status: str | None = None,
         limit: int = 100,
     ) -> list[VersionedInstruction]:
-        query: dict[str, Any] = {"out": None}
+        query: dict[str, Any] = {"out": INSTRUCTION_CURRENT_OUT}
         if owning_lob:
             query["owning_lob"] = owning_lob
         if status:
@@ -128,7 +147,7 @@ class InstructionRepository:
         return [document_to_versioned_instruction(doc) async for doc in cursor]
 
     async def list_versions(self, instruction_id: str) -> list[VersionedInstruction]:
-        cursor = self.collection.find({"instruction_id": instruction_id}).sort(
+        cursor = self.collection.find(self._instruction_id_filter(instruction_id)).sort(
             "version_number", 1
         )
         return [document_to_versioned_instruction(doc) async for doc in cursor]

@@ -87,51 +87,57 @@ def fetch_harness_status(harness_url: str) -> dict[str, Any]:
         return response.json()
 
 
-def fetch_qdrant_points(qdrant_url: str, collection: str) -> int:
+def fetch_multimodal_document_count(indexer_url: str, auth_headers: dict[str, str]) -> int:
     with httpx.Client(timeout=15.0) as client:
-        response = client.get(f"{qdrant_url.rstrip('/')}/collections/{collection}")
+        response = client.get(
+            f"{indexer_url.rstrip('/')}/api/stats",
+            headers=auth_headers,
+        )
         if response.status_code == 404:
             return 0
         response.raise_for_status()
-        result = response.json().get("result") or {}
-        return int(result.get("points_count") or 0)
+        components = response.json().get("components") or {}
+        vector = components.get("multimodal_vector") or {}
+        return int(vector.get("documents_count") or 0)
 
 
 def wait_for_index(
     *,
     harness_url: str,
-    qdrant_url: str,
-    qdrant_collection: str,
+    indexer_url: str,
     min_security_events: int,
-    min_qdrant_points: int,
+    min_multimodal_documents: int,
     timeout_seconds: int,
     poll_interval_seconds: float,
 ) -> dict[str, Any]:
     deadline = time.monotonic() + timeout_seconds
     last_status: dict[str, Any] = {}
 
-    while time.monotonic() < deadline:
-        last_status = fetch_harness_status(harness_url)
-        events = int(last_status.get("security_event_count") or 0)
-        payment_events = int(last_status.get("payment_security_event_count") or 0)
-        total_events = max(events, 0) + max(payment_events, 0)
-        points = fetch_qdrant_points(qdrant_url, qdrant_collection)
+    with httpx.Client(timeout=30.0) as client:
+        auth_headers = admin_auth_headers(client, harness_url)
 
-        logger.info(
-            "index wait: security_events=%s payment_events=%s qdrant_points=%s",
-            events,
-            payment_events,
-            points,
-        )
+        while time.monotonic() < deadline:
+            last_status = fetch_harness_status(harness_url)
+            events = int(last_status.get("security_event_count") or 0)
+            payment_events = int(last_status.get("payment_security_event_count") or 0)
+            total_events = max(events, 0) + max(payment_events, 0)
+            documents = fetch_multimodal_document_count(indexer_url, auth_headers)
 
-        if total_events >= min_security_events and points >= min_qdrant_points:
-            return last_status
+            logger.info(
+                "index wait: security_events=%s payment_events=%s multimodal_documents=%s",
+                events,
+                payment_events,
+                documents,
+            )
 
-        time.sleep(poll_interval_seconds)
+            if total_events >= min_security_events and documents >= min_multimodal_documents:
+                return last_status
+
+            time.sleep(poll_interval_seconds)
 
     raise TimeoutError(
         "timed out waiting for ETL index "
-        f"(need events>={min_security_events}, qdrant_points>={min_qdrant_points}); "
+        f"(need events>={min_security_events}, multimodal_documents>={min_multimodal_documents}); "
         f"last status={last_status}"
     )
 

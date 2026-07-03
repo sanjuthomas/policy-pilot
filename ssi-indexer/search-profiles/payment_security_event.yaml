@@ -1,7 +1,8 @@
 entity: payment_security_event
 wired: true
 description: >
-  Payment security events (payment-security-events Kafka topic).
+  Payment security events (payment_security_events Kafka topic).
+  Mongo _id is the sequence event id; etl.mongo_cdc exposes it as event_id.
 
 context_root: event
 payload_source: payment_security_event

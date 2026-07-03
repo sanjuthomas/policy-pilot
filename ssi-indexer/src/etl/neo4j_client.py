@@ -716,7 +716,7 @@ class Neo4jGraphWriter:
             }
 
     async def upsert_instruction_fact(self, fact: dict[str, Any]) -> None:
-        """Upsert instruction state from an InstructionFact event (ssi-instructions topic).
+        """Upsert instruction state from an InstructionFact event (instructions topic).
 
         Maintains:
           • Instruction node (with is_expired flag from dates)
@@ -985,7 +985,7 @@ class Neo4jGraphWriter:
 
         Creates/merges:
           - SecurityEvent node (with payment_id property)
-          - Payment node (stub — full data comes from ssi-payments)
+          - Payment node (stub — full data comes from payments)
           - User actor node + ACTED_AS relationship
           - (SecurityEvent)-[:TARGETS_PAYMENT]->(Payment)
           - (SecurityEvent)-[:INVOLVES_LOB]->(ProfitCenter)
@@ -1121,7 +1121,7 @@ class Neo4jGraphWriter:
                 raise
 
     async def upsert_payment_fact(self, fact: dict[str, Any]) -> None:
-        """Write a Payment fact (from ssi-payments topic) into Neo4j.
+        """Write a Payment fact (from payments topic) into Neo4j.
 
         Creates/merges:
           - Payment node with all fields

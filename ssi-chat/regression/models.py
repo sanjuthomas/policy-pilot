@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 
 SearchMode = Literal["events", "instructions", "payments", "all"]
@@ -18,7 +18,10 @@ class SeedStep(BaseModel):
 
 class SeedWaitConfig(BaseModel):
     min_security_events: int = 1
-    min_qdrant_points: int = 1
+    min_multimodal_documents: int = Field(
+        default=1,
+        validation_alias=AliasChoices("min_multimodal_documents", "min_qdrant_points"),
+    )
     timeout_seconds: int = 180
     poll_interval_seconds: float = 3.0
 
@@ -47,8 +50,8 @@ class RegressionCase(BaseModel):
     retrieval: RetrievalStrategy = Field(
         description=(
             "Primary engine for the answer: deterministic (Neo4j formatter, no LLM synthesis), "
-            "graph (Neo4j planned/LLM Cypher authoritative), vector (Qdrant dense/BM25 primary), "
-            "eligibility (live OPA via authorization-service, no Qdrant)."
+            "graph (Neo4j planned/LLM Cypher authoritative), vector (Neo4j dense/BM25 primary), "
+            "eligibility (live OPA via authorization-service, no multimodal search)."
         ),
     )
     question: str

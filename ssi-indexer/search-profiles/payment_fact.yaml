@@ -1,7 +1,8 @@
 entity: payment_fact
 wired: true
 description: >
-  Payment facts (ssi-payments Kafka topic).
+  Payment facts (payments Kafka topic). Kafka payloads are versioned Mongo rows
+  (_id = payment_id|version); etl.mongo_cdc normalizes them before indexing.
 
 context_root: fact
 payload_source: payment_fact
@@ -9,6 +10,8 @@ payload_source: payment_fact
 includes:
   - path: payment_id
   - path: instruction_id
+  - path: instruction_version
+    transform: str_value
   - path: status
   - path: currency
   - path: amount
@@ -16,8 +19,12 @@ includes:
   - path: value_date
   - path: owning_lob
   - path: instruction_type
+  - path: timestamp
   - path: created_by.user_id
   - path: created_by
+    transform: display_name
+  - path: submitted_by.user_id
+  - path: submitted_by
     transform: display_name
   - path: approved_by.user_id
   - path: approved_by
@@ -25,12 +32,15 @@ includes:
   - path: rejected_by.user_id
   - path: rejected_by
     transform: display_name
+  - path: rejection_reason
+  - path: cancellation_reason
   - literal: payment
 
 excludes:
   - version_number
   - lifecycle_events
-  - full payment document JSON
+  - Mongo _id / version key (payment_id|version_number)
+  - full payment document JSON beyond listed paths
 
 join:
   separator: " "

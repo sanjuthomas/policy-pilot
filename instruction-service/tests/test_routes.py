@@ -107,3 +107,95 @@ def test_submit_invalid_state(api_client: TestClient, mock_service: MagicMock) -
     mock_service.submit.side_effect = InvalidStateTransitionError("bad state")
     response = api_client.post("/api/v1/instructions/i1/submit")
     assert response.status_code == 409
+
+
+def test_create_value_error(api_client: TestClient, mock_service: MagicMock) -> None:
+    mock_service.create.side_effect = ValueError("bad request")
+    from tests.helpers import domestic_payload
+
+    response = api_client.post("/api/v1/instructions", json=domestic_payload())
+    assert response.status_code == 400
+
+
+def test_create_runtime_error(api_client: TestClient, mock_service: MagicMock) -> None:
+    mock_service.create.side_effect = RuntimeError("sequence down")
+    from tests.helpers import domestic_payload
+
+    response = api_client.post("/api/v1/instructions", json=domestic_payload())
+    assert response.status_code == 502
+
+
+def test_get_instruction_forbidden(api_client: TestClient, mock_service: MagicMock) -> None:
+    mock_service.get.side_effect = PermissionError("denied")
+    response = api_client.get("/api/v1/instructions/i1")
+    assert response.status_code == 403
+
+
+def test_list_instruction_versions(api_client: TestClient, mock_service: MagicMock) -> None:
+    mock_service.list_versions.return_value = [_sample_response()]
+    response = api_client.get("/api/v1/instructions/i1/versions")
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+
+
+def test_list_versions_not_found(api_client: TestClient, mock_service: MagicMock) -> None:
+    from inst.repository import InstructionNotFoundError
+
+    mock_service.list_versions.side_effect = InstructionNotFoundError("i1")
+    response = api_client.get("/api/v1/instructions/i1/versions")
+    assert response.status_code == 404
+
+
+def test_list_versions_forbidden(api_client: TestClient, mock_service: MagicMock) -> None:
+    mock_service.list_versions.side_effect = PermissionError("denied")
+    response = api_client.get("/api/v1/instructions/i1/versions")
+    assert response.status_code == 403
+
+
+def test_lifecycle_endpoints_success(api_client: TestClient, mock_service: MagicMock) -> None:
+    response_model = _sample_response()
+    mock_service.approve.return_value = response_model
+    mock_service.reject.return_value = response_model
+    mock_service.suspend.return_value = response_model
+    mock_service.reactivate.return_value = response_model
+    mock_service.use.return_value = response_model
+
+    assert api_client.post("/api/v1/instructions/i1/approve").status_code == 200
+    assert api_client.post(
+        "/api/v1/instructions/i1/reject",
+        json={"reason": "nope"},
+    ).status_code == 200
+    assert api_client.post("/api/v1/instructions/i1/suspend").status_code == 200
+    assert api_client.post("/api/v1/instructions/i1/reactivate").status_code == 200
+    assert api_client.post(
+        "/api/v1/instructions/i1/use",
+        json={"payment_reference": "pay-1"},
+    ).status_code == 200
+
+
+def test_lifecycle_concurrent_modification(api_client: TestClient, mock_service: MagicMock) -> None:
+    from inst.repository import ConcurrentModificationError
+
+    mock_service.approve.side_effect = ConcurrentModificationError("conflict")
+    response = api_client.post("/api/v1/instructions/i1/approve")
+    assert response.status_code == 409
+
+
+def test_bearer_token_passed_on_create(api_client: TestClient, mock_service: MagicMock) -> None:
+    mock_service.create.return_value = _sample_response()
+    from tests.helpers import domestic_payload
+
+    api_client.post(
+        "/api/v1/instructions",
+        json=domestic_payload(),
+        headers={"Authorization": "Bearer user-token", "X-Session-Id": "sess-1"},
+    )
+    _args, kwargs = mock_service.create.await_args
+    assert kwargs["bearer_token"] == "user-token"
+    assert kwargs["session_id"] == "sess-1"
+
+
+def test_get_service_returns_instruction_service() -> None:
+    from inst.routes import get_service
+
+    assert isinstance(get_service(), InstructionService)

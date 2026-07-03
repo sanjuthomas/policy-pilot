@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from inst.constants import INSTRUCTION_CURRENT_OUT
 from inst.models.api import CreateInstructionRequest, Subject
 from inst.models.enums import InstructionStatus
 from inst.models.instruction import UserReference
@@ -67,6 +68,6 @@ def test_to_response(sample_instruction) -> None:
     assert response.instruction_id == "instr-001"
     assert response.version_number == 3
     assert response.record_in == "2025-01-01T00:00:00Z"
-    assert response.record_out is None
+    assert response.record_out == INSTRUCTION_CURRENT_OUT
     assert response.status == "DRAFT"
     assert response.charge_bearer == "SHAR"

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Subject(BaseModel):
@@ -35,6 +35,10 @@ class CreatePaymentRequest(BaseModel):
     amount: float = Field(gt=0)
 
 
+class DeletePaymentRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=1024)
+
+
 class RejectPaymentRequest(BaseModel):
     reason: str = Field(min_length=1, max_length=1024)
 
@@ -58,7 +62,12 @@ class LifecycleEvent(BaseModel):
 
 
 class PaymentResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     payment_id: str
+    version_number: int
+    record_in: str = Field(serialization_alias="in")
+    record_out: str | None = Field(default=None, serialization_alias="out")
     instruction_id: str
     instruction_version: int
     status: str

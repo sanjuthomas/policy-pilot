@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -10,11 +11,11 @@ from ps.ilm_client import InstructionNotFoundError
 from ps.models.api import Subject
 from ps.models.enums import PaymentStatus
 from ps.routes import get_service, router
-from ps.service import PaymentService
+from ps.service import InvalidStateTransitionError, PaymentService
 
 
 @pytest.fixture
-def api_client(subject: Subject, payment) -> TestClient:
+def api_client(subject: Subject, versioned_payment) -> TestClient:
     mock_service = AsyncMock()
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
@@ -22,7 +23,7 @@ def api_client(subject: Subject, payment) -> TestClient:
     app.dependency_overrides[get_service] = lambda: mock_service
     client = TestClient(app)
     client.mock_service = mock_service  # type: ignore[attr-defined]
-    client.payment = payment  # type: ignore[attr-defined]
+    client.versioned_payment = versioned_payment  # type: ignore[attr-defined]
     return client
 
 
@@ -34,15 +35,15 @@ def _headers() -> dict[str, str]:
     }
 
 
-def test_create_payment_success(api_client: TestClient, payment) -> None:
-    api_client.mock_service.create.return_value = payment
+def test_create_payment_success(api_client: TestClient, versioned_payment) -> None:
+    api_client.mock_service.create.return_value = versioned_payment
     response = api_client.post(
         "/api/v1/payments",
         json={"instruction_id": "instr-001", "value_date": "2026-07-01", "amount": 100.0},
         headers=_headers(),
     )
     assert response.status_code == 201
-    assert response.json()["payment_id"] == payment.payment_id
+    assert response.json()["payment_id"] == versioned_payment.payment.payment_id
 
 
 def test_create_payment_not_found(api_client: TestClient) -> None:
@@ -85,22 +86,28 @@ def test_create_payment_bad_gateway(api_client: TestClient) -> None:
     assert response.status_code == 502
 
 
-def test_list_payments(api_client: TestClient, payment) -> None:
-    api_client.mock_service.list.return_value = [payment]
+def test_list_payments(api_client: TestClient, versioned_payment) -> None:
+    api_client.mock_service.list.return_value = [versioned_payment]
     response = api_client.get("/api/v1/payments", headers=_headers())
     assert response.status_code == 200
     assert len(response.json()) == 1
 
 
-def test_get_payment_forbidden(api_client: TestClient, payment) -> None:
+def test_get_payment_forbidden(api_client: TestClient, versioned_payment) -> None:
     api_client.mock_service.get.side_effect = PermissionError("denied")
-    response = api_client.get(f"/api/v1/payments/{payment.payment_id}", headers=_headers())
+    response = api_client.get(
+        f"/api/v1/payments/{versioned_payment.payment.payment_id}",
+        headers=_headers(),
+    )
     assert response.status_code == 403
 
 
-def test_get_payment(api_client: TestClient, payment) -> None:
-    api_client.mock_service.get.return_value = payment
-    response = api_client.get(f"/api/v1/payments/{payment.payment_id}", headers=_headers())
+def test_get_payment(api_client: TestClient, versioned_payment) -> None:
+    api_client.mock_service.get.return_value = versioned_payment
+    response = api_client.get(
+        f"/api/v1/payments/{versioned_payment.payment.payment_id}",
+        headers=_headers(),
+    )
     assert response.status_code == 200
 
 
@@ -110,80 +117,98 @@ def test_get_payment_not_found(api_client: TestClient) -> None:
     assert response.status_code == 404
 
 
-def test_submit_payment(api_client: TestClient, payment) -> None:
-    payment.status = PaymentStatus.SUBMITTED
-    api_client.mock_service.submit.return_value = payment
+def test_submit_payment(api_client: TestClient, versioned_payment) -> None:
+    submitted = replace(
+        versioned_payment,
+        payment=versioned_payment.payment.model_copy(
+            update={"status": PaymentStatus.SUBMITTED}
+        ),
+    )
+    api_client.mock_service.submit.return_value = submitted
     response = api_client.post(
-        f"/api/v1/payments/{payment.payment_id}/submit",
+        f"/api/v1/payments/{versioned_payment.payment.payment_id}/submit",
         headers={**_headers(), "Authorization": "Bearer user-token"},
     )
     assert response.status_code == 200
 
 
-def test_approve_payment(api_client: TestClient, payment) -> None:
-    payment.status = PaymentStatus.APPROVED
-    api_client.mock_service.approve.return_value = payment
+def test_approve_payment(api_client: TestClient, versioned_payment) -> None:
+    approved = replace(
+        versioned_payment,
+        payment=versioned_payment.payment.model_copy(
+            update={"status": PaymentStatus.APPROVED}
+        ),
+    )
+    api_client.mock_service.approve.return_value = approved
     response = api_client.post(
-        f"/api/v1/payments/{payment.payment_id}/approve",
+        f"/api/v1/payments/{versioned_payment.payment.payment_id}/approve",
         headers=_headers(),
     )
     assert response.status_code == 200
 
 
-def test_reject_payment(api_client: TestClient, payment) -> None:
-    payment.status = PaymentStatus.REJECTED
-    api_client.mock_service.reject.return_value = payment
+def test_reject_payment(api_client: TestClient, versioned_payment) -> None:
+    rejected = replace(
+        versioned_payment,
+        payment=versioned_payment.payment.model_copy(
+            update={"status": PaymentStatus.REJECTED}
+        ),
+    )
+    api_client.mock_service.reject.return_value = rejected
     response = api_client.post(
-        f"/api/v1/payments/{payment.payment_id}/reject",
+        f"/api/v1/payments/{versioned_payment.payment.payment_id}/reject",
         json={"reason": "docs missing"},
         headers=_headers(),
     )
     assert response.status_code == 200
 
 
-def test_submit_payment_errors(api_client: TestClient, payment) -> None:
+def test_submit_payment_errors(api_client: TestClient, versioned_payment) -> None:
+    payment_id = versioned_payment.payment.payment_id
     api_client.mock_service.submit.side_effect = LookupError("missing")
     response = api_client.post(
-        f"/api/v1/payments/{payment.payment_id}/submit",
+        f"/api/v1/payments/{payment_id}/submit",
         headers=_headers(),
     )
     assert response.status_code == 404
 
     api_client.mock_service.submit.side_effect = PermissionError("denied")
     response = api_client.post(
-        f"/api/v1/payments/{payment.payment_id}/submit",
+        f"/api/v1/payments/{payment_id}/submit",
         headers=_headers(),
     )
     assert response.status_code == 403
 
-    api_client.mock_service.submit.side_effect = ValueError("bad state")
+    api_client.mock_service.submit.side_effect = InvalidStateTransitionError("bad state")
     response = api_client.post(
-        f"/api/v1/payments/{payment.payment_id}/submit",
+        f"/api/v1/payments/{payment_id}/submit",
         headers=_headers(),
     )
     assert response.status_code == 409
 
 
-def test_approve_payment_errors(api_client: TestClient, payment) -> None:
+def test_approve_payment_errors(api_client: TestClient, versioned_payment) -> None:
+    payment_id = versioned_payment.payment.payment_id
     api_client.mock_service.approve.side_effect = LookupError("missing")
     response = api_client.post(
-        f"/api/v1/payments/{payment.payment_id}/approve",
+        f"/api/v1/payments/{payment_id}/approve",
         headers=_headers(),
     )
     assert response.status_code == 404
 
     api_client.mock_service.approve.side_effect = PermissionError("denied")
     response = api_client.post(
-        f"/api/v1/payments/{payment.payment_id}/approve",
+        f"/api/v1/payments/{payment_id}/approve",
         headers=_headers(),
     )
     assert response.status_code == 403
 
 
-def test_reject_payment_errors(api_client: TestClient, payment) -> None:
+def test_reject_payment_errors(api_client: TestClient, versioned_payment) -> None:
+    payment_id = versioned_payment.payment.payment_id
     api_client.mock_service.reject.side_effect = PermissionError("denied")
     response = api_client.post(
-        f"/api/v1/payments/{payment.payment_id}/reject",
+        f"/api/v1/payments/{payment_id}/reject",
         json={"reason": "n/a"},
         headers=_headers(),
     )

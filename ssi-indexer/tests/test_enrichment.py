@@ -8,7 +8,6 @@ from etl.enrichment import (
     build_search_text,
     enrich_document,
 )
-
 from helpers import sample_event as _sample_event
 from helpers import sample_instruction as _sample_instruction
 

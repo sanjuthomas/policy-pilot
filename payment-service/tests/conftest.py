@@ -8,6 +8,17 @@ import pytest
 from ps.models.api import Subject
 from ps.models.enums import PaymentStatus
 from ps.models.payment import Payment
+from ps.storage import VersionedPayment
+
+
+@pytest.fixture
+def versioned_payment(payment: Payment) -> VersionedPayment:
+    return VersionedPayment(
+        payment=payment,
+        version_number=1,
+        valid_in=payment.created_at.replace(tzinfo=None),
+        valid_out=None,
+    )
 
 
 @pytest.fixture(scope="session", autouse=True)

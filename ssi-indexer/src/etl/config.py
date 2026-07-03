@@ -24,13 +24,13 @@ class Settings(BaseSettings):
 
     kafka_enabled: bool = True
     kafka_bootstrap_servers: str = "kafka:9092"
-    kafka_instruction_security_events_topic: str = "instruction-security-events"
+    kafka_instruction_security_events_topic: str = "instruction_security_events"
     kafka_instruction_security_events_consumer_group: str = "instruction-security-event-etl"
-    kafka_instruction_topic: str = "ssi-instructions"
+    kafka_instruction_topic: str = "instructions"
     kafka_instruction_consumer_group: str = "ssi-instruction-etl"
-    kafka_payment_security_events_topic: str = "payment-security-events"
+    kafka_payment_security_events_topic: str = "payment_security_events"
     kafka_payment_security_events_consumer_group: str = "payment-security-event-etl"
-    kafka_payments_topic: str = "ssi-payments"
+    kafka_payments_topic: str = "payments"
     kafka_payments_consumer_group: str = "payment-fact-etl"
 
     neo4j_uri: str = "bolt://neo4j:7687"
@@ -38,11 +38,8 @@ class Settings(BaseSettings):
     neo4j_password: str = "devpassword"
     graph_model_dir: str = "/app/neo4j-graph-model"
 
-    qdrant_url: str = "http://qdrant:6333"
-    qdrant_collection: str = "ssi_search_index"
-    qdrant_dense_vector_name: str = "dense"
-    qdrant_bm25_vector_name: str = "bm25"
-    qdrant_bm25_model: str = "qdrant/bm25"
+    multimodal_vector_index: str = "multimodal_embedding"
+    multimodal_fulltext_index: str = "multimodal_search_text"
 
     ollama_url: str = "http://host.docker.internal:11434"
     ollama_embedding_model: str = "qwen3-embedding:0.6b"

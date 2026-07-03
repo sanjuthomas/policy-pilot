@@ -1,7 +1,8 @@
 entity: instruction_security_event
 wired: true
 description: >
-  Instruction security events (instruction-security-events Kafka topic).
+  Instruction security events (instruction_security_events Kafka topic).
+  Mongo _id is the sequence event id; etl.mongo_cdc exposes it as event_id.
   context_root is the denormalized merged dict from build_merged_context().
 
 context_root: merged
@@ -63,7 +64,7 @@ includes:
   - path: effective_date
   - path: end_date
 
-# Documented for readability — still present in Qdrant payload / merged, not embedded
+# Documented for readability — still present in multimodal payload / merged, not embedded
 excludes:
   - event_id
   - instruction_id

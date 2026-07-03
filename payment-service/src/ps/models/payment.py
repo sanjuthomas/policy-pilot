@@ -29,7 +29,6 @@ class Payment(BaseModel):
     payment_id: str = Field(default_factory=lambda: str(uuid4()))
     instruction_id: str
     instruction_version: int
-    version_number: int = 1
     status: PaymentStatus = PaymentStatus.DRAFT
     amount: float
     currency: str
@@ -86,15 +85,12 @@ class Payment(BaseModel):
         )
         return p
 
-    def sync_version_number(self) -> None:
-        """Align version_number with lifecycle events (one version per mutation)."""
-        self.version_number = max(1, len(self.lifecycle_events))
-
     def to_opa_payment(self, *, instruction_end_date: str, instruction_status: str) -> dict:
         return {
             "payment_id": self.payment_id,
             "instruction_id": self.instruction_id,
             "instruction_version": self.instruction_version,
+            "status": self.status.value,
             "amount": self.amount,
             "currency": self.currency,
             "instruction_status": instruction_status,

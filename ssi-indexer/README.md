@@ -1,6 +1,6 @@
 # SSI Indexer
 
-Kafka consumers that index instruction and payment facts into **Qdrant** (dense + BM25 hybrid) and **Neo4j** (graph projection).
+Kafka consumers that index instruction and payment facts into **Neo4j** — both the **graph projection** and a **multimodal store** (dense vector + fulltext BM25 on `MultimodalDocument` nodes).
 
 Also exposes a **Search Console** UI for manual vector / BM25 / hybrid / Neo4j queries.
 
@@ -10,15 +10,15 @@ http://localhost:8090
 
 ## Pipelines
 
-Four independent consumers run in the same process. Every Kafka message carries a **full snapshot** — the ETL makes no API calls to ILM or the payment service.
+Four independent consumers run in the same process. Kafka messages are published by **MongoDB Kafka Connect** (`publish.full.document.only=true`) from the domain Mongo collections — the ETL makes no API calls to ILM or the payment service. `etl.mongo_cdc` normalizes versioned Mongo rows and security-event `_id` values into the shapes the pipelines expect.
 
 ```mermaid
 flowchart TB
-    K1[instruction-security-events] --> P1[InstructionSecurityEventPipeline]
-    K2[ssi-instructions] --> P2[InstructionPipeline]
-    K3[payment-security-events] --> P3[PaymentSecurityEventPipeline]
-    K4[ssi-payments] --> P4[PaymentFactPipeline]
-    P1 --> NEO[Neo4j upsert]
+    K1[instruction_security_events] --> P1[InstructionSecurityEventPipeline]
+    K2[instructions] --> P2[InstructionPipeline]
+    K3[payment_security_events] --> P3[PaymentSecurityEventPipeline]
+    K4[payments] --> P4[PaymentFactPipeline]
+    P1 --> NEO[Neo4j graph upsert]
     P2 --> NEO
     P3 --> NEO
     P4 --> NEO
@@ -26,25 +26,25 @@ flowchart TB
     P2 --> OLL
     P3 --> OLL
     P4 --> OLL
-    OLL --> QD[Qdrant ssi_search_index]
+    OLL --> MM[Neo4j MultimodalDocument]
 ```
 
-| Pipeline | Kafka topic | Consumer group | Qdrant `source` tag |
-|----------|-------------|----------------|---------------------|
-| `InstructionSecurityEventPipeline` | `instruction-security-events` | `instruction-security-event-etl` | `instruction_security_event` |
-| `InstructionPipeline` | `ssi-instructions` | `ssi-instruction-etl` | `instruction_state` |
-| `PaymentSecurityEventPipeline` | `payment-security-events` | `payment-security-event-etl` | `payment_security_event` |
-| `PaymentFactPipeline` | `ssi-payments` | `payment-fact-etl` | `payment_fact` |
+| Pipeline | Kafka topic | Consumer group | Multimodal `source` tag |
+|----------|-------------|----------------|-------------------------|
+| `InstructionSecurityEventPipeline` | `instruction_security_events` | `instruction-security-event-etl` | `instruction_security_event` |
+| `InstructionPipeline` | `instructions` | `ssi-instruction-etl` | `instruction_state` |
+| `PaymentSecurityEventPipeline` | `payment_security_events` | `payment-security-event-etl` | `payment_security_event` |
+| `PaymentFactPipeline` | `payments` | `payment-fact-etl` | `payment_fact` |
 
 For each message:
 
 1. Parse the fact event (security event or state snapshot).
 2. Upsert Neo4j nodes/relationships (see `neo4j-graph-model/`). User upserts also write `REPORTS_TO` from `supervisor_id`.
-3. Embed `search_text` with Ollama **`qwen3-embedding:0.6b`** → upsert Qdrant hybrid point.
+3. Embed `search_text` with Ollama **`qwen3-embedding:0.6b`** → upsert a `MultimodalDocument` with `embedding` + `search_text`.
 
 ## Enriched document shape (instruction security events)
 
-Stored in Qdrant payload (and used for search text):
+Stored in the multimodal document payload (and used for search text):
 
 | Field | Content |
 |-------|---------|
@@ -59,21 +59,21 @@ Stored in Qdrant payload (and used for search text):
 | Pipeline | Extra indexed fields |
 |----------|---------------------|
 | Instruction security events | `merged.authorization_summary`, `merged.authorization_basis`, `merged.timestamp` |
-| Instruction state (`ssi-instructions`) | `approved_at`, `authorization_summary`, `authorization_basis` on Qdrant + Neo4j `InstructionVersion` |
+| Instruction state (`instructions`) | `approved_at`, `authorization_summary`, `authorization_basis` on multimodal doc + Neo4j `InstructionVersion` |
 | Payment security events / facts | Same denormalization pattern |
 
-On APPROVE instruction security events, the pipeline **patches** the existing `instruction_state` Qdrant point with approval authorization. Non-APPROVE instruction facts preserve existing approval fields when upserting.
+On APPROVE instruction security events, the pipeline **patches** the existing `instruction_state` multimodal document with approval authorization. Non-APPROVE instruction facts preserve existing approval fields when upserting.
 
 ## Search Console
 
 | Mode | Backend |
 |------|---------|
-| Hybrid | Qdrant dense + BM25 → RRF |
-| Vector | Qdrant dense only |
-| BM25 | Qdrant sparse only |
+| Hybrid | Neo4j vector + fulltext → client-side RRF |
+| Vector | Neo4j vector index (`multimodal_embedding`) |
+| BM25 | Neo4j fulltext index (`multimodal_search_text`) |
 | Neo4j | Text search on `SecurityEvent` nodes |
 
-Component status bar shows Kafka, Qdrant, Neo4j, and Ollama health.
+Component status bar shows Kafka, multimodal vector/fulltext indexes, Neo4j graph, and Ollama health.
 
 ## Configuration (Docker)
 
@@ -81,14 +81,14 @@ Copy `.env.example` to `.env` at the repo root to override defaults. Docker Comp
 
 | Variable | Default |
 |----------|---------|
-| `KAFKA_INSTRUCTION_SECURITY_EVENTS_TOPIC` | `instruction-security-events` |
-| `KAFKA_INSTRUCTION_SECURITY_EVENTS_CONSUMER_GROUP` | `instruction-security-event-etl` |
-| `KAFKA_INSTRUCTION_TOPIC` | `ssi-instructions` |
-| `KAFKA_PAYMENT_SECURITY_EVENTS_TOPIC` | `payment-security-events` |
-| `KAFKA_PAYMENTS_TOPIC` | `ssi-payments` |
+| `KAFKA_INSTRUCTION_SECURITY_EVENTS_TOPIC` | `instruction_security_events` |
+| `KAFKA_INSTRUCTION_TOPIC` | `instructions` |
+| `KAFKA_PAYMENT_SECURITY_EVENTS_TOPIC` | `payment_security_events` |
+| `KAFKA_PAYMENTS_TOPIC` | `payments` |
 | `OLLAMA_EMBEDDING_MODEL` | `qwen3-embedding:0.6b` |
 | `OLLAMA_CHAT_MODEL` | `hmahmood/neo4j-gemma-3-27b-inst-q8` |
-| `QDRANT_COLLECTION` | `ssi_search_index` |
+| `MULTIMODAL_VECTOR_INDEX` | `multimodal_embedding` |
+| `MULTIMODAL_FULLTEXT_INDEX` | `multimodal_search_text` |
 | `NEO4J_URI` | `bolt://neo4j:7687` |
 
 Requires **host Ollama** (`OLLAMA_URL=http://host.docker.internal:11434`).
@@ -105,34 +105,34 @@ ssi-indexer   # serves on :8090
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/stats` | Component health + Qdrant point counts |
+| GET | `/api/stats` | Component health + multimodal document counts |
 | POST | `/api/search/hybrid` | Hybrid search |
 | POST | `/api/search/vector` | Dense vector search |
-| POST | `/api/search/bm25` | BM25 search |
+| POST | `/api/search/bm25` | Fulltext BM25 search |
 | GET | `/api/graph/events` | Neo4j event text search |
 | GET | `/api/graph/events/{event_id}` | Event subgraph |
 
 ## Reset consumer offsets
 
-If Qdrant/Neo4j are empty but Kafka has messages, reset each consumer group:
+If Neo4j is empty but Kafka has messages, reset each consumer group:
 
 ```bash
 docker compose stop ssi-indexer
 
 for TOPIC_GROUP in \
-  "instruction-security-events:instruction-security-event-etl" \
-  "ssi-instructions:ssi-instruction-etl" \
-  "payment-security-events:payment-security-event-etl" \
-  "ssi-payments:payment-fact-etl"
+  "instruction_security_events:instruction-security-event-etl" \
+  "instructions:ssi-instruction-etl" \
+  "payment_security_events:payment-security-event-etl" \
+  "payments:payment-fact-etl"
 do
   TOPIC="${TOPIC_GROUP%%:*}"
   GROUP="${TOPIC_GROUP##*:}"
   docker exec kafka /opt/kafka/bin/kafka-consumer-groups.sh \
-    --bootstrap-server localhost:9092 \
+    --bootstrap-server kafka:9092 \
     --group "$GROUP" \
-    --reset-offsets --to-earliest \
-    --topic "$TOPIC" --execute
+    --topic "$TOPIC" \
+    --reset-offsets --to-earliest --execute
 done
 
-docker compose up -d ssi-indexer
+docker compose start ssi-indexer
 ```

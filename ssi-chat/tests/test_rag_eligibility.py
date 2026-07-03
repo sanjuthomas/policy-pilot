@@ -12,7 +12,7 @@ from chat_application.rag import RagService
 def rag_service() -> RagService:
     return RagService(
         ollama=MagicMock(),
-        qdrant=MagicMock(),
+        multimodal=MagicMock(),
         neo4j=MagicMock(),
     )
 

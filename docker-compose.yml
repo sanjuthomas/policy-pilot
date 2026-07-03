@@ -75,24 +75,96 @@ services:
       - |
         /opt/kafka/bin/kafka-topics.sh --create --if-not-exists \
           --bootstrap-server kafka:9092 \
-          --topic instruction-security-events \
+          --topic instruction_security_events \
           --partitions 4 \
           --replication-factor 1
         /opt/kafka/bin/kafka-topics.sh --create --if-not-exists \
           --bootstrap-server kafka:9092 \
-          --topic ssi-instructions \
+          --topic instructions \
           --partitions 4 \
           --replication-factor 1
         /opt/kafka/bin/kafka-topics.sh --create --if-not-exists \
           --bootstrap-server kafka:9092 \
-          --topic ssi-payments \
+          --topic payments \
           --partitions 4 \
           --replication-factor 1
         /opt/kafka/bin/kafka-topics.sh --create --if-not-exists \
           --bootstrap-server kafka:9092 \
-          --topic payment-security-events \
+          --topic payment_security_events \
           --partitions 4 \
           --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists \
+          --bootstrap-server kafka:9092 \
+          --topic connect-configs \
+          --partitions 1 \
+          --replication-factor 1 \
+          --config cleanup.policy=compact
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists \
+          --bootstrap-server kafka:9092 \
+          --topic connect-offsets \
+          --partitions 1 \
+          --replication-factor 1 \
+          --config cleanup.policy=compact
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists \
+          --bootstrap-server kafka:9092 \
+          --topic connect-status \
+          --partitions 1 \
+          --replication-factor 1 \
+          --config cleanup.policy=compact
+    networks:
+      - security-event-net
+
+  kafka-connect:
+    build:
+      context: ./kafka-connect
+      dockerfile: Dockerfile
+    container_name: kafka-connect
+    ports:
+      - "8083:8083"
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: kafka:9092
+      CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
+      CONNECT_GROUP_ID: mongo-cdc-connect
+      CONNECT_CONFIG_STORAGE_TOPIC: connect-configs
+      CONNECT_OFFSET_STORAGE_TOPIC: connect-offsets
+      CONNECT_STATUS_STORAGE_TOPIC: connect-status
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/confluent-hub-components
+      CONNECT_REST_PORT: 8083
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      mongodb:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8083/connectors >/dev/null"]
+      interval: 10s
+      timeout: 10s
+      retries: 18
+      start_period: 90s
+    restart: unless-stopped
+    networks:
+      - security-event-net
+
+  kafka-connect-init:
+    image: curlimages/curl:8.12.1
+    container_name: kafka-connect-init
+    depends_on:
+      kafka-connect:
+        condition: service_healthy
+    volumes:
+      - ./kafka-connect/connectors:/connectors:ro
+      - ./kafka-connect/register-connectors.sh:/register-connectors.sh:ro
+    entrypoint: ["/bin/sh", "/register-connectors.sh"]
+    restart: "no"
     networks:
       - security-event-net
 
@@ -123,18 +195,6 @@ services:
     volumes:
       - ./opa-policy-seed/policies:/policies:ro
     restart: "no"
-    networks:
-      - security-event-net
-
-  qdrant:
-    image: qdrant/qdrant:v1.18.2
-    container_name: qdrant
-    ports:
-      - "6333:6333"
-      - "6334:6334"
-    volumes:
-      - qdrant-data:/qdrant/storage
-    restart: unless-stopped
     networks:
       - security-event-net
 
@@ -214,7 +274,7 @@ services:
       MONGODB_URI: mongodb://mongodb:27017/?replicaSet=rs0
       MONGODB_DATABASE: ssi_cash_instructions
       SECURITY_EVENTS_DATABASE: security_events
-      SECURITY_EVENTS_COLLECTION: instruction-service
+      SECURITY_EVENTS_COLLECTION: instruction_service
       AUTHORIZATION_SERVICE_URL: http://authorization-service:8094
       SERVICE_USER_ID: svc-instruction
       SERVICE_USER_PASSWORD: Password1!
@@ -223,10 +283,6 @@ services:
       ZITADEL_INTERNAL_URL: http://zitadel-proxy
       ZITADEL_SERVICE_PAT_FILE: /zitadel/bootstrap/login-client.pat
       AUTH_MODE: jwt
-      KAFKA_ENABLED: "true"
-      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      KAFKA_SECURITY_EVENTS_TOPIC: instruction-security-events
-      KAFKA_INSTRUCTION_TOPIC: ssi-instructions
       SEQUENCE_SERVICE_URL: http://sequence-service:8095
     volumes:
       - zitadel-bootstrap:/zitadel/bootstrap:ro
@@ -237,8 +293,6 @@ services:
       mongo-init:
         condition: service_completed_successfully
       opa-policy-seed:
-        condition: service_completed_successfully
-      kafka-init:
         condition: service_completed_successfully
       sequence-service:
         condition: service_started
@@ -258,21 +312,18 @@ services:
       OTEL_SERVICE_NAME: ssi-indexer
       KAFKA_ENABLED: "true"
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      KAFKA_INSTRUCTION_SECURITY_EVENTS_TOPIC: instruction-security-events
+      KAFKA_INSTRUCTION_SECURITY_EVENTS_TOPIC: instruction_security_events
       KAFKA_INSTRUCTION_SECURITY_EVENTS_CONSUMER_GROUP: instruction-security-event-etl
-      KAFKA_INSTRUCTION_TOPIC: ssi-instructions
+      KAFKA_INSTRUCTION_TOPIC: instructions
       KAFKA_INSTRUCTION_CONSUMER_GROUP: ssi-instruction-etl
-      KAFKA_PAYMENT_SECURITY_EVENTS_TOPIC: payment-security-events
+      KAFKA_PAYMENT_SECURITY_EVENTS_TOPIC: payment_security_events
       KAFKA_PAYMENT_SECURITY_EVENTS_CONSUMER_GROUP: payment-security-event-etl
-      KAFKA_PAYMENTS_TOPIC: ssi-payments
+      KAFKA_PAYMENTS_TOPIC: payments
       KAFKA_PAYMENTS_CONSUMER_GROUP: payment-fact-etl
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: neo4j
       NEO4J_PASSWORD: devpassword
       GRAPH_MODEL_DIR: /app/neo4j-graph-model
-      QDRANT_URL: http://qdrant:6333
-      QDRANT_COLLECTION: ssi_search_index
-      QDRANT_BM25_MODEL: qdrant/bm25
       OIDC_ISSUER_URL: http://localhost:8080
       OIDC_INTERNAL_URL: http://zitadel-api:8080
       ZITADEL_INTERNAL_URL: http://zitadel-api:8080
@@ -288,10 +339,10 @@ services:
     depends_on:
       kafka-init:
         condition: service_completed_successfully
+      kafka-connect-init:
+        condition: service_completed_successfully
       neo4j:
         condition: service_healthy
-      qdrant:
-        condition: service_started
       instruction-service:
         condition: service_started
       payment-service:
@@ -316,7 +367,7 @@ services:
       MONGODB_DATABASE: ssi_cash_activities
       MONGODB_COLLECTION: payments
       SECURITY_EVENTS_DATABASE: security_events
-      SECURITY_EVENTS_COLLECTION: payment-service
+      SECURITY_EVENTS_COLLECTION: payment_service
       AUTHORIZATION_SERVICE_URL: http://authorization-service:8094
       ILM_URL: http://instruction-service:8000
       SERVICE_USER_ID: svc-payment
@@ -326,10 +377,6 @@ services:
       ZITADEL_INTERNAL_URL: http://zitadel-proxy
       ZITADEL_SERVICE_PAT_FILE: /zitadel/bootstrap/login-client.pat
       AUTH_MODE: jwt
-      KAFKA_ENABLED: "true"
-      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      KAFKA_PAYMENTS_TOPIC: ssi-payments
-      KAFKA_SECURITY_EVENTS_TOPIC: payment-security-events
       SEQUENCE_SERVICE_URL: http://sequence-service:8095
     volumes:
       - zitadel-bootstrap:/zitadel/bootstrap:ro
@@ -340,8 +387,6 @@ services:
       mongo-init:
         condition: service_completed_successfully
       opa-policy-seed:
-        condition: service_completed_successfully
-      kafka-init:
         condition: service_completed_successfully
       instruction-service:
         condition: service_started
@@ -452,8 +497,6 @@ services:
     environment:
       <<: *otel-ollama-environment
       OTEL_SERVICE_NAME: ssi-chat
-      QDRANT_URL: http://qdrant:6333
-      QDRANT_COLLECTION: ssi_search_index
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: neo4j
       NEO4J_PASSWORD: devpassword
@@ -475,8 +518,6 @@ services:
       - ./zitadel-seed:/app/zitadel-seed:ro
       - ./ssi-chat/src/chat_application/static:/usr/local/lib/python3.12/site-packages/chat_application/static:ro
     depends_on:
-      qdrant:
-        condition: service_started
       neo4j:
         condition: service_healthy
       payment-service:
@@ -641,7 +682,6 @@ networks:
 
 volumes:
   kafka-data:
-  qdrant-data:
   neo4j-data:
   mongo-data:
   zitadel-postgres-data:

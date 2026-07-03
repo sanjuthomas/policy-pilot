@@ -43,14 +43,12 @@ async def connect() -> None:
     db = get_database()
     collection = db.instructions
     await collection.create_index(
-        [("instruction_id", 1), ("version_number", 1)],
+        [("_id", 1), ("out", 1)],
         unique=True,
+        name="instruction_id_out_unique",
     )
     await collection.create_index(
-        [("instruction_id", 1)],
-        unique=True,
-        partialFilterExpression={"out": None},
-        name="instruction_id_current_unique",
+        [("out", 1), ("version_number", 1)],
     )
     await collection.create_index("status")
     await collection.create_index("owning_lob")

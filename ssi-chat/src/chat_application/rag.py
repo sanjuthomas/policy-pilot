@@ -42,9 +42,9 @@ from chat_application.formatting import (
     humanize_policy_basis,
 )
 from chat_application.models import ChatMessage, ChatResponse, SearchMode, SourceHit
+from chat_application.multimodal_search import MultimodalSearchClient
 from chat_application.neo4j import Neo4jClient
 from chat_application.ollama import OllamaClient
-from chat_application.qdrant import QdrantSearchClient
 from chat_application.reranker import RankedHit, graph_rows_to_hits, rrf_merge
 from chat_application.response_formatter import format_chat_response
 
@@ -370,11 +370,11 @@ class RagService:
         self,
         *,
         ollama: OllamaClient,
-        qdrant: QdrantSearchClient,
+        multimodal: MultimodalSearchClient,
         neo4j: Neo4jClient,
     ) -> None:
         self.ollama = ollama
-        self.qdrant = qdrant
+        self.multimodal = multimodal
         self.neo4j = neo4j
         self._schema = load_graph_schema()
         self._eligibility = EligibilityClient()
@@ -390,9 +390,9 @@ class RagService:
     ) -> ChatResponse:
         """Run the full RAG pipeline.
 
-        mode="events"       — instruction + payment security events in Qdrant
-        mode="instructions" — instruction_state points only
-        mode="payments"     — payment_fact points only
+        mode="events"       — instruction + payment security events in multimodal store
+        mode="instructions" — instruction_state documents only
+        mode="payments"     — payment_fact documents only
         mode="all"          — all points (no source filter)
         """
         started = time.perf_counter()
@@ -433,25 +433,25 @@ class RagService:
 
         limit = settings.retrieval_limit
 
-        # Map mode to Qdrant source filter tag
-        qdrant_source: str | None
+        # Map mode to multimodal source filter tag
+        search_source: str | None
         if mode == "events":
-            qdrant_source = "security_events"
+            search_source = "security_events"
         elif mode == "instructions":
-            qdrant_source = "instruction_state"
+            search_source = "instruction_state"
         elif mode == "payments":
-            qdrant_source = "payment"
+            search_source = "payment"
         else:
-            qdrant_source = None  # no filter — search everything
+            search_source = None  # no filter — search everything
 
         event_ids = extract_uuids(message)
         entity_ids = extract_entity_ids(message)
 
         vector_task = asyncio.create_task(
-            self._search_vector(message, limit, source=qdrant_source)
+            self._search_vector(message, limit, source=search_source)
         )
         bm25_task = asyncio.create_task(
-            asyncio.to_thread(self._search_bm25, message, limit, qdrant_source)
+            self._search_bm25(message, limit, search_source)
         )
         cypher_task = asyncio.create_task(self._search_graph(message, mode=mode))
         exact_task = (
@@ -553,18 +553,16 @@ class RagService:
     ) -> list[dict[str, Any]]:
         try:
             vector = await self.ollama.embed(query)
-            return await asyncio.to_thread(
-                self.qdrant.search_vector, vector, limit=limit, source=source
-            )
+            return await self.multimodal.search_vector(vector, limit=limit, source=source)
         except Exception as exc:
             logger.warning("vector search failed: %s", exc)
             return []
 
-    def _search_bm25(
+    async def _search_bm25(
         self, query: str, limit: int, source: str | None = None
     ) -> list[dict[str, Any]]:
         try:
-            return self.qdrant.search_bm25(query, limit=limit, source=source)
+            return await self.multimodal.search_bm25(query, limit=limit, source=source)
         except Exception as exc:
             logger.warning("BM25 search failed: %s", exc)
             return []
@@ -576,9 +574,9 @@ class RagService:
         graph_rows: list[dict[str, Any]] = []
 
         for event_id in event_ids:
-            qdrant_hit = await asyncio.to_thread(self.qdrant.fetch_by_event_id, event_id)
-            if qdrant_hit is not None:
-                hits.append(qdrant_hit)
+            store_hit = await self.multimodal.fetch_by_event_id(event_id)
+            if store_hit is not None:
+                hits.append(store_hit)
 
             try:
                 rows = await self.neo4j.lookup_instruction_for_event(event_id)
@@ -599,15 +597,13 @@ class RagService:
         approval_question = "approv" in message.lower()
 
         for instruction_id in instruction_ids:
-            state_hit = await asyncio.to_thread(
-                self.qdrant.fetch_by_instruction_id, instruction_id
-            )
+            state_hit = await self.multimodal.fetch_by_instruction_id(instruction_id)
             if state_hit is not None:
                 hits.append(state_hit)
 
             if approval_question:
-                approve_hits = await asyncio.to_thread(
-                    self.qdrant.fetch_instruction_approve_events, instruction_id
+                approve_hits = await self.multimodal.fetch_instruction_approve_events(
+                    instruction_id
                 )
                 hits.extend(approve_hits)
 
@@ -621,23 +617,19 @@ class RagService:
         via_instruction = is_instruction_approver_via_payment_question(message)
 
         for payment_id in payment_ids:
-            fact_hit = await asyncio.to_thread(
-                self.qdrant.fetch_by_payment_id, payment_id
-            )
+            fact_hit = await self.multimodal.fetch_by_payment_id(payment_id)
             if fact_hit is not None:
                 hits.append(fact_hit)
 
             if approval_question and via_instruction:
                 instruction_id = (fact_hit or {}).get("instruction_id")
                 if instruction_id:
-                    approve_hits = await asyncio.to_thread(
-                        self.qdrant.fetch_instruction_approve_events, instruction_id
+                    approve_hits = await self.multimodal.fetch_instruction_approve_events(
+                        instruction_id
                     )
                     hits.extend(approve_hits)
             elif approval_question:
-                approve_hits = await asyncio.to_thread(
-                    self.qdrant.fetch_payment_approve_events, payment_id
-                )
+                approve_hits = await self.multimodal.fetch_payment_approve_events(payment_id)
                 hits.extend(approve_hits)
 
         return hits

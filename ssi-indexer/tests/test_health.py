@@ -6,13 +6,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from etl.config import settings
 from etl.health import (
-    _qdrant_vector_names,
     _status,
     check_kafka,
+    check_multimodal_fulltext,
+    check_multimodal_vector,
     check_neo4j,
     check_ollama,
-    check_qdrant_bm25,
-    check_qdrant_vector,
     component_status,
 )
 
@@ -20,36 +19,6 @@ from etl.health import (
 def test_status_helper():
     result = _status(True, "up", detail="ok", count=5)
     assert result == {"ok": True, "status": "up", "detail": "ok", "count": 5}
-
-
-def test_qdrant_vector_names_dict():
-    params = MagicMock()
-    params.vectors = {"dense": MagicMock(), "other": MagicMock()}
-    params.sparse_vectors = {"bm25": MagicMock()}
-    info = MagicMock()
-    info.config.params = params
-
-    dense, sparse = _qdrant_vector_names(info)
-    assert dense == {"dense", "other"}
-    assert sparse == {"bm25"}
-
-
-def test_qdrant_vector_names_no_params():
-    info = MagicMock()
-    info.config.params = None
-    assert _qdrant_vector_names(info) == (set(), set())
-
-
-def test_qdrant_vector_names_non_dict_vectors():
-    params = MagicMock()
-    params.vectors = MagicMock()
-    params.sparse_vectors = None
-    info = MagicMock()
-    info.config.params = params
-
-    dense, sparse = _qdrant_vector_names(info)
-    assert dense == {settings.qdrant_dense_vector_name}
-    assert sparse == set()
 
 
 async def test_check_kafka_disabled():
@@ -97,81 +66,54 @@ async def test_check_kafka_running():
     assert result["brokers"] == 2
 
 
-def test_check_qdrant_vector_not_connected():
+async def test_check_multimodal_vector_missing_index():
     store = MagicMock()
-    store._client = None
-    result = check_qdrant_vector(store)
-    assert result["ok"] is False
+    store._writer = MagicMock()
+    store._writer._driver = MagicMock()
+    store.document_count = AsyncMock(return_value=0)
 
+    with patch("etl.health._index_exists", AsyncMock(return_value=False)):
+        result = await check_multimodal_vector(store)
 
-def test_check_qdrant_vector_empty_collection():
-    store = MagicMock()
-    store._client = MagicMock()
-    store.has_collection.return_value = False
-    result = check_qdrant_vector(store)
     assert result["ok"] is False
     assert result["status"] == "empty"
+    assert "vector index" in result["detail"]
 
 
-def test_check_qdrant_vector_missing_dense():
+async def test_check_multimodal_vector_up():
     store = MagicMock()
-    store._client = MagicMock()
-    store.has_collection.return_value = True
-    info = MagicMock()
-    info.points_count = 10
-    info.config.params = MagicMock(vectors={"other": MagicMock()}, sparse_vectors={})
-    store._client.get_collection.return_value = info
+    store._writer = MagicMock()
+    store.document_count = AsyncMock(return_value=42)
 
-    result = check_qdrant_vector(store)
-    assert result["ok"] is False
-    assert "dense vector" in result["detail"]
+    with patch("etl.health._index_exists", AsyncMock(return_value=True)):
+        result = await check_multimodal_vector(store)
 
-
-def test_check_qdrant_vector_up():
-    store = MagicMock()
-    store._client = MagicMock()
-    store.has_collection.return_value = True
-    info = MagicMock()
-    info.points_count = 42
-    info.config.params = MagicMock(
-        vectors={settings.qdrant_dense_vector_name: MagicMock()},
-        sparse_vectors={},
-    )
-    store._client.get_collection.return_value = info
-
-    result = check_qdrant_vector(store)
     assert result["ok"] is True
-    assert result["points_count"] == 42
+    assert result["documents_count"] == 42
 
 
-def test_check_qdrant_bm25_missing_sparse():
+async def test_check_multimodal_fulltext_missing_index():
     store = MagicMock()
-    store._client = MagicMock()
-    store.has_collection.return_value = True
-    info = MagicMock()
-    info.points_count = 5
-    info.config.params = MagicMock(vectors={}, sparse_vectors={})
-    store._client.get_collection.return_value = info
+    store._writer = MagicMock()
+    store.document_count = AsyncMock(return_value=3)
 
-    result = check_qdrant_bm25(store)
+    with patch("etl.health._index_exists", AsyncMock(return_value=False)):
+        result = await check_multimodal_fulltext(store)
+
     assert result["ok"] is False
-    assert "BM25 vector" in result["detail"]
+    assert "fulltext index" in result["detail"]
 
 
-def test_check_qdrant_bm25_up():
+async def test_check_multimodal_fulltext_up():
     store = MagicMock()
-    store._client = MagicMock()
-    store.has_collection.return_value = True
-    info = MagicMock()
-    info.points_count = 7
-    info.config.params = MagicMock(
-        vectors={},
-        sparse_vectors={settings.qdrant_bm25_vector_name: MagicMock()},
-    )
-    store._client.get_collection.return_value = info
+    store._writer = MagicMock()
+    store.document_count = AsyncMock(return_value=7)
 
-    result = check_qdrant_bm25(store)
+    with patch("etl.health._index_exists", AsyncMock(return_value=True)):
+        result = await check_multimodal_fulltext(store)
+
     assert result["ok"] is True
+    assert result["documents_count"] == 7
 
 
 async def test_check_ollama_model_missing():
@@ -253,15 +195,27 @@ async def test_component_status_aggregates():
         patch("etl.health.check_kafka", AsyncMock(return_value={"ok": True, "status": "up"})),
         patch("etl.health.check_neo4j", AsyncMock(return_value={"ok": True, "status": "up"})),
         patch("etl.health.check_ollama", AsyncMock(return_value={"ok": False, "status": "down"})),
-        patch("etl.health.check_qdrant_vector", return_value={"ok": True, "status": "up"}),
-        patch("etl.health.check_qdrant_bm25", return_value={"ok": True, "status": "up"}),
+        patch(
+            "etl.health.check_multimodal_vector",
+            AsyncMock(return_value={"ok": True, "status": "up"}),
+        ),
+        patch(
+            "etl.health.check_multimodal_fulltext",
+            AsyncMock(return_value={"ok": True, "status": "up"}),
+        ),
     ):
         result = await component_status(
             instruction_security_event_consumer=consumer,
-            qdrant_store=store,
+            multimodal_store=store,
             neo4j_writer=writer,
             ollama_client=ollama,
         )
 
-    assert set(result.keys()) == {"kafka", "ollama", "qdrant_vector", "qdrant_bm25", "neo4j"}
+    assert set(result.keys()) == {
+        "kafka",
+        "ollama",
+        "multimodal_vector",
+        "multimodal_fulltext",
+        "neo4j",
+    }
     assert result["ollama"]["ok"] is False

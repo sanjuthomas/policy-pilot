@@ -16,9 +16,9 @@ http://localhost:8092
 
 ## Search modes
 
-The sidebar radio buttons select what Qdrant and Neo4j focus on:
+The sidebar radio buttons select what the **Neo4j multimodal store** and graph focus on:
 
-| Mode | Qdrant filter | Use for |
+| Mode | Multimodal `source` filter | Use for |
 |------|---------------|---------|
 | **Security Events** (`events`) | `instruction_security_event` + `payment_security_event` | Policy denials, audit trail, ALERT/INFO counts |
 | **Instructions** (`instructions`) | `instruction_state` | Instruction state, duplicate routes, **Who/When/Why approval audit** |
@@ -33,8 +33,8 @@ Pass `"mode"` in the API request body (default `"events"`).
 flowchart LR
     Q[User question] --> P{Planned Cypher?}
     P -->|count / ranking / hierarchy| N[Neo4j deterministic query]
-    P -->|else| V[Vector / Qdrant]
-    Q --> B[BM25 / Qdrant]
+    P -->|else| V[Vector / Neo4j multimodal]
+    Q --> B[BM25 / Neo4j fulltext]
     Q --> C[Ollama → Cypher]
     C --> N
     V --> R[RRF merge + dedupe]
@@ -46,9 +46,9 @@ flowchart LR
 ```
 
 1. **Planned Cypher** — count, ranking, hierarchy, and instruction approval-by-ID questions bypass LLM Cypher generation (Neo4j is authoritative)
-2. **Exact lookup** — UUID in question triggers Qdrant fetch by ID; Instructions mode also fetches APPROVE security events for approval questions
-3. **Vector** — `qwen3-embedding:0.6b` embed → Qdrant dense search (mode-filtered)
-4. **BM25** — Qdrant sparse lexical search (mode-filtered)
+2. **Exact lookup** — UUID in question triggers multimodal fetch by ID; Instructions mode also fetches APPROVE security events for approval questions
+3. **Vector** — `qwen3-embedding:0.6b` embed → Neo4j vector index search (mode-filtered)
+4. **BM25** — Neo4j fulltext lexical search (mode-filtered)
 5. **Neo4j** — Ollama generates read-only Cypher from mode-specific prompts + `neo4j-graph-model/relationships.cypher`
 6. **Merge** — reciprocal rank fusion (k=60), dedupe by `event_id` / `instruction_id`
 7. **Answer** — full Ollama synthesis, **or** structured Who/When/Why for instruction and payment approval audit questions
@@ -118,7 +118,7 @@ Copy `.env.example` to `.env` at the repo root to override defaults. Docker Comp
 | `INSTRUCTION_SERVICE_URL` | `http://instruction-service:8000` |
 | `OIDC_ISSUER_URL` | `http://localhost:8080` |
 
-Requires Qdrant and Neo4j populated by `ssi-indexer` and **host Ollama**.
+Requires Neo4j multimodal documents populated by `ssi-indexer` and **host Ollama**.
 
 ## Run locally
 
@@ -139,7 +139,7 @@ curl -s -X POST http://localhost:8092/api/chat \
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/health` | Liveness |
-| GET | `/api/status` | Ollama models + Qdrant collection exists |
+| GET | `/api/status` | Ollama models + multimodal index health |
 | POST | `/api/chat` | Ask a question (`mode`, multi-turn via `history`) |
 
 ## Docker

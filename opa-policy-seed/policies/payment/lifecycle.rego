@@ -121,3 +121,20 @@ allow if {
     in_group("MIDDLE_OFFICE")
     covers_lob(input.payment.instruction_owning_lob)
 }
+
+# ---------------------------------------------------------------------------
+# DELETE_PAYMENT  (soft delete draft or submitted payments)
+#
+# Middle-office payment creators may withdraw a payment before it is approved.
+# ---------------------------------------------------------------------------
+
+allow if {
+    input.action == "DELETE_PAYMENT"
+
+    has_role("PAYMENT_CREATOR")
+
+    in_group("MIDDLE_OFFICE")
+    covers_lob(input.payment.instruction_owning_lob)
+
+    input.payment.status in {"DRAFT", "SUBMITTED"}
+}

@@ -6,9 +6,9 @@ from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
 from etl.admin import get_admin_subject
 from etl.models import Subject
+from fastapi.testclient import TestClient
 
 
 def _async_mocks(*consumers):
@@ -22,8 +22,8 @@ def client():
     with patch("etl.main.instruction_security_event_consumer") as mock_consumer, patch(
         "etl.main.neo4j_writer"
     ) as mock_neo4j, patch("etl.main.ollama_client") as mock_ollama, patch(
-        "etl.main.qdrant_store"
-    ) as mock_qdrant, patch(
+        "etl.main.multimodal_store"
+    ) as mock_multimodal, patch(
         "etl.main.instruction_consumer"
     ) as mock_instruction_consumer, patch(
         "etl.main.payment_security_event_consumer"
@@ -38,10 +38,7 @@ def client():
         mock_neo4j.close = AsyncMock()
         mock_ollama.warmup = AsyncMock()
         mock_ollama.close = AsyncMock()
-        mock_qdrant.connect = MagicMock()
-        mock_qdrant.close = MagicMock()
-        mock_qdrant.has_collection = MagicMock(return_value=False)
-        mock_qdrant.ensure_collection = MagicMock()
+        mock_multimodal.ensure_indexes = AsyncMock()
 
         _async_mocks(
             mock_consumer,
@@ -65,7 +62,7 @@ def client():
         app.dependency_overrides[get_admin_subject] = lambda: admin_subject
 
         with TestClient(app) as test_client:
-            yield test_client, mock_neo4j, mock_ollama, mock_qdrant
+            yield test_client, mock_neo4j, mock_ollama, mock_multimodal
 
         app.dependency_overrides.clear()
 
@@ -84,8 +81,8 @@ def test_health_endpoint(client):
             return_value={
                 "kafka": {"ok": True, "status": "up"},
                 "ollama": {"ok": True, "status": "up"},
-                "qdrant_vector": {"ok": True, "status": "up"},
-                "qdrant_bm25": {"ok": True, "status": "up"},
+                "multimodal_vector": {"ok": True, "status": "up"},
+                "multimodal_fulltext": {"ok": True, "status": "up"},
                 "neo4j": {"ok": True, "status": "up"},
             }
         ),
@@ -101,8 +98,8 @@ def test_stats_endpoint(client):
     status = {
         "kafka": {"ok": False, "status": "down"},
         "ollama": {"ok": True, "status": "up"},
-        "qdrant_vector": {"ok": True, "status": "up"},
-        "qdrant_bm25": {"ok": True, "status": "up"},
+        "multimodal_vector": {"ok": True, "status": "up"},
+        "multimodal_fulltext": {"ok": True, "status": "up"},
         "neo4j": {"ok": True, "status": "up"},
     }
     with patch("etl.main.component_status", AsyncMock(return_value=status)):
@@ -137,20 +134,22 @@ def test_search_profile_detail_not_found(client):
 
 
 def test_vector_chunk_stats(client):
-    test_client, _, _, mock_qdrant = client
-    mock_qdrant.search_text_chunk_stats.return_value = {
-        "collection": "ssi_search_index",
-        "indexing_model": "one_point_per_record",
-        "points_count": 2,
-        "search_text_field": "search_text",
-        "summary": {
-            "char_count": {"min": 10, "max": 100, "avg": 55, "median": 55},
-            "word_count": {"min": 2, "max": 20, "avg": 11, "median": 11},
-            "estimated_tokens": {"min": 3, "max": 26, "avg": 14, "median": 14},
-        },
-        "by_source": {"instruction_security_event": {"count": 2, "max_chars": 100, "avg_chars": 55}},
-        "top_chunks": [{"rank": 1, "char_count": 100, "source": "instruction_security_event"}],
-    }
+    test_client, _, _, mock_multimodal = client
+    mock_multimodal.search_text_chunk_stats = AsyncMock(
+        return_value={
+            "collection": "neo4j_multimodal",
+            "indexing_model": "one_point_per_record",
+            "points_count": 2,
+            "search_text_field": "search_text",
+            "summary": {
+                "char_count": {"min": 10, "max": 100, "avg": 55, "median": 55},
+                "word_count": {"min": 2, "max": 20, "avg": 11, "median": 11},
+                "estimated_tokens": {"min": 3, "max": 26, "avg": 14, "median": 14},
+            },
+            "by_source": {"instruction_security_event": {"count": 2, "max_chars": 100, "avg_chars": 55}},
+            "top_chunks": [{"rank": 1, "char_count": 100, "source": "instruction_security_event"}],
+        }
+    )
 
     response = test_client.get("/api/vector/chunk-stats?limit=10")
     assert response.status_code == 200
@@ -164,16 +163,16 @@ def test_vector_chunk_stats(client):
 
 
 def test_vector_chunk_stats_error(client):
-    test_client, _, _, mock_qdrant = client
-    mock_qdrant.search_text_chunk_stats.side_effect = RuntimeError("qdrant down")
+    test_client, _, _, mock_multimodal = client
+    mock_multimodal.search_text_chunk_stats = AsyncMock(side_effect=RuntimeError("neo4j down"))
     response = test_client.get("/api/vector/chunk-stats")
     assert response.status_code == 503
 
 
 def test_search_vector(client):
-    test_client, _, mock_ollama, mock_qdrant = client
+    test_client, _, mock_ollama, mock_multimodal = client
     mock_ollama.embed = AsyncMock(return_value=[0.1, 0.2])
-    mock_qdrant.search_dense.return_value = [{"score": 0.9, "event_id": "e1"}]
+    mock_multimodal.search_dense = AsyncMock(return_value=[{"score": 0.9, "event_id": "e1"}])
 
     response = test_client.post("/api/search/vector", json={"query": "wire transfer"})
     assert response.status_code == 200
@@ -190,8 +189,8 @@ def test_search_vector_error(client):
 
 
 def test_search_bm25(client):
-    test_client, _, _, mock_qdrant = client
-    mock_qdrant.search_bm25.return_value = []
+    test_client, _, _, mock_multimodal = client
+    mock_multimodal.search_bm25 = AsyncMock(return_value=[])
 
     response = test_client.post("/api/search/bm25", json={"query": "denied"})
     assert response.status_code == 200
@@ -199,9 +198,9 @@ def test_search_bm25(client):
 
 
 def test_search_hybrid(client):
-    test_client, _, mock_ollama, mock_qdrant = client
+    test_client, _, mock_ollama, mock_multimodal = client
     mock_ollama.embed = AsyncMock(return_value=[0.3])
-    mock_qdrant.search_hybrid.return_value = [{"score": 0.8}]
+    mock_multimodal.search_hybrid = AsyncMock(return_value=[{"score": 0.8}])
 
     response = test_client.post("/api/search/hybrid", json={"query": "hybrid"})
     assert response.status_code == 200

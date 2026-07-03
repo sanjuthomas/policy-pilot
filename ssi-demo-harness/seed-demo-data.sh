@@ -244,8 +244,8 @@ except Exception:
 print_mongo_alert_counts() {
   log "MongoDB security event ALERT counts"
   docker exec mongodb mongosh --quiet security_events --eval '
-const inst = db["instruction-service"];
-const pay = db["payment-service"];
+const inst = db["instruction_service"];
+const pay = db["payment_service"];
 printjson({
   instruction_ALERT: inst.countDocuments({severity:"ALERT"}),
   instruction_INFO: inst.countDocuments({severity:"INFO"}),

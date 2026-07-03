@@ -30,21 +30,21 @@ async def test_process_instruction_security_event():
     ollama.dimension = 4
     ollama.warmup = AsyncMock()
     ollama.embed = AsyncMock(return_value=[0.1, 0.2, 0.3, 0.4])
-    qdrant = MagicMock()
-    qdrant.ensure_collection = MagicMock()
-    qdrant.upsert = MagicMock()
+    multimodal = MagicMock()
+    multimodal.ensure_indexes = AsyncMock()
+    multimodal.upsert = AsyncMock()
 
     pipeline = InstructionSecurityEventPipeline(
         neo4j_writer=neo4j,
         ollama_client=ollama,
-        qdrant_store=qdrant,
+        multimodal_store=multimodal,
     )
     event = _security_event()
     await pipeline.process_instruction_security_event(event)
 
     neo4j.upsert.assert_awaited_once()
     ollama.warmup.assert_awaited_once()
-    qdrant.upsert.assert_called_once()
+    multimodal.upsert.assert_awaited_once()
 
 
 async def test_process_approve_patches_authorization():
@@ -52,15 +52,16 @@ async def test_process_approve_patches_authorization():
     ollama = AsyncMock()
     ollama.dimension = 2
     ollama.embed = AsyncMock(return_value=[0.5, 0.5])
-    qdrant = MagicMock()
-    qdrant.patch_instruction_state_authorization = MagicMock()
+    multimodal = MagicMock()
+    multimodal.upsert = AsyncMock()
+    multimodal.patch_instruction_state_authorization = AsyncMock()
 
     pipeline = InstructionSecurityEventPipeline(
         neo4j_writer=neo4j,
         ollama_client=ollama,
-        qdrant_store=qdrant,
+        multimodal_store=multimodal,
     )
-    pipeline._qdrant_ready = True
+    pipeline._multimodal_ready = True
 
     event = _security_event(
         event={"action": "APPROVE", "outcome": "ALLOW"},
@@ -78,7 +79,7 @@ async def test_process_approve_patches_authorization():
     )
     await pipeline.process_instruction_security_event(event)
 
-    qdrant.patch_instruction_state_authorization.assert_called_once_with(
+    multimodal.patch_instruction_state_authorization.assert_awaited_once_with(
         "instr-1",
         approved_at="2024-06-01",
         authorization_summary="approved by manager",

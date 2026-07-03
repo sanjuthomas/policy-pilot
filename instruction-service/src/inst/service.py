@@ -11,8 +11,8 @@ from inst.authorization import (
     instruction_resource_context,
 )
 from inst.config import settings
+from inst.constants import INSTRUCTION_CURRENT_OUT
 from inst.database import mongo_transaction
-from inst.kafka_publisher import kafka_publisher
 from inst.models.api import (
     CreateInstructionRequest,
     DeleteInstructionRequest,
@@ -32,10 +32,10 @@ from inst.models.instruction import (
     LifecycleEvent,
     UserReference,
 )
-from inst.models.instruction_fact import InstructionFact
 from inst.models.security_event import SecurityEvent
 from inst.repository import InstructionRepository
 from inst.security_event_repository import SecurityEventRepository
+from inst.security_event_serialization import security_event_to_document
 from inst.service_identity import service_identity
 from inst.storage import VersionedInstruction
 
@@ -62,7 +62,11 @@ def _to_response(record: VersionedInstruction) -> InstructionResponse:
         instruction_id=instruction.instruction_id,
         version_number=record.version_number,
         record_in=_fmt_datetime(record.valid_in) or "",
-        record_out=_fmt_datetime(record.valid_out),
+        record_out=(
+            INSTRUCTION_CURRENT_OUT
+            if record.valid_out is None
+            else _fmt_datetime(record.valid_out)
+        ),
         instruction_type=instruction.instruction_type.value,
         status=instruction.status.value,
         owning_lob=instruction.owning_lob,
@@ -170,6 +174,12 @@ class InstructionService:
     @staticmethod
     def _should_record_security_event(subject: Subject) -> bool:
         return subject.user_id not in settings.security_event_excluded_user_id_set
+
+    @staticmethod
+    def _should_record_view_security_event(subject: Subject) -> bool:
+        if subject.user_id in settings.security_event_view_excluded_user_id_set:
+            return False
+        return InstructionService._should_record_security_event(subject)
 
     async def _evaluate_policy(
         self,
@@ -281,8 +291,6 @@ class InstructionService:
         initial: bool = False,
     ) -> VersionedInstruction:
         """Persist instruction version and matching security event atomically."""
-        security_event_doc: dict | None = None
-
         async with mongo_transaction() as session:
             if initial:
                 saved = await self.repository.insert_initial(instruction, session=session)
@@ -297,27 +305,13 @@ class InstructionService:
                     action,
                     subject,
                     saved.instruction,
-                    event_id=event_id,
                     version_number=saved.version_number,
                     details=details,
                 )
-                security_event_doc = event.model_dump(mode="json")
                 await self.security_events.insert_document(
-                    security_event_doc,
+                    security_event_to_document(event, document_id=event_id),
                     session=session,
                 )
-
-        if security_event_doc is not None:
-            await self.security_events.publish(security_event_doc)
-
-            fact = InstructionFact.from_instruction(
-                action,
-                subject,
-                saved.instruction,
-                version_number=saved.version_number,
-                authorization=(details or {}).get("authorization"),
-            )
-            await kafka_publisher.publish_instruction_fact(fact.model_dump(mode="json"))
 
         return saved
 
@@ -480,21 +474,23 @@ class InstructionService:
         session_id: str | None = None,
     ) -> InstructionResponse:
         record = await self.repository.get_current(instruction_id)
+        record_view = self._should_record_view_security_event(subject)
         authorization = await self._authorize(
             LifecycleAction.VIEW,
             subject,
             record.instruction,
             bearer_token=bearer_token,
             session_id=session_id,
-            record_security_event=True,
+            record_security_event=record_view,
         )
-        await self._record_authorized_action(
-            LifecycleAction.VIEW,
-            subject,
-            record.instruction,
-            version_number=record.version_number,
-            details=details_with_authorization(None, authorization),
-        )
+        if record_view:
+            await self._record_authorized_action(
+                LifecycleAction.VIEW,
+                subject,
+                record.instruction,
+                version_number=record.version_number,
+                details=details_with_authorization(None, authorization),
+            )
         return _to_response(record)
 
     async def list_versions(
@@ -536,23 +532,25 @@ class InstructionService:
             ):
                 continue
             try:
+                record_view = self._should_record_view_security_event(subject)
                 authorization = await self._authorize(
                     LifecycleAction.VIEW,
                     subject,
                     record.instruction,
                     bearer_token=bearer_token,
                     session_id=session_id,
-                    record_security_event=True,
+                    record_security_event=record_view,
                 )
             except PermissionError:
                 continue
-            await self._record_authorized_action(
-                LifecycleAction.VIEW,
-                subject,
-                record.instruction,
-                version_number=record.version_number,
-                details=details_with_authorization(None, authorization),
-            )
+            if record_view:
+                await self._record_authorized_action(
+                    LifecycleAction.VIEW,
+                    subject,
+                    record.instruction,
+                    version_number=record.version_number,
+                    details=details_with_authorization(None, authorization),
+                )
             visible.append(_to_response(record))
         return visible
 

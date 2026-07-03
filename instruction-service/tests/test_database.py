@@ -50,3 +50,22 @@ def test_settings_loads_pat_from_file(tmp_path: Path) -> None:
         zitadel_service_pat=None,
     )
     assert settings.zitadel_service_pat == "secret-pat"
+
+
+@pytest.mark.asyncio
+async def test_mongo_transaction_yields_session() -> None:
+    from inst import database
+
+    mock_session = MagicMock()
+    mock_session.start_transaction = MagicMock()
+    mock_session.start_transaction.return_value.__aenter__ = AsyncMock(return_value=None)
+    mock_session.start_transaction.return_value.__aexit__ = AsyncMock(return_value=False)
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=False)
+
+    mock_client = MagicMock()
+    mock_client.start_session = AsyncMock(return_value=mock_session)
+
+    with patch.object(database, "_client", mock_client):
+        async with database.mongo_transaction() as session:
+            assert session is mock_session

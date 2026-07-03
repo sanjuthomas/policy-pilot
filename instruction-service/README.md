@@ -12,7 +12,7 @@ Middle office analysts create instructions **on behalf of** P&L profit centers (
 |-----|-------------|
 | http://localhost:8000/docs | OpenAPI |
 | http://localhost:8000/ui/ | Instruction browser |
-| http://localhost:8000/ui/security-events/ | Security event monitor (Mongo change stream) |
+| http://localhost:8000/ui/security-events/ | Security event monitor (Mongo-backed) |
 | http://localhost:8000/api/v1/instructions | REST API |
 
 ## Authentication
@@ -74,16 +74,61 @@ Requires `COMPLIANCE_ANALYST`, `COMPLIANCE_OFFICER`, or `PLATFORM_ADMIN`. The se
 
 No `instructed_amount`, `payment_identification`, or remittance fields.
 
+## Instruction lifecycle
+
+```
+DRAFT / PENDING  →  STANDING | SINGLE_USE | REJECTED
+STANDING         →  SUSPENDED  →  STANDING (reactivate)
+SINGLE_USE       →  USED (after payment use)
+DRAFT / PENDING  →  DELETED (soft delete)
+```
+
+| Step | Actor | Policy action (via authz) |
+|------|-------|--------------------------|
+| Create | Middle office with `covering_lobs` | `CREATE` |
+| Update | Creator while `DRAFT` | `UPDATE` |
+| Submit | Creator | `SUBMIT` |
+| Approve | Approver covering instruction LOB | `APPROVE` |
+| Reject | Approver covering instruction LOB | `REJECT` |
+| Suspend / reactivate | Authorized roles | `SUSPEND` / `REACTIVATE` |
+| Use | Payment flow | `USE` |
+| Soft delete | Creator while `DRAFT` or `PENDING` | `DELETE` (service layer; no HTTP route yet) |
+
+Terminal states (`REJECTED`, `USED`, `EXPIRED`, `DELETED`) block further mutations — each change appends a new version row; existing history is never overwritten.
+
+## Storage (append-only versions)
+
+Instructions are stored as **versioned rows** in MongoDB. Each mutation closes the current row and inserts the next version.
+
+| Concept | Value |
+|---------|-------|
+| Document `_id` | `{instruction_id}\|{version_number}` |
+| Current row marker | `out` = `9999-12-31T23:59:59Z` (`INSTRUCTION_CURRENT_OUT`) |
+| Instruction IDs | Allocated by **sequence-service** (`next_instruction_id`) |
+| Concurrency | Optimistic locking on append — concurrent writes return HTTP 409 |
+
+| Store | Location |
+|-------|----------|
+| MongoDB | `ssi_cash_instructions.instructions` |
+
+`GET /api/v1/instructions/{id}/versions` returns the full version history for an instruction.
+
 ## Security events (SIEM)
 
-Every authorized create/read/mutation emits a document to MongoDB `security_events.instruction-service` and publishes to Kafka topic `instruction-security-events`.
+Every authorized create/read/mutation (and policy denial before write) emits an **append-only** document to MongoDB `security_events.instruction_service`.
 
-**Instruction mutations** (create, update, submit, approve, etc.) write the instruction version and the matching security event in a **single MongoDB transaction** (replica set required). Kafka publish happens only after the transaction commits.
+**Instruction mutations** write the instruction version and the matching security event in a **single MongoDB transaction** (replica set required).
 
 | Outcome | Severity | When |
 |---------|----------|------|
 | Authorized action | `INFO` | Policy allowed (via authorization-service → OPA) |
 | Policy denial | `ALERT` | Policy denied before any write |
+
+Security event documents:
+
+- **`_id`** — sequence-allocated id from **sequence-service** (`next_security_event_id`); not stored as a separate `event_id` field
+- **API/UI** — `serialize_security_event` exposes `event_id` from `_id` for clients
+- **`instruction_snapshot`** — full instruction state at event time for downstream indexing
 
 Key OPA rules include: creator cannot approve own instruction; approver must not report directly to creator (inversion of control); approver LOB must match instruction LOB.
 
@@ -101,9 +146,9 @@ On every policy decision the service stores `details.authorization`:
 | `subject_at_decision` | Actor snapshot at decision time |
 | `resource_context` | Instruction fields used by OPA |
 
-On successful actions, `event.reason` is set to `authorization.summary`. The same block is published on Kafka `instruction-security-events` and embedded in `InstructionFact.authorization` on `ssi-instructions`.
+On successful actions, `event.reason` is set to `authorization.summary`.
 
-**Excluded actors:** Service user `etl-reader` does not emit VIEW events (prevents ETL → Kafka feedback loop). Configure via `SECURITY_EVENT_EXCLUDED_USER_IDS`.
+**Excluded actors:** Service user `etl-reader` does not emit VIEW events (prevents indexer read feedback loops). Configure via `SECURITY_EVENT_EXCLUDED_USER_IDS`.
 
 ## Example: create instruction
 
@@ -154,6 +199,8 @@ curl -s -X POST http://localhost:8000/api/v1/instructions \
   }'
 ```
 
+Subsequent lifecycle calls: `POST /instructions/{id}/submit`, `approve`, `reject`, `suspend`, `reactivate`, `use`.
+
 ## Run locally
 
 ```bash
@@ -162,8 +209,10 @@ pip install -e .
 uvicorn inst.main:app --reload --port 8000
 ```
 
-Requires MongoDB, **authorization-service**, and (for JWT mode) ZITADEL — see root `docker-compose.yml`.
+Requires MongoDB (replica set), **authorization-service**, **sequence-service**, and (for JWT mode) ZITADEL — see root `docker-compose.yml`.
 
 | Variable | Default |
 |----------|---------|
+| `MONGODB_URI` | `mongodb://localhost:27017/?replicaSet=rs0` |
 | `AUTHORIZATION_SERVICE_URL` | `http://authorization-service:8094` |
+| `SEQUENCE_SERVICE_URL` | `http://localhost:8095` |

@@ -108,3 +108,10 @@ def test_details_with_authorization_merges() -> None:
     )
     assert merged["reason"] == "test"
     assert merged["authorization"]["decision"] == "allow"
+
+
+def test_display_name_without_given_or_family_name() -> None:
+    subject = Subject(user_id="bob", title="VP", roles=["INSTRUCTION_CREATOR"])
+    decision = PolicyDecision(allowed=True, allow_basis=[], violations=[], is_alert=False)
+    block = build_authorization_block(decision, subject, LifecycleAction.VIEW)
+    assert block["summary"] == "bob was allowed to VIEW"

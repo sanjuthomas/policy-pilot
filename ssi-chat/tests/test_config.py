@@ -27,4 +27,4 @@ class TestSettings:
 
     def test_module_level_settings_instance(self) -> None:
         assert isinstance(settings, Settings)
-        assert settings.qdrant_collection == "ssi_search_index"
+        assert settings.multimodal_vector_index == "multimodal_embedding"

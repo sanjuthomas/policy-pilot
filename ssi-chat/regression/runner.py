@@ -207,8 +207,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--payment-url", default="http://localhost:8093")
     parser.add_argument("--indexer-url", default="http://localhost:8090")
     parser.add_argument("--authz-url", default="http://localhost:8094")
-    parser.add_argument("--qdrant-url", default="http://localhost:6333")
-    parser.add_argument("--qdrant-collection", default="ssi_search_index")
     parser.add_argument("--mode", choices=["events", "instructions", "payments", "all"], default="all")
     parser.add_argument("--tags", default="", help="Comma-separated tag filter")
     parser.add_argument(
@@ -256,10 +254,9 @@ def main(argv: list[str] | None = None) -> int:
         if not args.no_wait:
             wait_for_index(
                 harness_url=args.harness_url,
-                qdrant_url=args.qdrant_url,
-                qdrant_collection=args.qdrant_collection,
+                indexer_url=args.indexer_url,
                 min_security_events=suite.seed.wait.min_security_events,
-                min_qdrant_points=suite.seed.wait.min_qdrant_points,
+                min_multimodal_documents=suite.seed.wait.min_multimodal_documents,
                 timeout_seconds=suite.seed.wait.timeout_seconds,
                 poll_interval_seconds=suite.seed.wait.poll_interval_seconds,
             )
