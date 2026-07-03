@@ -1,0 +1,212 @@
+"""Deterministic formatters for Neo4j-direct answers (no LLM synthesis)."""
+
+from __future__ import annotations
+
+from typing import Any, Callable
+
+from chat_application.formatting import (
+    format_markdown_table,
+    humanize_authorization_text,
+)
+
+Formatter = Callable[[str, list[dict[str, Any]]], str | None]
+
+
+def _first_row(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    return rows[0] if rows else None
+
+
+def format_instruction_creator_by_id(question: str, rows: list[dict[str, Any]]) -> str | None:
+    row = _first_row(rows)
+    if row is None:
+        return "No instruction with that ID was found in the graph."
+    instruction_id = row.get("instruction_id") or "unknown"
+    creator = row.get("creator_display") or "unknown"
+    if not creator or creator == "unknown":
+        return f"No creator is recorded for instruction {instruction_id}."
+    return f"Instruction {instruction_id} was created by {creator}."
+
+
+def format_instruction_status_by_id(question: str, rows: list[dict[str, Any]]) -> str | None:
+    row = _first_row(rows)
+    if row is None:
+        return "No instruction with that ID was found in the graph."
+    instruction_id = row.get("instruction_id") or "unknown"
+    status = row.get("status") or "unknown"
+    lob = row.get("owning_lob")
+    suffix = f" (LOB {lob})" if lob else ""
+    return f"Instruction {instruction_id} has status {status}{suffix}."
+
+
+def format_instruction_creator_and_approver_by_id(
+    question: str, rows: list[dict[str, Any]]
+) -> str | None:
+    row = _first_row(rows)
+    if row is None:
+        return "No instruction with that ID was found in the graph."
+    instruction_id = row.get("instruction_id") or "unknown"
+    creator = row.get("creator_display") or "—"
+    approver = row.get("approver_display") or "—"
+    lines = [
+        f"Instruction: {instruction_id}",
+        f"Creator: {creator}",
+        f"Approver: {approver}",
+    ]
+    approved_at = row.get("approved_at")
+    if approved_at:
+        lines.append(f"Approved at: {approved_at}")
+    return "\n".join(lines)
+
+
+def format_instruction_approver_by_id(question: str, rows: list[dict[str, Any]]) -> str | None:
+    row = _first_row(rows)
+    if row is None:
+        return "No approval record was found for that instruction in the graph."
+    approver = row.get("approver_display") or "unknown"
+    when = row.get("v.approved_at") or row.get("approved_at")
+    summary = row.get("v.authorization_summary") or row.get("authorization_summary")
+    lines = [f"WHO: {approver}"]
+    if when:
+        lines.append(f"WHEN: {when}")
+    if summary:
+        lines.append(f"WHY: {humanize_authorization_text(str(summary))}")
+    return "\n".join(lines)
+
+
+def format_instruction_inventory_table(question: str, rows: list[dict[str, Any]]) -> str | None:
+    if not rows:
+        return "No matching instructions were found in the graph."
+    table_rows = [
+        [
+            row.get("instruction_id"),
+            row.get("status") or "—",
+            row.get("owning_lob") or "—",
+            row.get("currency") or "—",
+            row.get("creator_display") or "—",
+            row.get("approver_display") or "—",
+        ]
+        for row in rows
+    ]
+    return (
+        f"Found {len(table_rows)} instruction(s).\n\n"
+        f"{format_markdown_table(['Instruction ID', 'Status', 'LOB', 'Currency', 'Creator', 'Approver'], table_rows)}"
+    )
+
+
+def format_instruction_mutual_approval(question: str, rows: list[dict[str, Any]]) -> str | None:
+    if not rows:
+        return "No mutual approval cases were found in the graph."
+    table_rows = [
+        [
+            row.get("user_a_display"),
+            row.get("user_b_display"),
+            row.get("approved_by_a"),
+            row.get("approved_by_b"),
+        ]
+        for row in rows
+    ]
+    return (
+        f"Found {len(table_rows)} mutual approval case(s).\n\n"
+        f"{format_markdown_table(['User A', 'User B', 'A approved', 'B approved'], table_rows)}"
+    )
+
+
+def format_instruction_compliance_table(question: str, rows: list[dict[str, Any]]) -> str | None:
+    if not rows:
+        return "No matching compliance cases were found in the graph."
+    if rows[0].get("creator_display") and rows[0].get("approver_display"):
+        table_rows = [
+            [
+                row.get("instruction_id"),
+                row.get("owning_lob") or "—",
+                row.get("status") or "—",
+                row.get("creator_display") or "—",
+                row.get("approver_display") or "—",
+            ]
+            for row in rows
+        ]
+        headers = ["Instruction ID", "LOB", "Status", "Creator", "Approver"]
+    else:
+        table_rows = [
+            [
+                row.get("instruction_id"),
+                row.get("owning_lob") or "—",
+                row.get("status") or "—",
+                row.get("creator_display") or "—",
+            ]
+            for row in rows
+        ]
+        headers = ["Instruction ID", "LOB", "Status", "Creator"]
+    return (
+        f"Found {len(table_rows)} matching instruction(s).\n\n"
+        f"{format_markdown_table(headers, table_rows)}"
+    )
+
+
+def format_instruction_conflict_table(question: str, rows: list[dict[str, Any]]) -> str | None:
+    if not rows:
+        return "No duplicate settlement routes (CONFLICTS_WITH) were found in the graph."
+    table_rows = [
+        [
+            row.get("instruction_id_a"),
+            row.get("instruction_id_b"),
+            row.get("owning_lob") or "—",
+            row.get("currency") or "—",
+            row.get("creditor_account") or "—",
+        ]
+        for row in rows
+    ]
+    return (
+        f"Found {len(table_rows)} conflicting instruction pair(s).\n\n"
+        f"{format_markdown_table(['Instruction A', 'Instruction B', 'LOB', 'Currency', 'Creditor Account'], table_rows)}"
+    )
+
+
+def format_security_event_timeline(question: str, rows: list[dict[str, Any]]) -> str | None:
+    if not rows:
+        return "No security events were found for that instruction in the graph."
+    deduped: list[dict[str, Any]] = []
+    seen_event_ids: set[str] = set()
+    for row in sorted(rows, key=lambda item: str(item.get("timestamp") or "")):
+        event_id = str(row.get("event_id") or "")
+        if event_id and event_id in seen_event_ids:
+            continue
+        if event_id:
+            seen_event_ids.add(event_id)
+        deduped.append(row)
+    table_rows = [
+        [
+            row.get("timestamp") or "—",
+            row.get("action") or "—",
+            row.get("severity") or "—",
+            row.get("outcome") or "—",
+            row.get("actor_display") or "—",
+            row.get("event_id") or "—",
+        ]
+        for row in deduped
+    ]
+    return (
+        f"Security event timeline ({len(table_rows)} event(s)):\n\n"
+        f"{format_markdown_table(['Timestamp', 'Action', 'Severity', 'Outcome', 'Actor', 'Event ID'], table_rows)}"
+    )
+
+
+def format_alert_count_today(question: str, rows: list[dict[str, Any]]) -> str | None:
+    total = int(rows[0].get("total") or 0) if rows else 0
+    if total == 1:
+        return "There was 1 ALERT event today."
+    return f"There were {total} ALERT events today."
+
+
+FORMATTERS: dict[str, Formatter] = {
+    "instruction_creator_by_id": format_instruction_creator_by_id,
+    "instruction_status_by_id": format_instruction_status_by_id,
+    "instruction_creator_and_approver_by_id": format_instruction_creator_and_approver_by_id,
+    "instruction_approver_by_id": format_instruction_approver_by_id,
+    "instruction_inventory_table": format_instruction_inventory_table,
+    "instruction_mutual_approval": format_instruction_mutual_approval,
+    "instruction_compliance_table": format_instruction_compliance_table,
+    "instruction_conflict_table": format_instruction_conflict_table,
+    "security_event_timeline": format_security_event_timeline,
+    "alert_count_today": format_alert_count_today,
+}

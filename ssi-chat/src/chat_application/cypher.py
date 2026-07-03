@@ -707,6 +707,188 @@ LIMIT 50""",
     ]
 
 
+def _escape_cypher_literal(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("'", "\\'")
+
+
+def _instruction_detail_by_id_queries(instruction_id: str) -> list[tuple[str, str]]:
+    safe_id = _escape_cypher_literal(instruction_id)
+    return [
+        (
+            "instruction_detail",
+            f"""MATCH (i:Instruction {{instruction_id: '{safe_id}'}})-[:CURRENT]->(v:InstructionVersion)
+OPTIONAL MATCH (creator:User {{user_id: v.creator_user_id}})
+OPTIONAL MATCH (approver:User {{user_id: v.approver_user_id}})
+OPTIONAL MATCH (rejector:User {{user_id: v.rejector_user_id}})
+RETURN v.instruction_id AS instruction_id,
+       v.status AS status,
+       v.owning_lob AS owning_lob,
+       v.currency AS currency,
+       v.wire_scope AS wire_scope,
+       v.instruction_type AS instruction_type,
+       coalesce(creator.display_name, v.creator_user_id, '') AS creator_display,
+       coalesce(approver.display_name, v.approver_user_id, '') AS approver_display,
+       coalesce(rejector.display_name, v.rejector_user_id, '') AS rejector_display,
+       v.approved_at AS approved_at,
+       v.rejection_reason AS rejection_reason,
+       v.authorization_summary AS authorization_summary
+LIMIT 1""",
+        ),
+    ]
+
+
+def _instruction_list_by_status_queries(*, status: str, lob: str | None = None) -> list[tuple[str, str]]:
+    lob_clause = f"AND v.owning_lob = '{_escape_cypher_literal(lob)}'" if lob else ""
+    safe_status = _escape_cypher_literal(status)
+    return [
+        (
+            "instruction_inventory",
+            f"""MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion {{status: '{safe_status}'}})
+WHERE true {lob_clause}
+OPTIONAL MATCH (creator:User {{user_id: v.creator_user_id}})
+OPTIONAL MATCH (approver:User {{user_id: v.approver_user_id}})
+RETURN v.instruction_id AS instruction_id,
+       v.status AS status,
+       v.owning_lob AS owning_lob,
+       v.currency AS currency,
+       v.wire_scope AS wire_scope,
+       coalesce(creator.display_name, v.creator_user_id, '') AS creator_display,
+       coalesce(approver.display_name, v.approver_user_id, '') AS approver_display,
+       v.approved_at AS approved_at
+ORDER BY v.instruction_id
+LIMIT 200""",
+        ),
+    ]
+
+
+def _instructions_created_by_user_queries(user_id: str) -> list[tuple[str, str]]:
+    safe_user = _escape_cypher_literal(user_id)
+    return [
+        (
+            "instructions_by_creator",
+            f"""MATCH (u:User {{user_id: '{safe_user}'}})-[:CREATED]->(v:InstructionVersion)<-[:CURRENT]-(i:Instruction)
+OPTIONAL MATCH (approver:User {{user_id: v.approver_user_id}})
+RETURN v.instruction_id AS instruction_id,
+       v.status AS status,
+       v.owning_lob AS owning_lob,
+       v.currency AS currency,
+       coalesce(u.display_name, u.user_id, '') AS creator_display,
+       coalesce(approver.display_name, v.approver_user_id, '') AS approver_display,
+       v.approved_at AS approved_at
+ORDER BY v.instruction_id
+LIMIT 200""",
+        ),
+    ]
+
+
+def _instruction_mutual_approval_queries() -> list[tuple[str, str]]:
+    return [
+        (
+            "mutual_approval",
+            """MATCH (a:User)-[:APPROVED]->(va:InstructionVersion)<-[:CREATED]-(b:User)
+MATCH (b)-[:APPROVED]->(vb:InstructionVersion)<-[:CREATED]-(a)
+WHERE a.user_id <> b.user_id
+RETURN coalesce(a.display_name, a.user_id, '') AS user_a_display,
+       a.user_id AS user_a_id,
+       coalesce(b.display_name, b.user_id, '') AS user_b_display,
+       b.user_id AS user_b_id,
+       va.instruction_id AS approved_by_a,
+       vb.instruction_id AS approved_by_b,
+       va.owning_lob AS lob_a,
+       vb.owning_lob AS lob_b
+ORDER BY user_a_id, user_b_id
+LIMIT 50""",
+        ),
+    ]
+
+
+def _instruction_self_approval_queries() -> list[tuple[str, str]]:
+    return [
+        (
+            "self_approval",
+            """MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion)
+WHERE v.creator_user_id IS NOT NULL
+  AND v.approver_user_id IS NOT NULL
+  AND v.creator_user_id = v.approver_user_id
+OPTIONAL MATCH (creator:User {user_id: v.creator_user_id})
+RETURN v.instruction_id AS instruction_id,
+       v.status AS status,
+       v.owning_lob AS owning_lob,
+       coalesce(creator.display_name, v.creator_user_id, '') AS creator_display,
+       v.approved_at AS approved_at
+ORDER BY v.instruction_id
+LIMIT 50""",
+        ),
+    ]
+
+
+def _instruction_duplicate_routes_queries(*, lob: str | None = None) -> list[tuple[str, str]]:
+    lob_clause = ""
+    if lob:
+        lob_clause = f"AND v1.owning_lob = '{_escape_cypher_literal(lob)}'"
+    return [
+        (
+            "duplicate_routes",
+            f"""MATCH (i1:Instruction)-[:CONFLICTS_WITH]-(i2:Instruction)
+WHERE elementId(i1) < elementId(i2)
+MATCH (i1)-[:CURRENT]->(v1:InstructionVersion)
+MATCH (i2)-[:CURRENT]->(v2:InstructionVersion)
+WHERE v1.status IN ['STANDING', 'SINGLE_USE', 'PENDING_APPROVAL']
+  AND v2.status IN ['STANDING', 'SINGLE_USE', 'PENDING_APPROVAL']
+  {lob_clause}
+RETURN i1.instruction_id AS instruction_id_a,
+       i2.instruction_id AS instruction_id_b,
+       v1.owning_lob AS owning_lob,
+       v1.currency AS currency,
+       v1.creditor_account AS creditor_account,
+       v1.creditor_name AS creditor_name
+ORDER BY v1.creditor_account, v1.currency
+LIMIT 50""",
+        ),
+    ]
+
+
+def _instruction_security_event_timeline_queries(instruction_id: str) -> list[tuple[str, str]]:
+    safe_id = _escape_cypher_literal(instruction_id)
+    event_return = """
+OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(event)
+RETURN event.event_id AS event_id,
+       event.timestamp AS timestamp,
+       event.action AS action,
+       event.severity AS severity,
+       event.outcome AS outcome,
+       event.message AS message,
+       coalesce(actor.display_name, actor.user_id, '') AS actor_display
+ORDER BY timestamp ASC
+LIMIT 200"""
+    return [
+        (
+            "instruction_timeline_targets",
+            f"""MATCH (i:Instruction {{instruction_id: '{safe_id}'}})
+MATCH (event:SecurityEvent)-[:TARGETS]->(i)
+{event_return}""",
+        ),
+        (
+            "instruction_timeline_versions",
+            f"""MATCH (i:Instruction {{instruction_id: '{safe_id}'}})-[:HAS_VERSION]->(v:InstructionVersion)
+MATCH (event:SecurityEvent)-[:TARGETS_VERSION]->(v)
+{event_return}""",
+        ),
+    ]
+
+
+def _alert_count_today_queries() -> list[tuple[str, str]]:
+    return [
+        (
+            "alert_count_today",
+            """MATCH (e:SecurityEvent {severity: 'ALERT'})
+WHERE date(datetime(e.timestamp)) = date()
+RETURN count(e) AS total
+LIMIT 1""",
+        ),
+    ]
+
+
 def plan_graph_queries(question: str, *, mode: str) -> list[tuple[str, str]] | None:
     """Deterministic read-only Cypher for common aggregate questions."""
     flags = _question_flags(question)

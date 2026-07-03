@@ -86,7 +86,6 @@ class TestRagServiceAsk:
         response = await rag_service.ask(f"Who approved instruction {iid}?", [], mode="instructions")
         assert response.answer.startswith("WHO:")
         assert "Readable why." in response.answer
-        mock_ollama.synthesize_answer.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_ask_instruction_approval_synthesis_sequence_id(

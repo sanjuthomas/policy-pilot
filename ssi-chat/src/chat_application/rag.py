@@ -44,6 +44,7 @@ from chat_application.formatting import (
 from chat_application.models import ChatMessage, ChatResponse, SearchMode, SourceHit
 from chat_application.multimodal_search import MultimodalSearchClient
 from chat_application.neo4j import Neo4jClient
+from chat_application.neo4j_intents import try_neo4j_direct_answer
 from chat_application.ollama import OllamaClient
 from chat_application.reranker import RankedHit, graph_rows_to_hits, rrf_merge
 from chat_application.response_formatter import format_chat_response
@@ -379,6 +380,21 @@ class RagService:
         self._schema = load_graph_schema()
         self._eligibility = EligibilityClient()
 
+    async def _try_neo4j_direct_answer(
+        self,
+        message: str,
+        *,
+        mode: SearchMode,
+    ):
+        try:
+            result = await try_neo4j_direct_answer(self.neo4j, message, mode=mode)
+        except Exception as exc:
+            logger.warning("neo4j direct answer failed: %s", exc)
+            return None
+        if result is None:
+            return None
+        return result
+
     async def ask(
         self,
         message: str,
@@ -430,6 +446,18 @@ class RagService:
                     retrieval_ms=0.0,
                     generation_ms=round(elapsed, 1),
                 )
+
+        direct = await self._try_neo4j_direct_answer(message, mode=mode)
+        if direct is not None:
+            elapsed = (time.perf_counter() - started) * 1000
+            return ChatResponse(
+                answer=format_chat_response(direct.answer),
+                sources=[],
+                cypher=direct.cypher,
+                graph_rows=direct.graph_rows[:20],
+                retrieval_ms=round(elapsed, 1),
+                generation_ms=0.0,
+            )
 
         limit = settings.retrieval_limit
 

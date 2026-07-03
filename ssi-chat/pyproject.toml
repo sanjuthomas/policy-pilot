@@ -47,3 +47,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/chat_application", "regression"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/chat_application/intents/neo4j_direct.yaml" = "chat_application/intents/neo4j_direct.yaml"

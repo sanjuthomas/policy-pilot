@@ -1,0 +1,113 @@
+# Neo4j-direct intents: fixed Cypher + formatter (no vector / BM25 / LLM Cypher / synthesis).
+#
+# Fields:
+#   id          — stable intent name
+#   priority    — higher wins when multiple intents match (default 50)
+#   modes       — chat search modes where this intent applies
+#   match       — regex on the question (case-insensitive)
+#   exclude     — optional regex; intent skipped when this matches
+#   requires    — optional keys: instruction_id, payment_id, user_id
+#   query       — builder key in neo4j_intents.QUERY_BUILDERS
+#   formatter   — formatter key in neo4j_formatters.FORMATTERS
+
+intents:
+  # ── Instruction by ID ──────────────────────────────────────────────────────
+  - id: instruction.creator_by_id
+    priority: 100
+    modes: [instructions, all]
+    match: '\b(who|which user)\s+created\b'
+    exclude: '\bapprov'
+    requires:
+      instruction_id: true
+    query: instruction_detail_by_id
+    formatter: instruction_creator_by_id
+
+  - id: instruction.status_by_id
+    priority: 100
+    modes: [instructions, all]
+    match: '\b(what is|what''s)\s+the\s+status\b|\bstatus of\b'
+    requires:
+      instruction_id: true
+    query: instruction_detail_by_id
+    formatter: instruction_status_by_id
+
+  - id: instruction.creator_and_approver_by_id
+    priority: 110
+    modes: [instructions, all]
+    match: '\bwho\s+created\b.*\bwho\s+approv|\bwho\s+approv.*\bwho\s+created\b'
+    requires:
+      instruction_id: true
+    query: instruction_detail_by_id
+    formatter: instruction_creator_and_approver_by_id
+
+  - id: instruction.approver_by_id
+    priority: 95
+    modes: [instructions, all]
+    match: '\bwho\s+approv'
+    exclude: '\bwho\s+can\s+approv'
+    requires:
+      instruction_id: true
+    query: instruction_approval_lookup
+    formatter: instruction_approver_by_id
+
+  # ── Instruction inventory / compliance ─────────────────────────────────────
+  - id: instruction.list_single_use
+    priority: 80
+    modes: [instructions, all]
+    match: '\blist\b.*\bSINGLE_USE\b|\bSINGLE_USE\b.*\binstruction'
+    query: instruction_list_by_status
+    formatter: instruction_inventory_table
+
+  - id: instruction.created_by_user
+    priority: 80
+    modes: [instructions, all]
+    match: '\b(which|what|list)\b.*\binstruction.*\b(create|created)\b|\binstruction.*\b(create|created)\s+by\b'
+    requires:
+      user_id: true
+    query: instructions_created_by_user
+    formatter: instruction_inventory_table
+
+  - id: instruction.mutual_approval
+    priority: 70
+    modes: [instructions, all]
+    match: '\bmutual\s+approv|\bapprov.*each\s+other'
+    query: instruction_mutual_approval
+    formatter: instruction_mutual_approval
+
+  - id: instruction.self_approval
+    priority: 70
+    modes: [instructions, all]
+    match: '\bself[- ]?approv|\bcreator\s+and\s+approver\s+are\s+the\s+same\b|\bsame\s+person\b.*\bapprov'
+    query: instruction_self_approval
+    formatter: instruction_compliance_table
+
+  - id: instruction.duplicate_routes
+    priority: 70
+    modes: [instructions, all]
+    match: '\bduplicate\b.*\b(route|instruction)|\bCONFLICTS_WITH\b|\bsame\s+creditor\s+account\b.*\bcurrency\b'
+    query: instruction_duplicate_routes
+    formatter: instruction_conflict_table
+
+  - id: instruction.subordinate_approver
+    priority: 75
+    modes: [instructions, all]
+    match: '\b(reports?\s+to|reporting\s+to|directly\s+reports?)\b.*\bcreator\b|\bapprov.*\b(reports?\s+to|subordinate)\b.*\bcreator\b'
+    query: instruction_subordinate_approver
+    formatter: instruction_compliance_table
+
+  # ── Security events ────────────────────────────────────────────────────────
+  - id: events.instruction_timeline_by_id
+    priority: 100
+    modes: [events, all]
+    match: '\b(full\s+)?(security\s+event\s+)?timeline\b|\bfrom\s+creation\b.*\bapprov'
+    requires:
+      instruction_id: true
+    query: instruction_security_event_timeline
+    formatter: security_event_timeline
+
+  - id: events.alerts_today_count
+    priority: 60
+    modes: [events, all]
+    match: '\bhow\s+many\b.*\bALERT\b.*\btoday\b|\bhow\s+many\b.*\balert\b.*\bhappened\s+today\b'
+    query: alert_count_today
+    formatter: alert_count_today
