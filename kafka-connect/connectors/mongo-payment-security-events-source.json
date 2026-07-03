@@ -8,6 +8,7 @@
     "collection": "payment_service",
     "topic.namespace.map": "{\"security_events.payment_service\": \"payment_security_events\"}",
     "publish.full.document.only": "true",
+    "pipeline": "[{\"$match\": {\"operationType\": \"insert\"}}]",
     "copy.existing": "true",
     "output.format.key": "json",
     "output.format.value": "json",

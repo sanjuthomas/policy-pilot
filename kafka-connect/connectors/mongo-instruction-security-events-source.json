@@ -8,6 +8,7 @@
     "collection": "instruction_service",
     "topic.namespace.map": "{\"security_events.instruction_service\": \"instruction_security_events\"}",
     "publish.full.document.only": "true",
+    "pipeline": "[{\"$match\": {\"operationType\": \"insert\"}}]",
     "copy.existing": "true",
     "output.format.key": "json",
     "output.format.value": "json",

@@ -8,6 +8,7 @@
     "collection": "instructions",
     "topic.namespace.map": "{\"ssi_cash_instructions.instructions\": \"instructions\"}",
     "publish.full.document.only": "true",
+    "pipeline": "[{\"$match\": {\"operationType\": \"insert\"}}]",
     "copy.existing": "true",
     "output.format.key": "json",
     "output.format.value": "json",
