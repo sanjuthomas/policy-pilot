@@ -17,7 +17,7 @@ Middle office analysts create instructions **on behalf of** P&L profit centers (
 
 ## Authentication
 
-Production path uses **ZITADEL JWT** (`AUTH_MODE=jwt` in Docker). The test harness and ETL use ZITADEL session tokens.
+Production path uses **ZITADEL JWT** (`AUTH_MODE=jwt` in Docker). The test harness and secured admin UIs use ZITADEL session tokens.
 
 For local header-based testing without JWT, set `AUTH_MODE=headers` and pass subject headers:
 
@@ -148,7 +148,14 @@ On every policy decision the service stores `details.authorization`:
 
 On successful actions, `event.reason` is set to `authorization.summary`.
 
-**Excluded actors:** Service user `etl-reader` does not emit VIEW events (prevents indexer read feedback loops). Configure via `SECURITY_EVENT_EXCLUDED_USER_IDS`.
+**Excluded actors:**
+
+| User / setting | Effect |
+|----------------|--------|
+| `etl-reader` | No security events at all (`SECURITY_EVENT_EXCLUDED_USER_IDS`) |
+| `admin-001` | No **VIEW** security events on `GET /instructions` or `GET /instructions/{id}` (`SECURITY_EVENT_VIEW_EXCLUDED_USER_IDS`, default `admin-001`) |
+
+The instruction browser UI (`GET /api/ui/instructions`) reads Mongo directly and does not record VIEW events. Downstream indexing is **Mongo → Kafka Connect → Kafka → ssi-indexer**; this service does not publish to Kafka.
 
 ## Example: create instruction
 
@@ -216,3 +223,5 @@ Requires MongoDB (replica set), **authorization-service**, **sequence-service**,
 | `MONGODB_URI` | `mongodb://localhost:27017/?replicaSet=rs0` |
 | `AUTHORIZATION_SERVICE_URL` | `http://authorization-service:8094` |
 | `SEQUENCE_SERVICE_URL` | `http://localhost:8095` |
+| `SECURITY_EVENT_EXCLUDED_USER_IDS` | `etl-reader` |
+| `SECURITY_EVENT_VIEW_EXCLUDED_USER_IDS` | `admin-001` |

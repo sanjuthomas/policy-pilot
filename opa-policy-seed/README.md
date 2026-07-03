@@ -43,7 +43,7 @@ Valid LOB values: `FICC`, `FX`, or `DESK_<name>`.
 
 Key rules: creator cannot approve own instruction; approver must not report directly to creator (inversion of control); approver LOB must match instruction LOB; approver title must satisfy the approval matrix.
 
-Policy denials surface as HTTP 403 and `ALERT` security events on Kafka. Authorization-service queries:
+Policy denials surface as HTTP 403 and `ALERT` security events in Mongo (streamed to Kafka by Connect). Authorization-service queries:
 
 | OPA endpoint | Purpose |
 |--------------|---------|
@@ -54,7 +54,7 @@ Policy denials surface as HTTP 403 and `ALERT` security events on Kafka. Authori
 
 The same pattern applies under `/v1/data/payment/lifecycle/…` for payments.
 
-On allow, domain services build `details.authorization.summary` from `allow_basis` and persist it on Mongo security events, Kafka facts, and (via ETL) Neo4j multimodal documents for RAG **Who / When / Why** answers.
+On allow, domain services build `details.authorization.summary` from `allow_basis` and persist it on Mongo security events; **Kafka Connect** relays those documents to Kafka and **ssi-indexer** indexes them into Neo4j multimodal documents for RAG **Who / When / Why** answers.
 
 ## Payment authorization
 
@@ -70,7 +70,7 @@ On allow, domain services build `details.authorization.summary` from `allow_basi
 
 Key rules: payment amount within user's club ceiling and absolute $100 B limit; instruction must be `STANDING` or `SINGLE_USE` and not expired; creator cannot approve own payment; approver must not report directly to creator; approver must cover the instruction LOB.
 
-Policy denials surface as HTTP 403 and `ALERT` security events on Kafka.
+Policy denials surface as HTTP 403 and `ALERT` security events in Mongo (streamed to Kafka by Connect).
 
 ## Evaluate locally (instruction)
 

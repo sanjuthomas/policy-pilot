@@ -20,7 +20,7 @@ Domain services (instruction-service, payment-service) call authz for lifecycle 
 | **payment-service** | `POST …/payments/evaluate`, `POST …/payments/eligible-approvers` | `svc-payment` bearer token; user JWT in `X-On-Behalf-Of` for lifecycle evaluate |
 | **Platform admin** | `/ui/*`, `/api/ui/users` | `admin-001` (ZITADEL JWT) |
 
-**Not callers:** ssi-chat (uses domain eligible-approvers APIs), ssi-indexer, demo harness.
+**Not callers:** ssi-chat (uses domain eligible-approvers APIs), ssi-indexer (Kafka consumer only), demo harness, Kafka Connect.
 
 ## Service API (programmatic)
 

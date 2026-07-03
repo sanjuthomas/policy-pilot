@@ -2,7 +2,7 @@
 
 Web UI and CLI helpers for driving **instruction** and **payment** lifecycles with **ZITADEL OIDC** authentication.
 
-Use it to generate realistic traffic that flows through Kafka into the indexer and chat pipeline, including OPA policy demo scenarios that verify `ALERT` and `INFO` security event counts.
+Use it to generate realistic traffic that flows **MongoDB → Kafka Connect → Kafka → ssi-indexer → Neo4j**, including OPA policy demo scenarios that verify `ALERT` and `INFO` security event counts.
 
 ## URL
 
@@ -33,7 +33,7 @@ The instruction scenario verifies MongoDB security event count increases and inc
 | Approve payments | Funding approvers approve SUBMITTED payments |
 | Run payment scenario | Fixed 7-step OPA scenario (DRAFT → SUBMIT → APPROVE with denials) |
 
-The payment scenario verifies MongoDB counts: **+4 ALERT** and **+3 INFO** events in `security_events.payment-service`:
+The payment scenario verifies MongoDB counts: **+4 ALERT** and **+3 INFO** events in `security_events.payment_service`:
 
 1. `pay-101` creates FICC payment (DRAFT, INFO)
 2. `pay-201` (approver only) tries to create → DENY (ALERT)
@@ -88,8 +88,8 @@ Fixtures build the **SSI route template** schema (`currency` field, no payment a
 | `ZITADEL_HOST_HEADER` | `localhost` |
 | `USERS_FILE` | `/app/zitadel-seed/users.yaml` |
 | `MONGODB_URI` | `mongodb://mongodb:27017/?replicaSet=rs0` |
-| `SECURITY_EVENTS_COLLECTION` | `instruction-service` |
-| `PAYMENT_SECURITY_EVENTS_COLLECTION` | `payment-service` |
+| `SECURITY_EVENTS_COLLECTION` | `instruction_service` |
+| `PAYMENT_SECURITY_EVENTS_COLLECTION` | `payment_service` |
 
 ## Run locally
 
@@ -107,4 +107,4 @@ CLI entry point: `ssi-demo-harness`
 docker compose up -d ssi-demo-harness
 ```
 
-Requires instruction-service, payment-service, authorization-service, and ZITADEL running.
+Requires instruction-service, payment-service, authorization-service, Kafka Connect, and ZITADEL running.

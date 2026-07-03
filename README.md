@@ -79,6 +79,7 @@ flowchart TB
 
     subgraph stores [Data stores]
         MONGO[(MongoDB replica set)]
+        CONNECT[Kafka Connect :8083]
         KAFKA[(Kafka)]
         NEO[(Neo4j :7474 — graph + multimodal)]
     end
@@ -97,10 +98,8 @@ flowchart TB
     ILM --> MONGO
     PAY --> MONGO
     PAY -->|read instructions OBO| ILM
-    ILM -->|instruction_security_events| KAFKA
-    ILM -->|instructions| KAFKA
-    PAY -->|payment_security_events| KAFKA
-    PAY -->|payments| KAFKA
+    MONGO --> CONNECT
+    CONNECT -->|CDC full documents| KAFKA
     KAFKA --> ETL
     ETL --> NEO
     ETL --> OLLAMA
@@ -114,15 +113,16 @@ flowchart TB
 
 ### Data flow
 
-1. **Instruction service** — operator creates/mutates an instruction; ZITADEL JWT is validated; the service calls **authorization-service** with On-Behalf-Of (service account `svc-instruction` + user token); authz evaluates OPA and returns `allow` + `allow_basis`; instruction version and security event (with `details.authorization`) are written to MongoDB **in a single transaction**; two Kafka fact events are published — one to `instruction_security_events` (security event + full instruction snapshot) and one to `instructions` (instruction state fact + authorization on mutations).
-2. **Payment service** — middle-office users create payments against approved SSI instructions; the same OBO → authz → OPA path applies; each action writes to MongoDB and publishes to `payment_security_events` (audit) and `payments` (payment state fact).
-3. **Authorization service** — sole runtime caller of OPA. Exposes evaluate and eligible-approvers APIs to domain services only (no MongoDB). Reads candidate approvers from `users.yaml` for batch eligibility checks.
-4. **SSI indexer** — runs four independent Kafka consumers, all **self-contained** (full snapshots embedded — no API callbacks). Denormalizes `authorization_summary`, `approved_at`, and related fields onto Neo4j `MultimodalDocument` nodes and the graph for chat retrieval.
+1. **Instruction service** — operator creates/mutates an instruction; ZITADEL JWT is validated; the service calls **authorization-service** with On-Behalf-Of (service account `svc-instruction` + user token); authz evaluates OPA and returns `allow` + `allow_basis`; instruction version and security event (with `details.authorization`) are written to MongoDB **in a single transaction** (`ssi_cash_instructions.instructions` and `security_events.instruction_service`). Domain services do **not** publish to Kafka directly.
+2. **Payment service** — middle-office users create payments against approved SSI instructions; the same OBO → authz → OPA path applies; each action writes the payment version and matching security event to MongoDB (`ssi_cash_activities.payments` and `security_events.payment_service`) in one transaction.
+3. **Kafka Connect** — four MongoDB source connectors watch those collections and publish **verbatim full documents** to `instruction_security_events`, `instructions`, `payment_security_events`, and `payments`. **ssi-indexer** normalizes versioned `_id` values and security-event ids in `mongo_cdc.py` at consume time.
+4. **Authorization service** — sole runtime caller of OPA. Exposes evaluate and eligible-approvers APIs to domain services only (no MongoDB). Reads candidate approvers from `users.yaml` for batch eligibility checks.
+5. **SSI indexer** — runs four independent Kafka consumers, all **self-contained** (full snapshots embedded — no API callbacks). Denormalizes `authorization_summary`, `approved_at`, and related fields onto Neo4j `MultimodalDocument` nodes and the graph for chat retrieval.
    - **InstructionSecurityEventPipeline** (`instruction_security_events`) → Neo4j graph + multimodal `source=instruction_security_event`
    - **InstructionPipeline** (`instructions`) → instruction master graph + multimodal `source=instruction_state`
    - **PaymentSecurityEventPipeline** (`payment_security_events`) → payment security graph + multimodal `source=payment_security_event`
    - **PaymentFactPipeline** (`payments`) → payment master graph + multimodal `source=payment_fact`
-5. **Chat** — selects a retrieval mode (`events` / `instructions` / `payments` / `all`), runs vector + BM25 + Neo4j in parallel, merges with reciprocal rank fusion. Count, ranking, hierarchy, and approval-by-ID questions use **deterministic planned Cypher** or exact lookups. Instruction approval audit questions return **Who / When** from indexed data and **Why** via LLM rewrite of OPA `authorization_summary`. Live **who can approve?** questions bypass RAG and call instruction-service or payment-service eligible-approvers APIs (compliance JWT). Other questions use full Ollama synthesis.
+6. **Chat** — selects a retrieval mode (`events` / `instructions` / `payments` / `all`), runs vector + BM25 + Neo4j in parallel, merges with reciprocal rank fusion. Count, ranking, hierarchy, and approval-by-ID questions use **deterministic planned Cypher** or exact lookups. Instruction approval audit questions return **Who / When** from indexed data and **Why** via LLM rewrite of OPA `authorization_summary`. Live **who can approve?** questions bypass RAG and call instruction-service or payment-service eligible-approvers APIs (compliance JWT). Other questions use full Ollama synthesis.
 
 ---
 
@@ -232,13 +232,13 @@ MongoDB fits naturally because:
 
 ### Why Kafka?
 
-Every instruction mutation produces a **security event** — a structured audit record of who did what to which instruction and when. Kafka decouples the producers of those events (ILM) from every consumer that needs them.
+Every instruction or payment mutation produces a **security event** in MongoDB. **Kafka Connect** CDC decouples domain services from downstream consumers.
 
 Key reasons:
 
-- **Fan-out with no coupling** — any new consumer (compliance reporting tool, real-time fraud detector, ML feature pipeline, a second ETL feeding a different vector store) can subscribe to the `security-events` topic independently without any change to the ILM. The ILM publishes once; consumers scale independently.
-- **Durable replay** — Kafka retains events on disk for a configurable retention window. If the ETL falls behind, restarts, or needs to reprocess a backfill, it can seek back to any offset and replay without touching the ILM.
-- **Ordered delivery per partition** — events for the same instruction arrive in order, which matters for the ETL's `CURRENT` relationship management in Neo4j (it only promotes a new version if its `version_number` is higher than the current one).
+- **Fan-out with no coupling** — any new consumer (compliance reporting tool, real-time fraud detector, ML feature pipeline) can subscribe to the domain topics independently without any change to instruction-service or payment-service. Connect publishes once per Mongo insert; consumers scale independently.
+- **Durable replay** — Kafka retains events on disk for a configurable retention window. If the ETL falls behind, restarts, or needs to reprocess a backfill, it can seek back to any offset and replay without touching the domain APIs.
+- **Ordered delivery per partition** — events for the same key arrive in order, which matters for the ETL's `CURRENT` relationship management in Neo4j (it only promotes a new version if its `version_number` is higher than the current one).
 - **Backpressure isolation** — a spike in instruction activity does not block the ILM. The ETL processes at its own pace; the Kafka topic absorbs the burst.
 
 In this demo Kafka runs as a single broker with no replication, which is appropriate for local development. A production deployment would use a multi-broker cluster with `replication.factor=3` and `min.insync.replicas=2`.
@@ -365,6 +365,7 @@ Embedding throughput with `qwen3-embedding:0.6b` is sufficient for real-time ETL
 | http://localhost:8094 | Authorization service | OPA evaluation API (service accounts) |
 | http://localhost:8094/docs | Authorization service | OpenAPI |
 | http://localhost:8094/ui/ | Authorization service | Read-only user directory (roles, groups, LOBs, managers) |
+| http://localhost:8083/connectors | Kafka Connect | Mongo CDC connector REST API |
 | http://localhost:7474/browser/ | Neo4j | Graph browser — `neo4j` / `devpassword` |
 | http://localhost:8080/ui/console | ZITADEL | Identity admin console |
 
@@ -374,9 +375,10 @@ Embedding throughput with `qwen3-embedding:0.6b` is sufficient for real-time ETL
 
 | Directory | Role |
 |-----------|------|
-| `instruction-service` | FastAPI lifecycle API — routes policy checks to authorization-service (OBO), `details.authorization` audit block, Mongo persistence, Kafka publishing, compliance eligible-approvers API |
-| `payment-service` | Cash payment lifecycle against approved SSI instructions — same authz/OBO pattern, Mongo persistence, Kafka publishing, payment and security event UIs, compliance eligible-approvers API |
+| `instruction-service` | FastAPI lifecycle API — routes policy checks to authorization-service (OBO), `details.authorization` audit block, Mongo persistence (Connect CDC to Kafka), compliance eligible-approvers API |
+| `payment-service` | Cash payment lifecycle against approved SSI instructions — same authz/OBO pattern, Mongo persistence (Connect CDC to Kafka), payment and security event UIs, compliance eligible-approvers API |
 | `ssi-indexer` | Four Kafka consumers — instruction + payment security events and state facts → Neo4j graph + multimodal indexer + search console UI |
+| `kafka-connect` | MongoDB source connectors — change streams → domain Kafka topics (full documents, no transforms) |
 | `ssi-chat` | **PolicyPilot** — RAG chat assistant; four search modes, triple retrieval, Who/When/Why approval audit (deterministic facts + LLM WHY rewrite), planned Cypher, regression suite; compliance sign-in for live **who can approve?** via payment-service and instruction-service |
 | `authorization-service` | Stateless OPA gateway — lifecycle evaluate + batch eligible-approvers; user directory UI; reads `users.yaml`; no database |
 | `ssi-demo-harness` | ZITADEL-authenticated UI to drive lifecycles and OPA policy scenarios |
@@ -497,13 +499,13 @@ All passwords are `Password1!`. Login names follow `{user_id}@ssi.local`.
 | `pay-201` | Sophie Laurent | VP — funding approver | FICC, FX |
 | `fo-ficc-101` | Alex Morrison | Analyst — front-office submitter | FICC |
 | `fo-fx-101` | Jordan Blake | Analyst — front-office submitter | FX |
-| `etl-reader` | — | Service account — excluded from security event emission (`SECURITY_EVENT_EXCLUDED_USER_IDS`) | — |
+| `etl-reader` | — | Service account — excluded from **all** security event emission (`SECURITY_EVENT_EXCLUDED_USER_IDS`) | — |
 | `svc-instruction` | — | Service account — instruction service → authorization-service (OBO) | — |
 | `svc-payment` | — | Service account — payment service → authorization-service and ILM (OBO) | — |
 | `admin-001` | Platform Administrator | **Platform admin** — secured UIs (harness, browsers, ETL console, user directory) and **PolicyPilot** | — |
 | `comp-001` / `comp-002` | Compliance analysts | **PolicyPilot** and live eligible-approvers questions (via domain services) | — |
 
-**Platform admin (`admin-001`)** — sign in at any secured admin UI (test harness, instruction browser, payment browser, ETL indexer, authorization user directory) and at **PolicyPilot** (`http://localhost:8092`). Requires `PLATFORM_ADMIN` role and `ADMIN` group. All `/api/ui/*` and harness `/api/*` routes require this login; chat and domain-service eligible-approvers APIs accept `PLATFORM_ADMIN` in addition to compliance roles. Business lifecycle APIs still use their respective seeded users via ZITADEL JWT.
+**Platform admin (`admin-001`)** — sign in at any secured admin UI (test harness, instruction browser, payment browser, ETL indexer, authorization user directory) and at **PolicyPilot** (`http://localhost:8092`). Requires `PLATFORM_ADMIN` role and `ADMIN` group. All `/api/ui/*` and harness `/api/*` routes require this login; chat and domain-service eligible-approvers APIs accept `PLATFORM_ADMIN` in addition to compliance roles. Business lifecycle APIs still use their respective seeded users via ZITADEL JWT. **`admin-001` does not emit VIEW security events** when listing or reading instructions via the REST API (`SECURITY_EVENT_VIEW_EXCLUDED_USER_IDS`), so harness status polling does not flood the audit log. The instruction browser UI (`/api/ui/instructions`) reads Mongo directly and never records VIEW events.
 
 After changing `users.yaml`, re-seed Zitadel (`zitadel-seed` container or manual seed script).
 
@@ -557,12 +559,12 @@ Policy denials (self-approval, wrong LOB, amount over club limit, subordinate ap
 | Multimodal `source` | `instruction_security_event`, `instruction_state`, `payment_security_event`, `payment_fact` | Document type filter for chat modes |
 | MongoDB | `ssi_cash_instructions.instructions` | Instruction versions |
 | MongoDB | `ssi_cash_activities.payments` | Payment records |
-| MongoDB | `security_events.instruction-service` | ILM security events |
-| MongoDB | `security_events.payment-service` | Payment security events |
-| Kafka | `instruction_security_events` | ILM security event facts |
-| Kafka | `instructions` | ILM instruction state facts |
-| Kafka | `payment_security_events` | Payment security event facts |
-| Kafka | `payments` | Payment state facts |
+| MongoDB | `security_events.instruction_service` | ILM security events |
+| MongoDB | `security_events.payment_service` | Payment security events |
+| Kafka | `instruction_security_events` | Instruction security events (Mongo CDC) |
+| Kafka | `instructions` | Instruction version rows (Mongo CDC) |
+| Kafka | `payment_security_events` | Payment security events (Mongo CDC) |
+| Kafka | `payments` | Payment version rows (Mongo CDC) |
 
 ---
 
@@ -747,14 +749,14 @@ Compliance analysts sign in at http://localhost:8092 (`comp-001` / `comp-002`, p
 Every instruction mutation (create, update, submit, approve, reject, suspend, reactivate, use, delete) writes:
 
 - the instruction version to `ssi_cash_instructions.instructions`
-- the matching security event to `security_events.instruction-service`
+- the matching security event to `security_events.instruction_service`
 
 Every payment mutation (create, submit, approve, reject) writes:
 
 - the payment record to `ssi_cash_activities.payments`
-- the matching security event to `security_events.payment-service`
+- the matching security event to `security_events.payment_service`
 
-in a **single MongoDB multi-document transaction** per service. Kafka publish happens only after the transaction commits. MongoDB must run as a replica set — `docker-compose.yml` initialises `rs0` automatically.
+in a **single MongoDB multi-document transaction** per service. **Kafka Connect** picks up inserts from those collections and publishes to Kafka; **ssi-indexer** consumes asynchronously. MongoDB must run as a replica set — `docker-compose.yml` initialises `rs0` automatically.
 
 ---
 
@@ -786,7 +788,7 @@ cd ssi-demo-harness && pip install -e .
 ssi-demo-harness-ui   # :8091
 ```
 
-Each service reads configuration from environment variables (see its own README for the full list). Requires local MongoDB, Kafka, Neo4j, OPA, ZITADEL, and Ollama.
+Each service reads configuration from environment variables (see its own README for the full list). Requires local MongoDB (replica set), Kafka, Kafka Connect, Neo4j, OPA, ZITADEL, and Ollama.
 
 ---
 
@@ -799,6 +801,7 @@ Each service reads configuration from environment variables (see its own README 
 ├── payment-service/                 # Payment lifecycle API + UIs
 ├── authorization-service/           # OPA gateway + user directory UI
 ├── shared/authz_client/             # HTTP client used by domain services → authz
+├── kafka-connect/                   # Mongo CDC → Kafka (four source connectors)
 ├── ssi-indexer/                     # Kafka indexer + search console
 ├── ssi-chat/                        # PolicyPilot — RAG chat + compliance policy Q&A
 ├── ssi-demo-harness/                # Demo scenario harness UI
