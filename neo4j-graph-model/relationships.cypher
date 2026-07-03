@@ -158,42 +158,63 @@
 //   Written by: InstructionSecurityEventPipeline
 
 // ---------------------------------------------------------------------------
-// PAYMENT NODE
+// PAYMENT NODE (append-only versioned — mirrors Instruction / InstructionVersion)
 // ---------------------------------------------------------------------------
 //
 // (:Payment)
 //   payment_id          unique business id (sequence id)
+//   instruction_id      backing SSI instruction (stable on root)
+//
+// (:PaymentVersion)
+//   version_key         unique "{payment_id}:{version_number}"
+//   payment_id          parent payment id
 //   version_number      monotonic lifecycle version (1 = create, increments per mutation)
-//   version_key         unique "{payment_id}:{version_number}" (Community Edition helper)
-//   instruction_id      backing SSI instruction
-//   status              PENDING | APPROVED | REJECTED
+//   status              DRAFT | SUBMITTED | APPROVED | REJECTED | DELETED
 //   amount              numeric payment amount
 //   currency            ISO 4217 currency code (from instruction)
 //   value_date          intended settlement date (ISO string YYYY-MM-DD)
 //   owning_lob          LOB from the backing instruction
 //   instruction_type    STANDING | SINGLE_USE
 //   creator_user_id
+//   submitter_user_id
 //   approver_user_id
 //   rejector_user_id
 //   created_at
 //   updated_at
+//   timestamp           mutation timestamp from Mongo CDC row
+//
+// (:Payment)-[:HAS_VERSION]->(:PaymentVersion)
+//   All point-in-time payment versions (never deleted on new mutations).
+//   Written by: PaymentFactPipeline, PaymentSecurityEventPipeline
+//
+// (:Payment)-[:CURRENT]->(:PaymentVersion)
+//   Latest version (only advances, never regresses).
+//   Written by: PaymentFactPipeline, PaymentSecurityEventPipeline
 //
 // (:Instruction)-[:HAS_PAYMENT]->(:Payment)
 //   One instruction can have many payments (STANDING = many; SINGLE_USE = at most one).
-//   Written by: PaymentPipeline
+//   Written by: PaymentFactPipeline
 //
-// (:User)-[:CREATED_PAYMENT]->(:Payment)
-//   The PAYMENT_CREATOR who submitted the payment request.
-//   Written by: PaymentPipeline
+// (:User)-[:CREATED_PAYMENT]->(:PaymentVersion)
+//   The PAYMENT_CREATOR who created the payment request.
+//   Written by: PaymentFactPipeline
 //
-// (:User)-[:APPROVED_PAYMENT]->(:Payment)
+// (:User)-[:SUBMITTED_PAYMENT]->(:PaymentVersion)
+//   The user who submitted the payment for approval.
+//   Written by: PaymentFactPipeline
+//
+// (:User)-[:APPROVED_PAYMENT]->(:PaymentVersion)
 //   The FUNDING_APPROVER who approved the payment.
-//   Written by: PaymentPipeline
+//   Written by: PaymentFactPipeline
 //
-// (:User)-[:REJECTED_PAYMENT]->(:Payment)
+// (:User)-[:REJECTED_PAYMENT]->(:PaymentVersion)
 //   The FUNDING_APPROVER who rejected the payment.
-//   Written by: PaymentPipeline
+//   Written by: PaymentFactPipeline
 //
 // (:SecurityEvent)-[:TARGETS_PAYMENT]->(:Payment)
-//   Payment security events link to the Payment node.
+//   Payment security events link to the payment root.
+//   Written by: PaymentSecurityEventPipeline
+//
+// (:SecurityEvent)-[:TARGETS_PAYMENT_VERSION]->(:PaymentVersion)
+//   When resource.version_number is set on the security event.
 //   Written by: PaymentSecurityEventPipeline

@@ -29,6 +29,7 @@ flowchart TB
         SE -->|TARGETS| I[Instruction]
         SE -->|TARGETS_VERSION| IV[InstructionVersion]
         SE -->|TARGETS_PAYMENT| P[Payment]
+        SE -->|TARGETS_PAYMENT_VERSION| PV[PaymentVersion]
         SE -->|INVOLVES_LOB| PC[ProfitCenter]
     end
 
@@ -47,11 +48,13 @@ flowchart TB
     end
 
     subgraph Payment Master Graph
+        P -->|HAS_VERSION| PV
+        P -->|CURRENT| PV
         I -->|HAS_PAYMENT| P
-        UPC[User creator] -->|CREATED_PAYMENT| P
-        UPS[User submitter] -->|SUBMITTED_PAYMENT| P
-        UPA[User approver] -->|APPROVED_PAYMENT| P
-        UPR[User rejector] -->|REJECTED_PAYMENT| P
+        UPC[User creator] -->|CREATED_PAYMENT| PV
+        UPS[User submitter] -->|SUBMITTED_PAYMENT| PV
+        UPA[User approver] -->|APPROVED_PAYMENT| PV
+        UPR[User rejector] -->|REJECTED_PAYMENT| PV
     end
 
     U[User] -->|REPORTS_TO| S[User supervisor]
@@ -63,7 +66,8 @@ flowchart TB
 |---|---|
 | `Instruction` | `instruction_id`, `owning_lob`, `instruction_type`, `wire_scope`, `currency` |
 | `InstructionVersion` | `instruction_id`, `version_number`, `status`, `action`, …, `approved_at`, `authorization_summary`, `authorization_basis`, `creator_user_id`, `approver_user_id`, `rejector_user_id` |
-| `Payment` | `payment_id`, `instruction_id`, `status`, `amount`, `currency`, `value_date`, `owning_lob`, `instruction_type`, `created_by`, `approved_by` |
+| `Payment` | `payment_id`, `instruction_id` |
+| `PaymentVersion` | `payment_id`, `version_number`, `status`, `amount`, `currency`, `value_date`, `owning_lob`, `instruction_type`, `creator_user_id`, `submitter_user_id`, `approver_user_id`, `rejector_user_id`, `created_at`, `updated_at` |
 | `SecurityEvent` | `event_id`, `timestamp`, `severity`, `action`, `outcome`, `message`, …, `authorization_summary`, `authorization_basis`, `authorization_decision` |
 | `User` | `user_id`, `given_name`, `family_name`, `display_name` (\*), `title`, `lob`, `roles`, `supervisor_id` |
 | `ProfitCenter` | `name` |
@@ -88,12 +92,15 @@ flowchart TB
 | `ACTED_AS` | `User → SecurityEvent` | security event pipelines | Actor who generated the security event |
 | `TARGETS` | `SecurityEvent → Instruction` | InstructionSecurityEventPipeline | Event targets instruction root |
 | `TARGETS_VERSION` | `SecurityEvent → InstructionVersion` | InstructionSecurityEventPipeline | Event targets specific version |
-| `TARGETS_PAYMENT` | `SecurityEvent → Payment` | PaymentSecurityEventPipeline | Payment security event targets payment |
+| `TARGETS_PAYMENT` | `SecurityEvent → Payment` | PaymentSecurityEventPipeline | Payment security event targets payment root |
+| `TARGETS_PAYMENT_VERSION` | `SecurityEvent → PaymentVersion` | PaymentSecurityEventPipeline | Event targets specific payment version |
 | `HAS_PAYMENT` | `Instruction → Payment` | PaymentFactPipeline | Instruction has payment(s) |
-| `CREATED_PAYMENT` | `User → Payment` | PaymentFactPipeline | Payment creator |
-| `SUBMITTED_PAYMENT` | `User → Payment` | PaymentFactPipeline | Payment submitter |
-| `APPROVED_PAYMENT` | `User → Payment` | PaymentFactPipeline | Payment approver |
-| `REJECTED_PAYMENT` | `User → Payment` | PaymentFactPipeline | Payment rejector |
+| `HAS_VERSION` | `Payment → PaymentVersion` | payment pipelines | All point-in-time payment versions |
+| `CURRENT` | `Payment → PaymentVersion` | payment pipelines | Latest payment version |
+| `CREATED_PAYMENT` | `User → PaymentVersion` | PaymentFactPipeline | Payment creator |
+| `SUBMITTED_PAYMENT` | `User → PaymentVersion` | PaymentFactPipeline | Payment submitter |
+| `APPROVED_PAYMENT` | `User → PaymentVersion` | PaymentFactPipeline | Payment approver |
+| `REJECTED_PAYMENT` | `User → PaymentVersion` | PaymentFactPipeline | Payment rejector |
 | `INVOLVES_LOB` | `SecurityEvent → ProfitCenter` | InstructionSecurityEventPipeline | Event's owning LOB |
 | `REPORTS_TO` | `User → User` | all pipelines (on user upsert) | Org hierarchy from ZITADEL `supervisor_id` |
 
@@ -164,11 +171,12 @@ MATCH (approver)-[:REPORTS_TO]->(creator)
 RETURN creator.display_name AS supervisor, approver.display_name AS subordinate,
        v.instruction_id, v.owning_lob;
 
-// Payment approver reports to payment creator
-MATCH (creator:User)-[:CREATED_PAYMENT]->(p:Payment)
-MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+// Payment approver reports to payment creator (current version)
+MATCH (pay:Payment)-[:CURRENT]->(pv:PaymentVersion)
+MATCH (creator:User)-[:CREATED_PAYMENT]->(pv)
+MATCH (approver:User)-[:APPROVED_PAYMENT]->(pv)
 MATCH (approver)-[:REPORTS_TO]->(creator)
-RETURN creator.display_name, approver.display_name, p.payment_id, p.amount
+RETURN creator.display_name, approver.display_name, pay.payment_id, pv.amount
 LIMIT 50;
 
 // ALERT events today with full context
@@ -176,10 +184,11 @@ MATCH (e:SecurityEvent {severity: 'ALERT'})
 WHERE date(datetime(e.timestamp)) = date()
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
 OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
-OPTIONAL MATCH (e)-[:TARGETS_PAYMENT]->(p:Payment)
+OPTIONAL MATCH (e)-[:TARGETS_PAYMENT]->(pay:Payment)
+OPTIONAL MATCH (e)-[:TARGETS_PAYMENT_VERSION]->(pv:PaymentVersion)
 RETURN e.event_id, e.message, e.timestamp,
        coalesce(actor.display_name, actor.user_id) AS actor,
-       v.instruction_id, p.payment_id, p.amount
+       v.instruction_id, pay.payment_id, pv.amount
 ORDER BY e.timestamp DESC;
 ```
 

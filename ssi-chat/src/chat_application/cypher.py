@@ -312,7 +312,7 @@ def _time_filter_cypher(flags: dict[str, bool]) -> str:
 
 
 def _payment_value_date_filter_cypher(flags: dict[str, bool]) -> str:
-    """value_date is an ISO date string on Payment — compare via toString(date())."""
+    """value_date is an ISO date string on PaymentVersion — compare via toString(date())."""
     if flags["today"]:
         return "AND p.value_date STARTS WITH toString(date())"
     if flags["week"]:
@@ -362,10 +362,10 @@ def _payment_aggregate_queries(
         return [
             (
                 "payment_total_amount",
-                f"""MATCH (p:Payment)
+                f"""MATCH (pay:Payment)-[:CURRENT]->(p:PaymentVersion)
 WHERE true {status_filter} {lob_filter} {time_filter}
 RETURN coalesce(p.currency, 'USD') AS currency,
-       count(p) AS payment_count,
+       count(pay) AS payment_count,
        sum(p.amount) AS total_amount
 ORDER BY currency
 LIMIT 10""",
@@ -375,9 +375,9 @@ LIMIT 10""",
     return [
         (
             "payment_count",
-            f"""MATCH (p:Payment)
+            f"""MATCH (pay:Payment)-[:CURRENT]->(p:PaymentVersion)
 WHERE true {status_filter} {lob_filter} {time_filter}
-RETURN count(p) AS total
+RETURN count(pay) AS total
 LIMIT 1""",
         )
     ]
@@ -416,15 +416,16 @@ LIMIT 20""",
             f"""MATCH (e:SecurityEvent {{severity: 'ALERT'}})
 WHERE true {domain_filter} {time_filter}
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
-OPTIONAL MATCH (e)-[:TARGETS_PAYMENT]->(p:Payment)
+OPTIONAL MATCH (e)-[:TARGETS_PAYMENT]->(pay:Payment)
+OPTIONAL MATCH (e)-[:TARGETS_PAYMENT_VERSION]->(pv:PaymentVersion)
 OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
 RETURN e.event_id, e.timestamp, e.action, e.message, e.severity,
        CASE WHEN e.payment_id IS NOT NULL THEN 'payment' ELSE 'instruction' END AS domain,
        coalesce(e.payment_id, '') AS payment_id,
-       coalesce(p.instruction_id, v.instruction_id, '') AS instruction_id,
-       coalesce(p.amount, 0) AS amount,
-       coalesce(p.currency, '') AS currency,
-       coalesce(p.owning_lob, e.owning_lob, v.owning_lob, '') AS owning_lob,
+       coalesce(pv.instruction_id, pay.instruction_id, v.instruction_id, '') AS instruction_id,
+       coalesce(pv.amount, 0) AS amount,
+       coalesce(pv.currency, '') AS currency,
+       coalesce(pv.owning_lob, e.owning_lob, v.owning_lob, '') AS owning_lob,
        coalesce(actor.display_name, actor.user_id, '') AS actor_display
 ORDER BY e.timestamp DESC
 LIMIT 200""",
@@ -549,16 +550,18 @@ def _payments_for_instruction_queries(
     return [
         (
             "payments_for_instruction",
-            f"""MATCH (i:Instruction {{instruction_id: '{instruction_id}'}})-[:HAS_PAYMENT]->(p:Payment)
+            f"""MATCH (i:Instruction {{instruction_id: '{instruction_id}'}})-[:HAS_PAYMENT]->(pay:Payment)
+MATCH (pay)-[:CURRENT]->(p:PaymentVersion)
 WHERE true {status_filter}
-WITH collect(DISTINCT p) AS payments
-UNWIND payments AS p
+WITH collect(DISTINCT pay) AS payments
+UNWIND payments AS pay
+MATCH (pay)-[:CURRENT]->(p:PaymentVersion)
 OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
 OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
-WITH p,
+WITH pay, p,
      head(collect(DISTINCT creator)) AS creator,
      head(collect(DISTINCT approver)) AS approver
-RETURN p.payment_id AS payment_id,
+RETURN pay.payment_id AS payment_id,
        p.instruction_id AS instruction_id,
        p.status AS status,
        p.amount AS amount,
@@ -579,16 +582,18 @@ def _max_payments_per_instruction_queries() -> list[tuple[str, str]]:
     return [
         (
             "max_payments_per_instruction",
-            """MATCH (i:Instruction)-[:HAS_PAYMENT]->(p:Payment)
-WITH i.instruction_id AS instruction_id, count(DISTINCT p) AS payment_count
+            """MATCH (i:Instruction)-[:HAS_PAYMENT]->(pay:Payment)
+WITH i.instruction_id AS instruction_id, count(DISTINCT pay) AS payment_count
 ORDER BY payment_count DESC, instruction_id ASC
 LIMIT 1
 WITH instruction_id, payment_count
-MATCH (i:Instruction {instruction_id: instruction_id})-[:HAS_PAYMENT]->(p:Payment)
-WITH instruction_id, payment_count, p
+MATCH (i:Instruction {instruction_id: instruction_id})-[:HAS_PAYMENT]->(pay:Payment)
+MATCH (pay)-[:CURRENT]->(p:PaymentVersion)
+WITH instruction_id, payment_count, pay, p
 ORDER BY p.created_at ASC
-WITH instruction_id, payment_count, collect(DISTINCT p) AS payments
-UNWIND payments AS p
+WITH instruction_id, payment_count, collect(DISTINCT pay) AS payments
+UNWIND payments AS pay
+MATCH (pay)-[:CURRENT]->(p:PaymentVersion)
 OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
 OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
 WITH instruction_id,
@@ -774,13 +779,14 @@ RETURN count(e) AS total LIMIT 1""",
                 f"""MATCH (e:SecurityEvent)
 WHERE e.payment_id IS NOT NULL AND e.severity = 'ALERT' {time_filter}
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
-OPTIONAL MATCH (e)-[:TARGETS_PAYMENT]->(p:Payment)
+OPTIONAL MATCH (e)-[:TARGETS_PAYMENT]->(pay:Payment)
+OPTIONAL MATCH (e)-[:TARGETS_PAYMENT_VERSION]->(pv:PaymentVersion)
 RETURN e.event_id, e.timestamp, e.action, e.message, e.severity,
        e.payment_id AS payment_id,
-       coalesce(p.instruction_id, '') AS instruction_id,
-       coalesce(p.amount, 0) AS amount,
-       coalesce(p.currency, '') AS currency,
-       coalesce(p.owning_lob, e.owning_lob, '') AS owning_lob,
+       coalesce(pv.instruction_id, pay.instruction_id, '') AS instruction_id,
+       coalesce(pv.amount, 0) AS amount,
+       coalesce(pv.currency, '') AS currency,
+       coalesce(pv.owning_lob, e.owning_lob, '') AS owning_lob,
        coalesce(actor.display_name, actor.user_id, '') AS actor_display
 ORDER BY e.timestamp DESC
 LIMIT 200""",
@@ -823,12 +829,13 @@ RETURN count(e) AS total LIMIT 1""",
                 f"""MATCH (e:SecurityEvent {{severity: 'ALERT'}})
 WHERE true {time_filter}
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
-OPTIONAL MATCH (e)-[:TARGETS_PAYMENT]->(p:Payment)
+OPTIONAL MATCH (e)-[:TARGETS_PAYMENT]->(pay:Payment)
+OPTIONAL MATCH (e)-[:TARGETS_PAYMENT_VERSION]->(pv:PaymentVersion)
 OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
 RETURN e.event_id, e.timestamp, e.action, e.message, e.severity,
        CASE WHEN e.payment_id IS NOT NULL THEN 'payment' ELSE 'instruction' END AS domain,
        coalesce(e.payment_id, '') AS payment_id,
-       coalesce(p.instruction_id, v.instruction_id, '') AS instruction_id,
+       coalesce(pv.instruction_id, pay.instruction_id, v.instruction_id, '') AS instruction_id,
        coalesce(actor.display_name, actor.user_id, '') AS actor_display
 ORDER BY e.timestamp DESC
 LIMIT 200""",

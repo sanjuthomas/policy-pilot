@@ -181,8 +181,8 @@ class TestPlanGraphQueries:
         assert planned is not None
         assert planned[0][0] == "max_payments_per_instruction"
         assert "HAS_PAYMENT" in planned[0][1]
-        assert "count(DISTINCT p)" in planned[0][1]
-        assert "collect(DISTINCT p)" in planned[0][1]
+        assert "count(DISTINCT pay)" in planned[0][1]
+        assert "collect(DISTINCT pay)" in planned[0][1]
         assert "creator_display" in planned[0][1]
 
     def test_payments_for_instruction(self) -> None:
@@ -194,7 +194,7 @@ class TestPlanGraphQueries:
         assert planned is not None
         assert planned[0][0] == "payments_for_instruction"
         assert iid in planned[0][1]
-        assert "collect(DISTINCT p)" in planned[0][1]
+        assert "collect(DISTINCT pay)" in planned[0][1]
 
     def test_payments_for_instruction_approved_filter(self) -> None:
         iid = "3bcb9b9a-9415-44ce-b707-4cc4c8281bb9"
@@ -216,7 +216,7 @@ class TestPlanGraphQueries:
         assert "p.status = 'APPROVED'" in query
         assert "p.owning_lob = 'FICC'" in query
         assert "sum(p.amount)" in query
-        assert "count(p)" in query
+        assert "count(pay)" in query
         assert "date(datetime(p.updated_at)) = date()" in query
 
     def test_payment_count_approved_ficc_today(self) -> None:
@@ -242,7 +242,7 @@ class TestPlanGraphQueries:
         query = planned[0][1]
         assert "value_date STARTS WITH toString(date())" in query
         assert "updated_at" not in query
-        assert "count(p) AS total" in query
+        assert "count(pay) AS total" in query
 
     def test_instruction_count_in_store(self) -> None:
         planned = plan_graph_queries(

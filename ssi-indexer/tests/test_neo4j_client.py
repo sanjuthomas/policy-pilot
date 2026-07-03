@@ -9,6 +9,7 @@ import pytest
 from etl.neo4j_client import (
     Neo4jGraphWriter,
     _instruction_version_key,
+    _payment_version_key,
     _payment_version_number,
     _roles_json,
 )
@@ -22,6 +23,10 @@ def test_roles_json():
 
 def test_instruction_version_key():
     assert _instruction_version_key("20260628-FICC-I-1", 2) == "20260628-FICC-I-1:2"
+
+
+def test_payment_version_key():
+    assert _payment_version_key("20260629-FICC-P-1", 3) == "20260629-FICC-P-1:3"
 
 
 def test_payment_version_number_from_lifecycle():
@@ -193,5 +198,5 @@ async def test_apply_schema_applies_statements(tmp_path):
         await writer._apply_schema()
 
     assert writer._schema_applied is True
-    # 9 graph repair queries + 1 schema statement (comment-only chunk skipped)
-    assert session.run.await_count == 10
+    # comment-only chunk skipped; one schema statement applied
+    assert session.run.await_count == 1

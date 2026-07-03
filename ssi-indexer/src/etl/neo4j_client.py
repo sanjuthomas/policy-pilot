@@ -76,7 +76,6 @@ class Neo4jGraphWriter:
             for chunk in schema_path.read_text(encoding="utf-8").split(";")
             if chunk.strip() and not chunk.strip().startswith("//")
         ]
-        await self._repair_graph_duplicates()
         async with self._driver.session() as session:
             for statement in statements:
                 try:
@@ -85,91 +84,6 @@ class Neo4jGraphWriter:
                     logger.warning("Neo4j schema statement failed: %s | %s", exc, statement[:120])
         self._schema_applied = True
         logger.info("applied %s Neo4j schema statement(s)", len(statements))
-
-    async def _repair_graph_duplicates(self) -> None:
-        """Normalize version keys and remove duplicate nodes before composite constraints."""
-        if self._driver is None:
-            return
-
-        repairs = [
-            """
-            MATCH (v:InstructionVersion)
-            WHERE v.version_key IS NULL
-              AND v.instruction_id IS NOT NULL
-              AND v.version_number IS NOT NULL
-            MATCH (keeper:InstructionVersion {
-                instruction_id: v.instruction_id,
-                version_number: v.version_number
-            })
-            WHERE keeper.version_key IS NOT NULL AND keeper <> v
-            DETACH DELETE v
-            """,
-            """
-            MATCH (v:InstructionVersion)
-            WHERE v.instruction_id IS NOT NULL AND v.version_number IS NOT NULL
-            WITH v.instruction_id AS iid, v.version_number AS vn, collect(v) AS nodes
-            WHERE size(nodes) > 1
-            UNWIND nodes[1..] AS dup
-            DETACH DELETE dup
-            """,
-            """
-            MATCH (v:InstructionVersion)
-            WHERE v.version_key IS NULL
-              AND v.instruction_id IS NOT NULL
-              AND v.version_number IS NOT NULL
-            SET v.version_key = v.instruction_id + ':' + toString(v.version_number)
-            """,
-            """
-            MATCH (i:Instruction)
-            WITH i.instruction_id AS iid, collect(i) AS nodes
-            WHERE size(nodes) > 1
-            UNWIND nodes[1..] AS dup
-            DETACH DELETE dup
-            """,
-            """
-            MATCH (p:Payment) WHERE p.version_number IS NULL SET p.version_number = 1
-            """,
-            """
-            MATCH (p:Payment)
-            WHERE p.version_key IS NULL
-              AND p.payment_id IS NOT NULL
-              AND p.version_number IS NOT NULL
-            MATCH (keeper:Payment {
-                payment_id: p.payment_id,
-                version_number: p.version_number
-            })
-            WHERE keeper.version_key IS NOT NULL AND keeper <> p
-            DETACH DELETE p
-            """,
-            """
-            MATCH (p:Payment)
-            WHERE p.payment_id IS NOT NULL AND p.version_number IS NOT NULL
-            WITH p.payment_id AS pid, p.version_number AS vn, collect(p) AS nodes
-            WHERE size(nodes) > 1
-            UNWIND nodes[1..] AS dup
-            DETACH DELETE dup
-            """,
-            """
-            MATCH (p:Payment)
-            WHERE p.version_key IS NULL
-              AND p.payment_id IS NOT NULL
-              AND p.version_number IS NOT NULL
-            SET p.version_key = p.payment_id + ':' + toString(p.version_number)
-            """,
-            """
-            MATCH (p:Payment)
-            WITH p.payment_id AS pid, collect(p) AS nodes
-            WHERE size(nodes) > 1
-            UNWIND nodes[1..] AS dup
-            DETACH DELETE dup
-            """,
-        ]
-        async with self._driver.session() as session:
-            for query in repairs:
-                try:
-                    await session.run(query)
-                except Exception as exc:
-                    logger.warning("Neo4j graph repair step failed: %s", exc)
 
     async def upsert(self, document: EnrichedSecurityEventDocument) -> None:
         if self._driver is None:
@@ -985,9 +899,10 @@ class Neo4jGraphWriter:
 
         Creates/merges:
           - SecurityEvent node (with payment_id property)
-          - Payment node (stub — full data comes from payments)
+          - Payment root + PaymentVersion (append-only version chain)
           - User actor node + ACTED_AS relationship
           - (SecurityEvent)-[:TARGETS_PAYMENT]->(Payment)
+          - (SecurityEvent)-[:TARGETS_PAYMENT_VERSION]->(PaymentVersion)
           - (SecurityEvent)-[:INVOLVES_LOB]->(ProfitCenter)
         """
         if self._driver is None:
@@ -1082,23 +997,32 @@ class Neo4jGraphWriter:
                             supervisor_id=actor["supervisor_id"],
                         )
 
-                # Payment stub + TARGETS_PAYMENT
+                # Payment root + version + TARGETS_PAYMENT / TARGETS_PAYMENT_VERSION
                 if payment_id:
                     await tx.run(
                         """
-                        MERGE (p:Payment {payment_id: $payment_id})
-                        SET p.version_number = $version_number,
-                            p.version_key    = $version_key,
-                            p.instruction_id = coalesce($instruction_id, p.instruction_id),
-                            p.owning_lob     = coalesce($owning_lob, p.owning_lob)
-                        WITH p
+                        MERGE (pay:Payment {payment_id: $payment_id})
+                        SET pay.instruction_id = coalesce($instruction_id, pay.instruction_id)
+                        MERGE (v:PaymentVersion {version_key: $version_key})
+                        SET v.payment_id     = $payment_id,
+                            v.version_number = $version_number,
+                            v.owning_lob     = coalesce($owning_lob, v.owning_lob)
+                        MERGE (pay)-[:HAS_VERSION]->(v)
+                        WITH pay, v
+                        OPTIONAL MATCH (pay)-[r:CURRENT]->(cur:PaymentVersion)
+                        WITH pay, v, r, cur, coalesce(cur.version_number, -1) AS cur_num
+                        WHERE r IS NULL OR $version_number >= cur_num
+                        FOREACH (_ IN CASE WHEN r IS NOT NULL THEN [1] ELSE [] END | DELETE r)
+                        MERGE (pay)-[:CURRENT]->(v)
+                        WITH pay, v
                         MATCH (e:SecurityEvent {event_id: $event_id})
-                        MERGE (e)-[:TARGETS_PAYMENT]->(p)
+                        MERGE (e)-[:TARGETS_PAYMENT]->(pay)
+                        MERGE (e)-[:TARGETS_PAYMENT_VERSION]->(v)
                         """,
                         payment_id=payment_id,
-                        version_number=payment_version,
-                        version_key=payment_version_key,
                         instruction_id=instruction_id,
+                        version_key=payment_version_key,
+                        version_number=payment_version,
                         owning_lob=owning_lob,
                         event_id=event_id,
                     )
@@ -1123,12 +1047,12 @@ class Neo4jGraphWriter:
     async def upsert_payment_fact(self, fact: dict[str, Any]) -> None:
         """Write a Payment fact (from payments topic) into Neo4j.
 
-        Creates/merges:
-          - Payment node with all fields
-          - (Instruction)-[:HAS_PAYMENT]->(Payment)
-          - (User creator)-[:CREATED_PAYMENT]->(Payment)
-          - (User approver)-[:APPROVED_PAYMENT]->(Payment)   when present
-          - (User rejector)-[:REJECTED_PAYMENT]->(Payment)   when present
+        Maintains:
+          • Payment node (stable business key)
+          • PaymentVersion node (append-only lifecycle snapshot)
+          • CURRENT relationship on the latest version
+          • Creator, submitter, approver, rejector User nodes + payment rels
+          • (Instruction)-[:HAS_PAYMENT]->(Payment)
         """
         if self._driver is None:
             raise RuntimeError("Neo4j writer not connected")
@@ -1139,176 +1063,188 @@ class Neo4jGraphWriter:
 
         instruction_id = fact.get("instruction_id", "")
         created_by = fact.get("created_by") or {}
+        submitted_by = fact.get("submitted_by") or {}
         approved_by = fact.get("approved_by") or {}
         rejected_by = fact.get("rejected_by") or {}
         payment_version = _payment_version_number(fact)
         payment_version_key = _payment_version_key(payment_id, payment_version)
+        timestamp = fact.get("timestamp") or fact.get("updated_at")
+
+        creator_user_id = created_by.get("user_id")
+        submitter_user_id = submitted_by.get("user_id")
+        approver_user_id = approved_by.get("user_id")
+        rejector_user_id = rejected_by.get("user_id")
+
+        query = """
+        // ── Payment root node ────────────────────────────────────────────────────
+        MERGE (pay:Payment {payment_id: $payment_id})
+        SET   pay.instruction_id = $instruction_id
+
+        // ── PaymentVersion node (canonical key matches security-event ETL) ───────
+        MERGE (v:PaymentVersion {version_key: $version_key})
+        SET   v.payment_id         = $payment_id,
+              v.version_number     = $version_number,
+              v.status             = $status,
+              v.timestamp          = $timestamp,
+              v.instruction_id     = $instruction_id,
+              v.amount             = $amount,
+              v.currency           = $currency,
+              v.value_date         = $value_date,
+              v.owning_lob         = $owning_lob,
+              v.instruction_type   = $instruction_type,
+              v.creator_user_id    = $creator_user_id,
+              v.submitter_user_id  = $submitter_user_id,
+              v.approver_user_id   = $approver_user_id,
+              v.rejector_user_id   = $rejector_user_id,
+              v.created_at         = $created_at,
+              v.updated_at         = $updated_at
+        MERGE (pay)-[:HAS_VERSION]->(v)
+
+        // ── Mark CURRENT version (only advance, never go back) ──────────────────
+        WITH pay, v
+        OPTIONAL MATCH (pay)-[:CURRENT]->(existing:PaymentVersion)
+        WITH pay, v, existing
+        WHERE existing IS NULL OR v.version_number >= existing.version_number
+        OPTIONAL MATCH (pay)-[old:CURRENT]->(:PaymentVersion)
+        DELETE old
+        MERGE  (pay)-[:CURRENT]->(v)
+
+        // ── Instruction link ─────────────────────────────────────────────────────
+        WITH pay, v
+        FOREACH (_ IN CASE WHEN $instruction_id IS NOT NULL AND $instruction_id <> '' THEN [1] ELSE [] END |
+            MERGE (i:Instruction {instruction_id: $instruction_id})
+            MERGE (i)-[:HAS_PAYMENT]->(pay)
+        )
+
+        // ── Creator user ─────────────────────────────────────────────────────────
+        WITH pay, v
+        FOREACH (_ IN CASE WHEN $creator_user_id IS NOT NULL THEN [1] ELSE [] END |
+            MERGE (cu:User {user_id: $creator_user_id})
+            SET   cu.given_name    = coalesce($creator_given_name,    cu.given_name),
+                  cu.family_name   = coalesce($creator_family_name,   cu.family_name),
+                  cu.display_name  = coalesce(
+                      CASE WHEN $creator_family_name IS NOT NULL AND $creator_given_name IS NOT NULL
+                           THEN $creator_family_name + ', ' + $creator_given_name + ' (' + $creator_user_id + ')'
+                           ELSE null END,
+                      cu.display_name),
+                  cu.title         = coalesce($creator_title,   cu.title),
+                  cu.lob           = coalesce($creator_lob,     cu.lob),
+                  cu.supervisor_id = coalesce($creator_supervisor_id, cu.supervisor_id)
+            MERGE (cu)-[:CREATED_PAYMENT]->(v)
+        )
+
+        // ── Submitter user ───────────────────────────────────────────────────────
+        WITH pay, v
+        FOREACH (_ IN CASE WHEN $submitter_user_id IS NOT NULL THEN [1] ELSE [] END |
+            MERGE (su:User {user_id: $submitter_user_id})
+            SET   su.given_name    = coalesce($submitter_given_name,    su.given_name),
+                  su.family_name   = coalesce($submitter_family_name,   su.family_name),
+                  su.display_name  = coalesce(
+                      CASE WHEN $submitter_family_name IS NOT NULL AND $submitter_given_name IS NOT NULL
+                           THEN $submitter_family_name + ', ' + $submitter_given_name + ' (' + $submitter_user_id + ')'
+                           ELSE null END,
+                      su.display_name),
+                  su.title         = coalesce($submitter_title,   su.title),
+                  su.lob           = coalesce($submitter_lob,     su.lob),
+                  su.supervisor_id = coalesce($submitter_supervisor_id, su.supervisor_id)
+            MERGE (su)-[:SUBMITTED_PAYMENT]->(v)
+        )
+
+        // ── Approver user ────────────────────────────────────────────────────────
+        WITH pay, v
+        FOREACH (_ IN CASE WHEN $approver_user_id IS NOT NULL THEN [1] ELSE [] END |
+            MERGE (au:User {user_id: $approver_user_id})
+            SET   au.given_name    = coalesce($approver_given_name,    au.given_name),
+                  au.family_name   = coalesce($approver_family_name,   au.family_name),
+                  au.display_name  = coalesce(
+                      CASE WHEN $approver_family_name IS NOT NULL AND $approver_given_name IS NOT NULL
+                           THEN $approver_family_name + ', ' + $approver_given_name + ' (' + $approver_user_id + ')'
+                           ELSE null END,
+                      au.display_name),
+                  au.title         = coalesce($approver_title,   au.title),
+                  au.lob           = coalesce($approver_lob,     au.lob),
+                  au.supervisor_id = coalesce($approver_supervisor_id, au.supervisor_id)
+            MERGE (au)-[:APPROVED_PAYMENT]->(v)
+        )
+
+        // ── Rejector user ────────────────────────────────────────────────────────
+        WITH pay, v
+        FOREACH (_ IN CASE WHEN $rejector_user_id IS NOT NULL THEN [1] ELSE [] END |
+            MERGE (ru:User {user_id: $rejector_user_id})
+            SET   ru.given_name    = coalesce($rejector_given_name,    ru.given_name),
+                  ru.family_name   = coalesce($rejector_family_name,   ru.family_name),
+                  ru.display_name  = coalesce(
+                      CASE WHEN $rejector_family_name IS NOT NULL AND $rejector_given_name IS NOT NULL
+                           THEN $rejector_family_name + ', ' + $rejector_given_name + ' (' + $rejector_user_id + ')'
+                           ELSE null END,
+                      ru.display_name),
+                  ru.title         = coalesce($rejector_title,   ru.title),
+                  ru.lob           = coalesce($rejector_lob,     ru.lob),
+                  ru.supervisor_id = coalesce($rejector_supervisor_id, ru.supervisor_id)
+            MERGE (ru)-[:REJECTED_PAYMENT]->(v)
+        )
+        """
+
+        params: dict[str, Any] = {
+            "payment_id": payment_id,
+            "instruction_id": instruction_id,
+            "version_key": payment_version_key,
+            "version_number": payment_version,
+            "status": fact.get("status"),
+            "timestamp": timestamp,
+            "amount": fact.get("amount"),
+            "currency": fact.get("currency"),
+            "value_date": fact.get("value_date"),
+            "owning_lob": fact.get("owning_lob"),
+            "instruction_type": fact.get("instruction_type"),
+            "creator_user_id": creator_user_id,
+            "submitter_user_id": submitter_user_id,
+            "approver_user_id": approver_user_id,
+            "rejector_user_id": rejector_user_id,
+            "created_at": fact.get("created_at"),
+            "updated_at": fact.get("updated_at"),
+            "creator_given_name": created_by.get("given_name"),
+            "creator_family_name": created_by.get("family_name"),
+            "creator_title": created_by.get("title"),
+            "creator_lob": created_by.get("lob"),
+            "creator_supervisor_id": created_by.get("supervisor_id"),
+            "submitter_given_name": submitted_by.get("given_name"),
+            "submitter_family_name": submitted_by.get("family_name"),
+            "submitter_title": submitted_by.get("title"),
+            "submitter_lob": submitted_by.get("lob"),
+            "submitter_supervisor_id": submitted_by.get("supervisor_id"),
+            "approver_given_name": approved_by.get("given_name"),
+            "approver_family_name": approved_by.get("family_name"),
+            "approver_title": approved_by.get("title"),
+            "approver_lob": approved_by.get("lob"),
+            "approver_supervisor_id": approved_by.get("supervisor_id"),
+            "rejector_given_name": rejected_by.get("given_name"),
+            "rejector_family_name": rejected_by.get("family_name"),
+            "rejector_title": rejected_by.get("title"),
+            "rejector_lob": rejected_by.get("lob"),
+            "rejector_supervisor_id": rejected_by.get("supervisor_id"),
+        }
 
         async with self._driver.session() as session:
-            tx = await session.begin_transaction()
-            try:
-                # Payment node
-                await tx.run(
-                    """
-                    MERGE (p:Payment {payment_id: $payment_id})
-                    SET p.version_number   = $version_number,
-                        p.version_key      = $version_key,
-                        p.instruction_id   = $instruction_id,
-                        p.status           = $status,
-                        p.amount           = $amount,
-                        p.currency         = $currency,
-                        p.value_date       = $value_date,
-                        p.owning_lob       = $owning_lob,
-                        p.instruction_type = $instruction_type,
-                        p.creator_user_id  = $creator_user_id,
-                        p.approver_user_id = $approver_user_id,
-                        p.rejector_user_id = $rejector_user_id,
-                        p.created_at       = $created_at,
-                        p.updated_at       = $updated_at
-                    """,
-                    payment_id=payment_id,
-                    version_number=payment_version,
-                    version_key=payment_version_key,
-                    instruction_id=instruction_id,
-                    status=fact.get("status"),
-                    amount=fact.get("amount"),
-                    currency=fact.get("currency"),
-                    value_date=fact.get("value_date"),
-                    owning_lob=fact.get("owning_lob"),
-                    instruction_type=fact.get("instruction_type"),
-                    creator_user_id=created_by.get("user_id"),
-                    approver_user_id=approved_by.get("user_id") if approved_by else None,
-                    rejector_user_id=rejected_by.get("user_id") if rejected_by else None,
-                    created_at=fact.get("created_at"),
-                    updated_at=fact.get("updated_at"),
-                )
+            await session.run(query, **params)
 
-                # HAS_PAYMENT — Instruction → Payment
-                if instruction_id:
-                    await tx.run(
-                        """
-                        MERGE (i:Instruction {instruction_id: $instruction_id})
-                        WITH i
-                        MATCH (p:Payment {payment_id: $payment_id})
-                        MERGE (i)-[:HAS_PAYMENT]->(p)
-                        """,
-                        instruction_id=instruction_id,
-                        payment_id=payment_id,
-                    )
-
-                # Creator User + CREATED_PAYMENT
-                if created_by.get("user_id"):
-                    await tx.run(
+            for user in (created_by, submitted_by, approved_by, rejected_by):
+                if user.get("user_id") and user.get("supervisor_id"):
+                    await session.run(
                         """
                         MERGE (u:User {user_id: $user_id})
-                        SET u.given_name    = coalesce($given_name, u.given_name),
-                            u.family_name   = coalesce($family_name, u.family_name),
-                            u.display_name  = coalesce(
-                                CASE WHEN $family_name IS NOT NULL AND $given_name IS NOT NULL
-                                     THEN $family_name + ', ' + $given_name + ' (' + $user_id + ')'
-                                     ELSE null END,
-                                u.display_name),
-                            u.title         = coalesce($title, u.title),
-                            u.lob           = coalesce($lob, u.lob),
-                            u.supervisor_id = coalesce($supervisor_id, u.supervisor_id)
-                        WITH u
-                        MATCH (p:Payment {payment_id: $payment_id})
-                        MERGE (u)-[:CREATED_PAYMENT]->(p)
+                        MERGE (s:User {user_id: $supervisor_id})
+                        MERGE (u)-[:REPORTS_TO]->(s)
                         """,
-                        user_id=created_by["user_id"],
-                        given_name=created_by.get("given_name"),
-                        family_name=created_by.get("family_name"),
-                        title=created_by.get("title"),
-                        lob=created_by.get("lob"),
-                        supervisor_id=created_by.get("supervisor_id"),
-                        payment_id=payment_id,
+                        user_id=user["user_id"],
+                        supervisor_id=user["supervisor_id"],
                     )
-                    if created_by.get("supervisor_id"):
-                        await tx.run(
-                            """
-                            MERGE (u:User {user_id: $user_id})
-                            MERGE (s:User {user_id: $supervisor_id})
-                            MERGE (u)-[:REPORTS_TO]->(s)
-                            """,
-                            user_id=created_by["user_id"],
-                            supervisor_id=created_by["supervisor_id"],
-                        )
-
-                # Approver User + APPROVED_PAYMENT
-                if approved_by.get("user_id"):
-                    await tx.run(
-                        """
-                        MERGE (u:User {user_id: $user_id})
-                        SET u.given_name    = coalesce($given_name, u.given_name),
-                            u.family_name   = coalesce($family_name, u.family_name),
-                            u.display_name  = coalesce(
-                                CASE WHEN $family_name IS NOT NULL AND $given_name IS NOT NULL
-                                     THEN $family_name + ', ' + $given_name + ' (' + $user_id + ')'
-                                     ELSE null END,
-                                u.display_name),
-                            u.title         = coalesce($title, u.title),
-                            u.lob           = coalesce($lob, u.lob),
-                            u.supervisor_id = coalesce($supervisor_id, u.supervisor_id)
-                        WITH u
-                        MATCH (p:Payment {payment_id: $payment_id})
-                        MERGE (u)-[:APPROVED_PAYMENT]->(p)
-                        """,
-                        user_id=approved_by["user_id"],
-                        given_name=approved_by.get("given_name"),
-                        family_name=approved_by.get("family_name"),
-                        title=approved_by.get("title"),
-                        lob=approved_by.get("lob"),
-                        supervisor_id=approved_by.get("supervisor_id"),
-                        payment_id=payment_id,
-                    )
-                    if approved_by.get("supervisor_id"):
-                        await tx.run(
-                            """
-                            MERGE (u:User {user_id: $user_id})
-                            MERGE (s:User {user_id: $supervisor_id})
-                            MERGE (u)-[:REPORTS_TO]->(s)
-                            """,
-                            user_id=approved_by["user_id"],
-                            supervisor_id=approved_by["supervisor_id"],
-                        )
-
-                # Rejector User + REJECTED_PAYMENT
-                if rejected_by.get("user_id"):
-                    await tx.run(
-                        """
-                        MERGE (u:User {user_id: $user_id})
-                        SET u.given_name    = coalesce($given_name, u.given_name),
-                            u.family_name   = coalesce($family_name, u.family_name),
-                            u.display_name  = coalesce(
-                                CASE WHEN $family_name IS NOT NULL AND $given_name IS NOT NULL
-                                     THEN $family_name + ', ' + $given_name + ' (' + $user_id + ')'
-                                     ELSE null END,
-                                u.display_name),
-                            u.title         = coalesce($title, u.title),
-                            u.lob           = coalesce($lob, u.lob),
-                            u.supervisor_id = coalesce($supervisor_id, u.supervisor_id)
-                        WITH u
-                        MATCH (p:Payment {payment_id: $payment_id})
-                        MERGE (u)-[:REJECTED_PAYMENT]->(p)
-                        """,
-                        user_id=rejected_by["user_id"],
-                        given_name=rejected_by.get("given_name"),
-                        family_name=rejected_by.get("family_name"),
-                        title=rejected_by.get("title"),
-                        lob=rejected_by.get("lob"),
-                        supervisor_id=rejected_by.get("supervisor_id"),
-                        payment_id=payment_id,
-                    )
-
-                await tx.commit()
-            except Exception:
-                await tx.rollback()
-                raise
 
         logger.debug(
-            "upserted payment fact payment_id=%s status=%s",
+            "upserted payment fact payment_id=%s status=%s version=%s",
             payment_id,
             fact.get("status"),
+            payment_version,
         )
 
     async def run_read_cypher(self, cypher: str) -> list[dict[str, Any]]:
