@@ -10,6 +10,7 @@ from neo4j.exceptions import TransientError
 
 from etl.config import settings
 from etl.instruction_pipeline import InstructionPipeline
+from etl.mongo_cdc import normalize_instruction_message
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,7 @@ _RETRY_BASE_DELAY = 0.2  # seconds
 
 
 class InstructionKafkaConsumer:
-    """Consumes InstructionFact events from the ssi-instructions topic."""
+    """Consumes InstructionFact events from the instructions topic."""
 
     def __init__(self, pipeline: InstructionPipeline) -> None:
         self.pipeline = pipeline
@@ -95,7 +96,8 @@ class InstructionKafkaConsumer:
             raise
 
     async def _handle_message(self, payload: dict[str, Any]) -> None:
-        if not isinstance(payload, dict) or "instruction_id" not in payload:
+        fact = normalize_instruction_message(payload)
+        if not isinstance(fact, dict) or "instruction_id" not in fact:
             logger.warning("skipping invalid instruction fact payload: %s", payload)
             return
-        await self.pipeline.process_instruction_fact(payload)
+        await self.pipeline.process_instruction_fact(fact)

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from neo4j.exceptions import TransientError
+
 from etl.instruction_consumer import InstructionKafkaConsumer
 from etl.instruction_security_event_consumer import (
     InstructionSecurityEventKafkaConsumer,
@@ -12,7 +14,6 @@ from etl.payment_consumer import (
     PaymentFactKafkaConsumer,
     PaymentSecurityEventKafkaConsumer,
 )
-from neo4j.exceptions import TransientError
 
 
 async def test_instruction_consumer_kafka_disabled():
@@ -49,6 +50,13 @@ async def test_instruction_security_event_consumer_handle():
     event = {"event_id": "e1"}
     await consumer._handle_message(event)
     pipeline.process_instruction_security_event.assert_awaited_once_with(event)
+
+    pipeline.reset_mock()
+    mongo_event = {"_id": "e2", "severity": "INFO"}
+    await consumer._handle_message(mongo_event)
+    pipeline.process_instruction_security_event.assert_awaited_once_with(
+        {"_id": "e2", "severity": "INFO", "event_id": "e2"}
+    )
 
 
 async def test_payment_security_event_consumer_handle():

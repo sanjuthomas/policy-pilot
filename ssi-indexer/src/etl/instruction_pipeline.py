@@ -1,10 +1,8 @@
-"""Processes InstructionFact events from the ssi-instructions Kafka topic.
+"""Processes InstructionFact events from the instructions Kafka topic.
 
 Maintains the instruction master graph in Neo4j (InstructionVersion nodes,
-CONFLICTS_WITH, APPROVED_FOR, BELONGS_TO) and one instruction-state Qdrant
+CONFLICTS_WITH, APPROVED_FOR, BELONGS_TO) and one instruction-state multimodal
 point per instruction — updated in place on every mutation.
-
-No API calls — the fact event is self-contained.
 """
 
 from __future__ import annotations
@@ -13,9 +11,9 @@ import logging
 from typing import Any
 
 from etl.authorization_context import authorization_merged_from_fact
+from etl.multimodal_store import MultimodalNeo4jStore
 from etl.neo4j_client import Neo4jGraphWriter
 from etl.ollama_client import OllamaEmbeddingClient
-from etl.qdrant_store import QdrantHybridStore
 from etl.search_text.builder import build_search_text_from_profile
 from etl.search_text.context import instruction_state_context
 
@@ -32,12 +30,12 @@ class InstructionPipeline:
         *,
         neo4j_writer: Neo4jGraphWriter,
         ollama_client: OllamaEmbeddingClient,
-        qdrant_store: QdrantHybridStore,
+        multimodal_store: MultimodalNeo4jStore,
     ) -> None:
         self.neo4j_writer = neo4j_writer
         self.ollama_client = ollama_client
-        self.qdrant_store = qdrant_store
-        self._qdrant_ready = False
+        self.multimodal_store = multimodal_store
+        self._multimodal_ready = False
 
     async def process_instruction_fact(self, fact: dict[str, Any]) -> None:
         instruction_id = fact.get("instruction_id")
@@ -47,10 +45,10 @@ class InstructionPipeline:
 
         await self.neo4j_writer.upsert_instruction_fact(fact)
 
-        if not self._qdrant_ready:
+        if not self._multimodal_ready:
             await self.ollama_client.warmup()
-            self.qdrant_store.ensure_collection(self.ollama_client.dimension)
-            self._qdrant_ready = True
+            await self.multimodal_store.ensure_indexes(self.ollama_client.dimension)
+            self._multimodal_ready = True
 
         search_text = build_instruction_state_search_text(fact)
         dense_vector = await self.ollama_client.embed(search_text)
@@ -90,7 +88,7 @@ class InstructionPipeline:
             "instruction_snapshot": snap,
         }
 
-        existing = self.qdrant_store.get_instruction_state_payload(instruction_id)
+        existing = await self.multimodal_store.get_instruction_state_payload(instruction_id)
         if existing:
             if fact.get("action") != "APPROVE":
                 if not payload.get("authorization_summary"):
@@ -110,7 +108,7 @@ class InstructionPipeline:
                 if not payload.get("rejection_reason"):
                     payload["rejection_reason"] = existing.get("rejection_reason")
 
-        self.qdrant_store.upsert_instruction_state(
+        await self.multimodal_store.upsert_instruction_state(
             instruction_id=instruction_id,
             search_text=search_text,
             payload=payload,

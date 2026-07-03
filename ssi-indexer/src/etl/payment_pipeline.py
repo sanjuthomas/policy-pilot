@@ -1,20 +1,23 @@
-"""Processes payment events from the payment-security-events and ssi-payments topics.
+"""Processes payment events from the payment_security_events and payments topics.
 
 Two sub-pipelines:
-  PaymentSecurityEventPipeline  — consumes payment-security-events
-  PaymentFactPipeline           — consumes ssi-payments
+  PaymentSecurityEventPipeline  — consumes payment_security_events
+  PaymentFactPipeline           — consumes payments
 """
 from __future__ import annotations
 
 import json
 import logging
-import uuid
 from typing import Any
 
 from etl.authorization_context import authorization_merged_fields
+from etl.multimodal_store import (
+    MultimodalNeo4jStore,
+    event_document_id,
+    payment_document_id,
+)
 from etl.neo4j_client import Neo4jGraphWriter
 from etl.ollama_client import OllamaEmbeddingClient
-from etl.qdrant_store import QdrantHybridStore
 from etl.search_text.builder import build_search_text_from_profile
 from etl.search_text.context import payment_security_event_context
 
@@ -48,19 +51,19 @@ def build_payment_fact_search_text(fact: dict[str, Any]) -> str:
 
 
 class PaymentSecurityEventPipeline:
-    """Processes PaymentSecurityEvent messages from payment-security-events topic."""
+    """Processes PaymentSecurityEvent messages from payment_security_events topic."""
 
     def __init__(
         self,
         *,
         neo4j_writer: Neo4jGraphWriter,
         ollama_client: OllamaEmbeddingClient,
-        qdrant_store: QdrantHybridStore,
+        multimodal_store: MultimodalNeo4jStore,
     ) -> None:
         self.neo4j_writer = neo4j_writer
         self.ollama_client = ollama_client
-        self.qdrant_store = qdrant_store
-        self._qdrant_ready = False
+        self.multimodal_store = multimodal_store
+        self._multimodal_ready = False
 
     async def process(self, event: dict[str, Any]) -> None:
         event_id = event.get("event_id")
@@ -70,10 +73,10 @@ class PaymentSecurityEventPipeline:
 
         await self.neo4j_writer.upsert_payment_security_event(event)
 
-        if not self._qdrant_ready:
+        if not self._multimodal_ready:
             await self.ollama_client.warmup()
-            self.qdrant_store.ensure_collection(self.ollama_client.dimension)
-            self._qdrant_ready = True
+            await self.multimodal_store.ensure_indexes(self.ollama_client.dimension)
+            self._multimodal_ready = True
 
         search_text = build_payment_event_search_text(event)
         dense_vector = await self.ollama_client.embed(search_text)
@@ -108,8 +111,8 @@ class PaymentSecurityEventPipeline:
             "security_event": event,
         }
 
-        point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, event_id))
-        self.qdrant_store.upsert_payment_point(
+        point_id = event_document_id(event_id)
+        await self.multimodal_store.upsert_payment_point(
             point_id=point_id,
             search_text=search_text,
             payload=payload,
@@ -124,19 +127,19 @@ class PaymentSecurityEventPipeline:
 
 
 class PaymentFactPipeline:
-    """Processes payment fact snapshots from the ssi-payments topic."""
+    """Processes payment fact snapshots from the payments topic."""
 
     def __init__(
         self,
         *,
         neo4j_writer: Neo4jGraphWriter,
         ollama_client: OllamaEmbeddingClient,
-        qdrant_store: QdrantHybridStore,
+        multimodal_store: MultimodalNeo4jStore,
     ) -> None:
         self.neo4j_writer = neo4j_writer
         self.ollama_client = ollama_client
-        self.qdrant_store = qdrant_store
-        self._qdrant_ready = False
+        self.multimodal_store = multimodal_store
+        self._multimodal_ready = False
 
     async def process(self, fact: dict[str, Any]) -> None:
         payment_id = fact.get("payment_id")
@@ -146,10 +149,10 @@ class PaymentFactPipeline:
 
         await self.neo4j_writer.upsert_payment_fact(fact)
 
-        if not self._qdrant_ready:
+        if not self._multimodal_ready:
             await self.ollama_client.warmup()
-            self.qdrant_store.ensure_collection(self.ollama_client.dimension)
-            self._qdrant_ready = True
+            await self.multimodal_store.ensure_indexes(self.ollama_client.dimension)
+            self._multimodal_ready = True
 
         search_text = build_payment_fact_search_text(fact)
         dense_vector = await self.ollama_client.embed(search_text)
@@ -175,8 +178,8 @@ class PaymentFactPipeline:
             "payment_snapshot": fact,
         }
 
-        point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"payment:{payment_id}"))
-        self.qdrant_store.upsert_payment_point(
+        point_id = payment_document_id(payment_id)
+        await self.multimodal_store.upsert_payment_point(
             point_id=point_id,
             search_text=search_text,
             payload=payload,

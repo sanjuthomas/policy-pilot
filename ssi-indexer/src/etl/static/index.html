@@ -12,7 +12,7 @@
         <span class="brand-mark"></span>
         <div>
           <h1>Security Event Search</h1>
-          <p class="subtitle">Neo4j graph · Qdrant dense · BM25 · hybrid RRF</p>
+          <p class="subtitle">Neo4j graph · vector · BM25 · hybrid RRF</p>
         </div>
       </div>
       <div class="status-group">
@@ -38,7 +38,7 @@
         <div>
           <h2>Indexed text size monitor</h2>
           <p class="panel-intro">
-            One Qdrant point per record — no semantic chunking. Each point embeds a flattened
+            One multimodal document per record — no semantic chunking. Each document embeds a flattened
             <code>search_text</code> field (salient fields only, not the full JSON document).
             Top 10 largest texts help you decide if chunking is needed before hitting the
             embedding model limit (<span id="chunk-embed-limit">32K</span> tokens).
@@ -48,7 +48,7 @@
       </div>
 
       <div id="chunk-stats-empty" class="empty-state muted">
-        Sign in to load chunk size stats from Qdrant.
+        Sign in to load chunk size stats from the multimodal store.
       </div>
 
       <div id="chunk-stats-content" class="hidden">
@@ -78,7 +78,7 @@
           <h2>Search text profiles</h2>
           <p class="panel-intro">
             Fields listed here are flattened into <code>search_text</code> for dense embedding and
-            BM25. Everything else stays in the Qdrant payload only — browse full JSON in search
+            BM25. Everything else stays in the document payload only — browse full JSON in search
             results below.
           </p>
         </div>

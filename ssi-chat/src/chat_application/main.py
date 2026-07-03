@@ -17,9 +17,9 @@ from chat_application import __version__
 from chat_application.config import settings
 from chat_application.dependencies import get_compliance_subject
 from chat_application.models import ChatRequest, ChatResponse
+from chat_application.multimodal_search import MultimodalSearchClient
 from chat_application.neo4j import Neo4jClient
 from chat_application.ollama import OllamaClient
-from chat_application.qdrant import QdrantSearchClient
 from chat_application.rag import RagService
 from chat_application.subject import Subject
 from chat_application.users import compliance_users
@@ -30,8 +30,8 @@ logger = get_logger(__name__)
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 ollama_client = OllamaClient()
-qdrant_client = QdrantSearchClient()
 neo4j_client = Neo4jClient()
+multimodal_client = MultimodalSearchClient(neo4j_client)
 rag_service: RagService | None = None
 
 
@@ -40,7 +40,6 @@ async def lifespan(app: FastAPI):
     global rag_service
     configure_telemetry("ssi-chat", service_version=__version__)
     instrument_app(app)
-    qdrant_client.connect()
     await neo4j_client.connect()
     try:
         await ollama_client.embed("warmup")
@@ -48,19 +47,18 @@ async def lifespan(app: FastAPI):
         logger.warning("Ollama warmup failed (chat may still work): %s", exc)
     rag_service = RagService(
         ollama=ollama_client,
-        qdrant=qdrant_client,
+        multimodal=multimodal_client,
         neo4j=neo4j_client,
     )
     logger.info("PolicyPilot ready on port %s", settings.port)
     yield
-    qdrant_client.close()
     await neo4j_client.close()
     shutdown_telemetry()
 
 
 app = FastAPI(
     title="PolicyPilot",
-    description="PolicyPilot — natural-language policy Q&A over security events (vector + BM25 + Neo4j + Ollama)",
+    description="PolicyPilot — natural-language policy Q&A over security events (Neo4j multimodal + graph + Ollama)",
     version=__version__,
     lifespan=lifespan,
 )

@@ -10,9 +10,9 @@ from etl.config import settings
 from etl.instruction_security_event_consumer import (
     InstructionSecurityEventKafkaConsumer,
 )
+from etl.multimodal_store import MultimodalNeo4jStore
 from etl.neo4j_client import Neo4jGraphWriter
 from etl.ollama_client import OllamaEmbeddingClient
-from etl.qdrant_store import QdrantHybridStore
 
 logger = logging.getLogger(__name__)
 
@@ -65,111 +65,63 @@ async def check_kafka(
     )
 
 
-def _qdrant_vector_names(info: Any) -> tuple[set[str], set[str]]:
-    dense_names: set[str] = set()
-    sparse_names: set[str] = set()
-
-    params = getattr(info.config, "params", None)
-    if params is None:
-        return dense_names, sparse_names
-
-    vectors = getattr(params, "vectors", None)
-    if vectors is None:
-        pass
-    elif isinstance(vectors, dict):
-        dense_names = set(vectors.keys())
-    else:
-        dense_names = {settings.qdrant_dense_vector_name}
-
-    sparse_vectors = getattr(params, "sparse_vectors", None)
-    if isinstance(sparse_vectors, dict):
-        sparse_names = set(sparse_vectors.keys())
-
-    return dense_names, sparse_names
+async def _index_exists(neo4j_writer: Neo4jGraphWriter, name: str) -> bool:
+    if neo4j_writer._driver is None:
+        return False
+    async with neo4j_writer._driver.session() as session:
+        result = await session.run(
+            "SHOW INDEXES YIELD name WHERE name = $name RETURN name",
+            name=name,
+        )
+        record = await result.single()
+    return record is not None
 
 
-def check_qdrant_vector(qdrant_store: QdrantHybridStore) -> ComponentStatus:
+async def check_multimodal_vector(
+    multimodal_store: MultimodalNeo4jStore,
+) -> ComponentStatus:
     base = {
-        "url": settings.qdrant_url,
-        "collection": settings.qdrant_collection,
-        "vector": settings.qdrant_dense_vector_name,
+        "store": "neo4j_multimodal",
+        "vector_index": settings.multimodal_vector_index,
     }
-    if qdrant_store._client is None:
-        return _status(False, "down", detail="client not connected", **base)
-
     try:
-        qdrant_store._client.get_collections()
-        if not qdrant_store.has_collection():
+        exists = await _index_exists(multimodal_store._writer, settings.multimodal_vector_index)
+        count = await multimodal_store.document_count()
+        if not exists:
             return _status(
                 False,
                 "empty",
-                detail="collection not created yet",
-                points_count=0,
+                detail="vector index not created yet",
+                documents_count=count,
                 **base,
             )
-
-        info = qdrant_store._client.get_collection(settings.qdrant_collection)
-        dense_names, _ = _qdrant_vector_names(info)
-        if settings.qdrant_dense_vector_name not in dense_names:
-            return _status(
-                False,
-                "down",
-                detail=f"dense vector {settings.qdrant_dense_vector_name!r} missing",
-                points_count=info.points_count,
-                **base,
-            )
-
-        return _status(
-            True,
-            "up",
-            points_count=info.points_count,
-            **base,
-        )
+        return _status(True, "up", documents_count=count, **base)
     except Exception as exc:
-        logger.warning("qdrant vector health check failed: %s", exc)
+        logger.warning("multimodal vector health check failed: %s", exc)
         return _status(False, "down", detail=str(exc), **base)
 
 
-def check_qdrant_bm25(qdrant_store: QdrantHybridStore) -> ComponentStatus:
+async def check_multimodal_fulltext(
+    multimodal_store: MultimodalNeo4jStore,
+) -> ComponentStatus:
     base = {
-        "url": settings.qdrant_url,
-        "collection": settings.qdrant_collection,
-        "vector": settings.qdrant_bm25_vector_name,
-        "model": settings.qdrant_bm25_model,
+        "store": "neo4j_multimodal",
+        "fulltext_index": settings.multimodal_fulltext_index,
     }
-    if qdrant_store._client is None:
-        return _status(False, "down", detail="client not connected", **base)
-
     try:
-        qdrant_store._client.get_collections()
-        if not qdrant_store.has_collection():
+        exists = await _index_exists(multimodal_store._writer, settings.multimodal_fulltext_index)
+        count = await multimodal_store.document_count()
+        if not exists:
             return _status(
                 False,
                 "empty",
-                detail="collection not created yet",
-                points_count=0,
+                detail="fulltext index not created yet",
+                documents_count=count,
                 **base,
             )
-
-        info = qdrant_store._client.get_collection(settings.qdrant_collection)
-        _, sparse_names = _qdrant_vector_names(info)
-        if settings.qdrant_bm25_vector_name not in sparse_names:
-            return _status(
-                False,
-                "down",
-                detail=f"BM25 vector {settings.qdrant_bm25_vector_name!r} missing",
-                points_count=info.points_count,
-                **base,
-            )
-
-        return _status(
-            True,
-            "up",
-            points_count=info.points_count,
-            **base,
-        )
+        return _status(True, "up", documents_count=count, **base)
     except Exception as exc:
-        logger.warning("qdrant bm25 health check failed: %s", exc)
+        logger.warning("multimodal fulltext health check failed: %s", exc)
         return _status(False, "down", detail=str(exc), **base)
 
 
@@ -254,19 +206,21 @@ async def check_neo4j(neo4j_writer: Neo4jGraphWriter) -> ComponentStatus:
 async def component_status(
     *,
     instruction_security_event_consumer: InstructionSecurityEventKafkaConsumer,
-    qdrant_store: QdrantHybridStore,
+    multimodal_store: MultimodalNeo4jStore,
     neo4j_writer: Neo4jGraphWriter,
     ollama_client: OllamaEmbeddingClient,
 ) -> dict[str, ComponentStatus]:
-    kafka_status, neo4j_status, ollama_status = await asyncio.gather(
+    kafka_status, neo4j_status, ollama_status, vector_status, fulltext_status = await asyncio.gather(
         check_kafka(instruction_security_event_consumer),
         check_neo4j(neo4j_writer),
         check_ollama(ollama_client),
+        check_multimodal_vector(multimodal_store),
+        check_multimodal_fulltext(multimodal_store),
     )
     return {
         "kafka": kafka_status,
         "ollama": ollama_status,
-        "qdrant_vector": await asyncio.to_thread(check_qdrant_vector, qdrant_store),
-        "qdrant_bm25": await asyncio.to_thread(check_qdrant_bm25, qdrant_store),
+        "multimodal_vector": vector_status,
+        "multimodal_fulltext": fulltext_status,
         "neo4j": neo4j_status,
     }

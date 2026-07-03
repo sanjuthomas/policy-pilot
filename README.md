@@ -18,7 +18,7 @@ The answers rarely live in one place. Some rules sit in **LDAP**, some in an **O
 
 Worse, **what the permission model says** and **what actually happened** can diverge. A user may lack a role in one system yet still approve a payment because a downstream check passed, a stale entitlement was cached, or an exception path fired. For audit and supervision, the decisive record is not the org chart or the role matrix — it is the **security event**: the immutable fact that an action occurred, who performed it, whether policy allowed or denied it, and **why** (the OPA decision context captured at decision time).
 
-This demo models that reality end to end. Every instruction or payment mutation — create, submit, approve, reject, and policy denial — is recorded as a structured security event, streamed through Kafka, indexed into Qdrant and Neo4j, and made queryable in **natural language**. Stakeholders do not need to know which database, topic, or team owns the answer; they ask in conversation and get a **holistic, evidence-backed view** grounded in what the system actually did.
+This demo models that reality end to end. Every instruction or payment mutation — create, submit, approve, reject, and policy denial — is recorded as a structured security event, streamed through Kafka, indexed into Neo4j (graph + multimodal vector/fulltext), and made queryable in **natural language**. Stakeholders do not need to know which database, topic, or team owns the answer; they ask in conversation and get a **holistic, evidence-backed view** grounded in what the system actually did.
 
 The technical approach is **hybrid RAG** (vector search, BM25, and Neo4j) with **query-adaptive routing** — the assistant picks the right retrieval path and answer strategy for each question (planned graph queries, exact lookups, live eligibility checks, or full synthesis) instead of forcing every query through a single retrieval pattern.
 
@@ -80,8 +80,7 @@ flowchart TB
     subgraph stores [Data stores]
         MONGO[(MongoDB replica set)]
         KAFKA[(Kafka)]
-        QD[(Qdrant :6333)]
-        NEO[(Neo4j :7474)]
+        NEO[(Neo4j :7474 — graph + multimodal)]
     end
 
     subgraph ml [Host ML]
@@ -98,15 +97,13 @@ flowchart TB
     ILM --> MONGO
     PAY --> MONGO
     PAY -->|read instructions OBO| ILM
-    ILM -->|instruction-security-events| KAFKA
-    ILM -->|ssi-instructions| KAFKA
-    PAY -->|payment-security-events| KAFKA
-    PAY -->|ssi-payments| KAFKA
+    ILM -->|instruction_security_events| KAFKA
+    ILM -->|instructions| KAFKA
+    PAY -->|payment_security_events| KAFKA
+    PAY -->|payments| KAFKA
     KAFKA --> ETL
-    ETL --> QD
     ETL --> NEO
     ETL --> OLLAMA
-    CHAT --> QD
     CHAT --> NEO
     CHAT --> OLLAMA
     CHAT -->|eligible-approvers| ILM
@@ -117,14 +114,14 @@ flowchart TB
 
 ### Data flow
 
-1. **Instruction service** — operator creates/mutates an instruction; ZITADEL JWT is validated; the service calls **authorization-service** with On-Behalf-Of (service account `svc-instruction` + user token); authz evaluates OPA and returns `allow` + `allow_basis`; instruction version and security event (with `details.authorization`) are written to MongoDB **in a single transaction**; two Kafka fact events are published — one to `instruction-security-events` (security event + full instruction snapshot) and one to `ssi-instructions` (instruction state fact + authorization on mutations).
-2. **Payment service** — middle-office users create payments against approved SSI instructions; the same OBO → authz → OPA path applies; each action writes to MongoDB and publishes to `payment-security-events` (audit) and `ssi-payments` (payment state fact).
+1. **Instruction service** — operator creates/mutates an instruction; ZITADEL JWT is validated; the service calls **authorization-service** with On-Behalf-Of (service account `svc-instruction` + user token); authz evaluates OPA and returns `allow` + `allow_basis`; instruction version and security event (with `details.authorization`) are written to MongoDB **in a single transaction**; two Kafka fact events are published — one to `instruction_security_events` (security event + full instruction snapshot) and one to `instructions` (instruction state fact + authorization on mutations).
+2. **Payment service** — middle-office users create payments against approved SSI instructions; the same OBO → authz → OPA path applies; each action writes to MongoDB and publishes to `payment_security_events` (audit) and `payments` (payment state fact).
 3. **Authorization service** — sole runtime caller of OPA. Exposes evaluate and eligible-approvers APIs to domain services only (no MongoDB). Reads candidate approvers from `users.yaml` for batch eligibility checks.
-4. **SSI indexer** — runs four independent Kafka consumers, all **self-contained** (full snapshots embedded — no API callbacks). Denormalizes `authorization_summary`, `approved_at`, and related fields onto Qdrant and Neo4j for chat retrieval.
-   - **InstructionSecurityEventPipeline** (`instruction-security-events`) → Neo4j + Qdrant `source=instruction_security_event`
-   - **InstructionPipeline** (`ssi-instructions`) → instruction master graph + Qdrant `source=instruction_state`
-   - **PaymentSecurityEventPipeline** (`payment-security-events`) → payment security graph + Qdrant `source=payment_security_event`
-   - **PaymentFactPipeline** (`ssi-payments`) → payment master graph + Qdrant `source=payment_fact`
+4. **SSI indexer** — runs four independent Kafka consumers, all **self-contained** (full snapshots embedded — no API callbacks). Denormalizes `authorization_summary`, `approved_at`, and related fields onto Neo4j `MultimodalDocument` nodes and the graph for chat retrieval.
+   - **InstructionSecurityEventPipeline** (`instruction_security_events`) → Neo4j graph + multimodal `source=instruction_security_event`
+   - **InstructionPipeline** (`instructions`) → instruction master graph + multimodal `source=instruction_state`
+   - **PaymentSecurityEventPipeline** (`payment_security_events`) → payment security graph + multimodal `source=payment_security_event`
+   - **PaymentFactPipeline** (`payments`) → payment master graph + multimodal `source=payment_fact`
 5. **Chat** — selects a retrieval mode (`events` / `instructions` / `payments` / `all`), runs vector + BM25 + Neo4j in parallel, merges with reciprocal rank fusion. Count, ranking, hierarchy, and approval-by-ID questions use **deterministic planned Cypher** or exact lookups. Instruction approval audit questions return **Who / When** from indexed data and **Why** via LLM rewrite of OPA `authorization_summary`. Live **who can approve?** questions bypass RAG and call instruction-service or payment-service eligible-approvers APIs (compliance JWT). Other questions use full Ollama synthesis.
 
 ---
@@ -213,7 +210,7 @@ Example authorization block on an APPROVE security event:
 | Status gate | `resource.status == "PENDING"` | Approving an instruction not yet submitted |
 | Role segregation | `"INSTRUCTION_CREATOR" not in subject.roles` | Middle-office creator accounts cannot approve |
 
-**Why policy-as-code matters for this demo:** Allows and denials both produce structured audit records in Kafka → Neo4j → Qdrant. Denials surface as `ALERT` events for fraud-pattern questions (_"which users triggered the most policy denial alerts?"_). Allows carry `details.authorization` so the chat can answer approval audit questions with **Who / When / Why**, not just a name from instruction state.
+**Why policy-as-code matters for this demo:** Allows and denials both produce structured audit records in Kafka → Neo4j multimodal store. Denials surface as `ALERT` events for fraud-pattern questions (_"which users triggered the most policy denial alerts?"_). Allows carry `details.authorization` so the chat can answer approval audit questions with **Who / When / Why**, not just a name from instruction state.
 
 **Why OPA over embedding auth in domain services:** Policy logic changes independently of application logic. Adding a new rule (e.g. "MD-level approval required for international wire > $10M") requires editing a `.rego` file and reloading OPA — not rebuilding instruction-service or payment-service. The `opa-policy-seed` container loads policies from the `opa-policy-seed/policies/` directory at startup.
 
@@ -248,24 +245,21 @@ In this demo Kafka runs as a single broker with no replication, which is appropr
 
 ---
 
-### Why Qdrant + BM25 (hybrid search)?
+### Why Neo4j vector + fulltext BM25 (hybrid search)?
 
 No single retrieval strategy reliably handles the full range of questions a user asks over security events.
 
-**Dense vector search** (via `qwen3-embedding:0.6b` embeddings) excels at **semantic similarity** — "who tried to approve each other's instructions?" or "show me policy denial events for FX desk" — where the meaning matters more than the exact words. But dense search struggles with **exact identifiers**: if the user pastes a UUID like `2f75858d-d845-40d4-b9fb-43951a8c40e2`, the embedding of that string carries little semantic signal and the cosine similarity ranking is unreliable.
+**Dense vector search** (via `qwen3-embedding:0.6b` embeddings stored on `MultimodalDocument` nodes) excels at **semantic similarity** — "who tried to approve each other's instructions?" or "show me policy denial events for FX desk" — where the meaning matters more than the exact words. But dense search struggles with **exact identifiers**: if the user pastes a UUID like `2f75858d-d845-40d4-b9fb-43951a8c40e2`, the embedding of that string carries little semantic signal and the cosine similarity ranking is unreliable.
 
-**BM25 sparse search** is a classical term-frequency model (the same family as Elasticsearch's default scorer). It excels precisely where dense search fails: **exact-match tokens** — UUIDs, user IDs (`mo-100`, `ficc-300`), action names (`APPROVE`, `REJECT`), currency codes (`USD`, `EUR`). However, BM25 has no concept of synonymy or paraphrase — "declined" and "rejected" are unrelated tokens to BM25.
+**BM25 fulltext search** (Neo4j Lucene index on `search_text`) is a classical term-frequency model. It excels precisely where dense search fails: **exact-match tokens** — UUIDs, user IDs (`mo-100`, `ficc-300`), action names (`APPROVE`, `REJECT`), currency codes (`USD`, `EUR`). However, BM25 has no concept of synonymy or paraphrase — "declined" and "rejected" are unrelated tokens to BM25.
 
-**Hybrid search** fuses both signals:
+**Hybrid search** fuses both signals with reciprocal rank fusion (RRF, k=60) in the indexer console and chat reranker:
 
 ```
-score_hybrid(doc) = RRF(rank_dense, rank_bm25)
-                  = 1/(k + rank_dense) + 1/(k + rank_bm25)
+score_hybrid(doc) = 1/(k + rank_dense) + 1/(k + rank_bm25)
 ```
 
-Reciprocal Rank Fusion (RRF, Cormack et al. 2009) combines ranked lists without requiring score normalisation. The constant `k=60` dampens the influence of very high ranks. Empirically, hybrid search consistently outperforms either retriever alone in recall@10 across heterogeneous query distributions — a result confirmed in the BEIR benchmark suite and Qdrant's own evaluations.
-
-Qdrant was chosen because it natively supports **named vectors** (one point can carry both a dense 1024-d float32 vector and a BM25 sparse vector), runs hybrid queries server-side, and exposes a clean async Python client. The BM25 sparse encoder (`qdrant/bm25`) runs inside Qdrant itself — no separate sparse-encoder service is needed.
+Using **one Neo4j store** for graph traversal, dense vectors, and lexical search keeps chat/search/discovery infrastructure simple — no separate vector database to operate.
 
 ---
 
@@ -311,11 +305,11 @@ The graph also serves as a **cross-validation layer**: if a UUID is present in t
 | `qwen3-embedding:0.6b` ✓ | 1024 | 32 768 | Excellent retrieval, long context | — |
 | `snowflake-arctic-embed:m` | 768 | 512 | Compact English retrieval | Prior default; 512-token clipping risk |
 | `nomic-embed-text` | 768 | 8192 | Fast, good English recall | Lower retrieval vs Qwen3 embed |
-| `bge-m3:latest` | 1024 | 8192 | Multilingual, hybrid modes | Heavier; redundant with Qdrant BM25 |
+| `bge-m3:latest` | 1024 | 8192 | Multilingual, hybrid modes | Heavier; redundant with Neo4j fulltext |
 | `mxbai-embed-large` | 1024 | 512 | Strong English MTEB scores | Very short context window |
 | `text-embedding-3-small` (OpenAI) | 1536 | 8191 | High quality | Requires API key, not local |
 
-`qwen3-embedding:0.6b` is the default embedding model — **1024-dimensional** dense vectors indexed in Qdrant alongside BM25 sparse retrieval. After changing embedding models, wipe Qdrant and re-seed so the collection is recreated with the new vector size.
+`qwen3-embedding:0.6b` is the default embedding model — **1024-dimensional** dense vectors indexed in Neo4j alongside fulltext BM25. After changing embedding models, wipe Neo4j multimodal documents and re-seed so vector indexes are recreated with the new dimension.
 
 **Model selection — LLM (Cypher generation + answer synthesis):**
 
@@ -382,7 +376,7 @@ Embedding throughput with `qwen3-embedding:0.6b` is sufficient for real-time ETL
 |-----------|------|
 | `instruction-service` | FastAPI lifecycle API — routes policy checks to authorization-service (OBO), `details.authorization` audit block, Mongo persistence, Kafka publishing, compliance eligible-approvers API |
 | `payment-service` | Cash payment lifecycle against approved SSI instructions — same authz/OBO pattern, Mongo persistence, Kafka publishing, payment and security event UIs, compliance eligible-approvers API |
-| `ssi-indexer` | Four Kafka consumers — instruction + payment security events and state facts → Neo4j graph writer + Qdrant hybrid indexer (`ssi_search_index`) + search console UI |
+| `ssi-indexer` | Four Kafka consumers — instruction + payment security events and state facts → Neo4j graph + multimodal indexer + search console UI |
 | `ssi-chat` | **PolicyPilot** — RAG chat assistant; four search modes, triple retrieval, Who/When/Why approval audit (deterministic facts + LLM WHY rewrite), planned Cypher, regression suite; compliance sign-in for live **who can approve?** via payment-service and instruction-service |
 | `authorization-service` | Stateless OPA gateway — lifecycle evaluate + batch eligible-approvers; user directory UI; reads `users.yaml`; no database |
 | `ssi-demo-harness` | ZITADEL-authenticated UI to drive lifecycles and OPA policy scenarios |
@@ -409,11 +403,11 @@ The ETL and Chat use [Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Em
 
 Embeddings are queried through `POST /api/embed` on the local Ollama instance. Each document is embedded at write time by the ETL and at query time by PolicyPilot for similarity search.
 
-> **Important:** changing the embedding model changes the Qdrant dense vector size. Run `./ssi-demo-harness/seed-demo-data.sh` (full reset) after switching models.
+> **Important:** changing the embedding model changes the Neo4j vector dimension. Run `./ssi-demo-harness/seed-demo-data.sh` (full reset) after switching models.
 
-### Sparse retrieval — `qdrant/bm25`
+### Lexical retrieval — Neo4j fulltext (BM25)
 
-Alongside dense vectors, both the ETL indexer and Chat retriever use Qdrant's built-in **BM25** sparse encoder (`qdrant/bm25`). BM25 is a classical term-frequency retrieval model — it complements dense semantic search by excelling at exact-match terms like UUIDs, user IDs (`mo-100`, `ficc-300`), and action names (`APPROVE`, `REJECT`).
+Alongside dense vectors, both the ETL indexer and chat retriever use Neo4j's **fulltext index** on `MultimodalDocument.search_text` (Lucene BM25). BM25 complements dense semantic search by excelling at exact-match terms like UUIDs, user IDs (`mo-100`, `ficc-300`), and action names (`APPROVE`, `REJECT`).
 
 ### Chat / answer model — `hmahmood/neo4j-gemma-3-27b-inst-q8`
 
@@ -558,16 +552,17 @@ Policy denials (self-approval, wrong LOB, amount over club limit, subordinate ap
 
 | Layer | Name | Purpose |
 |-------|------|---------|
-| Qdrant collection | `ssi_search_index` | Hybrid search index (dense + BM25) |
-| Qdrant payload `source` | `instruction_security_event`, `instruction_state`, `payment_security_event`, `payment_fact` | Point type filter for chat modes |
+| Multimodal vector index | `multimodal_embedding` | Dense search on `MultimodalDocument.embedding` |
+| Multimodal fulltext index | `multimodal_search_text` | BM25 lexical search on `search_text` |
+| Multimodal `source` | `instruction_security_event`, `instruction_state`, `payment_security_event`, `payment_fact` | Document type filter for chat modes |
 | MongoDB | `ssi_cash_instructions.instructions` | Instruction versions |
 | MongoDB | `ssi_cash_activities.payments` | Payment records |
 | MongoDB | `security_events.instruction-service` | ILM security events |
 | MongoDB | `security_events.payment-service` | Payment security events |
-| Kafka | `instruction-security-events` | ILM security event facts |
-| Kafka | `ssi-instructions` | ILM instruction state facts |
-| Kafka | `payment-security-events` | Payment security event facts |
-| Kafka | `ssi-payments` | Payment state facts |
+| Kafka | `instruction_security_events` | ILM security event facts |
+| Kafka | `instructions` | ILM instruction state facts |
+| Kafka | `payment_security_events` | Payment security event facts |
+| Kafka | `payments` | Payment state facts |
 
 ---
 
@@ -576,7 +571,7 @@ Policy denials (self-approval, wrong LOB, amount over club limit, subordinate ap
 Four ETL pipelines write to the **same Neo4j database**, producing complementary sub-graphs that share nodes (`Instruction`, `InstructionVersion`, `User`, `ProfitCenter`, `Payment`, `SecurityEvent`).
 
 ### Graph 1 — Instruction Security Event Graph
-Built by `InstructionSecurityEventPipeline` from the `instruction-security-events` topic.
+Built by `InstructionSecurityEventPipeline` from the `instruction_security_events` topic.
 Answers: _who triggered this event, what severity, what instruction was touched, which actor caused a policy denial?_
 
 ```mermaid
@@ -593,7 +588,7 @@ flowchart TB
 ```
 
 ### Graph 2 — Instruction Master Graph
-Built by `InstructionPipeline` from the `ssi-instructions` topic.
+Built by `InstructionPipeline` from the `instructions` topic.
 Answers: _what is the current state of an instruction, who approved it, are there duplicate settlement routes, did a subordinate approve their manager's instruction?_
 
 ```mermaid
@@ -612,7 +607,7 @@ flowchart TB
 ```
 
 ### Graph 3 — Payment Security Event Graph
-Built by `PaymentSecurityEventPipeline` from the `payment-security-events` topic.
+Built by `PaymentSecurityEventPipeline` from the `payment_security_events` topic.
 Answers: _who attempted a denied payment action, what amount/LOB was involved?_
 
 ```mermaid
@@ -625,7 +620,7 @@ flowchart TB
 ```
 
 ### Graph 4 — Payment Master Graph
-Built by `PaymentFactPipeline` from the `ssi-payments` topic.
+Built by `PaymentFactPipeline` from the `payments` topic.
 Answers: _what is the current payment status, who created/submitted/approved it, which instruction does it use?_
 
 The `REPORTS_TO` relationship (org hierarchy from ZITADEL `supervisor_id`) is written by the ETL on every user upsert and powers inversion-of-control queries in chat.
@@ -695,10 +690,10 @@ User question + search mode (events | instructions | payments | all)
 ├─ Instructions mode + UUID + "who approved"? ──► Exact instruction lookup + APPROVE event fetch
 │                                              └─► Who/When from graph; Why via OPA summary + LLM rewrite
 │
-├─ UUID detected? ──► Exact Qdrant fetch + fixed Neo4j lookup (pinned to top of context)
+├─ UUID detected? ──► Exact multimodal fetch + fixed Neo4j lookup (pinned to top of context)
 │
-├─► Qdrant dense vector search (qwen3-embedding:0.6b), filtered by mode
-├─► Qdrant BM25 sparse search, filtered by mode
+├─► Neo4j dense vector search (qwen3-embedding:0.6b), filtered by mode
+├─► Neo4j fulltext BM25 search, filtered by mode
 └─► Ollama → Cypher → Neo4j (mode-specific system prompt)
          │
          ▼
@@ -708,7 +703,7 @@ User question + search mode (events | instructions | payments | all)
     Ollama answer synthesis (or structured Who/When/Why for approval audit)
 ```
 
-| Chat mode | Qdrant filter | Neo4j focus |
+| Chat mode | Multimodal `source` filter | Neo4j focus |
 |-----------|---------------|-------------|
 | `events` | `instruction_security_event` + `payment_security_event` | Both security event graphs |
 | `instructions` | `instruction_state` | Instruction master graph |
@@ -731,7 +726,7 @@ Every authorized instruction or payment mutation stores an OPA **authorization b
 | `details.authorization.subject_at_decision` | Actor snapshot at decision time |
 | `event.reason` | Copy of `summary` on successful actions |
 
-The ETL denormalizes these onto Qdrant (`authorization_summary`, `authorization_basis`, `approved_at` on `instruction_state`) and Neo4j (`InstructionVersion.approved_at`, `authorization_summary`, `authorization_basis`).
+The ETL denormalizes these onto multimodal documents (`authorization_summary`, `authorization_basis`, `approved_at` on `instruction_state`) and Neo4j (`InstructionVersion.approved_at`, `authorization_summary`, `authorization_basis`).
 
 **Chat behaviour (Instructions mode, approval questions):**
 
@@ -791,7 +786,7 @@ cd ssi-demo-harness && pip install -e .
 ssi-demo-harness-ui   # :8091
 ```
 
-Each service reads configuration from environment variables (see its own README for the full list). Requires local MongoDB, Kafka, Qdrant, Neo4j, OPA, ZITADEL, and Ollama.
+Each service reads configuration from environment variables (see its own README for the full list). Requires local MongoDB, Kafka, Neo4j, OPA, ZITADEL, and Ollama.
 
 ---
 

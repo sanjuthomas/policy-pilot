@@ -54,7 +54,7 @@ Policy denials surface as HTTP 403 and `ALERT` security events on Kafka. Authori
 
 The same pattern applies under `/v1/data/payment/lifecycle/…` for payments.
 
-On allow, domain services build `details.authorization.summary` from `allow_basis` and persist it on Mongo security events, Kafka facts, and (via ETL) Qdrant/Neo4j for RAG **Who / When / Why** answers.
+On allow, domain services build `details.authorization.summary` from `allow_basis` and persist it on Mongo security events, Kafka facts, and (via ETL) Neo4j multimodal documents for RAG **Who / When / Why** answers.
 
 ## Payment authorization
 

@@ -29,6 +29,7 @@ from etl.instruction_security_event_consumer import (
     InstructionSecurityEventKafkaConsumer,
 )
 from etl.instruction_security_event_pipeline import InstructionSecurityEventPipeline
+from etl.multimodal_store import MultimodalNeo4jStore
 from etl.neo4j_client import Neo4jGraphWriter
 from etl.ollama_client import OllamaEmbeddingClient
 from etl.payment_consumer import (
@@ -36,7 +37,6 @@ from etl.payment_consumer import (
     PaymentSecurityEventKafkaConsumer,
 )
 from etl.payment_pipeline import PaymentFactPipeline, PaymentSecurityEventPipeline
-from etl.qdrant_store import QdrantHybridStore
 from etl.search_text.builder import list_profile_fields, list_search_profiles
 
 __version__ = "0.2.0"
@@ -47,28 +47,28 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 neo4j_writer = Neo4jGraphWriter()
 ollama_client = OllamaEmbeddingClient()
-qdrant_store = QdrantHybridStore()
+multimodal_store = MultimodalNeo4jStore(neo4j_writer)
 
 instruction_security_event_pipeline = InstructionSecurityEventPipeline(
     neo4j_writer=neo4j_writer,
     ollama_client=ollama_client,
-    qdrant_store=qdrant_store,
+    multimodal_store=multimodal_store,
 )
 instruction_pipeline = InstructionPipeline(
     neo4j_writer=neo4j_writer,
     ollama_client=ollama_client,
-    qdrant_store=qdrant_store,
+    multimodal_store=multimodal_store,
 )
 
 payment_security_event_pipeline = PaymentSecurityEventPipeline(
     neo4j_writer=neo4j_writer,
     ollama_client=ollama_client,
-    qdrant_store=qdrant_store,
+    multimodal_store=multimodal_store,
 )
 payment_fact_pipeline = PaymentFactPipeline(
     neo4j_writer=neo4j_writer,
     ollama_client=ollama_client,
-    qdrant_store=qdrant_store,
+    multimodal_store=multimodal_store,
 )
 
 instruction_security_event_consumer = InstructionSecurityEventKafkaConsumer(
@@ -89,7 +89,6 @@ async def lifespan(app: FastAPI):
     configure_telemetry("ssi-indexer", service_version=__version__)
     instrument_app(app)
     await neo4j_writer.connect()
-    qdrant_store.connect()
 
     await instruction_security_event_consumer.start()
     await instruction_consumer.start()
@@ -98,8 +97,7 @@ async def lifespan(app: FastAPI):
 
     try:
         await ollama_client.warmup()
-        if qdrant_store.has_collection():
-            qdrant_store.ensure_collection(ollama_client.dimension)
+        await multimodal_store.ensure_indexes(ollama_client.dimension)
     except Exception as exc:
         logger.warning("search backends not fully warmed up yet: %s", exc)
 
@@ -112,13 +110,12 @@ async def lifespan(app: FastAPI):
     await payment_fact_consumer.close()
     await neo4j_writer.close()
     await ollama_client.close()
-    qdrant_store.close()
     shutdown_telemetry()
 
 
 app = FastAPI(
     title="Security Event Search Console",
-    description="Query Neo4j graph and Qdrant hybrid vectors produced by the ETL pipeline",
+    description="Query Neo4j graph and multimodal search produced by the ETL pipeline",
     version=__version__,
     lifespan=lifespan,
 )
@@ -137,7 +134,7 @@ async def index() -> FileResponse:
 async def health() -> dict:
     components = await component_status(
         instruction_security_event_consumer=instruction_security_event_consumer,
-        qdrant_store=qdrant_store,
+        multimodal_store=multimodal_store,
         neo4j_writer=neo4j_writer,
         ollama_client=ollama_client,
     )
@@ -167,20 +164,17 @@ async def vector_chunk_stats(
 ) -> dict:
     """Largest indexed search_text payloads — one point per record, no semantic chunking."""
     try:
-        stats_payload = await asyncio.to_thread(
-            qdrant_store.search_text_chunk_stats,
-            top_n=limit,
-        )
+        stats_payload = await multimodal_store.search_text_chunk_stats(top_n=limit)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     stats_payload["indexing_notes"] = {
-        "chunking": "none — each Qdrant point is one security event, instruction state, or payment record",
+        "chunking": "none — each multimodal document is one security event, instruction state, or payment record",
         "search_text": (
             "flattened subset of salient fields (message, authorization, actors, "
             "instruction/payment attributes) — not the full raw JSON document"
         ),
-        "full_payload": "stored in the Qdrant payload alongside search_text for retrieval",
+        "full_payload": "stored in Neo4j payload_json alongside search_text for retrieval",
         "sources": {
             "instruction_security_event": "one point per instruction security event",
             "instruction_state": "one point per instruction (updated in place on mutation)",
@@ -197,7 +191,7 @@ async def vector_chunk_stats(
 async def stats() -> dict:
     components = await component_status(
         instruction_security_event_consumer=instruction_security_event_consumer,
-        qdrant_store=qdrant_store,
+        multimodal_store=multimodal_store,
         neo4j_writer=neo4j_writer,
         ollama_client=ollama_client,
     )
@@ -211,8 +205,7 @@ async def stats() -> dict:
 async def search_vector(request: SearchRequest) -> dict:
     try:
         vector = await ollama_client.embed(request.query)
-        results = await asyncio.to_thread(
-            qdrant_store.search_dense,
+        results = await multimodal_store.search_dense(
             vector,
             limit=request.limit,
         )
@@ -224,8 +217,7 @@ async def search_vector(request: SearchRequest) -> dict:
 @api_router.post("/search/bm25")
 async def search_bm25(request: SearchRequest) -> dict:
     try:
-        results = await asyncio.to_thread(
-            qdrant_store.search_bm25,
+        results = await multimodal_store.search_bm25(
             request.query,
             limit=request.limit,
         )
@@ -238,8 +230,7 @@ async def search_bm25(request: SearchRequest) -> dict:
 async def search_hybrid(request: SearchRequest) -> dict:
     try:
         vector = await ollama_client.embed(request.query)
-        results = await asyncio.to_thread(
-            qdrant_store.search_hybrid,
+        results = await multimodal_store.search_hybrid(
             request.query,
             vector,
             limit=request.limit,

@@ -57,7 +57,7 @@ class TestRrfMerge:
         merged = rrf_merge([hits_a, hits_b])
         assert merged[0].summary == "much longer summary text"
 
-    def test_summary_from_qdrant_merged_payload(self) -> None:
+    def test_summary_from_search_hit_merged_payload(self) -> None:
         hits = [
             {
                 "source": "vector",

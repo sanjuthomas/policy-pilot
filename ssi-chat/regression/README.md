@@ -10,8 +10,8 @@ Each case also declares a **`retrieval`** tag — the primary engine the answer 
 |-------------|---------|---------------|
 | `deterministic` | Neo4j planned query + formatter; skips LLM synthesis | 18 |
 | `graph` | Neo4j planned or LLM Cypher is authoritative | 36 |
-| `vector` | Qdrant dense/BM25 hits drive open-ended security-event answers | 5 |
-| `eligibility` | Live OPA via authorization-service (no Qdrant) | 0 (supported in chat, not in this bank) |
+| `vector` | Neo4j dense/BM25 hits drive open-ended security-event answers | 5 |
+| `eligibility` | Live OPA via authorization-service (no multimodal search) | 0 (supported in chat, not in this bank) |
 
 PolicyPilot still runs dense vector search **in parallel** for every case except `eligibility` — the tag documents where the answer should actually come from.
 

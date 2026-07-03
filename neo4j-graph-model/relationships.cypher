@@ -2,8 +2,8 @@
 // Documentation only. No data is created by this file.
 //
 // Two ETL pipelines write to this graph:
-//   1. InstructionSecurityEventPipeline  — consumes instruction-security-events topic
-//   2. InstructionPipeline    — consumes ssi-instructions topic
+//   1. InstructionSecurityEventPipeline  — consumes instruction_security_events topic
+//   2. InstructionPipeline    — consumes instructions topic
 //
 // Source of truth in MongoDB:
 //   ssi_cash_instructions.instructions

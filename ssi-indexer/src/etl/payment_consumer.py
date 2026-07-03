@@ -9,6 +9,7 @@ from aiokafka import AIOKafkaConsumer
 from neo4j.exceptions import TransientError
 
 from etl.config import settings
+from etl.mongo_cdc import normalize_payment_message, normalize_security_event
 from etl.payment_pipeline import PaymentFactPipeline, PaymentSecurityEventPipeline
 
 logger = logging.getLogger(__name__)
@@ -18,7 +19,7 @@ _RETRY_BASE_DELAY = 0.2
 
 
 class PaymentSecurityEventKafkaConsumer:
-    """Consumes PaymentSecurityEvent messages from the payment-security-events topic."""
+    """Consumes PaymentSecurityEvent messages from the payment_security_events topic."""
 
     def __init__(self, pipeline: PaymentSecurityEventPipeline) -> None:
         self.pipeline = pipeline
@@ -94,14 +95,18 @@ class PaymentSecurityEventKafkaConsumer:
             raise
 
     async def _handle_message(self, payload: dict[str, Any]) -> None:
-        if not isinstance(payload, dict) or "event_id" not in payload:
+        if not isinstance(payload, dict):
             logger.warning("skipping invalid payment security event payload: %s", payload)
             return
-        await self.pipeline.process(payload)
+        event = normalize_security_event(payload)
+        if "event_id" not in event:
+            logger.warning("skipping invalid payment security event payload: %s", payload)
+            return
+        await self.pipeline.process(event)
 
 
 class PaymentFactKafkaConsumer:
-    """Consumes payment fact snapshots from the ssi-payments topic."""
+    """Consumes payment fact snapshots from the payments topic."""
 
     def __init__(self, pipeline: PaymentFactPipeline) -> None:
         self.pipeline = pipeline
@@ -177,7 +182,8 @@ class PaymentFactKafkaConsumer:
             raise
 
     async def _handle_message(self, payload: dict[str, Any]) -> None:
-        if not isinstance(payload, dict) or "payment_id" not in payload:
+        fact = normalize_payment_message(payload)
+        if not isinstance(fact, dict) or "payment_id" not in fact:
             logger.warning("skipping invalid payment fact payload: %s", payload)
             return
-        await self.pipeline.process(payload)
+        await self.pipeline.process(fact)

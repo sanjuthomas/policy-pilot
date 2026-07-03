@@ -6,6 +6,7 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from etl.neo4j_client import (
     Neo4jGraphWriter,
     _instruction_version_key,

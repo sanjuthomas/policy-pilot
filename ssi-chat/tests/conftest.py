@@ -26,16 +26,16 @@ def mock_ollama():
 
 
 @pytest.fixture
-def mock_qdrant():
+def mock_multimodal():
     client = MagicMock()
-    client.connect = MagicMock()
-    client.close = MagicMock()
-    client.has_collection = MagicMock(return_value=False)
-    client.search_vector = MagicMock(return_value=[])
-    client.search_bm25 = MagicMock(return_value=[])
-    client.fetch_by_event_id = MagicMock(return_value=None)
-    client.fetch_by_instruction_id = MagicMock(return_value=None)
-    client.fetch_instruction_approve_events = MagicMock(return_value=[])
+    client.has_documents = AsyncMock(return_value=False)
+    client.search_vector = AsyncMock(return_value=[])
+    client.search_bm25 = AsyncMock(return_value=[])
+    client.fetch_by_event_id = AsyncMock(return_value=None)
+    client.fetch_by_instruction_id = AsyncMock(return_value=None)
+    client.fetch_instruction_approve_events = AsyncMock(return_value=[])
+    client.fetch_by_payment_id = AsyncMock(return_value=None)
+    client.fetch_payment_approve_events = AsyncMock(return_value=[])
     return client
 
 
@@ -61,12 +61,12 @@ def compliance_subject():
 
 
 @pytest.fixture
-def test_client(mock_ollama, mock_qdrant, mock_neo4j, compliance_subject):
+def test_client(mock_ollama, mock_multimodal, mock_neo4j, compliance_subject):
     import chat_application.main as main_module
     from chat_application.dependencies import get_compliance_subject
 
     main_module.ollama_client = mock_ollama
-    main_module.qdrant_client = mock_qdrant
+    main_module.multimodal_client = mock_multimodal
     main_module.neo4j_client = mock_neo4j
     main_module.rag_service = None
 

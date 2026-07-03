@@ -16,8 +16,8 @@ const modeTabs = document.querySelectorAll(".mode-tab");
 
 const MODE_HINTS = {
   hybrid: "Dense embeddings + BM25 lexical search fused with reciprocal rank fusion (RRF).",
-  vector: "Semantic search using Ollama dense embeddings stored in Qdrant.",
-  bm25: "Lexical keyword search using Qdrant BM25 sparse vectors.",
+  vector: "Semantic search using Ollama dense embeddings stored in Neo4j.",
+  bm25: "Lexical keyword search using Neo4j fulltext (Lucene BM25).",
   neo4j: "Cypher text search over SecurityEvent nodes in the Neo4j graph.",
 };
 
@@ -47,7 +47,7 @@ function setMode(nextMode) {
   neo4jActionWrap.classList.toggle("hidden", !neo4jMode);
   neo4jActionWrap.setAttribute("aria-hidden", neo4jMode ? "false" : "true");
   resultsTitle.textContent =
-    mode === "neo4j" ? "Neo4j graph matches" : `Qdrant ${mode} matches`;
+    mode === "neo4j" ? "Neo4j graph matches" : `Multimodal ${mode} matches`;
 }
 
 function clearResults() {
@@ -65,8 +65,8 @@ function clearResults() {
 const COMPONENT_LABELS = {
   kafka: "Kafka",
   ollama: "Ollama",
-  qdrant_vector: "Qdrant · Vector",
-  qdrant_bm25: "Qdrant · BM25",
+  multimodal_vector: "Neo4j · Vector",
+  multimodal_fulltext: "Neo4j · BM25",
   neo4j: "Neo4j",
 };
 
@@ -92,10 +92,12 @@ function componentDetail(key, component) {
       .filter(Boolean)
       .join(" · ");
   }
-  if (key === "qdrant_vector" || key === "qdrant_bm25") {
-    const points =
-      component.points_count != null ? `${component.points_count} point(s)` : null;
-    return [component.collection, component.vector, points].filter(Boolean).join(" · ");
+  if (key === "multimodal_vector" || key === "multimodal_fulltext") {
+    const docs =
+      component.documents_count != null ? `${component.documents_count} document(s)` : null;
+    const index =
+      component.vector_index || component.fulltext_index || component.store;
+    return [index, docs].filter(Boolean).join(" · ");
   }
   if (key === "neo4j") {
     const nodes =
@@ -405,7 +407,7 @@ async function refreshChunkStats() {
   if (!AdminAuth.loadSession()) {
     chunkStatsContent.classList.add("hidden");
     chunkStatsEmpty.classList.remove("hidden");
-    chunkStatsEmpty.textContent = "Sign in to load chunk size stats from Qdrant.";
+    chunkStatsEmpty.textContent = "Sign in to load chunk size stats from the multimodal store.";
     return;
   }
 

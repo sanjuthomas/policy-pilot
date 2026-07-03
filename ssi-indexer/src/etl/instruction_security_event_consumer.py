@@ -10,6 +10,7 @@ from neo4j.exceptions import TransientError
 
 from etl.config import settings
 from etl.instruction_security_event_pipeline import InstructionSecurityEventPipeline
+from etl.mongo_cdc import normalize_security_event
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,7 @@ _RETRY_BASE_DELAY = 0.2  # seconds
 
 
 class InstructionSecurityEventKafkaConsumer:
-    """Consumes instruction security events from the instruction-security-events topic."""
+    """Consumes instruction security events from the instruction_security_events topic."""
 
     def __init__(self, pipeline: InstructionSecurityEventPipeline) -> None:
         self.pipeline = pipeline
@@ -96,7 +97,11 @@ class InstructionSecurityEventKafkaConsumer:
             raise
 
     async def _handle_message(self, payload: dict[str, Any]) -> None:
-        if not isinstance(payload, dict) or "event_id" not in payload:
+        if not isinstance(payload, dict):
             logger.warning("skipping invalid Kafka payload: %s", payload)
             return
-        await self.pipeline.process_instruction_security_event(payload)
+        event = normalize_security_event(payload)
+        if "event_id" not in event:
+            logger.warning("skipping invalid Kafka payload: %s", payload)
+            return
+        await self.pipeline.process_instruction_security_event(event)

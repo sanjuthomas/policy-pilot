@@ -29,7 +29,7 @@ def _hit_key(event_id: str | None, instruction_id: str | None, summary: str) -> 
     return f"row:{hash(summary)}"
 
 
-def _summary_from_qdrant(hit: dict[str, Any]) -> str:
+def _summary_from_search_hit(hit: dict[str, Any]) -> str:
     merged = hit.get("merged") or {}
     if merged.get("authorization_summary"):
         return str(merged["authorization_summary"])
@@ -58,7 +58,7 @@ def rrf_merge(
             source = hit.get("source", "unknown")
             event_id = hit.get("event_id")
             instruction_id = hit.get("instruction_id")
-            summary = hit.get("summary") or _summary_from_qdrant(hit)
+            summary = hit.get("summary") or _summary_from_search_hit(hit)
             key = _hit_key(event_id, instruction_id, summary)
 
             if key not in combined:

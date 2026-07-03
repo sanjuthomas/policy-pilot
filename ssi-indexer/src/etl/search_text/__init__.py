@@ -1,4 +1,4 @@
-"""YAML-driven search_text builder for Qdrant dense + BM25 indexing."""
+"""YAML-driven search_text builder for Neo4j multimodal indexing."""
 
 from etl.search_text.builder import (
     build_search_text_from_profile,

@@ -19,11 +19,8 @@ class Settings(BaseSettings):
     ollama_chat_model: str = "hmahmood/neo4j-gemma-3-27b-inst-q8"
     ollama_timeout_seconds: float = 300.0
 
-    qdrant_url: str = "http://qdrant:6333"
-    qdrant_collection: str = "ssi_search_index"
-    qdrant_dense_vector_name: str = "dense"
-    qdrant_bm25_vector_name: str = "bm25"
-    qdrant_bm25_model: str = "qdrant/bm25"
+    multimodal_vector_index: str = "multimodal_embedding"
+    multimodal_fulltext_index: str = "multimodal_search_text"
 
     neo4j_uri: str = "bolt://neo4j:7687"
     neo4j_user: str = "neo4j"

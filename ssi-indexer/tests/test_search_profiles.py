@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from helpers import sample_event as _sample_event
+from helpers import sample_instruction as _sample_instruction
+
 from etl.authorization_context import (
     authorization_merged_fields,
     authorization_merged_from_fact,
@@ -9,7 +12,10 @@ from etl.authorization_context import (
 )
 from etl.enrichment import build_merged_context, build_search_text
 from etl.instruction_pipeline import build_instruction_state_search_text
-from etl.payment_pipeline import build_payment_event_search_text, build_payment_fact_search_text
+from etl.payment_pipeline import (
+    build_payment_event_search_text,
+    build_payment_fact_search_text,
+)
 from etl.search_text.builder import (
     build_search_text_from_profile,
     expand_includes,
@@ -18,9 +24,10 @@ from etl.search_text.builder import (
     load_entity_profile,
     profiles_dir,
 )
-from etl.search_text.context import instruction_state_context, payment_security_event_context
-from helpers import sample_event as _sample_event
-from helpers import sample_instruction as _sample_instruction
+from etl.search_text.context import (
+    instruction_state_context,
+    payment_security_event_context,
+)
 
 
 def _legacy_instruction_security_event_search_text(ctx: dict) -> str:
@@ -96,6 +103,7 @@ def _legacy_instruction_state_search_text(fact: dict) -> str:
         debtor_account.get("identification") or "",
         snap.get("effective_date") or "",
         snap.get("end_date") or "",
+        snap.get("submitted_at") or "",
         created_by.get("user_id") or "",
         created_by.get("given_name") or "",
         created_by.get("family_name") or "",
@@ -108,6 +116,9 @@ def _legacy_instruction_state_search_text(fact: dict) -> str:
         rejected_by.get("given_name") or "",
         rejected_by.get("family_name") or "",
         snap.get("approved_at") or "",
+        snap.get("rejected_at") or "",
+        snap.get("rejection_reason") or "",
+        fact.get("timestamp") or "",
         fact.get("actor_user_id") or "",
         fact.get("actor_given_name") or "",
         fact.get("actor_family_name") or "",
@@ -183,18 +194,24 @@ def _legacy_payment_fact_search_text(fact: dict) -> str:
     parts = [
         fact.get("payment_id", ""),
         fact.get("instruction_id", ""),
+        str(fact.get("instruction_version", "")),
         fact.get("status", ""),
         fact.get("currency", ""),
         str(fact.get("amount", "")),
         fact.get("value_date") or "",
         fact.get("owning_lob", ""),
         fact.get("instruction_type", ""),
+        fact.get("timestamp") or "",
         created_by.get("user_id") or "",
         display(created_by),
+        (fact.get("submitted_by") or {}).get("user_id") or "",
+        display(fact.get("submitted_by") or {}),
         approved_by.get("user_id") or "",
         display(approved_by),
         rejected_by.get("user_id") or "",
         display(rejected_by),
+        fact.get("rejection_reason") or "",
+        fact.get("cancellation_reason") or "",
         "payment",
     ]
     return " ".join(str(part) for part in parts if part).strip()
@@ -279,15 +296,19 @@ def _sample_payment_fact() -> dict:
     return {
         "payment_id": "pay-99",
         "instruction_id": "instr-9",
+        "instruction_version": 2,
         "status": "APPROVED",
         "currency": "EUR",
         "amount": 500,
         "value_date": "2024-03-01",
         "owning_lob": "LOB-E",
         "instruction_type": "ACH",
+        "timestamp": "2024-03-01T10:00:00Z",
         "created_by": {"user_id": "c1", "given_name": "C", "family_name": "Cr"},
+        "submitted_by": {"user_id": "s1", "given_name": "S", "family_name": "Sub"},
         "approved_by": {"user_id": "a1", "given_name": "A", "family_name": "Ap"},
         "rejected_by": {"user_id": "r1", "given_name": "R", "family_name": "Re"},
+        "rejection_reason": "limit exceeded",
     }
 
 
@@ -380,3 +401,34 @@ def test_profile_matches_legacy_payment_fact():
     profile_text = build_search_text_from_profile("payment_fact", fact)
     assert profile_text == legacy
     assert build_payment_fact_search_text(fact) == legacy
+
+
+def test_versioned_payment_cdc_matches_payment_fact_profile() -> None:
+    from etl.mongo_cdc import versioned_payment_to_fact
+
+    fact = versioned_payment_to_fact(
+        {
+            "_id": "pay-99|4",
+            "version_number": 4,
+            "in": "2024-03-01T10:00:00Z",
+            "status": "REJECTED",
+            "owning_lob": "LOB-E",
+            "instruction_id": "instr-9",
+            "payload": {
+                "instruction_version": 2,
+                "currency": "EUR",
+                "amount": 500,
+                "value_date": "2024-03-01",
+                "instruction_type": "ACH",
+                "created_by": {"user_id": "c1", "given_name": "C", "family_name": "Cr"},
+                "rejection_reason": "limit exceeded",
+            },
+        }
+    )
+    assert fact is not None
+    text = build_payment_fact_search_text(fact)
+    assert "pay-99" in text
+    assert "instr-9" in text
+    assert "2" in text
+    assert "limit exceeded" in text
+    assert "2024-03-01T10:00:00Z" in text

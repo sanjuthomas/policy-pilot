@@ -17,7 +17,7 @@ class TestChatEndpoint:
         self,
         test_client: TestClient,
         mock_ollama,
-        mock_qdrant,
+        mock_multimodal,
         mock_neo4j,
     ) -> None:
         from chat_application.models import ChatResponse, SourceHit
