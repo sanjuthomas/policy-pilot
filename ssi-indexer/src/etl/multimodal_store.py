@@ -8,6 +8,10 @@ from typing import Any
 
 from etl.config import settings
 from etl.enrichment import EnrichedSecurityEventDocument
+from etl.multimodal_write import (
+    MultimodalWrite,
+    upsert_multimodal_in_tx,
+)
 from etl.neo4j_client import Neo4jGraphWriter
 
 logger = logging.getLogger(__name__)
@@ -194,34 +198,20 @@ class MultimodalNeo4jStore:
         payload: dict[str, Any],
         dense_vector: list[float],
     ) -> None:
-        payload = dict(payload)
-        fields = _denormalized_fields(payload)
+        write = MultimodalWrite(
+            document_id=document_id,
+            search_text=search_text,
+            payload=dict(payload),
+            dense_vector=dense_vector,
+        )
         async with self._driver.session() as session:
-            await session.run(
-                """
-                MERGE (d:MultimodalDocument {document_id: $document_id})
-                SET d.search_text = $search_text,
-                    d.embedding = $embedding,
-                    d.payload_json = $payload_json,
-                    d.source = $source,
-                    d.event_id = $event_id,
-                    d.instruction_id = $instruction_id,
-                    d.payment_id = $payment_id,
-                    d.action = $action,
-                    d.outcome = $outcome,
-                    d.updated_at = datetime()
-                """,
-                document_id=document_id,
-                search_text=search_text,
-                embedding=dense_vector,
-                payload_json=json.dumps(payload, default=str),
-                source=payload.get("source"),
-                event_id=fields.get("event_id"),
-                instruction_id=fields.get("instruction_id"),
-                payment_id=fields.get("payment_id"),
-                action=fields.get("action"),
-                outcome=fields.get("outcome"),
-            )
+            tx = await session.begin_transaction()
+            try:
+                await upsert_multimodal_in_tx(tx, write)
+                await tx.commit()
+            except Exception:
+                await tx.rollback()
+                raise
 
     async def upsert(
         self,
@@ -284,6 +274,49 @@ class MultimodalNeo4jStore:
         if record is None:
             return None
         return _payload_from_node(dict(record["d"]))
+
+    async def build_instruction_state_authorization_patch(
+        self,
+        instruction_id: str,
+        *,
+        approved_at: str | None,
+        authorization_summary: str | None,
+        authorization_basis: list[str] | None,
+    ) -> tuple[str, str, dict[str, Any]] | None:
+        """Return document id, search text, and payload for an instruction_state upsert."""
+        if not authorization_summary:
+            return None
+
+        document_id = instruction_document_id(instruction_id)
+        async with self._driver.session() as session:
+            result = await session.run(
+                """
+                MATCH (d:MultimodalDocument {document_id: $document_id})
+                RETURN d
+                """,
+                document_id=document_id,
+            )
+            record = await result.single()
+        if record is None:
+            return None
+
+        node = dict(record["d"])
+        payload = _payload_from_node(node)
+        basis = list(authorization_basis or [])
+        payload["approved_at"] = approved_at or payload.get("approved_at")
+        payload["authorization_summary"] = authorization_summary
+        payload["authorization_basis"] = basis
+        payload["source"] = "instruction_state"
+        payload["instruction_id"] = instruction_id
+        extra = " ".join(
+            part
+            for part in [approved_at or "", authorization_summary, " ".join(basis)]
+            if part
+        )
+        search_text = node.get("search_text") or payload.get("search_text") or ""
+        if extra:
+            search_text = f"{search_text} {extra}".strip()
+        return document_id, search_text, payload
 
     async def patch_instruction_state_authorization(
         self,

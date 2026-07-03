@@ -78,15 +78,13 @@ async def test_instruction_pipeline_processes_new_fact(mock_neo4j, mock_ollama, 
     fact = _instruction_fact()
     await pipeline.process_instruction_fact(fact)
 
-    mock_neo4j.upsert_instruction_fact.assert_awaited_once_with(fact)
+    mock_neo4j.upsert_instruction_fact.assert_awaited_once()
+    call_kwargs = mock_neo4j.upsert_instruction_fact.call_args
+    assert call_kwargs.args[0] == fact
+    assert "multimodal" in call_kwargs.kwargs
     mock_ollama.warmup.assert_awaited_once()
     mock_multimodal.ensure_indexes.assert_awaited_once_with(3)
     mock_ollama.embed.assert_awaited_once()
-    mock_multimodal.upsert_instruction_state.assert_awaited_once()
-
-    call_kwargs = mock_multimodal.upsert_instruction_state.call_args.kwargs
-    assert call_kwargs["instruction_id"] == "instr-merge"
-    assert call_kwargs["payload"]["status"] == "PENDING"
 
 
 async def test_instruction_pipeline_merges_existing_payload(mock_neo4j, mock_ollama, mock_multimodal):
@@ -121,7 +119,9 @@ async def test_instruction_pipeline_merges_existing_payload(mock_neo4j, mock_oll
     )
     await pipeline.process_instruction_fact(fact)
 
-    payload = mock_multimodal.upsert_instruction_state.call_args.kwargs["payload"]
+    payload = mock_neo4j.upsert_instruction_fact.call_args.kwargs["multimodal"].payload
+    assert payload["instruction_id"] == "instr-merge"
+    assert payload["status"] == "PENDING"
     assert payload["authorization_summary"] == "prev summary"
     assert payload["authorization_basis"] == ["old-rule"]
     assert payload["approved_at"] == "2023-12-01"
@@ -148,7 +148,7 @@ async def test_instruction_pipeline_approve_does_not_preserve_old_auth(mock_neo4
     )
     await pipeline.process_instruction_fact(fact)
 
-    payload = mock_multimodal.upsert_instruction_state.call_args.kwargs["payload"]
+    payload = mock_neo4j.upsert_instruction_fact.call_args.kwargs["multimodal"].payload
     assert payload["authorization_summary"] == "fresh approval"
     assert payload["authorization_basis"] == ["new-rule"]
 
@@ -169,7 +169,7 @@ async def test_payment_security_event_pipeline(mock_neo4j, mock_ollama, mock_mul
     }
     await pipeline.process(event)
     mock_neo4j.upsert_payment_security_event.assert_awaited_once()
-    mock_multimodal.upsert_payment_point.assert_awaited_once()
+    assert "multimodal" in mock_neo4j.upsert_payment_security_event.call_args.kwargs
 
 
 async def test_payment_security_event_skips_missing_event_id(mock_neo4j, mock_ollama, mock_multimodal):
@@ -199,8 +199,7 @@ async def test_payment_fact_pipeline(mock_neo4j, mock_ollama, mock_multimodal):
     }
     await pipeline.process(fact)
     mock_neo4j.upsert_payment_fact.assert_awaited_once()
-    mock_multimodal.upsert_payment_point.assert_awaited_once()
-    payload = mock_multimodal.upsert_payment_point.call_args.kwargs["payload"]
+    payload = mock_neo4j.upsert_payment_fact.call_args.kwargs["multimodal"].payload
     assert payload["source"] == "payment_fact"
 
 

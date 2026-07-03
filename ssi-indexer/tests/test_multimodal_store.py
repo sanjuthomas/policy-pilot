@@ -38,6 +38,11 @@ def neo4j_session() -> AsyncMock:
     session = AsyncMock()
     session.__aenter__ = AsyncMock(return_value=session)
     session.__aexit__ = AsyncMock(return_value=False)
+    tx = AsyncMock()
+    tx.run = AsyncMock()
+    tx.commit = AsyncMock()
+    tx.rollback = AsyncMock()
+    session.begin_transaction = AsyncMock(return_value=tx)
     return session
 
 
@@ -117,17 +122,18 @@ async def test_ensure_indexes_runs_once(store: MultimodalNeo4jStore, neo4j_sessi
 
 
 async def test_upsert_instruction_state(store: MultimodalNeo4jStore, neo4j_session: AsyncMock) -> None:
-    neo4j_session.run = AsyncMock()
+    tx = await neo4j_session.begin_transaction()
     await store.upsert_instruction_state(
         "instr-1",
         "pending wire",
         {"status": "PENDING"},
         dense_vector=[0.1, 0.2],
     )
-    neo4j_session.run.assert_awaited_once()
-    call_kwargs = neo4j_session.run.call_args.kwargs
+    tx.run.assert_awaited_once()
+    call_kwargs = tx.run.call_args.kwargs
     assert call_kwargs["instruction_id"] == "instr-1"
     assert call_kwargs["source"] == "instruction_state"
+    tx.commit.assert_awaited_once()
 
 
 async def test_get_instruction_state_payload_missing(
@@ -177,7 +183,8 @@ async def test_patch_instruction_state_authorization_updates(
             }
         }
     )
-    neo4j_session.run = AsyncMock(side_effect=[lookup, AsyncMock()])
+    neo4j_session.run = AsyncMock(return_value=lookup)
+    tx = await neo4j_session.begin_transaction()
 
     await store.patch_instruction_state_authorization(
         "instr-1",
@@ -185,7 +192,9 @@ async def test_patch_instruction_state_authorization_updates(
         authorization_summary="approved by manager",
         authorization_basis=["role-match"],
     )
-    assert neo4j_session.run.await_count == 2
+    neo4j_session.run.assert_awaited_once()
+    tx.run.assert_awaited_once()
+    tx.commit.assert_awaited_once()
 
 
 async def test_search_dense_returns_hits(store: MultimodalNeo4jStore, neo4j_session: AsyncMock) -> None:

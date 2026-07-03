@@ -11,7 +11,8 @@ import logging
 from typing import Any
 
 from etl.authorization_context import authorization_merged_from_fact
-from etl.multimodal_store import MultimodalNeo4jStore
+from etl.multimodal_store import MultimodalNeo4jStore, instruction_document_id
+from etl.multimodal_write import MultimodalWrite
 from etl.neo4j_client import Neo4jGraphWriter
 from etl.ollama_client import OllamaEmbeddingClient
 from etl.search_text.builder import build_search_text_from_profile
@@ -43,15 +44,12 @@ class InstructionPipeline:
             logger.warning("instruction fact missing instruction_id — skipping")
             return
 
-        await self.neo4j_writer.upsert_instruction_fact(fact)
-
         if not self._multimodal_ready:
             await self.ollama_client.warmup()
             await self.multimodal_store.ensure_indexes(self.ollama_client.dimension)
             self._multimodal_ready = True
 
         search_text = build_instruction_state_search_text(fact)
-        dense_vector = await self.ollama_client.embed(search_text)
 
         snap = fact.get("instruction_snapshot") or {}
         auth_merged = authorization_merged_from_fact(fact)
@@ -108,12 +106,14 @@ class InstructionPipeline:
                 if not payload.get("rejection_reason"):
                     payload["rejection_reason"] = existing.get("rejection_reason")
 
-        await self.multimodal_store.upsert_instruction_state(
-            instruction_id=instruction_id,
+        dense_vector = await self.ollama_client.embed(search_text)
+        multimodal = MultimodalWrite(
+            document_id=instruction_document_id(instruction_id),
             search_text=search_text,
-            payload=payload,
+            payload={**payload, "source": "instruction_state", "instruction_id": instruction_id},
             dense_vector=dense_vector,
         )
+        await self.neo4j_writer.upsert_instruction_fact(fact, multimodal=multimodal)
 
         logger.info(
             "processed instruction fact instruction_id=%s action=%s version=%s",

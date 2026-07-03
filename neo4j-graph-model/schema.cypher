@@ -54,24 +54,30 @@ FOR (v:InstructionVersion) ON (v.effective_date);
 CREATE INDEX instruction_version_end_date IF NOT EXISTS
 FOR (v:InstructionVersion) ON (v.end_date);
 
-// Payment constraints and indexes
-CREATE CONSTRAINT payment_id_version_unique IF NOT EXISTS
-FOR (p:Payment) REQUIRE (p.payment_id, p.version_number) IS UNIQUE;
+// Payment constraints and indexes (append-only versioned model — mirrors Instruction)
+CREATE CONSTRAINT payment_id_unique IF NOT EXISTS
+FOR (p:Payment) REQUIRE p.payment_id IS UNIQUE;
 
-CREATE INDEX payment_version_key IF NOT EXISTS
-FOR (p:Payment) ON (p.version_key);
+CREATE CONSTRAINT payment_version_key_unique IF NOT EXISTS
+FOR (v:PaymentVersion) REQUIRE v.version_key IS UNIQUE;
+
+CREATE CONSTRAINT payment_version_id_num_unique IF NOT EXISTS
+FOR (v:PaymentVersion) REQUIRE (v.payment_id, v.version_number) IS UNIQUE;
 
 CREATE INDEX payment_instruction_id IF NOT EXISTS
 FOR (p:Payment) ON (p.instruction_id);
 
-CREATE INDEX payment_status IF NOT EXISTS
-FOR (p:Payment) ON (p.status);
+CREATE INDEX payment_version_status IF NOT EXISTS
+FOR (v:PaymentVersion) ON (v.status);
 
-CREATE INDEX payment_created_at IF NOT EXISTS
-FOR (p:Payment) ON (p.created_at);
+CREATE INDEX payment_version_owning_lob IF NOT EXISTS
+FOR (v:PaymentVersion) ON (v.owning_lob);
 
-CREATE INDEX payment_owning_lob IF NOT EXISTS
-FOR (p:Payment) ON (p.owning_lob);
+CREATE INDEX payment_version_value_date IF NOT EXISTS
+FOR (v:PaymentVersion) ON (v.value_date);
+
+CREATE INDEX payment_version_created_at IF NOT EXISTS
+FOR (v:PaymentVersion) ON (v.created_at);
 
 CREATE INDEX payment_security_event_id IF NOT EXISTS
 FOR (e:SecurityEvent) ON (e.payment_id);
