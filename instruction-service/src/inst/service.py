@@ -175,6 +175,12 @@ class InstructionService:
     def _should_record_security_event(subject: Subject) -> bool:
         return subject.user_id not in settings.security_event_excluded_user_id_set
 
+    @staticmethod
+    def _should_record_view_security_event(subject: Subject) -> bool:
+        if subject.user_id in settings.security_event_view_excluded_user_id_set:
+            return False
+        return InstructionService._should_record_security_event(subject)
+
     async def _evaluate_policy(
         self,
         action: LifecycleAction,
@@ -468,21 +474,23 @@ class InstructionService:
         session_id: str | None = None,
     ) -> InstructionResponse:
         record = await self.repository.get_current(instruction_id)
+        record_view = self._should_record_view_security_event(subject)
         authorization = await self._authorize(
             LifecycleAction.VIEW,
             subject,
             record.instruction,
             bearer_token=bearer_token,
             session_id=session_id,
-            record_security_event=True,
+            record_security_event=record_view,
         )
-        await self._record_authorized_action(
-            LifecycleAction.VIEW,
-            subject,
-            record.instruction,
-            version_number=record.version_number,
-            details=details_with_authorization(None, authorization),
-        )
+        if record_view:
+            await self._record_authorized_action(
+                LifecycleAction.VIEW,
+                subject,
+                record.instruction,
+                version_number=record.version_number,
+                details=details_with_authorization(None, authorization),
+            )
         return _to_response(record)
 
     async def list_versions(
@@ -524,23 +532,25 @@ class InstructionService:
             ):
                 continue
             try:
+                record_view = self._should_record_view_security_event(subject)
                 authorization = await self._authorize(
                     LifecycleAction.VIEW,
                     subject,
                     record.instruction,
                     bearer_token=bearer_token,
                     session_id=session_id,
-                    record_security_event=True,
+                    record_security_event=record_view,
                 )
             except PermissionError:
                 continue
-            await self._record_authorized_action(
-                LifecycleAction.VIEW,
-                subject,
-                record.instruction,
-                version_number=record.version_number,
-                details=details_with_authorization(None, authorization),
-            )
+            if record_view:
+                await self._record_authorized_action(
+                    LifecycleAction.VIEW,
+                    subject,
+                    record.instruction,
+                    version_number=record.version_number,
+                    details=details_with_authorization(None, authorization),
+                )
             visible.append(_to_response(record))
         return visible
 

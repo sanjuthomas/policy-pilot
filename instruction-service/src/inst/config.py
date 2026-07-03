@@ -33,12 +33,21 @@ class Settings(BaseSettings):
     ui_initial_security_event_limit: int = 200
     sequence_service_url: str = "http://localhost:8095"
     security_event_excluded_user_ids: str = "etl-reader"
+    security_event_view_excluded_user_ids: str = "admin-001"
 
     @property
     def security_event_excluded_user_id_set(self) -> set[str]:
         return {
             user_id.strip()
             for user_id in self.security_event_excluded_user_ids.split(",")
+            if user_id.strip()
+        }
+
+    @property
+    def security_event_view_excluded_user_id_set(self) -> set[str]:
+        return {
+            user_id.strip()
+            for user_id in self.security_event_view_excluded_user_ids.split(",")
             if user_id.strip()
         }
 

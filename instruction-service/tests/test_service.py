@@ -345,6 +345,56 @@ async def test_should_record_security_event_excludes_etl_reader(
 
 
 @pytest.mark.asyncio
+async def test_should_record_view_security_event_excludes_admin(
+    sample_subject: Subject,
+) -> None:
+    admin = sample_subject.model_copy(
+        update={"user_id": "admin-001", "roles": ["PLATFORM_ADMIN"]}
+    )
+    assert InstructionService._should_record_view_security_event(admin) is False
+    assert InstructionService._should_record_view_security_event(sample_subject) is True
+
+
+@pytest.mark.asyncio
+async def test_list_skips_view_security_events_for_admin(
+    service: InstructionService,
+    mock_repo: MagicMock,
+    mock_security_events: MagicMock,
+    sample_subject: Subject,
+    sample_instruction: CashSettlementInstruction,
+) -> None:
+    admin = sample_subject.model_copy(
+        update={"user_id": "admin-001", "roles": ["PLATFORM_ADMIN"]}
+    )
+    mock_repo.list_current = AsyncMock(return_value=[_versioned(sample_instruction)])
+
+    visible = await service.list(admin)
+
+    assert len(visible) == 1
+    mock_security_events.record_authorized_action.assert_not_called()
+    mock_security_events.record_policy_denial.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_get_skips_view_security_events_for_admin(
+    service: InstructionService,
+    mock_repo: MagicMock,
+    mock_security_events: MagicMock,
+    sample_subject: Subject,
+    sample_instruction: CashSettlementInstruction,
+) -> None:
+    admin = sample_subject.model_copy(
+        update={"user_id": "admin-001", "roles": ["PLATFORM_ADMIN"]}
+    )
+    mock_repo.get_current = AsyncMock(return_value=_versioned(sample_instruction))
+
+    response = await service.get("instr-001", admin)
+
+    assert response.instruction_id == "instr-001"
+    mock_security_events.record_authorized_action.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_update_draft_success(
     service: InstructionService,
     mock_repo: MagicMock,

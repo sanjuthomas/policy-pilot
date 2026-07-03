@@ -1,4 +1,4 @@
-{
+  {
   "name": "mongo-payments-source",
   "config": {
     "connector.class": "com.mongodb.kafka.connect.MongoSourceConnector",
@@ -12,8 +12,7 @@
     "output.format.key": "json",
     "output.format.value": "json",
     "key.converter": "org.apache.kafka.connect.json.JsonConverter",
-    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
     "key.converter.schemas.enable": "false",
-    "value.converter.schemas.enable": "false"
+    "value.converter": "org.apache.kafka.connect.storage.StringConverter"
   }
 }

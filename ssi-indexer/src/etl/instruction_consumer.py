@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from typing import Any
 
@@ -10,6 +9,7 @@ from neo4j.exceptions import TransientError
 
 from etl.config import settings
 from etl.instruction_pipeline import InstructionPipeline
+from etl.kafka_deserialize import deserialize_kafka_json
 from etl.mongo_cdc import normalize_instruction_message
 
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ class InstructionKafkaConsumer:
             group_id=settings.kafka_instruction_consumer_group,
             enable_auto_commit=False,
             auto_offset_reset="earliest",
-            value_deserializer=lambda value: json.loads(value.decode("utf-8")),
+            value_deserializer=deserialize_kafka_json,
         )
         await self._consumer.start()
         self._task = asyncio.create_task(self._run())
