@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     authorization_service_url: str = "http://localhost:8094"
     instruction_service_url: str = Field(
         default="http://localhost:8000",
-        validation_alias=AliasChoices("instruction_service_url", "INSTRUCTION_SERVICE_URL", "ILM_URL"),
+        validation_alias=AliasChoices("instruction_service_url", "INSTRUCTION_SERVICE_URL"),
     )
     sequence_service_url: str = "http://localhost:8095"
 

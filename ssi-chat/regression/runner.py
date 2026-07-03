@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import re
 import sys
 import time
@@ -205,10 +204,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--harness-url", default="http://localhost:8091")
     parser.add_argument(
         "--instruction-service-url",
-        "--ilm-url",
         dest="instruction_service_url",
         default="http://localhost:8000",
-        help="instruction-service base URL (ILM_URL / --ilm-url accepted for compatibility)",
+        help="instruction-service base URL (INSTRUCTION_SERVICE_URL)",
     )
     parser.add_argument("--payment-url", default="http://localhost:8093")
     parser.add_argument("--indexer-url", default="http://localhost:8090")

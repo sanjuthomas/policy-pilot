@@ -21,14 +21,13 @@ class Settings(BaseSettings):
     admin_user_id: str = "admin-001"
     instruction_service_url: str = Field(
         default="http://localhost:8000",
-        validation_alias=AliasChoices("instruction_service_url", "INSTRUCTION_SERVICE_URL", "ILM_URL"),
+        validation_alias=AliasChoices("instruction_service_url", "INSTRUCTION_SERVICE_URL"),
     )
     instruction_service_api_prefix: str = Field(
         default="/api/v1",
         validation_alias=AliasChoices(
             "instruction_service_api_prefix",
             "INSTRUCTION_SERVICE_API_PREFIX",
-            "ILM_API_PREFIX",
         ),
     )
     users_file: Path = Path(__file__).resolve().parents[3] / "zitadel-seed" / "users.yaml"
