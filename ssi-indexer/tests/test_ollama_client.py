@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
-
 from etl.ollama_client import OllamaEmbeddingClient
 
 

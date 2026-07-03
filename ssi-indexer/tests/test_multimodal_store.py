@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import json
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from etl.multimodal_store import (
     MultimodalNeo4jStore,
     _chunk_record_id,

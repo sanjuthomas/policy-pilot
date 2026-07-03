@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from etl.instruction_pipeline import InstructionPipeline
 from etl.payment_pipeline import PaymentFactPipeline, PaymentSecurityEventPipeline
 

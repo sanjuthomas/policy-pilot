@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from helpers import sample_event as _sample_event
-from helpers import sample_instruction as _sample_instruction
-
 from etl.enrichment import (
     EnrichedSecurityEventDocument,
     build_merged_context,
     build_search_text,
     enrich_document,
 )
+from helpers import sample_event as _sample_event
+from helpers import sample_instruction as _sample_instruction
 
 
 def test_build_merged_context_with_instruction():

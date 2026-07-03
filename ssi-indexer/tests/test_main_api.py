@@ -6,10 +6,9 @@ from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
-
 from etl.admin import get_admin_subject
 from etl.models import Subject
+from fastapi.testclient import TestClient
 
 
 def _async_mocks(*consumers):
