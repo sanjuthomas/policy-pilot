@@ -14,6 +14,7 @@ Distributed **Kafka Connect** worker with the [MongoDB Kafka Connector](https://
 All connectors set:
 
 - `publish.full.document.only=true` — message value is the Mongo document only
+- `pipeline=[{"$match": {"operationType": "insert"}}]` — **insert-only** change stream; skip `update` events (e.g. closing `out` on a superseded version row). Downstream only needs new rows.
 - `copy.existing=true` — backfill existing collection data on first run
 - `topic.namespace.map` — route each collection to its topic
 - `value.converter=StringConverter` — Mongo connector already serializes JSON; avoids double-encoding at the broker
