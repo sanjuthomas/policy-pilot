@@ -11,7 +11,7 @@ from regression.auth_helpers import admin_auth_headers, compliance_auth_headers
 
 logger = logging.getLogger(__name__)
 
-SKIP_OLLAMA = os.environ.get("API_SMOKE_SKIP_OLLAMA", "").lower() in {"1", "true", "yes"}
+SKIP_VERTEX = os.environ.get("API_SMOKE_SKIP_VERTEX", "").lower() in {"1", "true", "yes"}
 
 
 @dataclass
@@ -365,8 +365,8 @@ def run_api_smoke(
         )
 
         def indexer_search_vector() -> None:
-            if SKIP_OLLAMA:
-                raise SkipCheck("API_SMOKE_SKIP_OLLAMA set")
+            if SKIP_VERTEX:
+                raise SkipCheck("API_SMOKE_SKIP_VERTEX set")
             response = client.post(
                 f"{indexer_url.rstrip('/')}/api/search/vector",
                 json={"query": "policy denial", "limit": 3},
@@ -426,8 +426,8 @@ def run_api_smoke(
         )
 
         def indexer_intent_extract() -> None:
-            if SKIP_OLLAMA:
-                raise SkipCheck("API_SMOKE_SKIP_OLLAMA set")
+            if SKIP_VERTEX:
+                raise SkipCheck("API_SMOKE_SKIP_VERTEX set")
             response = client.post(
                 f"{indexer_url.rstrip('/')}/api/intent/extract",
                 json={

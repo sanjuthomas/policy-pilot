@@ -74,7 +74,7 @@ Use `CHAT_REGRESSION_SEED=1` to run harness seed steps before the suite.
 
 ## API smoke (cross-service)
 
-Before chat cases, the runner executes **API smoke checks** across services (health, auth gates, admin UI APIs, indexer search/graph/cypher, payment/instruction eligible-approvers). Use:
+Before chat cases, the runner executes **API smoke checks** across services (health, auth gates, admin UI APIs, indexer search/graph/intent extract, payment/instruction eligible-approvers). Use:
 
 ```bash
 # Smoke only (fast, skips Vertex-dependent indexer checks)
@@ -87,7 +87,7 @@ PYTHONPATH=. python -m regression.runner --seed
 PYTHONPATH=. python -m regression.runner --skip-api-smoke
 ```
 
-Set `API_SMOKE_SKIP_OLLAMA=1` to skip Vertex-dependent smoke checks (indexer vector search and cypher generate) when GCP credentials are unavailable.
+Set `API_SMOKE_SKIP_VERTEX=1` to skip Vertex-dependent smoke checks (indexer vector search and intent extract) when GCP credentials are unavailable.
 
 Pytest:
 
