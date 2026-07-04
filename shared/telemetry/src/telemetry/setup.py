@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from opentelemetry import trace
 from opentelemetry._logs import set_logger_provider
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
@@ -12,13 +13,20 @@ from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.semconv.resource import ResourceAttributes
 
 from telemetry.config import TelemetrySettings
-from telemetry.exporters import build_log_exporter, build_metric_exporter
+from telemetry.exporters import (
+    build_log_exporter,
+    build_metric_exporter,
+    build_trace_exporter,
+)
 
 _logger_provider: LoggerProvider | None = None
 _meter_provider: MeterProvider | None = None
+_trace_provider: TracerProvider | None = None
 _logging_handler: LoggingHandler | None = None
 _console_handler: logging.Handler | None = None
 _settings: TelemetrySettings | None = None
@@ -44,7 +52,7 @@ def configure_telemetry(
     *,
     service_version: str = "0.1.0",
 ) -> TelemetrySettings:
-    global _logger_provider, _meter_provider, _logging_handler, _console_handler, _settings, _configured
+    global _logger_provider, _meter_provider, _trace_provider, _logging_handler, _console_handler, _settings, _configured
 
     settings = TelemetrySettings.from_env(
         service_name=service_name,
@@ -66,6 +74,7 @@ def configure_telemetry(
     resource = _resource(settings)
     log_exporter = build_log_exporter(settings)
     metric_exporter = build_metric_exporter(settings)
+    trace_exporter = build_trace_exporter(settings)
 
     _logger_provider = LoggerProvider(resource=resource)
     _logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
@@ -80,6 +89,10 @@ def configure_telemetry(
     from opentelemetry import metrics
 
     metrics.set_meter_provider(_meter_provider)
+
+    _trace_provider = TracerProvider(resource=resource)
+    _trace_provider.add_span_processor(BatchSpanProcessor(trace_exporter))
+    trace.set_tracer_provider(_trace_provider)
 
     root = logging.getLogger()
     root.handlers.clear()
@@ -110,14 +123,24 @@ def configure_telemetry(
     return settings
 
 
+def get_tracer(name: str, *, version: str = "0.1.0") -> trace.Tracer:
+    return trace.get_tracer(name, version)
+
+
 def instrument_app(app: Any) -> None:
     if not is_telemetry_enabled() or _settings is None:
         return
 
+    from telemetry.http_logging import add_http_payload_logging
+
+    add_http_payload_logging(
+        app,
+        excluded_urls=_settings.excluded_urls,
+    )
     FastAPIInstrumentor.instrument_app(app, excluded_urls=_settings.excluded_urls)
     HTTPXClientInstrumentor().instrument()
     logging.getLogger(__name__).info(
-        "FastAPI and HTTPX instrumentation enabled (excluded_urls=%s)",
+        "FastAPI, HTTPX, and HTTP payload logging enabled (excluded_urls=%s)",
         _settings.excluded_urls,
     )
 
@@ -127,7 +150,11 @@ def get_logger(name: str) -> logging.Logger:
 
 
 def shutdown_telemetry() -> None:
-    global _logger_provider, _meter_provider, _logging_handler, _console_handler, _configured
+    global _logger_provider, _meter_provider, _trace_provider, _logging_handler, _console_handler, _configured
+
+    if _trace_provider is not None:
+        _trace_provider.shutdown()
+        _trace_provider = None
 
     if _logger_provider is not None:
         _logger_provider.shutdown()

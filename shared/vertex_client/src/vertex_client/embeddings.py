@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Literal
+from contextlib import contextmanager
+from typing import Iterator, Literal
 
 from google import genai
 from google.genai import types
@@ -14,6 +15,17 @@ EmbeddingTaskType = Literal[
     "RETRIEVAL_QUERY",
     "SEMANTIC_SIMILARITY",
 ]
+
+
+@contextmanager
+def _gen_ai_operation(**kwargs) -> Iterator[object | None]:
+    try:
+        from telemetry.gen_ai import gen_ai_operation
+
+        with gen_ai_operation(**kwargs) as result:
+            yield result
+    except ImportError:
+        yield None
 
 
 class VertexEmbeddingClient:
@@ -59,14 +71,27 @@ class VertexEmbeddingClient:
             raise ValueError("cannot embed empty text")
 
         task = task_type or self._document_task_type
-        vector = await asyncio.to_thread(self._embed_sync, text, task)
-        if self._dimension is None:
-            self._dimension = len(vector)
-        elif len(vector) != self._dimension:
-            raise RuntimeError(
-                f"embedding dimension mismatch: expected {self._dimension}, got {len(vector)}"
-            )
-        return vector
+        try:
+            from telemetry.gen_ai import summarize_embedding_request
+        except ImportError:
+            summarize_embedding_request = lambda value: f"text_chars={len(value)}"  # noqa: E731
+
+        with _gen_ai_operation(
+            operation="embeddings",
+            model=self._model,
+            request_summary=summarize_embedding_request(text),
+        ) as telemetry_result:
+            vector = await asyncio.to_thread(self._embed_sync, text, task)
+            if self._dimension is None:
+                self._dimension = len(vector)
+            elif len(vector) != self._dimension:
+                raise RuntimeError(
+                    f"embedding dimension mismatch: expected {self._dimension}, got {len(vector)}"
+                )
+            if telemetry_result is not None:
+                telemetry_result.response_text = f"vector_dim={len(vector)}"
+                telemetry_result.attributes["gen_ai.embeddings.dimension"] = str(len(vector))
+            return vector
 
     async def embed_query(self, text: str) -> list[float]:
         return await self.embed(text, task_type=self._query_task_type)

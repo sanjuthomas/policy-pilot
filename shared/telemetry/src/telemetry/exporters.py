@@ -1,15 +1,26 @@
 from __future__ import annotations
 
-from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter as GrpcLogExporter
+from opentelemetry.exporter.otlp.proto.grpc._log_exporter import (
+    OTLPLogExporter as GrpcLogExporter,
+)
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import (
     OTLPMetricExporter as GrpcMetricExporter,
 )
-from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter as HttpLogExporter
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
+    OTLPSpanExporter as GrpcSpanExporter,
+)
+from opentelemetry.exporter.otlp.proto.http._log_exporter import (
+    OTLPLogExporter as HttpLogExporter,
+)
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import (
     OTLPMetricExporter as HttpMetricExporter,
 )
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
+    OTLPSpanExporter as HttpSpanExporter,
+)
 from opentelemetry.sdk._logs.export import LogExporter
 from opentelemetry.sdk.metrics.export import MetricExporter
+from opentelemetry.sdk.trace.export import SpanExporter
 
 from telemetry.config import TelemetrySettings
 
@@ -37,6 +48,18 @@ def build_metric_exporter(settings: TelemetrySettings) -> MetricExporter:
             insecure=settings.otlp_insecure,
         )
     return GrpcMetricExporter(
+        endpoint=_grpc_endpoint(settings.otlp_endpoint),
+        insecure=settings.otlp_insecure,
+    )
+
+
+def build_trace_exporter(settings: TelemetrySettings) -> SpanExporter:
+    if settings.otlp_protocol == "http/protobuf":
+        return HttpSpanExporter(
+            endpoint=f"{settings.otlp_endpoint.rstrip('/')}/v1/traces",
+            insecure=settings.otlp_insecure,
+        )
+    return GrpcSpanExporter(
         endpoint=_grpc_endpoint(settings.otlp_endpoint),
         insecure=settings.otlp_insecure,
     )

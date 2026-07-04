@@ -362,7 +362,6 @@ The indexer Search Console `POST /api/cypher/generate` endpoint uses the same pl
 | `neo4j-graph-model` | Graph schema docs, Cypher constraints/indexes, example queries |
 | `opa-policy-seed` | Startup gate — waits until OPA has compiled mounted Rego policies |
 | `zitadel-seed` | Demo user seed (`users.yaml`) — middle office, FICC/FX/DESK approvers, payment creators/approvers, front-office submitters, compliance analysts (`comp-001`, `comp-002`), service accounts |
-| `log-forwarder` | Optional container log shipping to Kafka |
 
 ---
 
@@ -912,8 +911,7 @@ For regression or smoke tests without Vertex (e.g. CI without GCP secrets), set 
 ├── ssi-demo-harness/                # Demo scenario harness UI
 ├── neo4j-graph-model/               # Graph schema and example queries
 ├── opa-policy-seed/                 # Rego policies
-├── zitadel-seed/                    # Demo user definitions
-└── log-forwarder/                   # Optional log → Kafka forwarder
+└── zitadel-seed/                    # Demo user definitions
 ```
 
 Each application directory has its own README.

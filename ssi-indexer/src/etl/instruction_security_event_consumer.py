@@ -6,6 +6,7 @@ from typing import Any
 
 from aiokafka import AIOKafkaConsumer
 from neo4j.exceptions import TransientError
+from telemetry.redaction import redact_value
 
 from etl.config import settings
 from etl.instruction_security_event_pipeline import InstructionSecurityEventPipeline
@@ -98,10 +99,10 @@ class InstructionSecurityEventKafkaConsumer:
 
     async def _handle_message(self, payload: dict[str, Any]) -> None:
         if not isinstance(payload, dict):
-            logger.warning("skipping invalid Kafka payload: %s", payload)
+            logger.warning("skipping invalid Kafka payload: %s", redact_value(payload))
             return
         event = normalize_security_event(payload)
         if "event_id" not in event:
-            logger.warning("skipping invalid Kafka payload: %s", payload)
+            logger.warning("skipping invalid Kafka payload: %s", redact_value(payload))
             return
         await self.pipeline.process_instruction_security_event(event)

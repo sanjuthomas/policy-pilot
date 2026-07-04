@@ -6,6 +6,7 @@ from typing import Any
 
 from aiokafka import AIOKafkaConsumer
 from neo4j.exceptions import TransientError
+from telemetry.redaction import redact_value
 
 from etl.config import settings
 from etl.instruction_pipeline import InstructionPipeline
@@ -98,6 +99,6 @@ class InstructionKafkaConsumer:
     async def _handle_message(self, payload: dict[str, Any]) -> None:
         fact = normalize_instruction_message(payload)
         if not isinstance(fact, dict) or "instruction_id" not in fact:
-            logger.warning("skipping invalid instruction fact payload: %s", payload)
+            logger.warning("skipping invalid instruction fact payload: %s", redact_value(payload))
             return
         await self.pipeline.process_instruction_fact(fact)

@@ -48,6 +48,10 @@ def test_configure_enabled_sets_meter_provider() -> None:
     assert settings.enabled is True
     assert is_telemetry_enabled() is True
 
+    from opentelemetry import trace
+
+    assert trace.get_tracer_provider() is not None
+
     meter = get_meter("test.meter")
     record_counter(meter, "test.counter", attributes={"result": "ok"})
 

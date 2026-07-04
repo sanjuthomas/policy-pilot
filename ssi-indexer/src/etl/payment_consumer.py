@@ -6,6 +6,7 @@ from typing import Any
 
 from aiokafka import AIOKafkaConsumer
 from neo4j.exceptions import TransientError
+from telemetry.redaction import redact_value
 
 from etl.config import settings
 from etl.kafka_deserialize import deserialize_kafka_json
@@ -96,11 +97,11 @@ class PaymentSecurityEventKafkaConsumer:
 
     async def _handle_message(self, payload: dict[str, Any]) -> None:
         if not isinstance(payload, dict):
-            logger.warning("skipping invalid payment security event payload: %s", payload)
+            logger.warning("skipping invalid payment security event payload: %s", redact_value(payload))
             return
         event = normalize_security_event(payload)
         if "event_id" not in event:
-            logger.warning("skipping invalid payment security event payload: %s", payload)
+            logger.warning("skipping invalid payment security event payload: %s", redact_value(payload))
             return
         await self.pipeline.process(event)
 
@@ -184,6 +185,6 @@ class PaymentFactKafkaConsumer:
     async def _handle_message(self, payload: dict[str, Any]) -> None:
         fact = normalize_payment_message(payload)
         if not isinstance(fact, dict) or "payment_id" not in fact:
-            logger.warning("skipping invalid payment fact payload: %s", payload)
+            logger.warning("skipping invalid payment fact payload: %s", redact_value(payload))
             return
         await self.pipeline.process(fact)
