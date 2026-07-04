@@ -58,57 +58,7 @@ The chat is designed to surface **fraud patterns, compliance violations, and col
 
 ## Architecture
 
-```mermaid
-flowchart TB
-    subgraph auth [Identity]
-        ZITADEL[ZITADEL :8080]
-    end
-
-    subgraph apps [Applications]
-        INST[instruction-service :8000]
-        PAY[payment-service :8093]
-        AUTHZ[authorization-service :8094]
-        HARNESS[ssi-demo-harness :8091]
-        ETL[ssi-indexer :8090]
-        CHAT[PolicyPilot :8092]
-    end
-
-    subgraph policy [Policy]
-        OPA[OPA :8181]
-    end
-
-    subgraph stores [Data stores]
-        MONGO[(MongoDB replica set)]
-        CONNECT[Kafka Connect :8083]
-        KAFKA[(Kafka)]
-        NEO[(Neo4j :7474 — graph + multimodal)]
-    end
-
-    subgraph ml [ML]
-        VERTEX[Vertex AI — text-embedding-004 + gemini-2.5-flash]
-    end
-
-    ZITADEL --> INST
-    ZITADEL --> PAY
-    ZITADEL --> HARNESS
-    ZITADEL --> CHAT
-    INST --> AUTHZ
-    PAY --> AUTHZ
-    AUTHZ --> OPA
-    INST --> MONGO
-    PAY --> MONGO
-    PAY -->|read instructions OBO| INST
-    MONGO --> CONNECT
-    CONNECT -->|CDC full documents| KAFKA
-    KAFKA --> ETL
-    ETL --> VERTEX
-    CHAT --> NEO
-    CHAT --> VERTEX
-    CHAT -->|eligible-approvers| INST
-    CHAT -->|eligible-approvers| PAY
-    HARNESS --> INST
-    HARNESS --> PAY
-```
+![End-to-end architecture: App Dev, Data Engineering, RAG Engineering, Security Engineering, Vertex embeddings, and Gemini generation](docs/architecture.png)
 
 ### Data flow
 
