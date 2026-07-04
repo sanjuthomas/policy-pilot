@@ -21,9 +21,11 @@ http://localhost:8092
 | Query embedding (vector search) | **Vertex AI** | `text-embedding-004` (768-dim) |
 | Answer synthesis | **Vertex AI** | `gemini-2.5-flash` |
 | Authorization WHY rewrite | **Vertex AI** | `gemini-2.5-flash` |
-| Cypher generation (graph fallback) | **Ollama** (host) | `hmahmood/neo4j-gemma-3-27b-inst-q8` |
+| Graph plan extraction (fallback) | **Vertex AI** | `gemini-2.5-flash` → `cypher_builder` |
 
-`PolicyPilotMlClient` (`ml_client.py`) orchestrates all three: retrieval and context assembly run locally; Gemini receives the merged context for generation.
+Planned Cypher for counts, rankings, hierarchy, and known audit shapes comes from **`shared/cypher_builder`** with no LLM call.
+
+`PolicyPilotMlClient` (`ml_client.py`) orchestrates Vertex embeddings and Gemini generation; retrieval and context assembly run locally.
 
 ## Search modes
 
@@ -46,8 +48,8 @@ flowchart LR
     P -->|count / ranking / hierarchy| N[Neo4j deterministic query]
     P -->|else| V[Vector / Neo4j multimodal]
     Q --> B[BM25 / Neo4j fulltext]
-    Q --> C[Ollama → Cypher]
-    C --> N
+    Q --> G[Gemini graph plan → Cypher]
+    G --> N
     V --> VE[Vertex embed query]
     VE --> V
     V --> R[RRF merge + dedupe]
@@ -55,14 +57,14 @@ flowchart LR
     N --> R
     R --> A{Approval audit?}
     A -->|yes| W[Who/When deterministic + Gemini WHY]
-    A -->|no| G[Vertex Gemini full answer]
+    A -->|no| S[Vertex Gemini full answer]
 ```
 
-1. **Planned Cypher** — count, ranking, hierarchy, and instruction approval-by-ID questions bypass LLM Cypher generation (Neo4j is authoritative)
+1. **Planned Cypher** — count, ranking, hierarchy, and instruction approval-by-ID questions bypass LLM graph extraction (`cypher_builder`; Neo4j is authoritative)
 2. **Exact lookup** — UUID in question triggers multimodal fetch by ID; Instructions mode also fetches APPROVE security events for approval questions
 3. **Vector** — Vertex `text-embedding-004` embed → Neo4j vector index search (mode-filtered)
 4. **BM25** — Neo4j fulltext lexical search (mode-filtered)
-5. **Neo4j** — Ollama generates read-only Cypher from mode-specific prompts + `neo4j-graph-model/relationships.cypher` (graph fallback)
+5. **Neo4j graph fallback** — Gemini extracts a structured graph query plan; `cypher_builder` turns it into validated read-only Cypher
 6. **Merge** — reciprocal rank fusion (k=60), dedupe by `event_id` / `instruction_id`
 7. **Answer** — Vertex Gemini synthesis over merged context, **or** structured Who/When/Why for instruction and payment approval audit questions
 
@@ -129,8 +131,6 @@ Copy `.env.example` to `.env` at the repo root to override defaults. Docker Comp
 | `EMBEDDING_DIMENSION` | `768` |
 | `GCP_SA_KEY_PATH` | host path to service account JSON (Compose mount) |
 | `GOOGLE_APPLICATION_CREDENTIALS` | `/run/secrets/gcp-sa.json` (in container) |
-| `OLLAMA_CHAT_MODEL` | `hmahmood/neo4j-gemma-3-27b-inst-q8` |
-| `OLLAMA_URL` | `http://host.docker.internal:11434` |
 | `MULTIMODAL_VECTOR_INDEX` | `multimodal_embedding` |
 | `MULTIMODAL_FULLTEXT_INDEX` | `multimodal_search_text` |
 | `NEO4J_URI` | `bolt://neo4j:7687` |
@@ -139,13 +139,13 @@ Copy `.env.example` to `.env` at the repo root to override defaults. Docker Comp
 | `INSTRUCTION_SERVICE_URL` | `http://instruction-service:8000` |
 | `OIDC_ISSUER_URL` | `http://localhost:8080` |
 
-Requires Neo4j multimodal documents populated by **ssi-indexer**, **GCP Vertex AI** credentials, and **host Ollama** (Cypher model only).
+Requires Neo4j multimodal documents populated by **ssi-indexer** and **GCP Vertex AI** credentials.
 
 ## Run locally
 
 ```bash
 cd ssi-chat
-pip install -e ../shared/vertex_client -e ../shared/cypher_gen -e ../shared/telemetry -e .
+pip install -e ../shared/cypher_builder -e ../shared/vertex_client -e ../shared/telemetry -e .
 export GOOGLE_APPLICATION_CREDENTIALS=~/.config/gcloud/your-vertex-key.json
 ssi-chat
 ```

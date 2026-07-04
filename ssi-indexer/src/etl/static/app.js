@@ -16,7 +16,7 @@ const modeTabs = document.querySelectorAll(".mode-tab");
 
 const MODE_HINTS = {
   hybrid: "Dense embeddings + BM25 lexical search fused with reciprocal rank fusion (RRF).",
-  vector: "Semantic search using Ollama dense embeddings stored in Neo4j.",
+  vector: "Semantic search using Vertex dense embeddings stored in Neo4j.",
   bm25: "Lexical keyword search using Neo4j fulltext (Lucene BM25).",
   neo4j: "Cypher text search over SecurityEvent nodes in the Neo4j graph.",
 };
@@ -64,7 +64,7 @@ function clearResults() {
 
 const COMPONENT_LABELS = {
   kafka: "Kafka",
-  ollama: "Ollama",
+  vertex_embeddings: "Vertex embeddings",
   multimodal_vector: "Neo4j · Vector",
   multimodal_fulltext: "Neo4j · BM25",
   neo4j: "Neo4j",
@@ -83,11 +83,11 @@ function componentDetail(key, component) {
       .filter(Boolean)
       .join(" · ");
   }
-  if (key === "ollama") {
+  if (key === "vertex_embeddings") {
     return [
       component.model,
       component.embeddings === "ready" ? `dim ${component.dimension}` : "not warmed up",
-      component.models_available != null ? `${component.models_available} model(s)` : null,
+      component.project,
     ]
       .filter(Boolean)
       .join(" · ");
@@ -627,7 +627,7 @@ cypherForm.addEventListener("submit", async (event) => {
       cypherErrorMsg.classList.remove("hidden");
     }
 
-    cypherGenerateStatus.textContent = `Generated via ${data.model || "hmahmood/neo4j-gemma-3-27b-inst-q8"}`;
+    cypherGenerateStatus.textContent = `Generated via ${data.source || "query_planner"}`;
   } catch (error) {
     cypherGenerateStatus.textContent = `Error: ${error.message}`;
   } finally {

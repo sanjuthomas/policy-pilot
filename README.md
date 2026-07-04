@@ -1,6 +1,6 @@
 # Security Event RAG Demo
 
-A monorepo demonstrating how to build a **retrieval-augmented generation (RAG) system over financial security events** using a containerized stack with **Vertex AI** (embeddings + Gemini) and **host Ollama** (Cypher generation).
+A monorepo demonstrating how to build a **retrieval-augmented generation (RAG) system over financial security events** using a containerized stack with **Vertex AI** (embeddings, answer synthesis, and structured graph query extraction).
 
 **PolicyPilot** — the chat application in this repo — gives supervisors and compliance officers a single conversational surface over the cash leg of the Standard Settlement Instructions (SSI).
 
@@ -86,7 +86,6 @@ flowchart TB
 
     subgraph ml [ML]
         VERTEX[Vertex AI — text-embedding-004 + gemini-2.5-flash]
-        OLLAMA[Ollama host — neo4j-gemma Cypher only]
     end
 
     ZITADEL --> INST
@@ -102,12 +101,9 @@ flowchart TB
     MONGO --> CONNECT
     CONNECT -->|CDC full documents| KAFKA
     KAFKA --> ETL
-    ETL --> NEO
     ETL --> VERTEX
-    ETL --> OLLAMA
     CHAT --> NEO
     CHAT --> VERTEX
-    CHAT --> OLLAMA
     CHAT -->|eligible-approvers| INST
     CHAT -->|eligible-approvers| PAY
     HARNESS --> INST
@@ -125,7 +121,7 @@ flowchart TB
    - **InstructionPipeline** (`instructions`) → instruction master graph + multimodal `source=instruction_state`
    - **PaymentSecurityEventPipeline** (`payment_security_events`) → payment security graph + multimodal `source=payment_security_event`
    - **PaymentFactPipeline** (`payments`) → payment master graph + multimodal `source=payment_fact`
-6. **Chat** — selects a retrieval mode (`events` / `instructions` / `payments` / `all`), runs vector + BM25 + Neo4j in parallel, merges with reciprocal rank fusion. Count, ranking, hierarchy, and approval-by-ID questions use **deterministic planned Cypher** or exact lookups. Instruction approval audit questions return **Who / When** from indexed data and **Why** via **Vertex Gemini** rewrite of OPA `authorization_summary`. Live **who can approve?** questions bypass RAG and call instruction-service or payment-service eligible-approvers APIs (compliance JWT). Other questions use **Vertex Gemini** synthesis over retrieved context; **Ollama** generates read-only Cypher when the graph fallback path runs.
+6. **Chat** — selects a retrieval mode (`events` / `instructions` / `payments` / `all`), runs vector + BM25 + Neo4j in parallel, merges with reciprocal rank fusion. Count, ranking, hierarchy, and approval-by-ID questions use **deterministic planned Cypher** (`shared/cypher_builder`) or exact lookups. Instruction approval audit questions return **Who / When** from indexed data and **Why** via **Vertex Gemini** rewrite of OPA `authorization_summary`. Live **who can approve?** questions bypass RAG and call instruction-service or payment-service eligible-approvers APIs (compliance JWT). Other questions use **Vertex Gemini** synthesis over retrieved context; unresolved graph questions fall back to **Gemini structured graph plan extraction** → read-only Cypher.
 
 ---
 
@@ -289,7 +285,7 @@ The graph enables questions that are **structurally impossible** with flat retri
 
 **Role in improving RAG recall:**
 
-The chat pipeline may ask **Ollama** to generate a Cypher query for exploratory graph retrieval. That query runs against Neo4j and returns structured rows (event IDs, user IDs, instruction IDs, timestamps). Those rows are injected into the LLM context alongside the vector and BM25 results. **Vertex Gemini** then synthesises an answer that combines semantic context (from vector search) with precise relational facts (from the graph). Neither source alone would produce a complete, accurate answer for relationship-heavy questions.
+The chat pipeline uses **planned Cypher** from `shared/cypher_builder` for known question shapes, and **Vertex Gemini** to extract a structured graph query plan when no planner rule matches. The resulting read-only Cypher runs against Neo4j and returns structured rows (event IDs, user IDs, instruction IDs, timestamps). Those rows are injected into the LLM context alongside the vector and BM25 results. **Vertex Gemini** then synthesises an answer that combines semantic context (from vector search) with precise relational facts (from the graph). Neither source alone would produce a complete, accurate answer for relationship-heavy questions.
 
 The graph also serves as a **cross-validation layer**: if a UUID is present in the question, the pipeline runs a deterministic Cypher lookup (`MATCH (e:SecurityEvent {event_id: $id})-[:TARGETS_VERSION]->(v)`) that is guaranteed to be exact regardless of embedding similarity.
 
@@ -302,12 +298,13 @@ The graph also serves as a **cross-validation layer**: if a UUID is present in t
 | Role | Model | Used by |
 |------|-------|---------|
 | Document + query embeddings | `text-embedding-004` (768-dim) | ssi-indexer (write), PolicyPilot (query) |
-| Answer synthesis + authorization WHY rewrite | `gemini-2.5-flash` | PolicyPilot only |
+| Answer synthesis + authorization WHY rewrite | `gemini-2.5-flash` | PolicyPilot |
+| Graph query plan extraction (fallback) | `gemini-2.5-flash` | PolicyPilot (structured JSON → Cypher via `cypher_builder`) |
 
-**Why move embeddings and generation to Vertex:**
+**Why Vertex for all ML:**
 
 - **Consistent vectors** — indexer and chat use the same embedding model and dimension (`768`), so query vectors match indexed documents.
-- **No local GPU for chat** — answer synthesis runs in GCP; only Cypher generation stays on host Ollama.
+- **No local GPU** — embeddings, synthesis, and graph plan extraction all run in GCP; the demo stack is fully containerized aside from GCP credentials.
 - **Production-shaped** — mirrors how many teams run retrieval locally/in-VPC and call a managed LLM for generation.
 
 **GCP setup (one-time):** enable Vertex AI API, create a service account with `roles/aiplatform.user`, download a JSON key, and set `GCP_SA_KEY_PATH` / `GOOGLE_APPLICATION_CREDENTIALS` (see `.env.example`). Docker Compose mounts the key into **ssi-indexer** and **ssi-chat** at `/run/secrets/gcp-sa.json`. Smoke test: `python scripts/vertex_smoke_test.py`.
@@ -316,39 +313,14 @@ The graph also serves as a **cross-validation layer**: if a UUID is present in t
 
 ---
 
-### Why Ollama (Cypher only)? Why run it on the host?
+### Graph queries — `shared/cypher_builder`
 
-**What Ollama does now:** Ollama is still required, but only for **read-only Cypher generation** — the Neo4j fine-tuned Gemma model translates natural language into graph queries. PolicyPilot and the indexer Search Console admin API call `POST /api/chat` on the host; embeddings and answer synthesis no longer go through Ollama.
+Neo4j graph retrieval uses a **two-tier** approach:
 
-**Why keep Ollama for Cypher:**
+1. **Planned Cypher** — rule-based intent matching in `shared/cypher_builder` for counts, rankings, hierarchy traversals, approval lookups, and other high-confidence question shapes. No LLM call.
+2. **Gemini graph plan extraction** — when no planner rule matches, PolicyPilot asks Gemini for a structured `GraphQueryPlan` (intent + parameters), which `cypher_builder` turns into validated read-only Cypher.
 
-| Model | Params | Role |
-|---|---|---|
-| `hmahmood/neo4j-gemma-3-27b-inst-q8` ✓ | 27B Q8 | Default — Neo4j fine-tuned Gemma 3 for Cypher |
-
-The model excels at schema-aware Cypher from `neo4j-graph-model/relationships.cypher`. Managed Gemini is used for final answers because it is faster to operate at chat scale and does not require a 27B model loaded locally.
-
-**Why run Ollama on the host, not in Docker:** Docker on macOS runs containers inside a Linux VM with **no access to the host GPU** (Metal/MPS). Running `ollama` natively lets the 27B Cypher model use Apple GPU via Metal. Containers reach it via `host.docker.internal:11434`.
-
-```bash
-ollama pull hmahmood/neo4j-gemma-3-27b-inst-q8
-```
-
-> To swap the Cypher model: set `OLLAMA_CHAT_MODEL` in `.env` and re-pull via `ollama pull`.
-
----
-
-### Test hardware (Ollama Cypher)
-
-Cypher generation benchmarks were run on:
-
-| Component | Specification |
-|---|---|
-| Chip | Apple M1 Max |
-| Unified RAM | 64 GB |
-| GPU cores | 32 (Metal 3) |
-
-The unified memory architecture means the CPU and GPU share the same 64 GB pool. The default `hmahmood/neo4j-gemma-3-27b-inst-q8` Cypher model runs comfortably on this hardware.
+The indexer Search Console `POST /api/cypher/generate` endpoint uses the same planner (deterministic matches only).
 
 ---
 
@@ -382,7 +354,8 @@ The unified memory architecture means the CPU and GPU share the same 64 GB pool.
 | `payment-service` | Cash payment lifecycle against approved SSI instructions — same authz/OBO pattern, Mongo persistence (Connect CDC to Kafka), payment and security event UIs, compliance eligible-approvers API |
 | `ssi-indexer` | Four Kafka consumers — instruction + payment security events and state facts → Neo4j graph + multimodal indexer (Vertex embeddings) + search console UI |
 | `kafka-connect` | MongoDB source connectors — change streams → domain Kafka topics (full documents, no transforms) |
-| `ssi-chat` | **PolicyPilot** — RAG chat assistant; Vertex Gemini synthesis; Ollama Cypher fallback; four search modes, triple retrieval, Who/When/Why approval audit, planned Cypher, regression suite |
+| `ssi-chat` | **PolicyPilot** — RAG chat assistant; Vertex Gemini synthesis + graph plan extraction; four search modes, triple retrieval, Who/When/Why approval audit, planned Cypher, regression suite |
+| `shared/cypher_builder` | Shared Neo4j query planner — deterministic Cypher intents + Gemini plan → Cypher conversion |
 | `shared/vertex_client` | Shared Vertex AI client — embeddings (`text-embedding-004`) and generation (`gemini-2.5-flash`) |
 | `authorization-service` | Stateless OPA gateway — lifecycle evaluate + batch eligible-approvers; user directory UI; reads `users.yaml`; no database |
 | `ssi-demo-harness` | ZITADEL-authenticated UI to drive lifecycles and OPA policy scenarios |
@@ -420,21 +393,7 @@ PolicyPilot uses Gemini for natural-language answers and authorization WHY rewri
 | Provider | Google Vertex AI |
 | Used for | Answer synthesis, authorization WHY summarization |
 
-Retrieved context (vector + BM25 + graph rows) is passed to Gemini; the model does **not** generate Cypher.
-
-### Cypher model — `hmahmood/neo4j-gemma-3-27b-inst-q8` (Ollama)
-
-Read-only Cypher generation uses a **Neo4j fine-tuned Gemma 3 27B** (Q8) on host Ollama.
-
-| Property | Value |
-|----------|-------|
-| Model | `hmahmood/neo4j-gemma-3-27b-inst-q8` (configurable via `OLLAMA_CHAT_MODEL`) |
-| Provider | Ollama on the host |
-| Used for | LLM Cypher fallback in PolicyPilot; admin Cypher generation in indexer Search Console |
-
-Called via `POST /api/chat` on `host.docker.internal:11434` with `stream: false`.
-
-> To use a different Cypher model: set `OLLAMA_CHAT_MODEL` in `.env` and re-pull via `ollama pull`.
+Retrieved context (vector + BM25 + graph rows) is passed to Gemini; the model does **not** emit raw Cypher directly — graph fallback uses structured plan extraction via `cypher_builder`.
 
 ### Lexical retrieval — Neo4j fulltext (BM25)
 
@@ -445,9 +404,10 @@ Alongside dense vectors, both the ETL indexer and chat retriever use Neo4j's **f
 | Step | Provider | When |
 |------|----------|------|
 | Query embedding | Vertex `text-embedding-004` | Every question (vector search) |
-| Cypher generation | Ollama `neo4j-gemma` | Graph fallback path (not planned Cypher) |
+| Graph plan extraction | Vertex `gemini-2.5-flash` | Graph fallback when no planner rule matches |
 | Answer synthesis | Vertex `gemini-2.5-flash` | Open-ended questions |
 | Authorization WHY rewrite | Vertex `gemini-2.5-flash` | Approval audit questions only |
+| Planned Cypher | `cypher_builder` (no LLM) | Counts, rankings, hierarchy, known audit shapes |
 
 WHO and WHEN in approval audit answers remain deterministic from indexed data.
 
@@ -460,22 +420,17 @@ WHO and WHEN in approval audit answers remain deterministic from indexed data.
 | Docker + Docker Compose | All containers are defined in `docker-compose.yml` |
 | GCP project + Vertex AI | Enable `aiplatform.googleapis.com`; service account with `roles/aiplatform.user` |
 | GCP service account key | Set `GCP_SA_KEY_PATH` in `.env` (mounted into ssi-indexer and ssi-chat) |
-| [Ollama](https://ollama.com) on the host | Cypher generation only; containers reach it via `host.docker.internal:11434` |
-| Cypher model pulled | `ollama pull hmahmood/neo4j-gemma-3-27b-inst-q8` |
 
 ---
 
 ## Quick start
 
 ```bash
-# 0. Configure Vertex + Ollama (copy and edit paths)
+# 0. Configure Vertex (copy and edit paths)
 cp .env.example .env
 # Set GCP_SA_KEY_PATH and GOOGLE_APPLICATION_CREDENTIALS to your service account JSON
 
-# 1. Pull Ollama Cypher model on the host
-ollama pull hmahmood/neo4j-gemma-3-27b-inst-q8
-
-# 2. Optional: verify Vertex connectivity
+# 1. Optional: verify Vertex connectivity
 python scripts/vertex_smoke_test.py
 
 # 3. Start the full stack
@@ -719,7 +674,8 @@ User question + search mode (events | instructions | payments | all)
 │
 ├─► Neo4j dense vector search (Vertex text-embedding-004), filtered by mode
 ├─► Neo4j fulltext BM25 search, filtered by mode
-└─► Ollama → Cypher → Neo4j (graph fallback; mode-specific system prompt)
+├─► Planned Cypher via cypher_builder (deterministic intents)
+├─► Vertex Gemini graph plan extraction → Cypher (fallback)
          │
          ▼
     RRF merge (k=60) + dedupe by event_id / payment_id
@@ -811,7 +767,7 @@ cd ssi-demo-harness && pip install -e .
 ssi-demo-harness-ui   # :8091
 ```
 
-Each service reads configuration from environment variables (see its own README for the full list). Requires local MongoDB (replica set), Kafka, Kafka Connect, Neo4j, OPA, ZITADEL, **Vertex AI** (GCP credentials), and **host Ollama** (Cypher model).
+Each service reads configuration from environment variables (see its own README for the full list). Requires local MongoDB (replica set), Kafka, Kafka Connect, Neo4j, OPA, ZITADEL, and **Vertex AI** (GCP credentials).
 
 ---
 
@@ -823,6 +779,7 @@ Each service reads configuration from environment variables (see its own README 
 ├── instruction-service/             # Instruction lifecycle API + UIs
 ├── payment-service/                 # Payment lifecycle API + UIs
 ├── authorization-service/           # OPA gateway + user directory UI
+├── shared/cypher_builder/           # Neo4j query planner (deterministic + Gemini plan parsing)
 ├── shared/vertex_client/            # Vertex AI embeddings + Gemini generation
 ├── shared/authz_client/             # HTTP client used by domain services → authz
 ├── kafka-connect/                   # Mongo CDC → Kafka (four source connectors)

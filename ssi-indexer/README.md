@@ -13,9 +13,10 @@ http://localhost:8090
 | Role | Provider | Model |
 |------|----------|-------|
 | Document embeddings | **Vertex AI** | `text-embedding-004` (768-dim) |
-| Admin Cypher generation (Search Console) | **Ollama** (host) | `hmahmood/neo4j-gemma-3-27b-inst-q8` |
 
 Embeddings use `RETRIEVAL_DOCUMENT` task type at index time; PolicyPilot uses the same model with `RETRIEVAL_QUERY` at chat time.
+
+Graph query generation in the Search Console uses the shared **`cypher_builder`** query planner (deterministic intents only — no local LLM).
 
 ## Pipelines
 
@@ -83,9 +84,9 @@ On APPROVE instruction security events, the pipeline **patches** the existing `i
 | Vector | Neo4j vector index (`multimodal_embedding`) |
 | BM25 | Neo4j fulltext index (`multimodal_search_text`) |
 | Neo4j | Text search on `SecurityEvent` nodes |
-| Cypher generate | Ollama → read-only Cypher (admin API) |
+| Cypher generate | `cypher_builder` query planner → read-only Cypher (admin API) |
 
-Component status bar shows Kafka, multimodal vector/fulltext indexes, Neo4j graph, Vertex embeddings, and Ollama (Cypher) health.
+Component status bar shows Kafka, multimodal vector/fulltext indexes, Neo4j graph, and Vertex embedding health.
 
 ## Configuration (Docker)
 
@@ -103,19 +104,17 @@ Copy `.env.example` to `.env` at the repo root to override defaults. Docker Comp
 | `KAFKA_INSTRUCTION_TOPIC` | `instructions` |
 | `KAFKA_PAYMENT_SECURITY_EVENTS_TOPIC` | `payment_security_events` |
 | `KAFKA_PAYMENTS_TOPIC` | `payments` |
-| `OLLAMA_CHAT_MODEL` | `hmahmood/neo4j-gemma-3-27b-inst-q8` |
-| `OLLAMA_URL` | `http://host.docker.internal:11434` |
 | `MULTIMODAL_VECTOR_INDEX` | `multimodal_embedding` |
 | `MULTIMODAL_FULLTEXT_INDEX` | `multimodal_search_text` |
 | `NEO4J_URI` | `bolt://neo4j:7687` |
 
-Requires **GCP Vertex AI** credentials and **host Ollama** for Search Console Cypher generation (`OLLAMA_URL=http://host.docker.internal:11434`).
+Requires **GCP Vertex AI** credentials for embeddings and vector search.
 
 ## Run locally
 
 ```bash
 cd ssi-indexer
-pip install -e ../shared/vertex_client -e .
+pip install -e ../shared/cypher_builder -e ../shared/vertex_client -e .
 export GOOGLE_APPLICATION_CREDENTIALS=~/.config/gcloud/your-vertex-key.json
 ssi-indexer   # serves on :8090
 ```
@@ -128,7 +127,7 @@ ssi-indexer   # serves on :8090
 | POST | `/api/search/hybrid` | Hybrid search |
 | POST | `/api/search/vector` | Dense vector search (Vertex embed query) |
 | POST | `/api/search/bm25` | Fulltext BM25 search |
-| POST | `/api/cypher/generate` | Natural language → Cypher (Ollama) |
+| POST | `/api/cypher/generate` | Natural language → Cypher (`cypher_builder` planner) |
 | GET | `/api/graph/events` | Neo4j event text search |
 | GET | `/api/graph/events/{event_id}` | Event subgraph |
 
