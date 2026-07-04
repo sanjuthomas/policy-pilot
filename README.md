@@ -771,6 +771,130 @@ Each service reads configuration from environment variables (see its own README 
 
 ---
 
+## Running locally — GCP and Vertex AI setup
+
+If you want to run or contribute to this repo on your machine, you need a **GCP project with Vertex AI enabled** and a **service account key** mounted into **ssi-indexer** and **ssi-chat**. Those two services call Vertex for embeddings (`text-embedding-004`), Gemini synthesis, and structured graph query extraction. The rest of the stack (MongoDB, Kafka, Neo4j, OPA, ZITADEL) runs entirely in Docker and does not require GCP.
+
+### What you need installed
+
+| Tool | Purpose |
+|------|---------|
+| [Google Cloud CLI (`gcloud`)](https://cloud.google.com/sdk/docs/install) | Create project resources and download a service account key |
+| Docker + Docker Compose | Run the full stack (`docker compose up -d`) |
+| Python 3.11+ | Run `scripts/vertex_smoke_test.py` and optional local service dev |
+
+You also need **billing enabled** on the GCP project. Vertex AI calls are metered; this demo uses small models and typical dev usage is low cost, but a billing account must be attached.
+
+### 1. Create a GCP project
+
+In the [Google Cloud Console](https://console.cloud.google.com/) create a new project (or pick an existing one). Note the **project ID** (not the display name) — the SDK and `gcloud` use the ID, e.g. `my-rag-demo-123456`.
+
+Set it as your active project:
+
+```bash
+gcloud config set project YOUR_PROJECT_ID
+```
+
+### 2. Enable the Vertex AI API
+
+```bash
+gcloud services enable aiplatform.googleapis.com
+```
+
+This enables the Vertex AI Platform API (`aiplatform.googleapis.com`), which covers embeddings and Gemini generation used by the demo.
+
+### 3. Create a service account
+
+Create a dedicated service account for local development (do not reuse production credentials):
+
+```bash
+gcloud iam service-accounts create vertex-client \
+  --display-name="Vertex AI client (local dev)"
+```
+
+Grant the roles the demo needs:
+
+```bash
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+  --member="serviceAccount:vertex-client@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/aiplatform.user"
+
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+  --member="serviceAccount:vertex-client@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/serviceusage.serviceUsageConsumer"
+```
+
+- **`roles/aiplatform.user`** — call Vertex embeddings and Gemini models.
+- **`roles/serviceusage.serviceUsageConsumer`** — allow the service account to consume enabled APIs (required when the key authenticates outside your user session).
+
+### 4. Download a JSON key
+
+Create a key file on your machine (keep it out of git — `.gitignore` already excludes `.env` and typical key paths):
+
+```bash
+mkdir -p ~/.config/gcloud
+gcloud iam service-accounts keys create \
+  ~/.config/gcloud/YOUR_PROJECT_ID-vertex-client-key.json \
+  --iam-account=vertex-client@YOUR_PROJECT_ID.iam.gserviceaccount.com
+```
+
+Treat this file like a password. Do not commit it or paste it into issues.
+
+### 5. Configure this repository
+
+Copy the example env file and point both variables at your key:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env`:
+
+```bash
+GCP_PROJECT_ID=YOUR_PROJECT_ID
+GCP_REGION=us-central1
+GCP_SA_KEY_PATH=/absolute/path/to/YOUR_PROJECT_ID-vertex-client-key.json
+GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/YOUR_PROJECT_ID-vertex-client-key.json
+```
+
+| Variable | Used by | Notes |
+|----------|---------|-------|
+| `GCP_PROJECT_ID` | ssi-indexer, ssi-chat, smoke test | Must match the project where Vertex AI is enabled |
+| `GCP_REGION` | ssi-indexer, ssi-chat | Default `us-central1`; Gemini and embedding models must be available in this region |
+| `GCP_SA_KEY_PATH` | Docker Compose | Host path mounted read-only into containers at `/run/secrets/gcp-sa.json` |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Local Python runs, smoke test | Same JSON file; inside containers Compose sets this to `/run/secrets/gcp-sa.json` automatically |
+
+Optional overrides (defaults are fine for most contributors): `VERTEX_EMBEDDING_MODEL`, `VERTEX_GEMINI_MODEL`, `EMBEDDING_DIMENSION` — see `.env.example`.
+
+### 6. Verify Vertex connectivity
+
+From the repo root, with `GOOGLE_APPLICATION_CREDENTIALS` set (via `.env` export or shell):
+
+```bash
+pip install google-genai pydantic   # if not already installed
+export $(grep -v '^#' .env | xargs)  # load GCP_* from .env (bash)
+python scripts/vertex_smoke_test.py
+```
+
+You should see `CONNECTION SUCCESSFUL` and a short greeting from Gemini. If this fails, fix credentials before starting Docker — **ssi-indexer** and **ssi-chat** will not index or answer questions without Vertex.
+
+Common failures:
+
+| Symptom | Likely fix |
+|---------|------------|
+| `403` / `Permission denied` | Confirm `roles/aiplatform.user` on the service account and that `GCP_PROJECT_ID` matches the key's project |
+| `API not enabled` | Re-run `gcloud services enable aiplatform.googleapis.com` |
+| `Could not automatically determine credentials` | Set `GOOGLE_APPLICATION_CREDENTIALS` to the absolute path of your JSON key |
+| Model not found in region | Set `GCP_REGION=us-central1` or choose a region where `gemini-2.5-flash` and `text-embedding-004` are available |
+
+### 7. Start the stack and seed demo data
+
+Once the smoke test passes, follow [Quick start](#quick-start) above: `docker compose up -d`, seed ZITADEL users, run scenarios in the harness (`http://localhost:8091`), then open PolicyPilot (`http://localhost:8092`).
+
+For regression or smoke tests without Vertex (e.g. CI without GCP secrets), set `API_SMOKE_SKIP_VERTEX=1` — see `ssi-chat/regression/README.md`.
+
+---
+
 ## Repository layout
 
 ```
