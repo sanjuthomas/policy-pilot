@@ -77,7 +77,8 @@ jobs:
             ./shared/platform_auth \
             ./shared/sequence_client \
             ./shared/authz_client \
-            ./shared/cypher_gen
+            ./shared/cypher_gen \
+            ./shared/vertex_client
 
       - name: Install and run tests with coverage
         working-directory: ${{ matrix.service }}
