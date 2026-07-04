@@ -1,0 +1,93 @@
+# Golden eval set with explicit routing and quality thresholds.
+#
+# Used for offline unit tests and optional --eval-golden runs.
+# Questions mirror seeded demo data placeholders from questions.yaml.
+
+version: 1
+cases:
+- id: golden_payment_creator
+  mode: payments
+  retrieval: deterministic
+  tags: [golden, who, creator]
+  question: Who created payment {approved_payment_id}?
+  expect:
+    requires_context: [approved_payment_id]
+    require_routing: true
+    routing_path: neo4j_direct
+    cypher_class: deterministic
+    answer_synthesis: formatter
+    require_entity_recall: true
+    min_answer_length: 5
+    answer_contains_any: [created, creator, submitted]
+
+- id: golden_payment_status
+  mode: payments
+  retrieval: deterministic
+  tags: [golden, status]
+  question: What is the status of payment {approved_payment_id}?
+  expect:
+    requires_context: [approved_payment_id]
+    require_routing: true
+    routing_path: neo4j_direct
+    require_entity_recall: true
+    answer_contains_any: [approved, status, payment]
+
+- id: golden_events_count_today
+  mode: events
+  retrieval: graph
+  tags: [golden, counts]
+  question: How many ALERT events happened today?
+  expect:
+    require_routing: true
+    answer_has_number: true
+    min_groundedness: 0.05
+    min_faithfulness: 0.05
+
+- id: golden_events_top_denial_user
+  mode: events
+  retrieval: deterministic
+  tags: [golden, ranking]
+  question: Which user triggered the most policy denial alerts this week?
+  expect:
+    require_routing: true
+    routing_path: neo4j_direct
+    cypher_class: deterministic
+    answer_synthesis: formatter
+    min_answer_length: 10
+
+- id: golden_instruction_status
+  mode: instructions
+  retrieval: deterministic
+  tags: [golden, status]
+  question: What is the status of instruction {approved_instruction_id}?
+  expect:
+    requires_context: [approved_instruction_id]
+    require_routing: true
+    routing_path: neo4j_direct
+    require_entity_recall: true
+    answer_contains_any: [approved, status, instruction]
+
+- id: golden_events_who_approved_payment
+  mode: events
+  retrieval: graph
+  tags: [golden, who, approve]
+  question: Who approved payment {approved_payment_id} and why?
+  expect:
+    requires_context: [approved_payment_id]
+    require_routing: true
+    require_entity_recall: true
+    min_answer_length: 20
+    answer_contains_any: [approv, allowed, because, role]
+
+- id: golden_vector_security_summary
+  mode: events
+  retrieval: vector
+  tags: [golden, vector]
+  question: Summarize recent security alerts involving policy denials.
+  expect:
+    require_routing: true
+    routing_path: full_rag
+    source_channels_any: [vector, bm25]
+    min_sources: 1
+    min_answer_length: 40
+    min_faithfulness: 0.05

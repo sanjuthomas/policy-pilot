@@ -3,6 +3,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest
+
 from chat_application.routing_observability import (
     AnswerRouting,
     cypher_class_for_provenance,
@@ -12,7 +13,15 @@ from chat_application.routing_observability import (
     log_answer_routing,
     question_fingerprint,
     record_answer_routing_metrics,
+    reset_routing_distribution,
 )
+
+
+@pytest.fixture(autouse=True)
+def _reset_routing_distribution() -> None:
+    reset_routing_distribution()
+    yield
+    reset_routing_distribution()
 
 
 class TestQuestionFingerprint:
@@ -62,6 +71,7 @@ class TestAnswerRoutingMetrics:
             cypher_provenance="llm_graph_plan",
             answer_synthesis="gemini_full",
             mode="events",
+            retrieval_strategy="graph",
             retrieval_ms=42.0,
             generation_ms=120.5,
         )
@@ -69,6 +79,7 @@ class TestAnswerRoutingMetrics:
 
         counter_names = [call.args[1] for call in mock_record_counter.call_args_list]
         assert "chat.answer.count" in counter_names
+        assert "chat.retrieval.route.count" in counter_names
         assert "chat.cypher.route.count" in counter_names
 
         route_call = next(
@@ -118,10 +129,11 @@ class TestFinalizeChatResponse:
         )
         assert response.routing is not None
         assert response.routing.path == "neo4j_direct"
+        assert response.routing.retrieval_strategy == "deterministic"
         assert response.routing.cypher_provenance == "predefined_yaml"
         assert response.routing.answer_synthesis == "formatter"
         assert "events.alerts_today_count" in (response.routing.label or "")
-        assert any("chat.answer.completed" in record.message for record in caplog.records)
+        assert any("strategy=deterministic" in record.message for record in caplog.records)
 
     def test_log_answer_routing_extra_fields(self, caplog: pytest.LogCaptureFixture) -> None:
         caplog.set_level("INFO")
@@ -130,12 +142,14 @@ class TestFinalizeChatResponse:
             cypher_provenance="llm_graph_plan",
             answer_synthesis="gemini_full",
             mode="payments",
+            retrieval_strategy="graph",
             question_length=10,
             question_hash="abc123",
         )
         log_answer_routing(routing)
         record = next(r for r in caplog.records if "chat.answer.completed" in r.message)
         assert getattr(record, "chat.path", None) == "full_rag"
+        assert getattr(record, "chat.retrieval_strategy", None) == "graph"
         assert getattr(record, "chat.cypher_provenance", None) == "llm_graph_plan"
 
 
@@ -164,6 +178,7 @@ class TestRagRoutingIntegration:
 
         assert response.routing is not None
         assert response.routing.path == "neo4j_direct"
+        assert response.routing.retrieval_strategy == "deterministic"
         assert response.routing.cypher_provenance == "predefined_yaml"
         assert response.routing.answer_synthesis == "formatter"
         assert response.routing.intent_id == "instruction.creator_by_id"
@@ -182,5 +197,6 @@ class TestRagRoutingIntegration:
 
         assert response.routing is not None
         assert response.routing.path == "full_rag"
+        assert response.routing.retrieval_strategy == "graph"
         assert response.routing.answer_synthesis == "formatter"
         assert response.routing.cypher_provenance == "predefined_planned"

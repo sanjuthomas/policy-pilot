@@ -38,6 +38,16 @@ class ExpectConfig(BaseModel):
     requires_cypher: bool = False
     requires_context: list[str] = Field(default_factory=list)
     skip_if_missing_context: bool = True
+    # Retrieval-quality overrides (defaults derived from case ``retrieval`` tag).
+    routing_path: str | None = None
+    cypher_class: Literal["deterministic", "llm", "none"] | None = None
+    answer_synthesis: str | None = None
+    source_channels_any: list[str] = Field(default_factory=list)
+    max_generation_ms: float | None = None
+    require_routing: bool = False
+    require_entity_recall: bool = False
+    min_groundedness: float | None = None
+    min_faithfulness: float | None = None
 
 
 class RegressionCase(BaseModel):
@@ -75,6 +85,7 @@ class CaseResult(BaseModel):
     generation_ms: float | None = None
     tags: list[str] = Field(default_factory=list)
     retrieval: RetrievalStrategy | None = None
+    quality: dict[str, Any] | None = None
 
 
 class SuiteResult(BaseModel):
@@ -83,6 +94,7 @@ class SuiteResult(BaseModel):
     skipped: int = 0
     cases: list[CaseResult] = Field(default_factory=list)
     context: dict[str, Any] = Field(default_factory=dict)
+    quality_summary: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return self.model_dump()

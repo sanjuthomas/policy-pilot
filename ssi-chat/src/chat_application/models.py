@@ -16,6 +16,17 @@ class ChatRequest(BaseModel):
     mode: SearchMode = "events"
 
 
+class ChatFeedbackRequest(BaseModel):
+    rating: Literal["up", "down"]
+    mode: SearchMode
+    path: str = Field(min_length=1)
+    cypher_provenance: str = Field(min_length=1)
+    answer_synthesis: str = Field(min_length=1)
+    retrieval_strategy: str | None = None
+    intent_id: str | None = None
+    question_hash: str | None = None
+
+
 class SourceHit(BaseModel):
     event_id: str | None = None
     instruction_id: str | None = None
@@ -32,6 +43,7 @@ class AnswerRoutingInfo(BaseModel):
     answer_synthesis: str
     label: str
     intent_id: str | None = None
+    retrieval_strategy: str | None = None
 
 
 class ChatResponse(BaseModel):

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 from typing import Any
 
@@ -20,10 +21,14 @@ from chat_application.cypher import (
     instruction_count_filters_from_question,
     instruction_id_from_list_payments_question,
     is_alert_ranking_question,
+    is_count_question,
     is_instruction_approver_via_payment_question,
     is_instruction_count_aggregate_question,
+    is_largest_payment_question,
     is_max_payments_per_instruction_question,
+    is_payment_amount_threshold_question,
     is_payment_count_aggregate_question,
+    is_payment_id_lookup_for_instruction_question,
     is_payment_total_amount_question,
     is_payments_for_instruction_question,
     is_security_event_alert_count_question,
@@ -32,6 +37,7 @@ from chat_application.cypher import (
     lob_filter_from_question,
     normalize_read_only_cypher,
     payment_aggregate_period_label,
+    payment_amount_threshold_from_question,
     plan_graph_queries,
     plans_from_graph_query,
     ranking_period_label,
@@ -112,6 +118,103 @@ def _dedupe_payment_graph_rows(graph_rows: list[dict[str, Any]]) -> list[dict[st
     return deduped
 
 
+def _format_payment_list_table(graph_rows: list[dict[str, Any]]) -> str:
+    payment_rows = _dedupe_payment_graph_rows(graph_rows)
+    table_rows = [
+        [
+            row.get("payment_id"),
+            row.get("instruction_id") or "N/A",
+            row.get("status") or "N/A",
+            _format_payment_amount_display(row.get("amount"), row.get("currency")),
+            row.get("value_date") or "N/A",
+            row.get("owning_lob") or "N/A",
+            row.get("creator_display") or "N/A",
+            row.get("approver_display") or "N/A",
+        ]
+        for row in payment_rows
+    ]
+    if not table_rows:
+        return "_No payments found._"
+    return format_markdown_table(
+        [
+            "Payment ID",
+            "Instruction ID",
+            "Status",
+            "Amount",
+            "Value Date",
+            "LOB",
+            "Creator",
+            "Approver",
+        ],
+        table_rows,
+    )
+
+
+def _format_largest_payment_answer(message: str, graph_rows: list[dict[str, Any]]) -> str:
+    payment_rows = _dedupe_payment_graph_rows(graph_rows)
+    period = payment_aggregate_period_label(message)
+    scope = _payment_aggregate_scope_label(message)
+
+    if not payment_rows:
+        return f"No payments were found for the largest-payment query ({scope}, {period})."
+
+    max_amount = max(float(row.get("amount") or 0) for row in payment_rows)
+    top_rows = [
+        row for row in payment_rows if float(row.get("amount") or 0) == max_amount
+    ]
+    amount_text = _format_payment_amount_display(
+        max_amount, top_rows[0].get("currency")
+    )
+
+    if len(top_rows) == 1:
+        summary = f"The largest payment ({scope}, {period}) is {amount_text}."
+    else:
+        summary = (
+            f"The largest payment amount ({scope}, {period}) is {amount_text} "
+            f"— {len(top_rows)} payment(s) tie at that amount."
+        )
+
+    return f"{summary}\n\n{_format_payment_list_table(top_rows)}"
+
+
+def _format_payments_above_amount_answer(message: str, graph_rows: list[dict[str, Any]]) -> str:
+    payment_rows = _dedupe_payment_graph_rows(graph_rows)
+    threshold = payment_amount_threshold_from_question(message)
+    threshold_text = _format_payment_amount_display(threshold, "USD")
+    period = payment_aggregate_period_label(message)
+    scope = _payment_aggregate_scope_label(message)
+    q = message.lower()
+
+    if not payment_rows:
+        if re.search(r"\b(do we|are there|any)\b", q):
+            return (
+                f"No, there are no payments with an amount greater than {threshold_text} "
+                f"({scope})."
+            )
+        return f"No payments found above {threshold_text} ({scope}, {period})."
+
+    count = len(payment_rows)
+    if is_count_question(message):
+        summary = f"There are {count} payment(s) above {threshold_text} ({scope}, {period})."
+    elif re.search(r"\b(do we|are there|any)\b", q):
+        summary = (
+            f"Yes, there are {count} payment(s) with an amount greater than "
+            f"{threshold_text} ({scope})."
+        )
+    else:
+        summary = f"Found {count} payment(s) above {threshold_text} ({scope}, {period})."
+
+    return f"{summary}\n\n{_format_payment_list_table(payment_rows)}"
+
+
+def _should_format_payments_above_amount(message: str, mode: SearchMode) -> bool:
+    return mode in ("payments", "all") and is_payment_amount_threshold_question(message)
+
+
+def _should_format_largest_payment(message: str, mode: SearchMode) -> bool:
+    return mode in ("payments", "all") and is_largest_payment_question(message)
+
+
 def _format_max_payments_per_instruction_answer(
     graph_rows: list[dict[str, Any]],
 ) -> str | None:
@@ -157,6 +260,8 @@ def _format_payment_amount_display(amount: Any, currency: Any) -> str:
 def _format_payments_for_instruction_answer(
     instruction_id: str,
     graph_rows: list[dict[str, Any]],
+    *,
+    question: str | None = None,
 ) -> str:
     payment_rows = _dedupe_payment_graph_rows(graph_rows)
     table_rows = [
@@ -171,6 +276,13 @@ def _format_payments_for_instruction_answer(
         ]
         for row in payment_rows
     ]
+
+    if question and is_payment_id_lookup_for_instruction_question(question):
+        if not table_rows:
+            return f"No payment is linked to instruction `{instruction_id}` in the graph."
+        if len(table_rows) == 1:
+            payment_id = table_rows[0][0]
+            return f"Payment `{payment_id}` is associated with instruction `{instruction_id}`."
 
     summary = f"There are {len(table_rows)} payments in total for instruction {instruction_id}."
     if not table_rows:
@@ -638,12 +750,19 @@ class RagService:
         if answer is None and is_max_payments_per_instruction_question(message):
             answer = _format_max_payments_per_instruction_answer(graph_result["rows"])
             answer_synthesis = "formatter"
+        if answer is None and _should_format_largest_payment(message, mode):
+            answer = _format_largest_payment_answer(message, graph_result["rows"])
+            answer_synthesis = "formatter"
+        if answer is None and _should_format_payments_above_amount(message, mode):
+            answer = _format_payments_above_amount_answer(message, graph_result["rows"])
+            answer_synthesis = "formatter"
         if answer is None and is_payments_for_instruction_question(message):
             instruction_id = instruction_id_from_list_payments_question(message)
             if instruction_id:
                 answer = _format_payments_for_instruction_answer(
                     instruction_id,
                     graph_result["rows"],
+                    question=message,
                 )
                 answer_synthesis = "formatter"
         if answer is None and is_alert_ranking_question(message, mode=mode):

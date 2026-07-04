@@ -109,6 +109,51 @@ RUN_API_SMOKE=1 pytest tests/test_api_smoke.py -v
 
 Chat cases exercise RAG end-to-end; they do not call instruction-service/payment REST APIs directly. Indexer and authz are covered by API smoke, not chat YAML.
 
+## RAG retrieval quality evaluation
+
+Every regression run now computes **retrieval-quality metrics** alongside answer assertions:
+
+| Metric | Meaning |
+|--------|---------|
+| `routing_accuracy` | Share of cases where `ChatResponse.routing.path` matches the declared `retrieval` strategy |
+| `mean_entity_recall` | Entity IDs in the question found in answer, sources, or graph rows |
+| `mean_source_precision@5` | Share of top-5 sources using expected channels (`vector`, `bm25`, …) |
+| `mean_groundedness` | Answer token overlap with primary graph row (deterministic/graph cases) |
+| `mean_faithfulness` | Answer token overlap with retrieved context (lightweight ragas-style proxy) |
+
+Metrics are printed after the case summary and written to `--report` JSON under `chat.quality_summary` and per-case `quality`.
+
+### Golden labeled set
+
+`eval_golden.yaml` is a smaller hand-labeled set with explicit routing and quality gates (`require_routing`, `require_entity_recall`, `min_faithfulness`, …):
+
+```bash
+PYTHONPATH=. python -m regression.runner --eval-golden --seed --report golden-eval.json
+```
+
+Cases fail when **both** answer expectations and explicit quality gates fail. The full `questions.yaml` bank still uses flexible keyword assertions; quality metrics are reported for all cases without changing pass/fail unless you add quality fields under `expect:`.
+
+Example quality overrides on any case:
+
+```yaml
+expect:
+  require_routing: true
+  routing_path: neo4j_direct
+  cypher_class: deterministic
+  require_entity_recall: true
+  min_faithfulness: 0.15
+  source_channels_any: [vector, bm25]
+```
+
+### Offline unit tests
+
+```bash
+cd ssi-chat
+pytest tests/test_eval_metrics.py -v
+```
+
+No live stack required — validates metric math and golden YAML schema.
+
 ## Files
 
 | File | Purpose |
@@ -119,6 +164,8 @@ Chat cases exercise RAG end-to-end; they do not call instruction-service/payment
 | `auth_helpers.py` | Shared admin/compliance login headers |
 | `seed.py` | Harness actions, ETL wait, context `{approved_payment_id}` resolution |
 | `assertions.py` | Expectation evaluation |
+| `eval_metrics.py` | Routing accuracy, recall, precision@k, faithfulness proxies |
+| `eval_golden.yaml` | Labeled golden eval set with strict quality gates |
 | `models.py` | Pydantic schemas |
 
 ## Adding cases

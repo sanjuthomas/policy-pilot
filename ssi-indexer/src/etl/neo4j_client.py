@@ -279,25 +279,7 @@ class Neo4jGraphWriter:
                         creditor_agent_bic=merged.get("creditor_agent_bic"),
                     )
 
-                    # CURRENT — only advance if this version is newer
-                    await tx.run(
-                        """
-                        MATCH (i:Instruction {instruction_id: $instruction_id})
-                        MATCH (v:InstructionVersion {version_key: $version_key})
-                        OPTIONAL MATCH (i)-[r:CURRENT]->(cur:InstructionVersion)
-                        WITH i, v, r, cur,
-                             coalesce(cur.version_number, -1) AS cur_num
-                        WHERE $version_number > cur_num
-                        DELETE r
-                        WITH i, v
-                        MERGE (i)-[:CURRENT]->(v)
-                        """,
-                        instruction_id=document.instruction_id,
-                        version_key=version_key,
-                        version_number=version_number,
-                    )
-
-                    # TARGETS_VERSION
+                    # TARGETS_VERSION (instruction facts own CURRENT lifecycle pointer)
                     await tx.run(
                         """
                         MATCH (e:SecurityEvent {event_id: $event_id})
@@ -753,11 +735,18 @@ class Neo4jGraphWriter:
               )
         MERGE (i)-[:HAS_VERSION]->(v)
 
-        // ── Mark CURRENT version (only advance, never go back) ──────────────────
+        // ── Mark CURRENT version (instruction facts own lifecycle status) ───────
         WITH i, v
         OPTIONAL MATCH (i)-[:CURRENT]->(existing:InstructionVersion)
         WITH i, v, existing
-        WHERE existing IS NULL OR v.version_number >= existing.version_number
+        WHERE existing IS NULL
+           OR (
+                $status IS NOT NULL AND $status <> ''
+                AND (
+                    v.version_number >= existing.version_number
+                    OR existing.status IS NULL OR existing.status = ''
+                )
+           )
         OPTIONAL MATCH (i)-[old:CURRENT]->(:InstructionVersion)
         DELETE old
         MERGE  (i)-[:CURRENT]->(v)
@@ -1052,12 +1041,6 @@ class Neo4jGraphWriter:
                             v.owning_lob     = coalesce($owning_lob, v.owning_lob)
                         MERGE (pay)-[:HAS_VERSION]->(v)
                         WITH pay, v
-                        OPTIONAL MATCH (pay)-[r:CURRENT]->(cur:PaymentVersion)
-                        WITH pay, v, r, cur, coalesce(cur.version_number, -1) AS cur_num
-                        WHERE r IS NULL OR $version_number >= cur_num
-                        FOREACH (_ IN CASE WHEN r IS NOT NULL THEN [1] ELSE [] END | DELETE r)
-                        MERGE (pay)-[:CURRENT]->(v)
-                        WITH pay, v
                         MATCH (e:SecurityEvent {event_id: $event_id})
                         MERGE (e)-[:TARGETS_PAYMENT]->(pay)
                         MERGE (e)-[:TARGETS_PAYMENT_VERSION]->(v)
@@ -1149,11 +1132,18 @@ class Neo4jGraphWriter:
               v.updated_at         = $updated_at
         MERGE (pay)-[:HAS_VERSION]->(v)
 
-        // ── Mark CURRENT version (only advance, never go back) ──────────────────
+        // ── Mark CURRENT version (payment facts own lifecycle status) ───────────
         WITH pay, v
         OPTIONAL MATCH (pay)-[:CURRENT]->(existing:PaymentVersion)
         WITH pay, v, existing
-        WHERE existing IS NULL OR v.version_number >= existing.version_number
+        WHERE existing IS NULL
+           OR (
+                $status IS NOT NULL
+                AND (
+                    v.version_number >= existing.version_number
+                    OR existing.status IS NULL
+                )
+           )
         OPTIONAL MATCH (pay)-[old:CURRENT]->(:PaymentVersion)
         DELETE old
         MERGE  (pay)-[:CURRENT]->(v)

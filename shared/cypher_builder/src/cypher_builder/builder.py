@@ -67,6 +67,11 @@ class CypherQueryBuilder:
     def instructions_created_by_user(self, user_id: str) -> list[tuple[str, str]]:
         return qe._instructions_created_by_user_queries(user_id)
 
+    def largest_payment(
+        self, question: str, flags: dict[str, bool]
+    ) -> list[tuple[str, str]]:
+        return qe._largest_payment_queries(question, flags)
+
     def max_payments_per_instruction(self) -> list[tuple[str, str]]:
         return qe._max_payments_per_instruction_queries()
 
@@ -74,6 +79,15 @@ class CypherQueryBuilder:
         self, question: str, flags: dict[str, bool], *, sum_amount: bool
     ) -> list[tuple[str, str]]:
         return qe._payment_aggregate_queries(question, flags, sum_amount=sum_amount)
+
+    def payments_above_amount(
+        self,
+        question: str,
+        flags: dict[str, bool],
+        *,
+        min_amount: float,
+    ) -> list[tuple[str, str]]:
+        return qe._payments_above_amount_queries(question, flags, min_amount=min_amount)
 
     def payment_approval_lookup(self, payment_id: str) -> list[tuple[str, str]]:
         return qe._payment_approval_lookup_queries(payment_id)

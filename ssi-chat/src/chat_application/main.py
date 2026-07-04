@@ -16,11 +16,17 @@ from telemetry import (
 from chat_application import __version__
 from chat_application.config import settings
 from chat_application.dependencies import get_compliance_subject
+from chat_application.feedback_observability import (
+    ChatFeedbackContext,
+    get_feedback_distribution,
+    record_chat_feedback,
+)
 from chat_application.ml_client import PolicyPilotMlClient
-from chat_application.models import ChatRequest, ChatResponse
+from chat_application.models import ChatFeedbackRequest, ChatRequest, ChatResponse
 from chat_application.multimodal_search import MultimodalSearchClient
 from chat_application.neo4j import Neo4jClient
 from chat_application.rag import RagService
+from chat_application.routing_observability import get_routing_distribution
 from chat_application.subject import Subject
 from chat_application.users import compliance_users
 from chat_application.zitadel_auth import ZitadelAuthClient, login_name_for_user
@@ -76,6 +82,18 @@ async def index() -> FileResponse:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "UP"}
+
+
+@app.get("/api/routing-stats")
+async def routing_stats() -> dict:
+    """In-process retrieval routing distribution since process start."""
+    return get_routing_distribution().to_dict()
+
+
+@app.get("/api/feedback-stats")
+async def feedback_stats() -> dict:
+    """Thumbs-up/down satisfaction distribution by retrieval strategy since process start."""
+    return get_feedback_distribution().to_dict()
 
 
 class LoginRequest(BaseModel):
@@ -138,6 +156,26 @@ async def chat(
     except Exception as exc:
         logger.exception("chat failed")
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/api/chat/feedback")
+async def chat_feedback(
+    request: ChatFeedbackRequest,
+    subject: Subject = Depends(get_compliance_subject),
+) -> dict[str, str]:
+    feedback = ChatFeedbackContext.from_payload(
+        rating=request.rating,
+        mode=request.mode,
+        path=request.path,
+        cypher_provenance=request.cypher_provenance,
+        answer_synthesis=request.answer_synthesis,
+        retrieval_strategy=request.retrieval_strategy,
+        user_id=subject.user_id,
+        intent_id=request.intent_id,
+        question_hash=request.question_hash,
+    )
+    record_chat_feedback(feedback)
+    return {"status": "recorded"}
 
 
 def run() -> None:

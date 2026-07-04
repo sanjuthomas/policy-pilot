@@ -129,7 +129,7 @@ function authHeaders() {
   };
 }
 
-function appendMessage(role, content) {
+function appendMessage(role, content, chatMeta = null) {
   const wrap = document.createElement("div");
   wrap.className = `message ${role}`;
   wrap.innerHTML = `
@@ -139,11 +139,87 @@ function appendMessage(role, content) {
   const body = wrap.querySelector(".message-body");
   if (role === "assistant") {
     body.innerHTML = renderAssistantMarkdown(content);
+    if (chatMeta?.routing) {
+      wrap.appendChild(createFeedbackBar(chatMeta));
+    }
   } else {
     body.textContent = content;
   }
   thread.appendChild(wrap);
   thread.scrollTop = thread.scrollHeight;
+}
+
+function createFeedbackBar(chatMeta) {
+  const bar = document.createElement("div");
+  bar.className = "message-feedback";
+  bar.setAttribute("role", "group");
+  bar.setAttribute("aria-label", "Rate this answer");
+
+  const label = document.createElement("span");
+  label.className = "feedback-label muted";
+  label.textContent = "Helpful?";
+
+  const upBtn = document.createElement("button");
+  upBtn.type = "button";
+  upBtn.className = "feedback-btn feedback-up";
+  upBtn.setAttribute("aria-label", "Thumbs up");
+  upBtn.textContent = "👍";
+
+  const downBtn = document.createElement("button");
+  downBtn.type = "button";
+  downBtn.className = "feedback-btn feedback-down";
+  downBtn.setAttribute("aria-label", "Thumbs down");
+  downBtn.textContent = "👎";
+
+  const status = document.createElement("span");
+  status.className = "feedback-status muted";
+
+  async function submitFeedback(rating) {
+    if (bar.dataset.submitted) {
+      return;
+    }
+    upBtn.disabled = true;
+    downBtn.disabled = true;
+    status.textContent = "Saving…";
+
+    const routing = chatMeta.routing;
+    try {
+      const response = await fetch("/api/chat/feedback", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders(),
+        },
+        body: JSON.stringify({
+          rating,
+          mode: chatMeta.mode,
+          path: routing.path,
+          cypher_provenance: routing.cypher_provenance,
+          answer_synthesis: routing.answer_synthesis,
+          retrieval_strategy: routing.retrieval_strategy || null,
+          intent_id: routing.intent_id || null,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.detail || `HTTP ${response.status}`);
+      }
+      bar.dataset.submitted = rating;
+      upBtn.classList.toggle("selected", rating === "up");
+      downBtn.classList.toggle("selected", rating === "down");
+      status.textContent = "Thanks for your feedback";
+    } catch (error) {
+      upBtn.disabled = false;
+      downBtn.disabled = false;
+      status.textContent = `Could not save feedback: ${error.message}`;
+    }
+  }
+
+  upBtn.addEventListener("click", () => submitFeedback("up"));
+  downBtn.addEventListener("click", () => submitFeedback("down"));
+
+  bar.append(label, upBtn, downBtn, status);
+  return bar;
 }
 
 function shortId(value) {
@@ -163,6 +239,7 @@ function renderMeta(data) {
   if (routing) {
     metaRouting.textContent = routing.label || "Unknown path";
     const detailParts = [
+      routing.retrieval_strategy && `strategy=${routing.retrieval_strategy}`,
       routing.path && `path=${routing.path}`,
       routing.cypher_provenance && `cypher=${routing.cypher_provenance}`,
       routing.answer_synthesis && `synthesis=${routing.answer_synthesis}`,
@@ -234,7 +311,10 @@ async function sendMessage(text) {
     if (!response.ok) {
       throw new Error(payload.detail || `HTTP ${response.status}`);
     }
-    appendMessage("assistant", payload.answer);
+    appendMessage("assistant", payload.answer, {
+      mode,
+      routing: payload.routing,
+    });
     history.push({ role: "assistant", content: payload.answer });
     if (history.length > 40) {
       history = history.slice(-40);

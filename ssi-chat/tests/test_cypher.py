@@ -10,12 +10,16 @@ from chat_application.cypher import (
     instruction_id_from_list_payments_question,
     is_alert_ranking_question,
     is_count_question,
+    is_largest_payment_question,
+    is_payment_amount_threshold_question,
     is_max_payments_per_instruction_question,
+    is_payment_id_lookup_for_instruction_question,
     is_payments_for_instruction_question,
     load_graph_schema,
     lob_filter_from_question,
     normalize_read_only_cypher,
     payment_status_filter_from_question,
+    payment_amount_threshold_from_question,
     plan_graph_queries,
     ranking_period_label,
     records_to_rows,
@@ -214,7 +218,20 @@ class TestPlanGraphQueries:
         assert planned is not None
         assert planned[0][0] == "payments_for_instruction"
         assert iid in planned[0][1]
-        assert "collect(DISTINCT pay)" in planned[0][1]
+        assert "HAS_PAYMENT" in planned[0][1]
+
+    def test_payment_id_for_used_instruction_with_typo(self) -> None:
+        question = (
+            "Can you give me the payment ID associated with a used instruction 0260704-FICC-I-1?"
+        )
+        assert is_payments_for_instruction_question(question)
+        assert is_payment_id_lookup_for_instruction_question(question)
+        iid = instruction_id_from_list_payments_question(question)
+        assert iid == "20260704-FICC-I-1"
+        planned = plan_graph_queries(question, mode="payments")
+        assert planned is not None
+        assert planned[0][0] == "payments_for_instruction"
+        assert "20260704-FICC-I-1" in planned[0][1]
 
     def test_payments_for_instruction_approved_filter(self) -> None:
         iid = "3bcb9b9a-9415-44ce-b707-4cc4c8281bb9"
@@ -224,6 +241,26 @@ class TestPlanGraphQueries:
         )
         assert planned is not None
         assert "p.status = 'APPROVED'" in planned[0][1]
+
+    def test_largest_payment_today(self) -> None:
+        question = "What was the largest payment today?"
+        assert is_largest_payment_question(question)
+        planned = plan_graph_queries(question, mode="payments")
+        assert planned is not None
+        assert planned[0][0] == "largest_payment"
+        assert "max(pv.version_number)" in planned[0][1]
+        assert "ORDER BY p.amount DESC" in planned[0][1]
+        assert "date(datetime(p.updated_at)) = date()" in planned[0][1]
+
+    def test_payments_above_amount_threshold(self) -> None:
+        question = "do we have any payments with >$25M amount?"
+        assert is_payment_amount_threshold_question(question)
+        assert payment_amount_threshold_from_question(question) == 25_000_000
+        planned = plan_graph_queries(question, mode="payments")
+        assert planned is not None
+        assert planned[0][0] == "payments_above_amount"
+        assert "p.amount > 25000000" in planned[0][1]
+        assert "max(pv.version_number)" in planned[0][1]
 
     def test_payment_total_amount_ficc_today(self) -> None:
         planned = plan_graph_queries(
@@ -236,7 +273,7 @@ class TestPlanGraphQueries:
         assert "p.status = 'APPROVED'" in query
         assert "p.owning_lob = 'FICC'" in query
         assert "sum(p.amount)" in query
-        assert "count(pay)" in query
+        assert "count(DISTINCT pay)" in query
         assert "date(datetime(p.updated_at)) = date()" in query
 
     def test_payment_count_approved_ficc_today(self) -> None:
@@ -262,7 +299,7 @@ class TestPlanGraphQueries:
         query = planned[0][1]
         assert "value_date STARTS WITH toString(date())" in query
         assert "updated_at" not in query
-        assert "count(pay) AS total" in query
+        assert "count(DISTINCT pay) AS total" in query
 
     def test_instruction_count_in_store(self) -> None:
         planned = plan_graph_queries(
@@ -272,7 +309,8 @@ class TestPlanGraphQueries:
         assert planned is not None
         assert planned[0][0] == "count"
         assert "count(DISTINCT i.instruction_id)" in planned[0][1]
-        assert "[:CURRENT]->" in planned[0][1]
+        assert "HAS_VERSION" in planned[0][1]
+        assert "max(iv.version_number)" in planned[0][1]
 
     def test_instruction_count_submitted(self) -> None:
         planned = plan_graph_queries(
@@ -352,6 +390,46 @@ class TestIsCountQuestion:
         assert is_count_question("Who approved this instruction?") is False
 
 
+class TestIsPaymentAmountThresholdQuestion:
+    def test_detects_gt_dollar_million(self) -> None:
+        question = "do we have any payments with >$25M amount?"
+        assert is_payment_amount_threshold_question(question)
+        assert payment_amount_threshold_from_question(question) == 25_000_000
+
+    def test_detects_over_million_phrase(self) -> None:
+        question = "Show payments over $10M approved this week."
+        assert is_payment_amount_threshold_question(question)
+        assert payment_amount_threshold_from_question(question) == 10_000_000
+
+    def test_excludes_total_amount(self) -> None:
+        assert not is_payment_amount_threshold_question(
+            "What is the total approved payment amount for FICC today?"
+        )
+
+
+class TestIsLargestPaymentQuestion:
+    def test_detects_largest_payment_today(self) -> None:
+        assert is_largest_payment_question("What was the largest payment today?")
+
+    def test_detects_largest_approved_week_by_lob(self) -> None:
+        assert is_largest_payment_question(
+            "What are the largest approved payments this week by LOB?"
+        )
+
+    def test_excludes_max_payments_per_instruction(self) -> None:
+        assert not is_largest_payment_question(
+            "Which instruction has the maximum number of payments?"
+        )
+
+    def test_excludes_payment_total(self) -> None:
+        assert not is_largest_payment_question(
+            "What is the total approved payment amount for FICC today?"
+        )
+
+    def test_excludes_user_ranking(self) -> None:
+        assert not is_largest_payment_question("Which user has the most payments?")
+
+
 class TestIsMaxPaymentsPerInstructionQuestion:
     def test_detects_max_payments_question(self) -> None:
         assert is_max_payments_per_instruction_question(
@@ -383,6 +461,13 @@ class TestIsPaymentsForInstructionQuestion:
         assert is_payments_for_instruction_question(
             f"Can you list the payments for instruction {iid}?"
         )
+
+    def test_normalizes_seven_digit_instruction_id_typo(self) -> None:
+        typo = "0260704-FICC-I-1"
+        expected = "20260704-FICC-I-1"
+        question = f"payment ID for instruction {typo}"
+        assert instruction_id_from_list_payments_question(question) == expected
+        assert extract_entity_ids(question) == [expected]
 
     def test_extract_entity_ids_includes_sequence_and_uuid(self) -> None:
         seq = "20260627-FX-P-2"

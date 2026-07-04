@@ -20,7 +20,9 @@ from chat_application.cypher import (
     is_alert_ranking_question,
     is_count_question,
     is_instruction_count_aggregate_question,
+    is_largest_payment_question,
     is_max_payments_per_instruction_question,
+    is_payment_amount_threshold_question,
     is_payment_count_aggregate_question,
     is_payment_total_amount_question,
     is_payments_for_instruction_question,
@@ -306,12 +308,22 @@ def _format_planned_graph_answer(
 
         return _format_max_payments_per_instruction_answer(rows)
 
+    if "largest_payment" in labels and is_largest_payment_question(question):
+        from chat_application.rag import _format_largest_payment_answer
+
+        return _format_largest_payment_answer(question, rows)
+
+    if "payments_above_amount" in labels and is_payment_amount_threshold_question(question):
+        from chat_application.rag import _format_payments_above_amount_answer
+
+        return _format_payments_above_amount_answer(question, rows)
+
     if "payments_for_instruction" in labels and is_payments_for_instruction_question(question):
         from chat_application.rag import _format_payments_for_instruction_answer
 
         instruction_id = instruction_id_from_list_payments_question(question)
         if instruction_id:
-            return _format_payments_for_instruction_answer(instruction_id, rows)
+            return _format_payments_for_instruction_answer(instruction_id, rows, question=question)
 
     if "approval_lookup" in labels or "payment_approval_lookup" in labels:
         from chat_application.neo4j_formatters import format_approval_lookup_answer

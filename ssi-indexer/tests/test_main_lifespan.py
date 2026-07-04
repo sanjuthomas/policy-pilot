@@ -16,8 +16,6 @@ async def test_lifespan_starts_and_stops_consumers() -> None:
     app = FastAPI()
 
     with (
-        patch("etl.main.configure_telemetry"),
-        patch("etl.main.instrument_app"),
         patch("etl.main.shutdown_telemetry") as mock_shutdown,
         patch("etl.main.neo4j_writer") as mock_neo4j,
         patch("etl.main.embedding_client") as mock_embedding,
@@ -68,8 +66,6 @@ async def test_lifespan_continues_when_warmup_fails() -> None:
     app = FastAPI()
 
     with (
-        patch("etl.main.configure_telemetry"),
-        patch("etl.main.instrument_app"),
         patch("etl.main.shutdown_telemetry"),
         patch("etl.main.neo4j_writer") as mock_neo4j,
         patch("etl.main.embedding_client") as mock_embedding,

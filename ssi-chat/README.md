@@ -99,6 +99,28 @@ Questions like _“Who can approve payment `<uuid>`?”_ or _“Who can approve 
 
 Requires **compliance sign-in** at http://localhost:8092 (`comp-001` / `comp-002`, or platform admin). Domain services enforce the compliance JWT, load entity context, and delegate batch OPA evaluation to authorization-service.
 
+## Retrieval routing metrics
+
+Every `POST /api/chat` answer records retrieval routing:
+
+- **Structured log** — `chat.answer.completed strategy=… path=… cypher=… synthesis=…` plus `chat.retrieval_strategy`, source channel counts, and timing fields on the log record.
+- **OTel counters** — `chat.retrieval.route.count` (by strategy/path/mode), `chat.retrieval.source.channel.count` (vector/bm25/neo4j/exact hits), duration histograms.
+- **Live distribution** — `GET /api/routing-stats` returns in-process counts since startup:
+
+```bash
+curl -s http://localhost:8092/api/routing-stats | jq
+```
+
+`retrieval_strategy` values align with the regression bank: `deterministic`, `graph`, `vector`, `eligibility`.
+
+### Answer feedback (thumbs up/down)
+
+Each assistant answer in the UI includes 👍/👎 controls. Feedback is posted to `POST /api/chat/feedback` with the answer's routing metadata. Logs and OTel counter `chat.feedback.count` are tagged by `chat.feedback_rating` and `chat.retrieval_strategy` so you can see satisfaction by mechanism (e.g. deterministic liked 90% of the time).
+
+```bash
+curl -s http://localhost:8092/api/feedback-stats | jq
+```
+
 ## Example questions
 
 See **`regression/questions.yaml`** for the full regression bank (59 cases, each tagged with `retrieval: deterministic | graph | vector | eligibility`) and **`regression/README.md`** for how to run it.

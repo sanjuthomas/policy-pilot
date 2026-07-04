@@ -60,6 +60,17 @@ _LOB_FILTER = re.compile(
     re.IGNORECASE,
 )
 
+_PAYMENT_AMOUNT_THRESHOLD = re.compile(
+    r"(?:>|greater\s+than|more\s+than|over|above|exceeding|at\s+least)\s*"
+    r"\$?\s*([\d,]+(?:\.\d+)?)\s*(m(?:illion)?|b(?:illion)?|k(?:ilo)?)?",
+    re.IGNORECASE,
+)
+
+_PAYMENT_DOLLAR_AMOUNT = re.compile(
+    r"\$\s*([\d,]+(?:\.\d+)?)\s*(m(?:illion)?|b(?:illion)?|k(?:ilo)?)?",
+    re.IGNORECASE,
+)
+
 _RANKING_QUESTION = re.compile(
     r"\b(most|top|highest|greatest|largest|biggest|who triggered|which user|which users)\b",
     re.IGNORECASE,
@@ -78,8 +89,23 @@ _LIST_PAYMENTS_FOR_INSTRUCTION = re.compile(
     re.IGNORECASE,
 )
 
+_PAYMENT_FOR_INSTRUCTION = re.compile(
+    r"\bpayment(?:\s+ids?)?\s+(?:associated\s+with|for|linked\s+to|of|backing)\s+"
+    r"(?:a\s+)?(?:used\s+)?instruction\b|"
+    r"\b(?:give|get|tell)\b.*\bpayment(?:\s+id)?\b.*\binstruction\b|"
+    r"\binstruction\b.*\bpayment(?:\s+id)?\b|"
+    r"\bused\s+instruction\b.*\bpayment\b|"
+    r"\bpayment\b.*\bused\s+instruction\b",
+    re.IGNORECASE,
+)
+
+_RELAXED_SEQUENCE_ENTITY_ID = re.compile(
+    r"(\d{7,8}-[A-Z0-9_]+-[IP]-\d+)",
+    re.IGNORECASE,
+)
+
 _INSTRUCTION_ID_IN_QUESTION = re.compile(
-    r"instruction\s+(\d{8}-[A-Z0-9_]+-I-\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
+    r"instruction\s+(\d{7,8}-[A-Z0-9_]+-I-\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
     re.IGNORECASE,
 )
 
@@ -216,6 +242,88 @@ def is_payment_count_aggregate_question(question: str) -> bool:
     if _LIST_PAYMENTS_FOR_INSTRUCTION.search(question):
         return False
     return True
+
+
+def is_largest_payment_question(question: str) -> bool:
+    """Rank payments by amount (largest/top/highest), not per-instruction counts."""
+    q = question.lower()
+    if "payment" not in q:
+        return False
+    if is_max_payments_per_instruction_question(question):
+        return False
+    if is_payment_total_amount_question(question):
+        return False
+    if is_count_question(question):
+        return False
+    if is_payments_for_instruction_question(question):
+        return False
+    if re.search(r"\b(which|who)\s+(user|users|creator|approver)\b", q):
+        return False
+    if re.search(r"\b(user|users)\s+with\s+(the\s+)?(most|top)\b", q):
+        return False
+    if not _RANKING_QUESTION.search(question):
+        return False
+    if re.search(
+        r"\b(largest|biggest|highest|greatest|maximum)\b.*\bpayments?\b|"
+        r"\bpayments?\b.*\b(largest|biggest|highest|greatest|maximum)\b|"
+        r"\b(largest|biggest|highest|maximum)\s+(payment|amount)\b",
+        q,
+    ):
+        return True
+    return bool(re.search(r"\btop\s+\d*\s*payments?\b", q))
+
+
+def _parse_money_threshold(raw_number: str, suffix: str | None) -> float:
+    value = float(raw_number.replace(",", ""))
+    unit = (suffix or "").lower()
+    if unit.startswith("b"):
+        return value * 1_000_000_000
+    if unit.startswith("m"):
+        return value * 1_000_000
+    if unit.startswith("k"):
+        return value * 1_000
+    return value
+
+
+def payment_amount_threshold_from_question(question: str) -> float | None:
+    """Minimum payment amount from phrases like >$25M, over $10 million, exceeding 100M."""
+    match = _PAYMENT_AMOUNT_THRESHOLD.search(question)
+    if match:
+        return _parse_money_threshold(match.group(1), match.group(2))
+    for match in _PAYMENT_DOLLAR_AMOUNT.finditer(question):
+        amount = _parse_money_threshold(match.group(1), match.group(2))
+        if amount >= 1_000_000:
+            return amount
+    return None
+
+
+def is_payment_amount_threshold_question(question: str) -> bool:
+    """List or existence check for payments above a dollar amount."""
+    q = question.lower()
+    if "payment" not in q:
+        return False
+    if is_payment_total_amount_question(question):
+        return False
+    if is_largest_payment_question(question):
+        return False
+    if is_payments_for_instruction_question(question):
+        return False
+    threshold = payment_amount_threshold_from_question(question)
+    if threshold is None:
+        return False
+    amount_cues = (
+        r">",
+        r"greater\s+than",
+        r"more\s+than",
+        r"\bover\b",
+        r"\babove\b",
+        r"exceeding",
+        r"at\s+least",
+        r"\$\s*\d",
+        r"\bmillion\b",
+        r"\bbillion\b",
+    )
+    return any(re.search(cue, q) for cue in amount_cues)
 
 
 def is_instruction_count_aggregate_question(question: str) -> bool:
@@ -361,6 +469,17 @@ def payment_aggregate_period_label(question: str) -> str:
     return "all time"
 
 
+def normalize_sequence_entity_id(entity_id: str) -> str:
+    """Normalize demo sequence IDs; repair common 7-digit date typos (0260704 → 20260704)."""
+    match = re.match(r"^(\d{7,8})-([A-Z0-9_]+)-([IP])-(\d+)$", entity_id.strip(), re.IGNORECASE)
+    if not match:
+        return entity_id.strip()
+    date_part, lob, kind, seq = match.groups()
+    if len(date_part) == 7 and date_part.startswith("0"):
+        date_part = f"2{date_part}"
+    return f"{date_part}-{lob.upper()}-{kind.upper()}-{seq}"
+
+
 def is_max_payments_per_instruction_question(question: str) -> bool:
     q = question.lower()
     return "instruction" in q and "payment" in q and bool(_MAX_PAYMENTS_PER_INSTRUCTION.search(question))
@@ -368,21 +487,37 @@ def is_max_payments_per_instruction_question(question: str) -> bool:
 
 def is_payments_for_instruction_question(question: str) -> bool:
     q = question.lower()
-    if not extract_entity_ids(question):
-        return False
     if is_max_payments_per_instruction_question(question):
+        return False
+    if is_instruction_approver_via_payment_question(question):
+        return False
+    if is_count_question(question):
         return False
     if "approv" in q and ("who" in q or "when" in q or "why" in q):
         return False
     if "payment" not in q or "instruction" not in q:
         return False
-    return bool(_LIST_PAYMENTS_FOR_INSTRUCTION.search(question))
+    if _LIST_PAYMENTS_FOR_INSTRUCTION.search(question):
+        return True
+    if _PAYMENT_FOR_INSTRUCTION.search(question):
+        return True
+    return bool(instruction_id_from_list_payments_question(question))
+
+
+def is_payment_id_lookup_for_instruction_question(question: str) -> bool:
+    """Single payment ID lookup (not a tabular list request)."""
+    return is_payments_for_instruction_question(question) and not bool(
+        _LIST_PAYMENTS_FOR_INSTRUCTION.search(question)
+    )
 
 
 def instruction_id_from_list_payments_question(question: str) -> str | None:
     match = _INSTRUCTION_ID_IN_QUESTION.search(question)
     if match:
-        return match.group(1)
+        return normalize_sequence_entity_id(match.group(1))
+    instruction_ids = extract_instruction_ids(question)
+    if instruction_ids:
+        return instruction_ids[0]
     entity_ids = extract_entity_ids(question)
     return entity_ids[0] if entity_ids else None
 
@@ -470,6 +605,17 @@ def _payment_status_filter_cypher(question: str) -> str:
     return ""
 
 
+def _payment_latest_status_match_prefix() -> str:
+    """Match each Payment at its highest version that carries a lifecycle status."""
+    return """
+MATCH (pay:Payment)-[:HAS_VERSION]->(pv:PaymentVersion)
+WHERE pv.status IS NOT NULL
+WITH pay, max(pv.version_number) AS max_ver
+MATCH (pay)-[:HAS_VERSION]->(p:PaymentVersion)
+WHERE p.version_number = max_ver AND p.status IS NOT NULL
+"""
+
+
 def _payment_aggregate_queries(
     question: str,
     flags: dict[str, bool],
@@ -488,10 +634,10 @@ def _payment_aggregate_queries(
         return [
             (
                 "payment_total_amount",
-                f"""MATCH (pay:Payment)-[:CURRENT]->(p:PaymentVersion)
-WHERE true {status_filter} {lob_filter} {time_filter}
+                f"""{_payment_latest_status_match_prefix()}
+AND true {status_filter} {lob_filter} {time_filter}
 RETURN coalesce(p.currency, 'USD') AS currency,
-       count(pay) AS payment_count,
+       count(DISTINCT pay) AS payment_count,
        sum(p.amount) AS total_amount
 ORDER BY currency
 LIMIT 10""",
@@ -501,11 +647,79 @@ LIMIT 10""",
     return [
         (
             "payment_count",
-            f"""MATCH (pay:Payment)-[:CURRENT]->(p:PaymentVersion)
-WHERE true {status_filter} {lob_filter} {time_filter}
-RETURN count(pay) AS total
+            f"""{_payment_latest_status_match_prefix()}
+AND true {status_filter} {lob_filter} {time_filter}
+RETURN count(DISTINCT pay) AS total
 LIMIT 1""",
         )
+    ]
+
+
+def _payments_above_amount_queries(
+    question: str,
+    flags: dict[str, bool],
+    *,
+    min_amount: float,
+) -> list[tuple[str, str]]:
+    lob = lob_filter_from_question(question)
+    lob_filter = f"AND p.owning_lob = '{lob}'" if lob else ""
+    status_filter = _payment_status_filter_cypher(question)
+    time_filter = _payment_time_filter_cypher(
+        flags,
+        use_value_date=is_payment_value_date_question(question),
+    )
+    return [
+        (
+            "payments_above_amount",
+            f"""{_payment_latest_status_match_prefix()}
+AND p.amount > {min_amount} {status_filter} {lob_filter} {time_filter}
+OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+RETURN pay.payment_id AS payment_id,
+       p.instruction_id AS instruction_id,
+       p.status AS status,
+       p.amount AS amount,
+       p.currency AS currency,
+       p.value_date AS value_date,
+       p.owning_lob AS owning_lob,
+       coalesce(creator.display_name, creator.user_id, p.creator_user_id, '') AS creator_display,
+       coalesce(approver.display_name, approver.user_id, p.approver_user_id, '') AS approver_display
+ORDER BY p.amount DESC, pay.payment_id ASC
+LIMIT 200""",
+        ),
+    ]
+
+
+def _largest_payment_queries(
+    question: str,
+    flags: dict[str, bool],
+) -> list[tuple[str, str]]:
+    lob = lob_filter_from_question(question)
+    lob_filter = f"AND p.owning_lob = '{lob}'" if lob else ""
+    status_filter = _payment_status_filter_cypher(question)
+    time_filter = _payment_time_filter_cypher(
+        flags,
+        use_value_date=is_payment_value_date_question(question),
+    )
+    return [
+        (
+            "largest_payment",
+            f"""{_payment_latest_status_match_prefix()}
+AND true {status_filter} {lob_filter} {time_filter}
+OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+RETURN pay.payment_id AS payment_id,
+       p.instruction_id AS instruction_id,
+       p.status AS status,
+       p.amount AS amount,
+       p.currency AS currency,
+       p.value_date AS value_date,
+       p.owning_lob AS owning_lob,
+       coalesce(creator.display_name, creator.user_id, p.creator_user_id, '') AS creator_display,
+       coalesce(approver.display_name, approver.user_id, p.approver_user_id, '') AS approver_display
+ORDER BY p.amount DESC, pay.payment_id ASC
+LIMIT 50""",
+        ),
     ]
 
 
@@ -583,9 +797,17 @@ def extract_payment_ids(text: str) -> list[str]:
 
 def extract_instruction_ids(text: str) -> list[str]:
     """Return sequence instruction IDs (-I-) in order of appearance."""
-    return list(
+    ids = list(
         dict.fromkeys(match.group(0) for match in _SEQUENCE_INSTRUCTION_ID_PATTERN.finditer(text))
     )
+    if not ids:
+        ids = [
+            match.group(1)
+            for match in _RELAXED_SEQUENCE_ENTITY_ID.finditer(text)
+            if re.search(r"-I-\d+$", match.group(1), re.IGNORECASE)
+        ]
+        ids = list(dict.fromkeys(ids))
+    return [normalize_sequence_entity_id(item) for item in ids]
 
 
 def is_instruction_approver_via_payment_question(question: str) -> bool:
@@ -698,11 +920,14 @@ def _payments_for_instruction_queries(
         (
             "payments_for_instruction",
             f"""MATCH (i:Instruction {{instruction_id: '{instruction_id}'}})-[:HAS_PAYMENT]->(pay:Payment)
-MATCH (pay)-[:CURRENT]->(p:PaymentVersion)
-WHERE true {status_filter}
-WITH collect(DISTINCT pay) AS payments
-UNWIND payments AS pay
-MATCH (pay)-[:CURRENT]->(p:PaymentVersion)
+MATCH (pay)-[:HAS_VERSION]->(pv:PaymentVersion)
+WHERE pv.status IS NOT NULL
+WITH i, pay, max(pv.version_number) AS max_ver
+MATCH (pay)-[:HAS_VERSION]->(p:PaymentVersion)
+WHERE p.version_number = max_ver AND p.status IS NOT NULL {status_filter}
+WITH collect(DISTINCT {{pay: pay, p: p}}) AS payment_rows
+UNWIND payment_rows AS row
+WITH row.pay AS pay, row.p AS p
 OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
 OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
 WITH pay, p,
@@ -804,10 +1029,21 @@ LIMIT 1""",
     ]
 
 
+def _instruction_latest_status_match_prefix() -> str:
+    """Match each Instruction at its highest version that carries a lifecycle status."""
+    return """
+MATCH (i:Instruction)-[:HAS_VERSION]->(iv:InstructionVersion)
+WHERE iv.status IS NOT NULL AND iv.status <> ''
+WITH i, max(iv.version_number) AS max_ver
+MATCH (i)-[:HAS_VERSION]->(v:InstructionVersion)
+WHERE v.version_number = max_ver AND v.status IS NOT NULL AND v.status <> ''
+"""
+
+
 def _instruction_count_queries(
     question: str, flags: dict[str, bool]
 ) -> list[tuple[str, str]]:
-    """Count distinct instructions via CURRENT version (Mongo-aligned business key)."""
+    """Count distinct instructions at their latest version with lifecycle status."""
     status, instruction_type = instruction_count_filters_from_question(question)
     lob = lob_filter_from_question(question)
     status_clause = f"AND v.status = '{status}'" if status else ""
@@ -828,8 +1064,8 @@ def _instruction_count_queries(
         return [
             (
                 "count_by_lob",
-                f"""MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion)
-WHERE true {status_clause} {type_clause} {time_clause}
+                f"""{_instruction_latest_status_match_prefix()}
+AND true {status_clause} {type_clause} {time_clause}
 RETURN v.owning_lob AS lob, count(DISTINCT i.instruction_id) AS total
 ORDER BY lob
 LIMIT 20""",
@@ -839,14 +1075,14 @@ LIMIT 20""",
     return [
         (
             "count",
-            f"""MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion)
-WHERE true {status_clause} {type_clause} {lob_clause} {time_clause}
+            f"""{_instruction_latest_status_match_prefix()}
+AND true {status_clause} {type_clause} {lob_clause} {time_clause}
 RETURN count(DISTINCT i.instruction_id) AS total LIMIT 1""",
         ),
         (
             "details",
-            f"""MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion)
-WHERE true {status_clause} {type_clause} {lob_clause} {time_clause}
+            f"""{_instruction_latest_status_match_prefix()}
+AND true {status_clause} {type_clause} {lob_clause} {time_clause}
 RETURN v.instruction_id, v.status, v.instruction_type, v.owning_lob, v.currency, v.wire_scope,
        v.version_number
 ORDER BY v.instruction_id
@@ -1240,6 +1476,14 @@ def plan_graph_queries(question: str, *, mode: str) -> list[tuple[str, str]] | N
     if mode in ("payments", "all") and is_max_payments_per_instruction_question(question):
         return builder.max_payments_per_instruction()
 
+    if mode in ("payments", "all") and is_payment_amount_threshold_question(question):
+        min_amount = payment_amount_threshold_from_question(question)
+        if min_amount is not None:
+            return builder.payments_above_amount(question, flags, min_amount=min_amount)
+
+    if mode in ("payments", "all") and is_largest_payment_question(question):
+        return builder.largest_payment(question, flags)
+
     if (
         mode == "events"
         and flags["ranking"]
@@ -1392,7 +1636,10 @@ def extract_uuids(text: str) -> list[str]:
 
 def extract_entity_ids(text: str) -> list[str]:
     """Return unique instruction/payment business IDs (sequence or legacy UUID)."""
-    return list(dict.fromkeys(match.group(1) for match in _ENTITY_ID_PATTERN.finditer(text)))
+    ids = list(dict.fromkeys(match.group(1) for match in _ENTITY_ID_PATTERN.finditer(text)))
+    if not ids:
+        ids = list(dict.fromkeys(match.group(1) for match in _RELAXED_SEQUENCE_ENTITY_ID.finditer(text)))
+    return [normalize_sequence_entity_id(item) for item in ids]
 
 
 def extract_event_id(row: dict[str, Any]) -> str | None:

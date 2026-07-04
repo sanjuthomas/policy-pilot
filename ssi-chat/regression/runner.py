@@ -15,6 +15,11 @@ import yaml
 from regression.api_smoke import print_smoke_summary, run_api_smoke, smoke_to_dict
 from regression.assertions import evaluate_expectations
 from regression.auth_helpers import compliance_auth_headers
+from regression.eval_metrics import (
+    CaseQualityScores,
+    evaluate_case_quality,
+    summarize_suite_quality,
+)
 from regression.models import (
     CaseResult,
     RegressionCase,
@@ -30,6 +35,7 @@ from regression.seed import (
 logger = logging.getLogger(__name__)
 
 DEFAULT_QUESTIONS = Path(__file__).resolve().parent / "questions.yaml"
+DEFAULT_GOLDEN = Path(__file__).resolve().parent / "eval_golden.yaml"
 
 
 def load_suite(path: Path) -> RegressionSuite:
@@ -83,6 +89,20 @@ def ask_chat(
     )
     response.raise_for_status()
     return response.json()
+
+
+def _quality_gate_enabled(expect) -> bool:
+    return bool(
+        expect.require_routing
+        or expect.require_entity_recall
+        or expect.routing_path
+        or expect.cypher_class
+        or expect.answer_synthesis
+        or expect.source_channels_any
+        or expect.max_generation_ms is not None
+        or expect.min_groundedness is not None
+        or expect.min_faithfulness is not None
+    )
 
 
 def run_case(
@@ -164,6 +184,20 @@ def run_case(
         cypher=payload.get("cypher"),
     )
 
+    quality = evaluate_case_quality(
+        retrieval=case.retrieval,
+        expect=case.expect,
+        question=question,
+        answer=answer,
+        sources=sources,
+        graph_rows=graph_rows,
+        routing=payload.get("routing"),
+        generation_ms=payload.get("generation_ms"),
+    )
+    if passed and _quality_gate_enabled(case.expect) and not quality.passed:
+        passed = False
+        reason = quality.failures[0] if quality.failures else "quality gate failed"
+
     preview = answer.strip().replace("\n", " ")
     if len(preview) > 240:
         preview = preview[:237] + "..."
@@ -181,7 +215,35 @@ def run_case(
         generation_ms=payload.get("generation_ms"),
         tags=case.tags,
         retrieval=case.retrieval,
+        quality=quality.to_dict(),
     )
+
+
+def print_quality_summary(result: SuiteResult) -> None:
+    scored = [
+        (case.retrieval, CaseQualityScores(**case.quality))
+        for case in result.cases
+        if case.quality and case.retrieval and not case.skipped
+    ]
+    if not scored:
+        return
+
+    summary = summarize_suite_quality(scored)
+    result.quality_summary = summary.to_dict()
+
+    print("\n=== Retrieval quality metrics ===")
+    if summary.routing_accuracy is not None:
+        print(f"routing_accuracy: {summary.routing_accuracy:.1%} ({summary.cases_scored} cases)")
+    if summary.mean_entity_recall is not None:
+        print(f"mean_entity_recall: {summary.mean_entity_recall:.2f}")
+    if summary.mean_source_precision_at_k is not None:
+        print(f"mean_source_precision@5: {summary.mean_source_precision_at_k:.2f}")
+    if summary.mean_groundedness is not None:
+        print(f"mean_groundedness: {summary.mean_groundedness:.2f}")
+    if summary.mean_faithfulness is not None:
+        print(f"mean_faithfulness: {summary.mean_faithfulness:.2f}")
+    if summary.quality_failures:
+        print(f"quality_gate_failures: {summary.quality_failures} (cases with explicit quality expect)")
 
 
 def print_summary(result: SuiteResult) -> None:
@@ -200,6 +262,11 @@ def print_summary(result: SuiteResult) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run ssi-chat regression suite")
     parser.add_argument("--questions", type=Path, default=DEFAULT_QUESTIONS)
+    parser.add_argument(
+        "--eval-golden",
+        action="store_true",
+        help="Run labeled golden eval set (eval_golden.yaml) instead of full question bank",
+    )
     parser.add_argument("--chat-url", default="http://localhost:8092")
     parser.add_argument("--harness-url", default="http://localhost:8091")
     parser.add_argument(
@@ -240,7 +307,7 @@ def main(argv: list[str] | None = None) -> int:
         format="%(levelname)s %(message)s",
     )
 
-    suite = load_suite(args.questions)
+    suite = load_suite(DEFAULT_GOLDEN if args.eval_golden else args.questions)
     tag_filter = {tag.strip() for tag in args.tags.split(",") if tag.strip()} or None
     retrieval_filter = {item.strip() for item in args.retrieval.split(",") if item.strip()} or None
     id_filter = {item.strip() for item in args.ids.split(",") if item.strip()} or None
@@ -310,6 +377,7 @@ def main(argv: list[str] | None = None) -> int:
                     chat_failed += 1
 
         print_summary(result)
+        print_quality_summary(result)
         print(f"\nCompleted {len(cases)} chat case(s)")
 
     elapsed = time.perf_counter() - started

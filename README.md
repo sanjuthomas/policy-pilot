@@ -657,6 +657,17 @@ User question + search mode (events | instructions | payments | all)
 
 The chat API response includes the generated Cypher query, graph rows, per-source timing, and source cards tagged `vector` / `bm25` / `neo4j` / `exact`.
 
+### Retrieval quality evaluation
+
+The regression suite (`ssi-chat/regression/`) measures answer quality beyond keyword checks:
+
+- **Routing accuracy** — did the response use the expected path (`neo4j_direct`, `full_rag`, `eligibility`) and synthesis mode?
+- **Entity recall** — are instruction/payment IDs from the question grounded in sources or graph rows?
+- **Source precision@5** — for vector-mode cases, do top sources include `vector` or `bm25` channels?
+- **Groundedness / faithfulness** — lightweight token-overlap proxies against graph rows and retrieved context (no LLM-as-judge dependency)
+
+Run the full bank with metrics: `python -m regression.runner --seed --report regression-report.json`. For a smaller labeled set with strict gates, use `--eval-golden`. Offline metric tests: `pytest tests/test_eval_metrics.py`. See `ssi-chat/regression/README.md`.
+
 ---
 
 ## Authorization audit trail (Who / When / Why)

@@ -13,6 +13,8 @@ from chat_application.rag import (
     _display_from_snap_user,
     _format_alert_ranking_answer,
     _format_instruction_count_aggregate_answer,
+    _format_largest_payment_answer,
+    _format_payments_above_amount_answer,
     _format_max_payments_per_instruction_answer,
     _format_payment_count_aggregate_answer,
     _format_payment_total_amount_answer,
@@ -184,8 +186,27 @@ class TestPaymentsForInstructionAnswer:
         assert "92831268-b1d0-44c8-a24a-b84a912cb051" in answer
         assert "10,000,000.00 USD" in answer
 
-
-class TestAlertRankingAnswer:
+    def test_payment_id_lookup_answer(self) -> None:
+        iid = "20260704-FICC-I-1"
+        pid = "20260704-FICC-P-1"
+        question = (
+            f"Can you give me the payment ID associated with a used instruction {iid}?"
+        )
+        rows = [
+            {
+                "payment_id": pid,
+                "instruction_id": iid,
+                "status": "USED",
+                "amount": 5_000_000,
+                "currency": "USD",
+                "value_date": "2026-07-04",
+                "owning_lob": "FICC",
+                "creator_display": "Creator",
+                "approver_display": "Approver",
+            },
+        ]
+        answer = _format_payments_for_instruction_answer(iid, rows, question=question)
+        assert answer == f"Payment `{pid}` is associated with instruction `{iid}`."
     def test_formats_ranking_table(self) -> None:
         rows = [
             {
@@ -212,6 +233,84 @@ class TestAlertRankingAnswer:
         assert "Total Alerts" in answer
         assert "Hassan, Amira (fx-201)" in answer
         assert "| 12" in answer or "| 12 " in answer
+
+
+class TestLargestPaymentAnswer:
+    def test_formats_table_with_currency_and_ties(self) -> None:
+        rows = [
+            {
+                "payment_id": "20260704-FICC-P-4",
+                "instruction_id": "20260704-FICC-I-3",
+                "status": "APPROVED",
+                "amount": 100_000_000,
+                "currency": "USD",
+                "value_date": "2026-07-05",
+                "owning_lob": "FICC",
+                "creator_display": "Al-Rashid, Fatima (pay-205)",
+                "approver_display": "Johnson, Marcus (pay-202)",
+            },
+            {
+                "payment_id": "20260704-FICC-P-6",
+                "instruction_id": "20260704-FICC-I-3",
+                "status": "SUBMITTED",
+                "amount": 100_000_000,
+                "currency": "USD",
+                "value_date": "2026-07-05",
+                "owning_lob": "FICC",
+                "creator_display": "Rodriguez, Emily (pay-101)",
+                "approver_display": "",
+            },
+            {
+                "payment_id": "20260704-FICC-P-11",
+                "instruction_id": "20260704-FICC-I-3",
+                "status": "APPROVED",
+                "amount": 50_000_000,
+                "currency": "USD",
+                "value_date": "2026-07-05",
+                "owning_lob": "FICC",
+                "creator_display": "Bergmann, Thomas (pay-300)",
+                "approver_display": "Osei, Victoria (pay-400)",
+            },
+        ]
+        answer = _format_largest_payment_answer("What was the largest payment today?", rows)
+        assert "100,000,000.00 USD" in answer
+        assert "2 payment(s) tie" in answer
+        assert "Payment ID" in answer
+        assert "20260704-FICC-P-4" in answer
+        assert "20260704-FICC-P-6" in answer
+        assert "20260704-FICC-P-11" not in answer
+
+
+class TestPaymentsAboveAmountAnswer:
+    def test_existence_yes_with_table(self) -> None:
+        rows = [
+            {
+                "payment_id": "20260704-FICC-P-4",
+                "instruction_id": "20260704-FICC-I-3",
+                "status": "APPROVED",
+                "amount": 100_000_000,
+                "currency": "USD",
+                "value_date": "2026-07-05",
+                "owning_lob": "FICC",
+                "creator_display": "Al-Rashid, Fatima (pay-205)",
+                "approver_display": "Johnson, Marcus (pay-202)",
+            },
+        ]
+        answer = _format_payments_above_amount_answer(
+            "do we have any payments with >$25M amount?",
+            rows,
+        )
+        assert answer.startswith("Yes, there are 1 payment(s)")
+        assert "100,000,000.00 USD" in answer
+        assert "Payment ID" in answer
+
+    def test_existence_no(self) -> None:
+        answer = _format_payments_above_amount_answer(
+            "do we have any payments with >$25M amount?",
+            [],
+        )
+        assert answer.startswith("No, there are no payments")
+        assert "25,000,000.00 USD" in answer
 
 
 class TestPaymentAggregateAnswers:

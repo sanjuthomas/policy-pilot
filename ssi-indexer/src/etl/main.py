@@ -98,8 +98,6 @@ class SearchRequest(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    configure_telemetry("ssi-indexer", service_version=__version__)
-    instrument_app(app)
     await neo4j_writer.connect()
 
     await instruction_security_event_consumer.start()
@@ -132,6 +130,9 @@ app = FastAPI(
     version=__version__,
     lifespan=lifespan,
 )
+
+configure_telemetry("ssi-indexer", service_version=__version__)
+instrument_app(app)
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
