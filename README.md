@@ -343,6 +343,21 @@ The indexer Search Console `POST /api/cypher/generate` endpoint uses the same pl
 | http://localhost:8083/connectors | Kafka Connect | Mongo CDC connector REST API |
 | http://localhost:7474/browser/ | Neo4j | Graph browser — `neo4j` / `devpassword` |
 | http://localhost:8080/ui/console | ZITADEL | Identity admin console |
+| http://localhost:5601 | OpenSearch Dashboards | Search exported OTLP application logs |
+| http://localhost:9200 | OpenSearch | Log index API (`otel-logs`) |
+
+---
+
+## Observability (logs)
+
+Application services send logs **directly over OTLP** to the OpenTelemetry Collector (`4317`). The collector forwards them to two destinations:
+
+1. **Debug exporter** — collector stdout (`docker compose logs otel-collector`)
+2. **OpenSearch** — index `otel-logs` (redacted HTTP and Vertex Gen AI log lines, startup messages, errors)
+
+Metrics and traces still use the debug exporter only. There is no application log file on disk; optional console mirroring uses `OTEL_LOG_CONSOLE=true`.
+
+To browse logs locally, open [OpenSearch Dashboards](http://localhost:5601), create an index pattern for `otel-logs*`, and use **Discover**.
 
 ---
 
@@ -899,6 +914,7 @@ For regression or smoke tests without Vertex (e.g. CI without GCP secrets), set 
 ```
 .
 ├── docker-compose.yml
+├── otel-collector-config.yaml       # OTLP receiver; logs → debug + OpenSearch
 ├── instruction-service/             # Instruction lifecycle API + UIs
 ├── payment-service/                 # Payment lifecycle API + UIs
 ├── authorization-service/           # OPA gateway + user directory UI

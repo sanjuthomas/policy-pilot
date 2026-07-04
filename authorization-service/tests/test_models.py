@@ -19,4 +19,5 @@ def test_payment_to_opa_payment() -> None:
     )
 
     assert payload["instruction_owning_lob"] == "FX"
+    assert payload["instruction_type"] == ""
     assert payload["created_by"]["user_id"] == "pay-101"

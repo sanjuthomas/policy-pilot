@@ -27,10 +27,27 @@ covers_lob(lob) if {
 # Instruction helpers
 # ---------------------------------------------------------------------------
 
-# A payment may only be initiated or approved against a fully-approved
-# instruction (lifecycle status APPROVED).
+# Submit and funding approval require a fully-approved instruction.
 instruction_is_approved if {
     input.payment.instruction_status == "APPROVED"
+}
+
+# Draft payments may be created or edited while the backing instruction is still
+# progressing through the SSI lifecycle (DRAFT → SUBMITTED → APPROVED).
+instruction_usable_for_draft_payment if {
+    input.payment.instruction_status in {"DRAFT", "SUBMITTED", "APPROVED"}
+}
+
+# After SUBMIT_PAYMENT on a SINGLE_USE instruction the saga marks the instruction
+# USED before the payment moves to SUBMITTED.  Funding approval must accept that
+# consumed state while STANDING instructions remain APPROVED.
+instruction_backing_valid_for_approval if {
+    instruction_is_approved
+}
+
+instruction_backing_valid_for_approval if {
+    input.payment.instruction_status == "USED"
+    input.payment.instruction_type == "SINGLE_USE"
 }
 
 # Instruction must not be expired.

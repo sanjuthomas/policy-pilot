@@ -11,6 +11,7 @@ def test_payment_approval_blocked_reason_for_used_instruction() -> None:
         "DRAFT",
         "USED",
         instruction_id="20260704-FICC-I-6",
+        instruction_type="STANDING",
     )
     assert reason is not None
     assert "20260704-FICC-I-6" in reason
@@ -30,6 +31,23 @@ def test_payment_approval_blocked_reason_for_submitted_payment() -> None:
     assert payment_approval_blocked_reason("SUBMITTED", "APPROVED") is None
 
 
+def test_payment_approval_blocked_reason_for_submitted_single_use_payment() -> None:
+    assert payment_approval_blocked_reason(
+        "SUBMITTED",
+        "USED",
+        instruction_type="SINGLE_USE",
+        payment_instruction_type="SINGLE_USE",
+    ) is None
+
+
 def test_payment_prospective_instruction_status_only_when_approved() -> None:
     assert payment_prospective_instruction_status("APPROVED") == "APPROVED"
     assert payment_prospective_instruction_status("USED") is None
+
+
+def test_payment_prospective_instruction_status_for_consumed_single_use() -> None:
+    assert payment_prospective_instruction_status(
+        "USED",
+        instruction_type="SINGLE_USE",
+        payment_instruction_type="SINGLE_USE",
+    ) == "USED"

@@ -28,6 +28,48 @@ def format_instruction_creator_by_id(question: str, rows: list[dict[str, Any]]) 
     return f"Instruction {instruction_id} was created by {creator}."
 
 
+def format_payment_creator_by_id(question: str, rows: list[dict[str, Any]]) -> str | None:
+    row = _first_row(rows)
+    if row is None:
+        return "No payment with that ID was found in the graph."
+    payment_id = row.get("payment_id") or "unknown"
+    creator = row.get("creator_display") or "unknown"
+    if not creator or creator == "unknown":
+        return f"No creator is recorded for payment {payment_id}."
+    return f"Payment {payment_id} was created by {creator}."
+
+
+def format_payment_status_by_id(question: str, rows: list[dict[str, Any]]) -> str | None:
+    row = _first_row(rows)
+    if row is None:
+        return "No payment with that ID was found in the graph."
+    payment_id = row.get("payment_id") or "unknown"
+    status = row.get("status") or "unknown"
+    lob = row.get("owning_lob")
+    suffix = f" (LOB {lob})" if lob else ""
+    return f"Payment {payment_id} has status {status}{suffix}."
+
+
+def format_payment_creator_and_approver_by_id(
+    question: str, rows: list[dict[str, Any]]
+) -> str | None:
+    row = _first_row(rows)
+    if row is None:
+        return "No payment with that ID was found in the graph."
+    payment_id = row.get("payment_id") or "unknown"
+    creator = row.get("creator_display") or "—"
+    approver = row.get("approver_display") or "—"
+    lines = [
+        f"Payment: {payment_id}",
+        f"Creator: {creator}",
+        f"Approver: {approver}",
+    ]
+    approved_at = row.get("approved_at")
+    if approved_at:
+        lines.append(f"Approved at: {approved_at}")
+    return "\n".join(lines)
+
+
 def format_instruction_status_by_id(question: str, rows: list[dict[str, Any]]) -> str | None:
     row = _first_row(rows)
     if row is None:
@@ -232,6 +274,9 @@ FORMATTERS: dict[str, Formatter] = {
     "instruction_status_by_id": format_instruction_status_by_id,
     "instruction_creator_and_approver_by_id": format_instruction_creator_and_approver_by_id,
     "instruction_approver_by_id": format_instruction_approver_by_id,
+    "payment_creator_by_id": format_payment_creator_by_id,
+    "payment_status_by_id": format_payment_status_by_id,
+    "payment_creator_and_approver_by_id": format_payment_creator_and_approver_by_id,
     "instruction_inventory_table": format_instruction_inventory_table,
     "instruction_mutual_approval": format_instruction_mutual_approval,
     "instruction_compliance_table": format_instruction_compliance_table,

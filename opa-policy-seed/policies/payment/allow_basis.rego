@@ -27,7 +27,7 @@ allow_basis contains msg if {
 
 allow_basis contains msg if {
     input.action == "CREATE_PAYMENT"
-    instruction_is_approved
+    instruction_usable_for_draft_payment
     msg := sprintf("instruction status %v", [input.payment.instruction_status])
 }
 
@@ -62,7 +62,7 @@ allow_basis contains msg if {
 
 allow_basis contains msg if {
     input.action == "UPDATE_PAYMENT"
-    instruction_is_approved
+    instruction_usable_for_draft_payment
     msg := sprintf("instruction status %v", [input.payment.instruction_status])
 }
 
@@ -126,8 +126,11 @@ allow_basis contains msg if {
 
 allow_basis contains msg if {
     input.action == "APPROVE_PAYMENT"
-    instruction_is_approved
-    msg := sprintf("instruction status %v", [input.payment.instruction_status])
+    instruction_backing_valid_for_approval
+    msg := sprintf(
+        "instruction status %v type %v",
+        [input.payment.instruction_status, input.payment.instruction_type],
+    )
 }
 
 allow_basis contains "instruction not expired" if {

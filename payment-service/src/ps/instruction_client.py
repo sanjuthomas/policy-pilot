@@ -118,7 +118,7 @@ class InstructionServiceClient:
         bearer_token: str | None = None,
         session_id: str | None = None,
     ) -> dict[str, Any]:
-        """Call instruction-service USE endpoint for SINGLE_USE instructions (Saga step 1)."""
+        """Call instruction-service USE endpoint for SINGLE_USE instructions at submit."""
         url = f"{self._base}/api/v1/instructions/{instruction_id}/use"
         body = {
             "payment_reference": payment_id,

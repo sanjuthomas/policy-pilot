@@ -780,6 +780,30 @@ LIMIT 1""",
     ]
 
 
+def _payment_detail_by_id_queries(payment_id: str) -> list[tuple[str, str]]:
+    safe_id = _escape_cypher_literal(payment_id)
+    return [
+        (
+            "payment_detail",
+            f"""MATCH (pay:Payment {{payment_id: '{safe_id}'}})-[:CURRENT]->(p:PaymentVersion)
+OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+RETURN p.payment_id AS payment_id,
+       p.instruction_id AS instruction_id,
+       p.status AS status,
+       p.amount AS amount,
+       p.currency AS currency,
+       p.value_date AS value_date,
+       p.owning_lob AS owning_lob,
+       p.created_at AS created_at,
+       coalesce(creator.display_name, creator.user_id, p.creator_user_id, '') AS creator_display,
+       coalesce(approver.display_name, approver.user_id, p.approver_user_id, '') AS approver_display,
+       p.approved_at AS approved_at
+LIMIT 1""",
+        ),
+    ]
+
+
 def _instruction_count_queries(
     question: str, flags: dict[str, bool]
 ) -> list[tuple[str, str]]:

@@ -64,6 +64,13 @@ def _build_instruction_detail(context: dict[str, Any], _question: str, _mode: Se
     return _GRAPH_BUILDER.instruction_detail(instruction_id)
 
 
+def _build_payment_detail(context: dict[str, Any], _question: str, _mode: SearchMode):
+    payment_id = _payment_id_from_context(context)
+    if not payment_id:
+        return []
+    return _GRAPH_BUILDER.payment_detail(payment_id)
+
+
 def _build_instruction_approval_lookup(context: dict[str, Any], _question: str, _mode: SearchMode):
     instruction_id = _instruction_id_from_context(context)
     if not instruction_id:
@@ -119,6 +126,7 @@ def _build_security_event_alert_list(context: dict[str, Any], _question: str, _m
 
 QUERY_BUILDERS: dict[str, QueryBuilder] = {
     "instruction_detail_by_id": _build_instruction_detail,
+    "payment_detail_by_id": _build_payment_detail,
     "instruction_approval_lookup": _build_instruction_approval_lookup,
     "instruction_list_by_status": _build_instruction_list_single_use,
     "instruction_list_single_use": _build_instruction_list_single_use,
@@ -147,6 +155,7 @@ class Neo4jDirectResult:
     cypher: str | None
     graph_rows: list[dict[str, Any]]
     intent_id: str
+    source: str = "yaml"
 
 
 @lru_cache(maxsize=1)
@@ -407,4 +416,5 @@ async def try_neo4j_direct_answer(
         cypher="\n\n".join(cyphers) if cyphers else None,
         graph_rows=rows,
         intent_id=match.intent_id,
+        source=match.source,
     )

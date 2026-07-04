@@ -78,6 +78,9 @@ class CypherQueryBuilder:
     def payment_approval_lookup(self, payment_id: str) -> list[tuple[str, str]]:
         return qe._payment_approval_lookup_queries(payment_id)
 
+    def payment_detail(self, payment_id: str) -> list[tuple[str, str]]:
+        return qe._payment_detail_by_id_queries(payment_id)
+
     def payments_for_instruction(
         self, instruction_id: str, *, status: str | None = None
     ) -> list[tuple[str, str]]:

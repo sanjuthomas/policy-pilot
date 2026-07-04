@@ -7,6 +7,8 @@ const metaEmpty = document.getElementById("meta-empty");
 const metaContent = document.getElementById("meta-content");
 const metaTiming = document.getElementById("meta-timing");
 const metaCypher = document.getElementById("meta-cypher");
+const metaRouting = document.getElementById("meta-routing");
+const metaRoutingDetail = document.getElementById("meta-routing-detail");
 const metaSources = document.getElementById("meta-sources");
 const authStatus = document.getElementById("auth-status");
 const authUser = document.getElementById("auth-user");
@@ -156,6 +158,21 @@ function renderMeta(data) {
 
   metaTiming.textContent = `Retrieval ${data.retrieval_ms ?? "—"} ms · Generation ${data.generation_ms ?? "—"} ms`;
   metaCypher.textContent = data.cypher || "(no Cypher generated)";
+
+  const routing = data.routing;
+  if (routing) {
+    metaRouting.textContent = routing.label || "Unknown path";
+    const detailParts = [
+      routing.path && `path=${routing.path}`,
+      routing.cypher_provenance && `cypher=${routing.cypher_provenance}`,
+      routing.answer_synthesis && `synthesis=${routing.answer_synthesis}`,
+      routing.intent_id && `intent=${routing.intent_id}`,
+    ].filter(Boolean);
+    metaRoutingDetail.textContent = detailParts.join(" · ");
+  } else {
+    metaRouting.textContent = "(routing metadata unavailable)";
+    metaRoutingDetail.textContent = "";
+  }
 
   metaSources.innerHTML = "";
   if (!data.sources || data.sources.length === 0) {

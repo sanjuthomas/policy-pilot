@@ -38,8 +38,6 @@ rag_service: RagService | None = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global rag_service
-    configure_telemetry("ssi-chat", service_version=__version__)
-    instrument_app(app)
     await neo4j_client.connect()
     try:
         await ml_client.warmup()
@@ -63,6 +61,9 @@ app = FastAPI(
     version=__version__,
     lifespan=lifespan,
 )
+
+configure_telemetry("ssi-chat", service_version=__version__)
+instrument_app(app)
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 

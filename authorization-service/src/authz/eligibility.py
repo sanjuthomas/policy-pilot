@@ -71,6 +71,7 @@ class EligibilityService:
             amount=context.amount,
             currency=context.currency,
             owning_lob=context.owning_lob,
+            instruction_type=context.instruction_type,
             created_by=UserReference(
                 user_id=context.created_by_user_id,
                 supervisor_id=context.created_by_supervisor_id,
@@ -116,6 +117,8 @@ class EligibilityService:
             payment.status,
             instruction_status,
             instruction_id=payment.instruction_id,
+            instruction_type=request.payment.instruction_type,
+            payment_instruction_type=request.payment.instruction_type,
         )
 
         candidates = self._users.funding_approver_candidates(payment.owning_lob)
@@ -128,7 +131,9 @@ class EligibilityService:
 
         prospective_eligible: list[EligibleApprover] = []
         prospective_instruction_status = payment_prospective_instruction_status(
-            instruction_status
+            instruction_status,
+            instruction_type=request.payment.instruction_type,
+            payment_instruction_type=request.payment.instruction_type,
         )
         if prospective_instruction_status and payment.status == "DRAFT":
             prospective_eligible = await self._eligible_payment_approvers_for_context(

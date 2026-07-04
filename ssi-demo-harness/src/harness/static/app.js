@@ -147,23 +147,15 @@ function handleGridClick(event) {
   }
 
   const action = card.dataset.action;
-  const input = card.querySelector('input[type="number"]:not([data-role="amount"])');
+  const input = card.querySelector('input[type="number"]');
   const count = input ? Number.parseInt(input.value, 10) : null;
-  const amountInput = card.querySelector('input[data-role="amount"]');
-  const amountRaw = amountInput && amountInput.value.trim() !== "" ? amountInput.value : null;
-  const amount = amountRaw !== null ? Number.parseFloat(amountRaw) : null;
 
   if (input && (!Number.isFinite(count) || count < 1)) {
     appendLog("Enter a valid count (at least 1).", { error: true });
     return;
   }
 
-  if (amountRaw !== null && (!Number.isFinite(amount) || amount <= 0)) {
-    appendLog("Enter a valid amount greater than zero, or leave amount blank.", { error: true });
-    return;
-  }
-
-  void runAction(action, count, amount);
+  void runAction(action, count);
 }
 
 actionGrid.addEventListener("click", handleGridClick);

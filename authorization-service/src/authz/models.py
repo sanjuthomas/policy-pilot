@@ -76,6 +76,7 @@ class PaymentRecord(BaseModel):
     amount: float
     currency: str
     owning_lob: str
+    instruction_type: str = ""
     created_by: UserReference
 
     def to_opa_payment(self, *, instruction_end_date: str, instruction_status: str) -> dict:
@@ -87,6 +88,7 @@ class PaymentRecord(BaseModel):
             "currency": self.currency,
             "instruction_status": instruction_status,
             "instruction_end_date": instruction_end_date,
+            "instruction_type": self.instruction_type,
             "instruction_owning_lob": self.owning_lob,
             "created_by": {
                 "user_id": self.created_by.user_id,
@@ -107,6 +109,7 @@ class PaymentRecord(BaseModel):
             amount=doc["amount"],
             currency=doc["currency"],
             owning_lob=doc["owning_lob"],
+            instruction_type=doc.get("instruction_type") or "",
             created_by=UserReference(
                 user_id=created_by.get("user_id", ""),
                 supervisor_id=created_by.get("supervisor_id"),
@@ -202,6 +205,7 @@ class PaymentEligibilityContext(BaseModel):
     amount: float
     currency: str
     owning_lob: str
+    instruction_type: str = ""
     created_by_user_id: str
     created_by_supervisor_id: str | None = None
 

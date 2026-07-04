@@ -6,6 +6,7 @@ import pytest
 from chat_application.neo4j_formatters import (
     format_instruction_creator_by_id,
     format_instruction_status_by_id,
+    format_payment_creator_by_id,
 )
 from chat_application.neo4j_intents import (
     build_match_context,
@@ -28,6 +29,26 @@ class TestNeo4jDirectMatching:
         match = match_neo4j_direct_intent(question, mode="events")
         assert match is not None
         assert match.intent_id == "instruction.creator_by_id"
+
+    def test_matches_creator_by_payment_id(self) -> None:
+        question = "Who created 20260704-FICC-P-1?"
+        match = match_neo4j_direct_intent(question, mode="payments")
+        assert match is not None
+        assert match.intent_id == "payment.creator_by_id"
+        assert match.formatter_name == "payment_creator_by_id"
+        assert "payment_detail" in match.planned[0][0]
+
+    def test_matches_creator_by_payment_id_in_events_mode(self) -> None:
+        question = "Who created 20260704-FICC-P-1?"
+        match = match_neo4j_direct_intent(question, mode="events")
+        assert match is not None
+        assert match.intent_id == "payment.creator_by_id"
+
+    def test_payment_creator_and_approver_beats_creator_only(self) -> None:
+        question = "Who created 20260704-FICC-P-1 and who approved it?"
+        match = match_neo4j_direct_intent(question, mode="payments")
+        assert match is not None
+        assert match.intent_id == "payment.creator_and_approver_by_id"
 
     def test_creator_and_approver_beats_creator_only(self) -> None:
         question = "Who created 20260703-FICC-I-1 and who approved it?"
@@ -82,6 +103,10 @@ class TestNeo4jDirectMatching:
         context = build_match_context("Who created 20260703-FICC-I-1?")
         assert context["instruction_ids"] == ["20260703-FICC-I-1"]
 
+    def test_build_match_context_extracts_payment_id(self) -> None:
+        context = build_match_context("Who created 20260704-FICC-P-1?")
+        assert context["payment_ids"] == ["20260704-FICC-P-1"]
+
     def test_build_match_context_extracts_user_id(self) -> None:
         context = build_match_context("Which instructions did mo-100 create?")
         assert context["user_id"] == "mo-100"
@@ -106,6 +131,15 @@ class TestNeo4jDirectFormatters:
         assert "DRAFT" in answer
         assert "FICC" in answer
 
+    def test_format_payment_creator_by_id(self) -> None:
+        answer = format_payment_creator_by_id(
+            "Who created 20260704-FICC-P-1?",
+            [{"payment_id": "20260704-FICC-P-1", "creator_display": "Rodriguez, Emily (pay-101)"}],
+        )
+        assert answer is not None
+        assert "20260704-FICC-P-1" in answer
+        assert "Rodriguez, Emily (pay-101)" in answer
+
 
 class TestNeo4jDirectExecution:
     @pytest.mark.asyncio
@@ -127,6 +161,27 @@ class TestNeo4jDirectExecution:
         assert result is not None
         assert "Walsh, Patricia (mo-010)" in result.answer
         assert result.intent_id == "instruction.creator_by_id"
+        neo4j.run_cypher.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_try_neo4j_direct_answer_payment_creator(self) -> None:
+        neo4j = AsyncMock()
+        neo4j.run_cypher = AsyncMock(
+            return_value=[
+                {
+                    "payment_id": "20260704-FICC-P-1",
+                    "creator_display": "Rodriguez, Emily (pay-101)",
+                }
+            ]
+        )
+        result = await try_neo4j_direct_answer(
+            neo4j,
+            "Who created 20260704-FICC-P-1?",
+            mode="payments",
+        )
+        assert result is not None
+        assert "Rodriguez, Emily (pay-101)" in result.answer
+        assert result.intent_id == "payment.creator_by_id"
         neo4j.run_cypher.assert_awaited()
 
     @pytest.mark.asyncio
@@ -170,5 +225,36 @@ class TestRagNeo4jDirectEarlyExit:
 
         assert "Walsh, Patricia (mo-010)" in response.answer
         assert response.generation_ms == 0.0
+        mock_ml_client.synthesize_answer.assert_not_called()
+        mock_ml_client.embed.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_ask_uses_neo4j_direct_for_payment_creator(
+        self, rag_service, mock_ml_client, mock_multimodal, mock_neo4j
+    ) -> None:
+        mock_neo4j.run_cypher = AsyncMock(
+            return_value=[
+                {
+                    "payment_id": "20260704-FICC-P-1",
+                    "creator_display": "Rodriguez, Emily (pay-101)",
+                }
+            ]
+        )
+        mock_multimodal.search_vector = AsyncMock(return_value=[])
+        mock_multimodal.search_bm25 = AsyncMock(return_value=[])
+        mock_ml_client.embed = AsyncMock(return_value=[0.1, 0.2])
+        mock_ml_client.synthesize_answer = AsyncMock(return_value="should not be called")
+
+        response = await rag_service.ask(
+            "Who created 20260704-FICC-P-1?",
+            [],
+            mode="payments",
+        )
+
+        assert "Rodriguez, Emily (pay-101)" in response.answer
+        assert response.generation_ms == 0.0
+        assert response.routing is not None
+        assert response.routing.path == "neo4j_direct"
+        assert response.routing.intent_id == "payment.creator_by_id"
         mock_ml_client.synthesize_answer.assert_not_called()
         mock_ml_client.embed.assert_not_called()

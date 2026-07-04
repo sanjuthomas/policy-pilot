@@ -47,16 +47,25 @@ violations["NO_LIMIT_GROUP_ASSIGNED"] if {
     not has_any_limit_group
 }
 
-# ── Unapproved instruction ────────────────────────────────────────────────────
-# Rule:     The instruction referenced by the payment has not completed the SSI
-#           approval lifecycle (status must be APPROVED).
-#           Using a DRAFT or SUBMITTED instruction to route a real payment
-#           bypasses the four-eyes control on instruction setup.
-# Severity: ALERT — potential fraud or controls bypass.
+# ── Instruction lifecycle mismatch ───────────────────────────────────────────
+# Rule:     CREATE/UPDATE require the backing instruction to be in DRAFT,
+#           SUBMITTED, or APPROVED.  SUBMIT requires APPROVED.  APPROVE accepts
+#           APPROVED (STANDING) or USED (SINGLE_USE after submit saga).
+# Severity: ALERT when the action bypasses required controls.
 
 violations["ALERT_UNAPPROVED_INSTRUCTION"] if {
-    input.action in {"CREATE_PAYMENT", "UPDATE_PAYMENT", "APPROVE_PAYMENT"}
+    input.action in {"CREATE_PAYMENT", "UPDATE_PAYMENT"}
+    not instruction_usable_for_draft_payment
+}
+
+violations["ALERT_UNAPPROVED_INSTRUCTION"] if {
+    input.action == "SUBMIT_PAYMENT"
     not instruction_is_approved
+}
+
+violations["ALERT_UNAPPROVED_INSTRUCTION"] if {
+    input.action == "APPROVE_PAYMENT"
+    not instruction_backing_valid_for_approval
 }
 
 # ── Expired instruction ───────────────────────────────────────────────────────

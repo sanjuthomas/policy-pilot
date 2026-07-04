@@ -54,6 +54,11 @@ from chat_application.neo4j_formatters import format_security_event_alert_list
 from chat_application.neo4j_intents import try_neo4j_direct_answer
 from chat_application.reranker import RankedHit, graph_rows_to_hits, rrf_merge
 from chat_application.response_formatter import format_chat_response
+from chat_application.routing_observability import (
+    AnswerSynthesis,
+    cypher_provenance_for_direct_intent,
+    finalize_chat_response,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -492,13 +497,15 @@ class RagService:
             )
             if eligibility_answer is not None:
                 elapsed = (time.perf_counter() - started) * 1000
-                return ChatResponse(
+                return finalize_chat_response(
+                    message,
+                    mode,
                     answer=eligibility_answer,
-                    sources=[],
-                    cypher=None,
-                    graph_rows=[],
                     retrieval_ms=0.0,
-                    generation_ms=round(elapsed, 1),
+                    generation_ms=elapsed,
+                    path="eligibility",
+                    cypher_provenance="none",
+                    answer_synthesis="eligibility_api",
                 )
         elif eligibility_target == "instruction":
             eligibility_answer = await self._answer_instruction_eligible_approvers(
@@ -508,25 +515,35 @@ class RagService:
             )
             if eligibility_answer is not None:
                 elapsed = (time.perf_counter() - started) * 1000
-                return ChatResponse(
+                return finalize_chat_response(
+                    message,
+                    mode,
                     answer=eligibility_answer,
-                    sources=[],
-                    cypher=None,
-                    graph_rows=[],
                     retrieval_ms=0.0,
-                    generation_ms=round(elapsed, 1),
+                    generation_ms=elapsed,
+                    path="eligibility",
+                    cypher_provenance="none",
+                    answer_synthesis="eligibility_api",
                 )
 
         direct = await self._try_neo4j_direct_answer(message, mode=mode)
         if direct is not None:
             elapsed = (time.perf_counter() - started) * 1000
-            return ChatResponse(
+            return finalize_chat_response(
+                message,
+                mode,
                 answer=format_chat_response(direct.answer),
-                sources=[],
                 cypher=direct.cypher,
-                graph_rows=direct.graph_rows[:20],
-                retrieval_ms=round(elapsed, 1),
+                graph_rows=direct.graph_rows,
+                retrieval_ms=elapsed,
                 generation_ms=0.0,
+                path="neo4j_direct",
+                cypher_provenance=cypher_provenance_for_direct_intent(
+                    direct.intent_id,
+                    source=direct.source,
+                ),
+                answer_synthesis="formatter",
+                intent_id=direct.intent_id,
             )
 
         limit = settings.retrieval_limit
@@ -604,17 +621,23 @@ class RagService:
         chat_history = [{"role": m.role, "content": m.content} for m in history[-8:]]
 
         gen_started = time.perf_counter()
-        answer = None
+        answer: str | None = None
+        answer_synthesis: AnswerSynthesis = "gemini_full"
         if _is_instruction_approval_question(message, mode):
             answer = await self._synthesize_instruction_approval_answer(
                 message, entity_ids, merged, graph_result["rows"]
             )
+            if answer is not None:
+                answer_synthesis = "gemini_why_only"
         if answer is None and _is_payment_approval_question(message, mode):
             answer = await self._synthesize_payment_approval_answer(
                 message, entity_ids, merged, graph_result["rows"]
             )
+            if answer is not None:
+                answer_synthesis = "gemini_why_only"
         if answer is None and is_max_payments_per_instruction_question(message):
             answer = _format_max_payments_per_instruction_answer(graph_result["rows"])
+            answer_synthesis = "formatter"
         if answer is None and is_payments_for_instruction_question(message):
             instruction_id = instruction_id_from_list_payments_question(message)
             if instruction_id:
@@ -622,38 +645,53 @@ class RagService:
                     instruction_id,
                     graph_result["rows"],
                 )
+                answer_synthesis = "formatter"
         if answer is None and is_alert_ranking_question(message, mode=mode):
             answer = _format_alert_ranking_answer(message, graph_result["rows"])
+            answer_synthesis = "formatter"
         if answer is None and _should_format_payment_total_amount(message, mode):
             answer = _format_payment_total_amount_answer(message, graph_result["rows"])
+            answer_synthesis = "formatter"
         if answer is None and _should_format_payment_count_aggregate(message, mode):
             answer = _format_payment_count_aggregate_answer(message, graph_result["rows"])
+            answer_synthesis = "formatter"
         if answer is None and _should_format_instruction_count_aggregate(message, mode):
             answer = _format_instruction_count_aggregate_answer(message, graph_result["rows"])
+            answer_synthesis = "formatter"
         if answer is None and _should_format_security_event_count_aggregate(message, mode):
             answer = _format_security_event_count_aggregate_answer(
                 message, graph_result["rows"]
             )
+            answer_synthesis = "formatter"
         if answer is None and _should_format_security_event_alert_count(message, mode):
             answer = _format_security_event_alert_count_answer(
                 message, graph_result["rows"]
             )
+            answer_synthesis = "formatter"
         if answer is None and _should_format_security_event_alert_list(message, mode):
             answer = format_security_event_alert_list(message, graph_result["rows"])
+            answer_synthesis = "formatter"
         if answer is None:
             answer = await self.ml_client.synthesize_answer(
                 message, context, chat_history, mode=mode
             )
+            answer_synthesis = "gemini_full"
         answer = format_chat_response(answer)
         generation_ms = (time.perf_counter() - gen_started) * 1000
 
-        return ChatResponse(
+        graph_provenance = graph_result.get("cypher_provenance") or "none"
+        return finalize_chat_response(
+            message,
+            mode,
             answer=answer,
             sources=[self._to_source(hit) for hit in merged],
             cypher=graph_result.get("cypher"),
-            graph_rows=graph_result["rows"][:20],
-            retrieval_ms=round(retrieval_ms, 1),
-            generation_ms=round(generation_ms, 1),
+            graph_rows=graph_result["rows"],
+            retrieval_ms=retrieval_ms,
+            generation_ms=generation_ms,
+            path="full_rag",
+            cypher_provenance=graph_provenance,
+            answer_synthesis=answer_synthesis,
         )
 
     async def _search_vector(
@@ -762,6 +800,8 @@ class RagService:
         self, question: str, *, mode: SearchMode = "events"
     ) -> dict[str, Any]:
         planned = plan_graph_queries(question, mode=mode)
+        cypher_provenance: str = "predefined_planned" if planned else "none"
+
         if planned is None:
             try:
                 graph_plan = await self.ml_client.extract_graph_query_plan(
@@ -770,16 +810,19 @@ class RagService:
                 planned = plans_from_graph_query(
                     graph_plan, mode=mode, question=question
                 )
+                if planned:
+                    cypher_provenance = "llm_graph_plan"
             except Exception as exc:
                 logger.warning("graph plan extraction failed: %s", exc)
 
         if planned is not None:
             try:
-                return await self._run_planned_graph_queries(planned)
+                result = await self._run_planned_graph_queries(planned)
+                return {**result, "cypher_provenance": cypher_provenance}
             except Exception as exc:
                 logger.warning("planned graph query failed: %s", exc)
 
-        return {"cypher": None, "rows": []}
+        return {"cypher": None, "rows": [], "cypher_provenance": "none"}
 
     async def _run_planned_graph_queries(
         self, planned: list[tuple[str, str]]

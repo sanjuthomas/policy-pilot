@@ -29,8 +29,6 @@ logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    configure_telemetry("payment-service", service_version=__version__)
-    instrument_app(app)
     await connect()
     await service_identity.login()
     await security_event_ui_store.connect()
@@ -46,6 +44,9 @@ app = FastAPI(
     version=__version__,
     lifespan=lifespan,
 )
+
+configure_telemetry("payment-service", service_version=__version__)
+instrument_app(app)
 
 app.include_router(auth_router)
 app.include_router(router, prefix=settings.api_prefix)

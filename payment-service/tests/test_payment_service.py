@@ -236,7 +236,7 @@ async def test_delete_already_deleted(
 
 
 @pytest.mark.asyncio
-async def test_create_single_use_runs_saga(
+async def test_create_single_use_does_not_mark_used_at_create(
     service: PaymentService,
     subject: Subject,
     standing_instruction: dict,
@@ -244,7 +244,6 @@ async def test_create_single_use_runs_saga(
     standing_instruction["instruction_type"] = "SINGLE_USE"
     service.instruction_service.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _allow_decision()
-    service.instruction_service.mark_used.return_value = {"status": "USED"}
 
     with _patched_txn():
         record = await service.create(
@@ -254,8 +253,29 @@ async def test_create_single_use_runs_saga(
             subject=subject,
         )
 
-    service.instruction_service.mark_used.assert_awaited_once()
+    service.instruction_service.mark_used.assert_not_awaited()
     assert record.payment.instruction_type == "SINGLE_USE"
+    assert record.payment.status == PaymentStatus.DRAFT
+
+
+@pytest.mark.asyncio
+async def test_submit_single_use_runs_saga(
+    service: PaymentService,
+    subject: Subject,
+    payment: Payment,
+    standing_instruction: dict,
+) -> None:
+    single_use = payment.model_copy(update={"instruction_type": "SINGLE_USE"})
+    service.repo.get_current.return_value = _versioned(single_use)
+    service.instruction_service.get_instruction.return_value = standing_instruction
+    service.authz.evaluate_payment.return_value = _allow_decision()
+    service.instruction_service.mark_used.return_value = {"status": "USED"}
+
+    with _patched_txn():
+        record = await service.submit(single_use.payment_id, subject)
+
+    service.instruction_service.mark_used.assert_awaited_once()
+    assert record.payment.status == PaymentStatus.SUBMITTED
 
 
 @pytest.mark.asyncio
@@ -274,14 +294,14 @@ async def test_create_instruction_not_found(
 
 
 @pytest.mark.asyncio
-async def test_create_rejects_unapproved_instruction(
+async def test_create_rejects_unusable_instruction(
     service: PaymentService,
     subject: Subject,
     standing_instruction: dict,
 ) -> None:
-    standing_instruction["status"] = "DRAFT"
+    standing_instruction["status"] = "USED"
     service.instruction_service.get_instruction.return_value = standing_instruction
-    with pytest.raises(ValueError, match="not in an approved state"):
+    with pytest.raises(ValueError, match="not in a usable state"):
         await service.create(
             instruction_id="instr-001",
             value_date="2026-07-01",
@@ -313,45 +333,41 @@ async def test_create_policy_denied(
 
 
 @pytest.mark.asyncio
-async def test_create_single_use_mark_used_state_error(
+async def test_submit_single_use_mark_used_state_error(
     service: PaymentService,
     subject: Subject,
+    payment: Payment,
     standing_instruction: dict,
 ) -> None:
-    standing_instruction["instruction_type"] = "SINGLE_USE"
+    single_use = payment.model_copy(update={"instruction_type": "SINGLE_USE"})
+    service.repo.get_current.return_value = _versioned(single_use)
     service.instruction_service.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _allow_decision()
     service.instruction_service.mark_used.side_effect = InstructionStateError("already used")
 
     with pytest.raises(ValueError, match="already used"):
-        await service.create(
-            instruction_id="instr-001",
-            value_date="2026-07-01",
-            amount=100.0,
-            subject=subject,
-        )
+        await service.submit(single_use.payment_id, subject)
 
     service.event_repo.record_policy_denial.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_create_single_use_mark_used_runtime_error(
+async def test_submit_single_use_mark_used_runtime_error(
     service: PaymentService,
     subject: Subject,
+    payment: Payment,
     standing_instruction: dict,
 ) -> None:
-    standing_instruction["instruction_type"] = "SINGLE_USE"
+    single_use = payment.model_copy(update={"instruction_type": "SINGLE_USE"})
+    service.repo.get_current.return_value = _versioned(single_use)
     service.instruction_service.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _allow_decision()
     service.instruction_service.mark_used.side_effect = RuntimeError("network down")
 
     with pytest.raises(RuntimeError, match="Could not mark instruction"):
-        await service.create(
-            instruction_id="instr-001",
-            value_date="2026-07-01",
-            amount=100.0,
-            subject=subject,
-        )
+        await service.submit(single_use.payment_id, subject)
+
+    service.event_repo.record_policy_denial.assert_awaited_once()
 
 
 @pytest.mark.asyncio

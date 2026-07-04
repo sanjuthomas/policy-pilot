@@ -23,6 +23,7 @@ from telemetry.exporters import (
     build_metric_exporter,
     build_trace_exporter,
 )
+from telemetry.logging_filter import install_redacting_log_filters
 
 _logger_provider: LoggerProvider | None = None
 _meter_provider: MeterProvider | None = None
@@ -65,6 +66,7 @@ def configure_telemetry(
             level=getattr(logging, settings.log_level, logging.INFO),
             format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
         )
+        install_redacting_log_filters()
         _configured = True
         logging.getLogger(__name__).info(
             "OpenTelemetry disabled (OTEL_SDK_DISABLED); using plain logging"
@@ -110,6 +112,8 @@ def configure_telemetry(
             logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s")
         )
         root.addHandler(_console_handler)
+
+    install_redacting_log_filters(root=root)
 
     LoggingInstrumentor().instrument(set_logging_format=True)
 

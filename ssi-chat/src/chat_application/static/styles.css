@@ -342,6 +342,17 @@ body {
   overflow: auto;
 }
 
+.routing-label {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.routing-detail {
+  margin: 0.35rem 0 0;
+  font-size: 0.72rem;
+}
+
 .sources-list {
   display: flex;
   flex-direction: column;

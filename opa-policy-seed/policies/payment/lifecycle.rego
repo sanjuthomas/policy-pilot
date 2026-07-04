@@ -11,7 +11,7 @@ default allow := false
 #   2. Be a member of the MIDDLE_OFFICE group.
 #   3. Have the instruction's owning LOB listed in their covering_lobs
 #      (desk-coverage assignment in ZITADEL).
-#   4. The backing instruction must be approved (status APPROVED)
+#   4. The backing instruction must be in DRAFT, SUBMITTED, or APPROVED status
 #      and not expired.
 #   5. The payment amount must be positive and within the creator's club ceiling.
 #
@@ -26,7 +26,7 @@ allow if {
     in_group("MIDDLE_OFFICE")
     covers_lob(input.payment.instruction_owning_lob)
 
-    instruction_is_approved
+    instruction_usable_for_draft_payment
 
     instruction_not_expired
 
@@ -50,7 +50,7 @@ allow if {
     in_group("MIDDLE_OFFICE")
     covers_lob(input.payment.instruction_owning_lob)
 
-    instruction_is_approved
+    instruction_usable_for_draft_payment
 
     instruction_not_expired
 
@@ -72,7 +72,9 @@ allow if {
 #      organically part of that desk (front-office identity check).
 #      This is intentionally different from CREATE: middle office covers
 #      LOBs via an explicit list; front office IS the LOB.
-#   3. The instruction must still be approved and not expired.
+#   3. The backing instruction must be APPROVED and not expired.  For
+#      SINGLE_USE instructions the payment service marks the instruction USED
+#      as part of the submit saga immediately after this check passes.
 #
 # Submission moves the payment DRAFT → SUBMITTED.
 # ---------------------------------------------------------------------------
@@ -97,9 +99,9 @@ allow if {
 #   1. Hold the FUNDING_APPROVER role.
 #   2. Be a member of the MIDDLE_OFFICE group.
 #   3. Have the instruction's owning LOB in their covering_lobs.
-#   4. The instruction must still be approved and not expired.
-#      (A service-layer validity check will auto-cancel the payment if the
-#       instruction changed since creation.)
+#   4. The backing instruction must be APPROVED (STANDING) or USED after a
+#      SINGLE_USE submit saga.  (A service-layer validity check will auto-cancel
+#      the payment if the instruction changed since creation.)
 #   5. Payment amount within the approver's club ceiling.
 #   6. Four-eyes: approver ≠ creator (segregation of duties).
 #   7. Approver must not report directly to the creator (reporting-line
@@ -114,7 +116,7 @@ allow if {
     in_group("MIDDLE_OFFICE")
     covers_lob(input.payment.instruction_owning_lob)
 
-    instruction_is_approved
+    instruction_backing_valid_for_approval
 
     instruction_not_expired
 

@@ -60,6 +60,19 @@ _AMOUNT_PATTERN = re.compile(
     r'(?:["\'])?[\d,]+(?:\.\d+)?(?:["\'])?'
 )
 
+# Sensitive URL query parameters (sessionToken, access_token, etc.).
+_QUERY_PARAM = re.compile(
+    r'(?i)([?&](?:sessionToken|session_token|access_token|refresh_token|'
+    r'id_token|token|password|pat|api_key)=)[^&\s"\']+'
+)
+
+# ZITADEL / OAuth session resource ids in paths.
+_SESSION_PATH = re.compile(r"(/v2/sessions/)\d+")
+
+# Bearer and basic credentials embedded in log text.
+_BEARER_TOKEN = re.compile(r"(?i)\bBearer\s+\S+")
+_BASIC_AUTH = re.compile(r"(?i)\bBasic\s+[A-Za-z0-9+/=]+")
+
 
 def _key_is_sensitive(key: str) -> bool:
     lowered = key.lower().replace("-", "_")
@@ -102,6 +115,10 @@ def redact_string(text: str, *, max_len: int = 4000) -> str:
         lambda match: f"{match.group('key')}: {_REDACTED}",
         text,
     )
+    scrubbed = _QUERY_PARAM.sub(r"\1" + _REDACTED, scrubbed)
+    scrubbed = _SESSION_PATH.sub(r"\1" + _REDACTED, scrubbed)
+    scrubbed = _BEARER_TOKEN.sub("Bearer " + _REDACTED, scrubbed)
+    scrubbed = _BASIC_AUTH.sub("Basic " + _REDACTED, scrubbed)
     scrubbed = _AMOUNT_PATTERN.sub(r"\1" + _REDACTED, scrubbed)
     scrubbed = _PROPER_NAME.sub(_REDACTED, scrubbed)
     scrubbed = _ACCOUNT_NUMBER.sub(_REDACTED, scrubbed)

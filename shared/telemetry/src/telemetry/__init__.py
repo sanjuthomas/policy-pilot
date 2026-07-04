@@ -1,4 +1,5 @@
 from telemetry.config import TelemetrySettings
+from telemetry.logging_filter import RedactingLogFilter, install_redacting_log_filters
 from telemetry.metrics import get_meter, record_counter, record_histogram
 from telemetry.redaction import (
     redact_headers,
@@ -26,6 +27,8 @@ __all__ = [
     "is_telemetry_enabled",
     "record_counter",
     "record_histogram",
+    "RedactingLogFilter",
+    "install_redacting_log_filters",
     "redact_headers",
     "redact_json_body",
     "redact_payload",

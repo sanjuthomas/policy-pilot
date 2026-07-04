@@ -399,7 +399,7 @@ def create_payments(
     seed, auth, ps = _payment_clients(settings)
 
     approved = _fetch_approved_instructions(settings, admin_session)
-    # Prefer STANDING type so we can reuse them; fall back to SINGLE_USE type.
+    # Prefer STANDING type so we can reuse them; fall back to all APPROVED.
     standing = [i for i in approved if i.get("instruction_type") == "STANDING"]
     pool = standing if standing else approved
 

@@ -74,3 +74,4 @@ class TestChatResponse:
         )
         assert resp.answer == "Two alerts."
         assert resp.graph_rows[0]["total"] == 2
+        assert resp.routing is None

@@ -50,6 +50,35 @@ intents:
     query: instruction_approval_lookup
     formatter: instruction_approver_by_id
 
+  # ── Payment by ID ────────────────────────────────────────────────────────
+  - id: payment.creator_by_id
+    priority: 100
+    modes: [payments, all]
+    match: '\b(who|which user)\s+created\b'
+    exclude: '\bapprov'
+    requires:
+      payment_id: true
+    query: payment_detail_by_id
+    formatter: payment_creator_by_id
+
+  - id: payment.status_by_id
+    priority: 100
+    modes: [payments, all]
+    match: '\b(what is|what''s)\s+the\s+status\b|\bstatus of\b'
+    requires:
+      payment_id: true
+    query: payment_detail_by_id
+    formatter: payment_status_by_id
+
+  - id: payment.creator_and_approver_by_id
+    priority: 110
+    modes: [payments, all]
+    match: '\bwho\s+created\b.*\bwho\s+approv|\bwho\s+approv.*\bwho\s+created\b'
+    requires:
+      payment_id: true
+    query: payment_detail_by_id
+    formatter: payment_creator_and_approver_by_id
+
   # ── Instruction inventory / compliance ─────────────────────────────────────
   - id: instruction.list_single_use
     priority: 80

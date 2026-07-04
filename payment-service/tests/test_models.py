@@ -88,6 +88,7 @@ def test_payment_to_opa_payment(payment: Payment) -> None:
     assert payload["instruction_id"] == "instr-001"
     assert payload["amount"] == 1_000_000.0
     assert payload["instruction_status"] == "APPROVED"
+    assert payload["instruction_type"] == payment.instruction_type
     assert payload["created_by"]["user_id"] == "alice"
 
 

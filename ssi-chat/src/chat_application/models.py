@@ -26,6 +26,14 @@ class SourceHit(BaseModel):
     security_event: dict[str, Any] | None = None
 
 
+class AnswerRoutingInfo(BaseModel):
+    path: str
+    cypher_provenance: str
+    answer_synthesis: str
+    label: str
+    intent_id: str | None = None
+
+
 class ChatResponse(BaseModel):
     answer: str
     sources: list[SourceHit]
@@ -33,3 +41,4 @@ class ChatResponse(BaseModel):
     graph_rows: list[dict[str, Any]] = Field(default_factory=list)
     retrieval_ms: float | None = None
     generation_ms: float | None = None
+    routing: AnswerRoutingInfo | None = None

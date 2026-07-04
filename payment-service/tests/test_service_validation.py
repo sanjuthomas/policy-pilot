@@ -6,13 +6,20 @@ import pytest
 from ps.models.payment import Payment
 from ps.service import (
     _APPROVED_STATUSES,
+    _DRAFT_PAYMENT_INSTRUCTION_STATUSES,
     _check_instruction_validity_for_approval,
     _validate_instruction_at_create,
+    _validate_instruction_approved_for_submit,
+    _validate_instruction_for_draft_payment,
 )
 
 
 def test_approved_statuses_constant() -> None:
     assert _APPROVED_STATUSES == {"APPROVED"}
+
+
+def test_draft_payment_instruction_statuses_constant() -> None:
+    assert _DRAFT_PAYMENT_INSTRUCTION_STATUSES == {"DRAFT", "SUBMITTED", "APPROVED"}
 
 
 def test_validate_instruction_at_create_approved(standing_instruction: dict) -> None:
@@ -24,9 +31,19 @@ def test_validate_instruction_at_create_single_use(standing_instruction: dict) -
     _validate_instruction_at_create(standing_instruction)
 
 
-def test_validate_instruction_at_create_rejects_draft(standing_instruction: dict) -> None:
+def test_validate_instruction_at_create_allows_draft(standing_instruction: dict) -> None:
     standing_instruction["status"] = "DRAFT"
-    with pytest.raises(ValueError, match="not in an approved state"):
+    _validate_instruction_at_create(standing_instruction)
+
+
+def test_validate_instruction_at_create_allows_submitted(standing_instruction: dict) -> None:
+    standing_instruction["status"] = "SUBMITTED"
+    _validate_instruction_at_create(standing_instruction)
+
+
+def test_validate_instruction_at_create_rejects_used(standing_instruction: dict) -> None:
+    standing_instruction["status"] = "USED"
+    with pytest.raises(ValueError, match="not in a usable state"):
         _validate_instruction_at_create(standing_instruction)
 
 
@@ -68,6 +85,36 @@ def test_check_instruction_validity_bad_status(
     reason = _check_instruction_validity_for_approval(payment, standing_instruction)
     assert reason is not None
     assert "no longer in an approvable state" in reason
+
+
+def test_check_instruction_validity_allows_used_single_use(
+    payment: Payment,
+    standing_instruction: dict,
+) -> None:
+    payment.instruction_type = "SINGLE_USE"
+    standing_instruction["status"] = "USED"
+    standing_instruction["instruction_type"] = "SINGLE_USE"
+    assert _check_instruction_validity_for_approval(payment, standing_instruction) is None
+
+
+def test_validate_instruction_approved_for_submit(standing_instruction: dict) -> None:
+    _validate_instruction_approved_for_submit(standing_instruction)
+
+
+def test_validate_instruction_approved_for_submit_rejects_draft(
+    standing_instruction: dict,
+) -> None:
+    standing_instruction["status"] = "DRAFT"
+    with pytest.raises(ValueError, match="must be APPROVED"):
+        _validate_instruction_approved_for_submit(standing_instruction)
+
+
+def test_validate_instruction_for_draft_payment_rejects_used(
+    standing_instruction: dict,
+) -> None:
+    standing_instruction["status"] = "USED"
+    with pytest.raises(ValueError, match="not in a usable state"):
+        _validate_instruction_for_draft_payment(standing_instruction)
 
 
 def test_check_instruction_validity_expired(

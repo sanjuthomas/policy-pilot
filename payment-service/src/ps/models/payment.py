@@ -95,6 +95,7 @@ class Payment(BaseModel):
             "currency": self.currency,
             "instruction_status": instruction_status,
             "instruction_end_date": instruction_end_date,
+            "instruction_type": self.instruction_type,
             "instruction_owning_lob": self.owning_lob,
             "created_by": {
                 "user_id": self.created_by.user_id,

@@ -12,13 +12,21 @@ processors:
 exporters:
   debug:
     verbosity: basic
+  opensearch/logs:
+    http:
+      endpoint: http://opensearch:9200
+    dataset: ssi
+    namespace: development
+    logs_index: otel-logs
+    mapping:
+      mode: ss4o
 
 service:
   pipelines:
     logs:
       receivers: [otlp]
       processors: [batch]
-      exporters: [debug]
+      exporters: [debug, opensearch/logs]
     metrics:
       receivers: [otlp]
       processors: [batch]

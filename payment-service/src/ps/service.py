@@ -1,4 +1,4 @@
-"""Payment service — business logic with Saga for SINGLE_USE instructions."""
+"""Payment service — business logic with Saga for SINGLE_USE instructions at submit."""
 from __future__ import annotations
 
 import logging
@@ -44,6 +44,7 @@ from ps.storage import VersionedPayment
 logger = logging.getLogger(__name__)
 
 _APPROVED_STATUSES = {"APPROVED"}
+_DRAFT_PAYMENT_INSTRUCTION_STATUSES = {"DRAFT", "SUBMITTED", "APPROVED"}
 
 
 class InvalidStateTransitionError(Exception):
@@ -89,13 +90,32 @@ def _user_ref(subject: Subject) -> UserReference:
 
 
 def _validate_instruction_at_create(instruction: dict) -> None:
-    """Basic validation at payment creation time."""
+    """Validate backing instruction when drafting a payment."""
+    _validate_instruction_for_draft_payment(instruction)
+
+
+def _validate_instruction_for_draft_payment(instruction: dict) -> None:
+    status = instruction.get("status", "")
+    if status not in _DRAFT_PAYMENT_INSTRUCTION_STATUSES:
+        raise ValueError(
+            f"instruction is not in a usable state for drafting a payment "
+            f"(status={status}). "
+            "Only DRAFT, SUBMITTED, or APPROVED instructions can back a draft payment."
+        )
+    _validate_instruction_not_expired(instruction)
+
+
+def _validate_instruction_approved_for_submit(instruction: dict) -> None:
     status = instruction.get("status", "")
     if status not in _APPROVED_STATUSES:
         raise ValueError(
-            f"instruction is not in an approved state (status={status}). "
-            "Only APPROVED instructions can be used for payments."
+            f"instruction must be APPROVED before a payment can be submitted "
+            f"(status={status})"
         )
+    _validate_instruction_not_expired(instruction)
+
+
+def _validate_instruction_not_expired(instruction: dict) -> None:
     end_date_raw = instruction.get("end_date") or ""
     if end_date_raw:
         end_dt = datetime.fromisoformat(end_date_raw.replace("Z", "+00:00")).replace(tzinfo=None)
@@ -117,10 +137,17 @@ def _check_instruction_validity_for_approval(payment: Payment, instruction: dict
         )
 
     status = instruction.get("status", "")
-    if status not in _APPROVED_STATUSES:
+    instruction_type = instruction.get("instruction_type") or ""
+    backing_ok = status in _APPROVED_STATUSES or (
+        status == "USED"
+        and payment.instruction_type == "SINGLE_USE"
+        and instruction_type == "SINGLE_USE"
+    )
+    if not backing_ok:
         return (
             f"instruction is no longer in an approvable state "
-            f"(current status={status!r}); it must be APPROVED to approve a payment"
+            f"(current status={status!r}); it must be APPROVED, or USED when "
+            f"SINGLE_USE, to approve a payment"
         )
 
     end_date_raw = instruction.get("end_date") or ""
@@ -399,38 +426,6 @@ class PaymentService:
         except PermissionError:
             raise
 
-        # Saga: for SINGLE_USE type mark instruction USED first
-        if instruction_type == "SINGLE_USE":
-            try:
-                await self.instruction_service.mark_used(
-                    instruction_id,
-                    payment.payment_id,
-                    bearer_token=bearer_token,
-                    session_id=session_id,
-                )
-            except InstructionStateError as exc:
-                if self._should_record_security_event(subject):
-                    await self.event_repo.record_policy_denial(
-                        PaymentAction.CREATE_PAYMENT,
-                        subject,
-                        payment,
-                        reason=f"Saga step failed — instruction cannot be marked USED: {exc}",
-                        details={"saga_step": "mark_used", "saga_error": str(exc)},
-                    )
-                raise ValueError(str(exc)) from exc
-            except Exception as exc:
-                if self._should_record_security_event(subject):
-                    await self.event_repo.record_policy_denial(
-                        PaymentAction.CREATE_PAYMENT,
-                        subject,
-                        payment,
-                        reason=f"Saga step failed — instruction-service unreachable: {exc}",
-                        details={"saga_step": "mark_used", "saga_error": str(exc)},
-                    )
-                raise RuntimeError(
-                    f"Could not mark instruction as USED before creating payment: {exc}"
-                ) from exc
-
         details = details_with_authorization(None, authorization)
         self._record_event(payment, PaymentAction.CREATE_PAYMENT, subject, details)
         saved = await self._save_payment_with_security_event(
@@ -483,7 +478,7 @@ class PaymentService:
                 f"backing instruction not found: {payment.instruction_id}"
             ) from exc
 
-        _validate_instruction_at_create(instruction)
+        _validate_instruction_for_draft_payment(instruction)
 
         instruction_status = instruction["status"]
         end_date = instruction.get("end_date") or ""
@@ -535,22 +530,78 @@ class PaymentService:
         except InstructionNotFoundError:
             raise ValueError(f"backing instruction {payment.instruction_id} not found")
 
+        _validate_instruction_approved_for_submit(instruction)
+
         instruction_end_date = instruction.get("end_date") or ""
         instruction_status = instruction.get("status", "")
+        payment.instruction_version = int(instruction.get("version_number") or 1)
+
+        try:
+            authorization = await self._authorize(
+                PaymentAction.SUBMIT_PAYMENT,
+                subject,
+                payment,
+                instruction_end_date=instruction_end_date,
+                instruction_status=instruction_status,
+                bearer_token=bearer_token,
+                session_id=session_id,
+            )
+        except PermissionError:
+            raise
+
+        post_submit_instruction_status = instruction_status
+        if payment.instruction_type == "SINGLE_USE":
+            try:
+                await self.instruction_service.mark_used(
+                    payment.instruction_id,
+                    payment.payment_id,
+                    bearer_token=bearer_token,
+                    session_id=session_id,
+                )
+            except InstructionStateError as exc:
+                if self._should_record_security_event(subject):
+                    await self.event_repo.record_policy_denial(
+                        PaymentAction.SUBMIT_PAYMENT,
+                        subject,
+                        payment,
+                        reason=f"Saga step failed — instruction cannot be marked USED: {exc}",
+                        details={"saga_step": "mark_used", "saga_error": str(exc)},
+                    )
+                raise ValueError(str(exc)) from exc
+            except Exception as exc:
+                if self._should_record_security_event(subject):
+                    await self.event_repo.record_policy_denial(
+                        PaymentAction.SUBMIT_PAYMENT,
+                        subject,
+                        payment,
+                        reason=f"Saga step failed — instruction-service unreachable: {exc}",
+                        details={"saga_step": "mark_used", "saga_error": str(exc)},
+                    )
+                raise RuntimeError(
+                    f"Could not mark instruction as USED before submitting payment: {exc}"
+                ) from exc
+            instruction = await self.instruction_service.get_instruction(
+                payment.instruction_id, bearer_token=bearer_token, session_id=session_id
+            )
+            payment.instruction_version = int(instruction.get("version_number") or 1)
+            post_submit_instruction_status = instruction.get("status", "") or "USED"
 
         now = datetime.now(timezone.utc)
         payment.status = PaymentStatus.SUBMITTED
         payment.submitted_by = _user_ref(subject)
         payment.updated_at = now
 
+        details = details_with_authorization(None, authorization)
         saved = await self._persist_new_version(
             payment,
             PaymentAction.SUBMIT_PAYMENT,
             subject,
+            details=details,
             instruction_end_date=instruction_end_date,
-            instruction_status=instruction_status,
+            instruction_status=post_submit_instruction_status,
             bearer_token=bearer_token,
             session_id=session_id,
+            skip_authorize=True,
         )
 
         logger.info("payment submitted payment_id=%s by=%s", payment_id, subject.user_id)

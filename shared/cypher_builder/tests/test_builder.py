@@ -96,3 +96,15 @@ def test_plan_graph_queries_alert_list() -> None:
 def test_validate_read_only_cypher_rejects_writes() -> None:
     with pytest.raises(ValueError, match="disallowed write keyword"):
         validate_read_only_cypher("MATCH (n) CREATE (m) RETURN n LIMIT 1")
+
+
+def test_payment_detail_query_includes_creator_and_approver() -> None:
+    from cypher_builder.builder import CypherQueryBuilder
+
+    planned = CypherQueryBuilder().payment_detail("20260704-FICC-P-1")
+    assert planned[0][0] == "payment_detail"
+    query = planned[0][1]
+    assert "payment_id: '20260704-FICC-P-1'" in query
+    assert "CREATED_PAYMENT" in query
+    assert "APPROVED_PAYMENT" in query
+    assert "creator_display" in query
