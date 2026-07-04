@@ -65,9 +65,36 @@ class TestChatEndpoint:
         )
         assert response.status_code == 401
 
+    def test_chat_internal_error_returns_503(
+        self,
+        test_client: TestClient,
+        mock_ml_client,
+        mock_multimodal,
+        mock_neo4j,
+    ) -> None:
+        mock_rag = MagicMock()
+        mock_rag.ask = AsyncMock(side_effect=RuntimeError("neo4j down"))
+
+        with patch("chat_application.main.rag_service", mock_rag):
+            response = test_client.post(
+                "/api/chat",
+                headers={
+                    "Authorization": "Bearer test-token",
+                    "X-Session-Id": "session-1",
+                },
+                json={"message": "hello"},
+            )
+
+        assert response.status_code == 503
+        assert "neo4j down" in response.json()["detail"]
+
 
 class TestIndexRoute:
     def test_root_serves_index_html(self, test_client: TestClient) -> None:
         response = test_client.get("/")
         assert response.status_code == 200
         assert "text/html" in response.headers.get("content-type", "")
+
+    def test_static_assets_served(self, test_client: TestClient) -> None:
+        response = test_client.get("/static/styles.css")
+        assert response.status_code == 200

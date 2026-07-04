@@ -1,0 +1,221 @@
+from __future__ import annotations
+
+from chat_application.formatting import (
+    coerce_numeric_amount,
+    escape_markdown_cell,
+    format_eligible_approvers_section,
+    format_money_amount,
+    format_policy_basis_cell,
+    format_usd_compact,
+    humanize_authorization_text,
+    humanize_policy_basis,
+)
+from chat_application.neo4j_formatters import (
+    FORMATTERS,
+    format_alert_count_today,
+    format_instruction_approver_by_id,
+    format_instruction_compliance_table,
+    format_instruction_conflict_table,
+    format_instruction_creator_and_approver_by_id,
+    format_instruction_creator_by_id,
+    format_instruction_inventory_table,
+    format_instruction_mutual_approval,
+    format_instruction_status_by_id,
+    format_security_event_timeline,
+)
+
+
+class TestFormattingExtended:
+    def test_escape_markdown_cell_none(self) -> None:
+        assert escape_markdown_cell(None) == "—"
+
+    def test_format_markdown_table_empty_headers(self) -> None:
+        from chat_application.formatting import format_markdown_table
+
+        assert format_markdown_table([], [["a"]]) == ""
+
+    def test_coerce_numeric_amount_invalid(self) -> None:
+        assert coerce_numeric_amount("not-a-number") is None
+        assert coerce_numeric_amount({}) is None
+
+    def test_format_money_amount_without_currency(self) -> None:
+        assert format_money_amount(1234.5) == "1,234.50"
+
+    def test_format_usd_compact_billion(self) -> None:
+        assert format_usd_compact(2_500_000_000) == "$2.5 billion"
+
+    def test_format_usd_compact_thousands(self) -> None:
+        assert format_usd_compact(12_345) == "$12,345"
+
+    def test_format_usd_compact_small_decimal(self) -> None:
+        assert format_usd_compact(12.34) == "$12.34"
+
+    def test_humanize_policy_basis_list(self) -> None:
+        basis = humanize_policy_basis(["amount 1000000 within subject and absolute limits"])
+        assert "$1 million" in basis[0]
+
+    def test_humanize_authorization_text_empty(self) -> None:
+        assert humanize_authorization_text("") == ""
+
+    def test_format_policy_basis_cell_empty(self) -> None:
+        assert format_policy_basis_cell(None) == "—"
+
+    def test_format_eligible_approvers_section_empty(self) -> None:
+        text = format_eligible_approvers_section(
+            header="Header",
+            section_title="Approvers",
+            eligible=[],
+            empty_message="No approvers.",
+            candidate_role_label="FUNDING_APPROVER",
+        )
+        assert "No approvers." in text
+
+    def test_format_eligible_approvers_section_with_candidates(self) -> None:
+        text = format_eligible_approvers_section(
+            header="Header",
+            section_title="Approvers",
+            eligible=[
+                {
+                    "display_name": "Bob Jones",
+                    "title": "MD",
+                    "allow_basis": ["role FUNDING_APPROVER"],
+                }
+            ],
+            empty_message="No approvers.",
+            candidate_role_label="FUNDING_APPROVER",
+            candidates_evaluated=3,
+        )
+        assert "Bob Jones" in text
+        assert "Evaluated 3" in text
+
+
+class TestNeo4jFormatters:
+    def test_instruction_creator_by_id_empty(self) -> None:
+        assert "No instruction" in format_instruction_creator_by_id("q", [])
+
+    def test_instruction_creator_by_id_unknown_creator(self) -> None:
+        text = format_instruction_creator_by_id(
+            "q",
+            [{"instruction_id": "i1", "creator_display": "unknown"}],
+        )
+        assert "No creator is recorded" in text
+
+    def test_instruction_creator_by_id_success(self) -> None:
+        text = format_instruction_creator_by_id(
+            "q",
+            [{"instruction_id": "i1", "creator_display": "Alice Smith"}],
+        )
+        assert "Alice Smith" in text
+
+    def test_instruction_status_by_id(self) -> None:
+        text = format_instruction_status_by_id(
+            "q",
+            [{"instruction_id": "i1", "status": "APPROVED", "owning_lob": "FICC"}],
+        )
+        assert "APPROVED" in text
+        assert "FICC" in text
+
+    def test_instruction_creator_and_approver_by_id(self) -> None:
+        text = format_instruction_creator_and_approver_by_id(
+            "q",
+            [
+                {
+                    "instruction_id": "i1",
+                    "creator_display": "Alice",
+                    "approver_display": "Bob",
+                    "approved_at": "2025-01-01",
+                }
+            ],
+        )
+        assert "Alice" in text
+        assert "Bob" in text
+        assert "Approved at" in text
+
+    def test_instruction_inventory_table(self) -> None:
+        text = format_instruction_inventory_table(
+            "q",
+            [{"instruction_id": "i1", "status": "DRAFT", "owning_lob": "FICC"}],
+        )
+        assert "Found 1 instruction" in text
+
+    def test_instruction_approver_by_id(self) -> None:
+        text = format_instruction_approver_by_id(
+            "q",
+            [
+                {
+                    "approver_display": "Bob",
+                    "approved_at": "2025-01-01",
+                    "authorization_summary": "amount 1000000 within subject and absolute limits",
+                }
+            ],
+        )
+        assert "Bob" in text
+        assert "$1 million" in text
+
+    def test_instruction_mutual_approval_table(self) -> None:
+        text = format_instruction_mutual_approval(
+            "q",
+            [{"user_a_display": "A", "user_b_display": "B", "approved_by_a": "X", "approved_by_b": "Y"}],
+        )
+        assert "mutual approval" in text
+
+    def test_instruction_compliance_table_with_approver(self) -> None:
+        text = format_instruction_compliance_table(
+            "q",
+            [{"instruction_id": "i1", "creator_display": "Alice", "approver_display": "Bob"}],
+        )
+        assert "Approver" in text
+
+    def test_instruction_compliance_table_creator_only(self) -> None:
+        text = format_instruction_compliance_table(
+            "q",
+            [{"instruction_id": "i1", "creator_display": "Alice"}],
+        )
+        assert "Creator" in text
+        assert "Approver" not in text.split("\n")[0]
+
+    def test_instruction_conflict_table(self) -> None:
+        text = format_instruction_conflict_table(
+            "q",
+            [{"instruction_id_a": "a", "instruction_id_b": "b", "owning_lob": "FICC"}],
+        )
+        assert "conflicting instruction pair" in text
+
+    def test_security_event_timeline_dedupes(self) -> None:
+        text = format_security_event_timeline(
+            "q",
+            [
+                {"event_id": "e1", "timestamp": "2025-01-02", "action": "CREATE"},
+                {"event_id": "e1", "timestamp": "2025-01-02", "action": "CREATE"},
+            ],
+        )
+        assert "1 event" in text
+
+    def test_alert_count_today_singular_and_plural(self) -> None:
+        assert "1 ALERT event" in format_alert_count_today("q", [{"total": 1}])
+        assert "5 ALERT events" in format_alert_count_today("q", [{"total": 5}])
+
+    def test_formatters_registry(self) -> None:
+        assert "instruction_creator_by_id" in FORMATTERS
+        assert FORMATTERS["alert_count_today"] is format_alert_count_today
+
+
+class TestMultimodalIds:
+    def test_document_ids_are_deterministic(self) -> None:
+        from chat_application.multimodal_ids import (
+            event_document_id,
+            instruction_document_id,
+            payment_document_id,
+        )
+
+        assert event_document_id("evt-1") == event_document_id("evt-1")
+        assert instruction_document_id("i1") != payment_document_id("p1")
+
+
+class TestPrompts:
+    def test_answer_system_prompt_modes(self) -> None:
+        from chat_application.prompts import answer_system_prompt
+
+        assert "payment" in answer_system_prompt("payments").lower()
+        assert "instruction" in answer_system_prompt("instructions").lower()
+        assert answer_system_prompt("events") == answer_system_prompt("unknown")

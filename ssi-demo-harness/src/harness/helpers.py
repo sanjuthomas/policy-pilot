@@ -367,6 +367,35 @@ def build_payment_seed_plan(
     return plan
 
 
+def resolve_payment_update_amount(
+    current_amount: float,
+    creator_user_id: str,
+    *,
+    seed: SeedFile,
+    override: float | None = None,
+    rng: random.Random | None = None,
+) -> float:
+    """Pick a new draft payment amount within the creator's club limit."""
+    if override is not None and override > 0:
+        return override
+
+    rng = rng or random.Random()
+    creator = next((user for user in seed.users if user.user_id == creator_user_id), None)
+    limit = _user_amount_limit(creator) if creator else None
+    cap = limit or 100_000_000.0
+
+    higher_tiers = [
+        amount for amount in _PAYMENT_AMOUNT_TIERS if amount > current_amount and amount <= cap
+    ]
+    if higher_tiers:
+        return rng.choice(higher_tiers)
+
+    bumped = round(current_amount * 1.25, 2)
+    if bumped > current_amount and bumped <= cap:
+        return bumped
+    return current_amount
+
+
 def payment_submitter_for_lob(seed: SeedFile, lob: str, *, rng: random.Random | None = None) -> str:
     """Front-office user who may SUBMIT_PAYMENT for the given instruction LOB."""
     candidates = [
@@ -469,6 +498,7 @@ __all__ = [
     "_rejector_for_payment",
     "build_payment_seed_plan",
     "payment_submitter_for_lob",
+    "resolve_payment_update_amount",
     "_count_security_events",
     "_count_payment_security_events",
     "_fetch_api_instructions",

@@ -22,6 +22,7 @@ async def test_connect_and_close() -> None:
             assert get_db() is mock_db
             mock_collection.drop_index.assert_any_await("payment_id_1")
             mock_collection.drop_index.assert_any_await("payment_id_version_unique")
+            mock_collection.drop_index.assert_any_await("event_id_1")
             await close()
             mock_client.close.assert_called_once()
 

@@ -22,6 +22,11 @@ _LEGACY_PAYMENT_INDEXES = (
     "payment_id_version_unique",
 )
 
+# Pre–sequence-_id schema; event id lived in event_id field instead of Mongo _id.
+_LEGACY_SECURITY_EVENT_INDEXES = (
+    "event_id_1",
+)
+
 
 async def connect() -> None:
     global _client
@@ -46,6 +51,12 @@ async def connect() -> None:
     await collection.create_index("in")
 
     security_events = get_security_events_db()[settings.security_events_collection]
+    for index_name in _LEGACY_SECURITY_EVENT_INDEXES:
+        try:
+            await security_events.drop_index(index_name)
+        except OperationFailure as exc:
+            if exc.code != 27:  # IndexNotFound
+                raise
     await security_events.create_index("timestamp")
     await security_events.create_index("severity")
     await security_events.create_index("event.action")

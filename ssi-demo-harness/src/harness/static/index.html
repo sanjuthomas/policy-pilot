@@ -133,6 +133,26 @@
             </div>
           </article>
 
+          <article class="action-card" data-action="update-payments">
+            <h3>Update draft payments</h3>
+            <p>
+              Change amount on DRAFT payments (creates a new version). Leave amount blank to
+              auto-bump to the next club tier.
+            </p>
+            <div class="action-controls">
+              <input type="number" min="1" max="500" value="5" aria-label="Count" />
+              <input
+                type="number"
+                min="1"
+                step="1000"
+                placeholder="Amount (optional)"
+                aria-label="Amount"
+                data-role="amount"
+              />
+              <button type="button" class="btn-primary">Update</button>
+            </div>
+          </article>
+
           <article class="action-card" data-action="submit-payments">
             <h3>Submit payments</h3>
             <p>Submit up to N DRAFT payments for approval as the original creator.</p>

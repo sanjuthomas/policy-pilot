@@ -99,6 +99,143 @@ async def test_create_standing_payment_success(
 
 
 @pytest.mark.asyncio
+async def test_update_draft_payment_success(
+    service: PaymentService,
+    subject: Subject,
+    payment: Payment,
+    standing_instruction: dict,
+) -> None:
+    service.repo.get_current.return_value = _versioned(payment)
+    service.instruction_service.get_instruction.return_value = standing_instruction
+    service.authz.evaluate_payment.return_value = _allow_decision()
+
+    with _patched_txn():
+        result = await service.update(
+            payment.payment_id,
+            instruction_id=payment.instruction_id,
+            value_date="2026-07-15",
+            amount=750_000.0,
+            subject=subject,
+        )
+
+    assert result.payment.status == PaymentStatus.DRAFT
+    assert result.payment.amount == 750_000.0
+    assert result.payment.value_date == "2026-07-15"
+    assert result.version_number == 2
+    service.repo.append_version.assert_awaited_once()
+    service.event_repo.insert_document.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_update_rejects_non_draft(
+    service: PaymentService,
+    subject: Subject,
+    submitted_payment: Payment,
+) -> None:
+    service.repo.get_current.return_value = _versioned(submitted_payment)
+    with pytest.raises(InvalidStateTransitionError, match="only DRAFT"):
+        await service.update(
+            submitted_payment.payment_id,
+            instruction_id=submitted_payment.instruction_id,
+            value_date="2026-07-15",
+            amount=100.0,
+            subject=subject,
+        )
+
+
+@pytest.mark.asyncio
+async def test_update_rejects_instruction_id_change(
+    service: PaymentService,
+    subject: Subject,
+    payment: Payment,
+) -> None:
+    service.repo.get_current.return_value = _versioned(payment)
+    with pytest.raises(ValueError, match="instruction_id cannot be changed"):
+        await service.update(
+            payment.payment_id,
+            instruction_id="other-instruction",
+            value_date="2026-07-15",
+            amount=100.0,
+            subject=subject,
+        )
+
+
+@pytest.mark.asyncio
+async def test_update_instruction_not_found(
+    service: PaymentService,
+    subject: Subject,
+    payment: Payment,
+) -> None:
+    service.repo.get_current.return_value = _versioned(payment)
+    service.instruction_service.get_instruction.side_effect = InstructionNotFoundError("missing")
+    with pytest.raises(ValueError, match="backing instruction not found"):
+        await service.update(
+            payment.payment_id,
+            instruction_id=payment.instruction_id,
+            value_date="2026-07-15",
+            amount=100.0,
+            subject=subject,
+        )
+
+
+@pytest.mark.asyncio
+async def test_update_policy_denied(
+    service: PaymentService,
+    subject: Subject,
+    payment: Payment,
+    standing_instruction: dict,
+) -> None:
+    service.repo.get_current.return_value = _versioned(payment)
+    service.instruction_service.get_instruction.return_value = standing_instruction
+    service.authz.evaluate_payment.return_value = _deny_decision("ALERT_AMOUNT_EXCEEDS_SUBJECT_LIMIT")
+
+    with pytest.raises(PermissionError):
+        await service.update(
+            payment.payment_id,
+            instruction_id=payment.instruction_id,
+            value_date="2026-07-15",
+            amount=750_000.0,
+            subject=subject,
+        )
+
+
+@pytest.mark.asyncio
+async def test_delete_draft_payment_success(
+    service: PaymentService,
+    subject: Subject,
+    payment: Payment,
+    standing_instruction: dict,
+) -> None:
+    from ps.models.api import DeletePaymentRequest
+
+    service.repo.get_current.return_value = _versioned(payment)
+    service.instruction_service.get_instruction.return_value = standing_instruction
+    service.authz.evaluate_payment.return_value = _allow_decision()
+
+    with _patched_txn():
+        result = await service.delete(
+            payment.payment_id,
+            subject,
+            DeletePaymentRequest(reason="cleanup"),
+        )
+
+    assert result.payment.status == PaymentStatus.DELETED
+    service.repo.append_version.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_delete_already_deleted(
+    service: PaymentService,
+    subject: Subject,
+    payment: Payment,
+) -> None:
+    deleted = payment.model_copy(update={"status": PaymentStatus.DELETED})
+    service.repo.get_current.return_value = _versioned(deleted)
+    with pytest.raises(InvalidStateTransitionError, match="already deleted"):
+        await service.delete(deleted.payment_id, subject)
+
+
+@pytest.mark.asyncio
 async def test_create_single_use_runs_saga(
     service: PaymentService,
     subject: Subject,

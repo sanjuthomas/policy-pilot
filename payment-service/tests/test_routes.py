@@ -86,6 +86,69 @@ def test_create_payment_bad_gateway(api_client: TestClient) -> None:
     assert response.status_code == 502
 
 
+def test_update_payment_success(api_client: TestClient, versioned_payment) -> None:
+    updated = replace(
+        versioned_payment,
+        version_number=2,
+        payment=versioned_payment.payment.model_copy(update={"amount": 250.0}),
+    )
+    api_client.mock_service.update.return_value = updated
+    response = api_client.put(
+        f"/api/v1/payments/{versioned_payment.payment.payment_id}",
+        json={
+            "instruction_id": versioned_payment.payment.instruction_id,
+            "value_date": "2026-07-02",
+            "amount": 250.0,
+        },
+        headers=_headers(),
+    )
+    assert response.status_code == 200
+    assert response.json()["amount"] == 250.0
+    assert response.json()["version_number"] == 2
+
+
+def test_update_payment_forbidden(api_client: TestClient, versioned_payment) -> None:
+    api_client.mock_service.update.side_effect = PermissionError("denied")
+    response = api_client.put(
+        f"/api/v1/payments/{versioned_payment.payment.payment_id}",
+        json={
+            "instruction_id": versioned_payment.payment.instruction_id,
+            "value_date": "2026-07-02",
+            "amount": 250.0,
+        },
+        headers=_headers(),
+    )
+    assert response.status_code == 403
+
+
+def test_update_payment_invalid_state(api_client: TestClient, versioned_payment) -> None:
+    api_client.mock_service.update.side_effect = InvalidStateTransitionError("only DRAFT")
+    response = api_client.put(
+        f"/api/v1/payments/{versioned_payment.payment.payment_id}",
+        json={
+            "instruction_id": versioned_payment.payment.instruction_id,
+            "value_date": "2026-07-02",
+            "amount": 250.0,
+        },
+        headers=_headers(),
+    )
+    assert response.status_code == 409
+
+
+def test_update_payment_not_found(api_client: TestClient, versioned_payment) -> None:
+    api_client.mock_service.update.side_effect = LookupError("missing")
+    response = api_client.put(
+        f"/api/v1/payments/{versioned_payment.payment.payment_id}",
+        json={
+            "instruction_id": versioned_payment.payment.instruction_id,
+            "value_date": "2026-07-02",
+            "amount": 250.0,
+        },
+        headers=_headers(),
+    )
+    assert response.status_code == 404
+
+
 def test_list_payments(api_client: TestClient, versioned_payment) -> None:
     api_client.mock_service.list.return_value = [versioned_payment]
     response = api_client.get("/api/v1/payments", headers=_headers())

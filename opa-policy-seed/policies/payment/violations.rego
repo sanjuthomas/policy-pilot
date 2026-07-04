@@ -22,7 +22,7 @@ package payment.lifecycle
 # Severity: ALERT — represents a controls bypass or rogue large-value transfer.
 
 violations["ALERT_AMOUNT_EXCEEDS_100B_LIMIT"] if {
-    input.action in {"CREATE_PAYMENT", "APPROVE_PAYMENT"}
+    input.action in {"CREATE_PAYMENT", "UPDATE_PAYMENT", "APPROVE_PAYMENT"}
     exceeds_absolute_limit
 }
 
@@ -33,7 +33,7 @@ violations["ALERT_AMOUNT_EXCEEDS_100B_LIMIT"] if {
 # Severity: ALERT — subject is acting beyond their delegated authority.
 
 violations["ALERT_AMOUNT_EXCEEDS_SUBJECT_LIMIT"] if {
-    input.action in {"CREATE_PAYMENT", "APPROVE_PAYMENT"}
+    input.action in {"CREATE_PAYMENT", "UPDATE_PAYMENT", "APPROVE_PAYMENT"}
     exceeds_subject_limit
 }
 
@@ -43,7 +43,7 @@ violations["ALERT_AMOUNT_EXCEEDS_SUBJECT_LIMIT"] if {
 # Denial → ALERT security event — block the action; no amount limit can be validated.
 
 violations["NO_LIMIT_GROUP_ASSIGNED"] if {
-    input.action in {"CREATE_PAYMENT", "APPROVE_PAYMENT"}
+    input.action in {"CREATE_PAYMENT", "UPDATE_PAYMENT", "APPROVE_PAYMENT"}
     not has_any_limit_group
 }
 
@@ -55,7 +55,7 @@ violations["NO_LIMIT_GROUP_ASSIGNED"] if {
 # Severity: ALERT — potential fraud or controls bypass.
 
 violations["ALERT_UNAPPROVED_INSTRUCTION"] if {
-    input.action in {"CREATE_PAYMENT", "APPROVE_PAYMENT"}
+    input.action in {"CREATE_PAYMENT", "UPDATE_PAYMENT", "APPROVE_PAYMENT"}
     not instruction_is_approved
 }
 
@@ -65,7 +65,7 @@ violations["ALERT_UNAPPROVED_INSTRUCTION"] if {
 # Severity: ALERT — compliance breach.
 
 violations["ALERT_EXPIRED_INSTRUCTION"] if {
-    input.action in {"CREATE_PAYMENT", "APPROVE_PAYMENT"}
+    input.action in {"CREATE_PAYMENT", "UPDATE_PAYMENT", "APPROVE_PAYMENT"}
     input.payment.instruction_end_date != ""
     time.now_ns() >= time.parse_rfc3339_ns(input.payment.instruction_end_date)
 }

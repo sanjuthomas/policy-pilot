@@ -24,6 +24,7 @@ from harness.helpers import (
     instruction_service_client,
     payment_client,
     payment_submitter_for_lob,
+    resolve_payment_update_amount,
 )
 from harness.instruction_client import InstructionServiceClient
 from harness.payment_client import PaymentServiceClient
@@ -517,6 +518,90 @@ def submit_payments(
     result.ok = result.failed == 0
     result.logs.append(
         f"Submitted {result.succeeded} payment(s) with {result.failed} failure(s)."
+    )
+    return result
+
+
+def update_payments(
+    settings: Settings,
+    count: int,
+    admin_session: SessionCredentials,
+    *,
+    amount: float | None = None,
+) -> HarnessActionResult:
+    result = HarnessActionResult(action="update_payments", requested=count)
+    if error := _require_pat(settings):
+        result.logs.append(f"error: {error}")
+        result.ok = False
+        return result
+
+    seed, auth, ps = _payment_clients(settings)
+
+    drafts = _fetch_api_payments(settings, admin_session, status="DRAFT")
+    to_process = drafts[:count]
+
+    if not to_process:
+        result.logs.append("No DRAFT payments available to update.")
+        return result
+
+    amount_note = f"amount={amount:,.0f}" if amount else "auto amount bump"
+    result.logs.append(f"Updating up to {len(to_process)} DRAFT payment(s) ({amount_note})")
+
+    for index, payment in enumerate(to_process, start=1):
+        payment_id = payment["payment_id"]
+        instruction_id = payment.get("instruction_id", "")
+        value_date = payment.get("value_date", "2026-07-01")
+        current_amount = float(payment.get("amount") or 0)
+        created_by = payment.get("created_by") or {}
+        creator_id = created_by.get("user_id")
+        if not creator_id:
+            result.failed += 1
+            result.logs.append(f"[{index}] {payment_id} skip: missing created_by")
+            continue
+
+        new_amount = resolve_payment_update_amount(
+            current_amount,
+            creator_id,
+            seed=seed,
+            override=amount,
+        )
+        if new_amount == current_amount:
+            result.skipped += 1
+            result.logs.append(
+                f"[{index}] {payment_id} skip: amount unchanged at {current_amount:,.0f}"
+            )
+            continue
+
+        result.logs.append(
+            f"[{index}] {payment_id}  user={creator_id}  "
+            f"{current_amount:,.0f} -> {new_amount:,.0f}"
+        )
+        session = _session_for_user(auth, seed, settings, creator_id)
+        response = ps.update_payment(
+            session,
+            payment_id,
+            instruction_id,
+            new_amount,
+            value_date,
+        )
+        if response.status_code in range(200, 300):
+            result.succeeded += 1
+            body = response.json()
+            result.logs.append(
+                f"  -> HTTP {response.status_code} v{body.get('version_number', '?')} "
+                f"amount={body.get('amount', new_amount):,.0f}"
+            )
+        else:
+            result.failed += 1
+            result.logs.append(f"  -> update HTTP {response.status_code} FAIL")
+            detail = response.text.strip()
+            if detail:
+                result.logs.append(f"     {detail[:300]}")
+
+    result.ok = result.failed == 0
+    result.logs.append(
+        f"Updated {result.succeeded} payment(s) with {result.failed} failure(s), "
+        f"{result.skipped} skipped."
     )
     return result
 

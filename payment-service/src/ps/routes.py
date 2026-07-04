@@ -9,6 +9,7 @@ from ps.models.api import (
     PaymentResponse,
     RejectPaymentRequest,
     Subject,
+    UpdatePaymentRequest,
 )
 from ps.repository import ConcurrentModificationError
 from ps.service import InvalidStateTransitionError, PaymentService
@@ -110,6 +111,38 @@ async def list_payments(
         limit=limit,
     )
     return [_to_response(record) for record in records]
+
+
+@router.put("/{payment_id}", response_model=PaymentResponse)
+async def update_payment(
+    payment_id: str,
+    request: UpdatePaymentRequest,
+    subject: Subject = Depends(get_subject),
+    service: PaymentService = Depends(get_service),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+) -> PaymentResponse:
+    try:
+        record = await service.update(
+            payment_id,
+            instruction_id=request.instruction_id,
+            value_date=request.value_date,
+            amount=request.amount,
+            subject=subject,
+            bearer_token=_bearer_token(authorization),
+            session_id=x_session_id,
+        )
+        return _to_response(record)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except InvalidStateTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ConcurrentModificationError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get("/{payment_id}", response_model=PaymentResponse)

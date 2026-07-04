@@ -86,7 +86,7 @@ async function refreshStatus() {
   }
 }
 
-async function runAction(action, count) {
+async function runAction(action, count, amount = null) {
   if (busy) {
     return;
   }
@@ -98,13 +98,19 @@ async function runAction(action, count) {
 
   setBusy(true);
   const label = action.replace(/-/g, " ");
-  appendLog(`Starting ${label}${count ? ` (count=${count})` : ""}...`);
+  const amountNote =
+    amount !== null && Number.isFinite(amount) && amount > 0 ? `, amount=${amount}` : "";
+  appendLog(`Starting ${label}${count ? ` (count=${count}${amountNote})` : ""}...`);
 
   try {
+    const body = count ? { count } : {};
+    if (amount !== null && Number.isFinite(amount) && amount > 0) {
+      body.amount = amount;
+    }
     const response = await AdminAuth.adminFetch(`/api/actions/${action}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(count ? { count } : {}),
+      body: JSON.stringify(body),
     });
 
     const data = await response.json();
@@ -141,15 +147,23 @@ function handleGridClick(event) {
   }
 
   const action = card.dataset.action;
-  const input = card.querySelector('input[type="number"]');
+  const input = card.querySelector('input[type="number"]:not([data-role="amount"])');
   const count = input ? Number.parseInt(input.value, 10) : null;
+  const amountInput = card.querySelector('input[data-role="amount"]');
+  const amountRaw = amountInput && amountInput.value.trim() !== "" ? amountInput.value : null;
+  const amount = amountRaw !== null ? Number.parseFloat(amountRaw) : null;
 
   if (input && (!Number.isFinite(count) || count < 1)) {
     appendLog("Enter a valid count (at least 1).", { error: true });
     return;
   }
 
-  void runAction(action, count);
+  if (amountRaw !== null && (!Number.isFinite(amount) || amount <= 0)) {
+    appendLog("Enter a valid amount greater than zero, or leave amount blank.", { error: true });
+    return;
+  }
+
+  void runAction(action, count, amount);
 }
 
 actionGrid.addEventListener("click", handleGridClick);

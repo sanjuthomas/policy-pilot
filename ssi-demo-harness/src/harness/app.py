@@ -45,6 +45,11 @@ class CountRequest(BaseModel):
     count: int = Field(ge=1, le=500)
 
 
+class UpdatePaymentsRequest(BaseModel):
+    count: int = Field(ge=1, le=500)
+    amount: float | None = Field(default=None, gt=0)
+
+
 @app.get("/")
 async def index() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
@@ -122,6 +127,7 @@ _COUNT_ACTIONS: dict[str, Callable[..., object]] = {
     "suspend-instructions": actions.suspend_instructions,
     "reactivate-instructions": actions.reactivate_instructions,
     "create-payments": actions.create_payments,
+    "update-payments": actions.update_payments,
     "submit-payments": actions.submit_payments,
     "approve-payments": actions.approve_payments,
     "reject-payments": actions.reject_payments,
@@ -137,11 +143,18 @@ async def _run_count_action(
     action_name: str,
     count: int,
     admin_session: SessionCredentials,
+    *,
+    amount: float | None = None,
 ) -> dict:
     handler = _COUNT_ACTIONS.get(action_name)
     if handler is None:
         raise HTTPException(status_code=404, detail=f"unknown action: {action_name}")
-    result = await asyncio.to_thread(handler, settings, count, admin_session)
+    if action_name == "update-payments":
+        result = await asyncio.to_thread(
+            handler, settings, count, admin_session, amount=amount
+        )
+    else:
+        result = await asyncio.to_thread(handler, settings, count, admin_session)
     return result.to_dict()
 
 
@@ -167,6 +180,22 @@ def _count_route(action_name: str):
     return route
 
 
+def _update_payments_route():
+    async def route(
+        request: UpdatePaymentsRequest,
+        _admin: Subject = Depends(get_admin_subject),
+        admin_session: SessionCredentials = Depends(get_admin_session),
+    ) -> dict:
+        return await _run_count_action(
+            "update-payments",
+            request.count,
+            admin_session,
+            amount=request.amount,
+        )
+
+    return route
+
+
 def _scenario_route(action_name: str):
     async def route(
         _admin: Subject = Depends(get_admin_subject),
@@ -184,6 +213,7 @@ app.post("/api/actions/reject-instructions")(_count_route("reject-instructions")
 app.post("/api/actions/suspend-instructions")(_count_route("suspend-instructions"))
 app.post("/api/actions/reactivate-instructions")(_count_route("reactivate-instructions"))
 app.post("/api/actions/create-payments")(_count_route("create-payments"))
+app.post("/api/actions/update-payments")(_update_payments_route())
 app.post("/api/actions/submit-payments")(_count_route("submit-payments"))
 app.post("/api/actions/approve-payments")(_count_route("approve-payments"))
 app.post("/api/actions/reject-payments")(_count_route("reject-payments"))

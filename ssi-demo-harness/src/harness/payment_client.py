@@ -107,3 +107,22 @@ class PaymentServiceClient:
                 },
                 params=params,
             )
+
+    def update_payment(
+        self,
+        session: SessionCredentials,
+        payment_id: str,
+        instruction_id: str,
+        amount: float,
+        value_date: str,
+    ) -> httpx.Response:
+        return self.request(
+            "PUT",
+            f"/payments/{payment_id}",
+            session=session,
+            json_body={
+                "instruction_id": instruction_id,
+                "amount": amount,
+                "value_date": value_date,
+            },
+        )

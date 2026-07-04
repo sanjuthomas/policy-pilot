@@ -27,3 +27,13 @@ def test_payment_mode_routes_payment_eligibility_question() -> None:
 
 def test_ignores_unrelated_questions() -> None:
     assert eligible_approver_target("How many payments were approved today?", mode="payments") is None
+
+
+def test_events_mode_resolves_ambiguous_payment_mention() -> None:
+    q = "Who can approve payment for this instruction?"
+    assert eligible_approver_target(q, mode="events") == "payment"
+
+
+def test_events_mode_resolves_ambiguous_instruction_mention() -> None:
+    q = "Who can approve this instruction?"
+    assert eligible_approver_target(q, mode="events") == "instruction"

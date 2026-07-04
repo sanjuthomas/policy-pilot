@@ -8,6 +8,7 @@ from inst.models.api import (
     InstructionResponse,
     RejectInstructionRequest,
     Subject,
+    UpdateInstructionRequest,
     UseInstructionRequest,
 )
 from inst.repository import ConcurrentModificationError, InstructionNotFoundError
@@ -88,6 +89,33 @@ async def list_instruction_versions(
         raise HTTPException(status_code=404, detail="instruction not found") from exc
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
+@router.put("/{instruction_id}", response_model=InstructionResponse)
+async def update_instruction(
+    instruction_id: str,
+    request: UpdateInstructionRequest,
+    subject: Subject = Depends(get_subject),
+    service: InstructionService = Depends(get_service),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+) -> InstructionResponse:
+    try:
+        return await service.update(
+            instruction_id,
+            request,
+            subject,
+            bearer_token=_bearer_token(authorization),
+            session_id=x_session_id,
+        )
+    except InstructionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="instruction not found") from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except InvalidStateTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ConcurrentModificationError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get("/{instruction_id}", response_model=InstructionResponse)

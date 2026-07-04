@@ -36,6 +36,32 @@ allow if {
 }
 
 # ---------------------------------------------------------------------------
+# UPDATE_PAYMENT  (middle-office edits draft payments)
+#
+# Same desk-coverage and instruction validity rules as CREATE_PAYMENT.
+# Only payments in DRAFT may be edited; each update appends a new version.
+# ---------------------------------------------------------------------------
+
+allow if {
+    input.action == "UPDATE_PAYMENT"
+
+    has_role("PAYMENT_CREATOR")
+
+    in_group("MIDDLE_OFFICE")
+    covers_lob(input.payment.instruction_owning_lob)
+
+    instruction_is_approved
+
+    instruction_not_expired
+
+    input.payment.amount > 0
+
+    input.payment.status == "DRAFT"
+
+    within_amount_limit
+}
+
+# ---------------------------------------------------------------------------
 # SUBMIT_PAYMENT  (front-office review and hand-off)
 #
 # A front-office analyst who belongs to the trading desk that owns the

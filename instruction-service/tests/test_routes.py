@@ -78,6 +78,57 @@ def test_create_instruction(api_client: TestClient, mock_service: MagicMock) -> 
     assert response.json()["instruction_id"] == "i1"
 
 
+def test_update_instruction(api_client: TestClient, mock_service: MagicMock) -> None:
+    response_model = _sample_response()
+    mock_service.update.return_value = response_model
+    from tests.helpers import domestic_payload
+
+    response = api_client.put("/api/v1/instructions/i1", json=domestic_payload())
+    assert response.status_code == 200
+    assert response.json()["instruction_id"] == "i1"
+    mock_service.update.assert_awaited_once()
+
+
+def test_update_instruction_not_found(api_client: TestClient, mock_service: MagicMock) -> None:
+    from inst.repository import InstructionNotFoundError
+
+    mock_service.update.side_effect = InstructionNotFoundError("i1")
+    from tests.helpers import domestic_payload
+
+    response = api_client.put("/api/v1/instructions/i1", json=domestic_payload())
+    assert response.status_code == 404
+
+
+def test_update_instruction_invalid_state(api_client: TestClient, mock_service: MagicMock) -> None:
+    from inst.service import InvalidStateTransitionError
+
+    mock_service.update.side_effect = InvalidStateTransitionError("only DRAFT")
+    from tests.helpers import domestic_payload
+
+    response = api_client.put("/api/v1/instructions/i1", json=domestic_payload())
+    assert response.status_code == 409
+
+
+def test_update_instruction_forbidden(api_client: TestClient, mock_service: MagicMock) -> None:
+    mock_service.update.side_effect = PermissionError("denied")
+    from tests.helpers import domestic_payload
+
+    response = api_client.put("/api/v1/instructions/i1", json=domestic_payload())
+    assert response.status_code == 403
+
+
+def test_update_instruction_concurrent_modification(
+    api_client: TestClient, mock_service: MagicMock
+) -> None:
+    from inst.repository import ConcurrentModificationError
+
+    mock_service.update.side_effect = ConcurrentModificationError("conflict")
+    from tests.helpers import domestic_payload
+
+    response = api_client.put("/api/v1/instructions/i1", json=domestic_payload())
+    assert response.status_code == 409
+
+
 def test_create_permission_denied(api_client: TestClient, mock_service: MagicMock) -> None:
     mock_service.create.side_effect = PermissionError("denied")
     from tests.helpers import domestic_payload

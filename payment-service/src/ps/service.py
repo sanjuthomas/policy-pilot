@@ -447,6 +447,71 @@ class PaymentService:
         )
         return saved
 
+    # ── Update ────────────────────────────────────────────────────────────────
+
+    async def update(
+        self,
+        payment_id: str,
+        *,
+        instruction_id: str,
+        value_date: str,
+        amount: float,
+        subject: Subject,
+        bearer_token: str | None = None,
+        session_id: str | None = None,
+    ) -> VersionedPayment:
+        current = await self._get_current_or_404(payment_id)
+        payment = current.payment.model_copy(deep=True)
+
+        if payment.status != PaymentStatus.DRAFT:
+            raise InvalidStateTransitionError("only DRAFT payments can be updated")
+
+        if payment.instruction_id != instruction_id:
+            raise ValueError(
+                f"instruction_id cannot be changed (expected {payment.instruction_id!r}, "
+                f"got {instruction_id!r})"
+            )
+
+        try:
+            instruction = await self.instruction_service.get_instruction(
+                payment.instruction_id,
+                bearer_token=bearer_token,
+                session_id=session_id,
+            )
+        except InstructionNotFoundError as exc:
+            raise ValueError(
+                f"backing instruction not found: {payment.instruction_id}"
+            ) from exc
+
+        _validate_instruction_at_create(instruction)
+
+        instruction_status = instruction["status"]
+        end_date = instruction.get("end_date") or ""
+        instruction_version = int(instruction.get("version_number") or 1)
+
+        payment.amount = amount
+        payment.value_date = value_date
+        payment.instruction_version = instruction_version
+        payment.updated_at = datetime.now(timezone.utc)
+
+        saved = await self._persist_new_version(
+            payment,
+            PaymentAction.UPDATE_PAYMENT,
+            subject,
+            instruction_end_date=end_date,
+            instruction_status=instruction_status,
+            bearer_token=bearer_token,
+            session_id=session_id,
+        )
+
+        logger.info(
+            "payment updated (DRAFT) payment_id=%s amount=%s value_date=%s",
+            payment.payment_id,
+            amount,
+            value_date,
+        )
+        return saved
+
     # ── Submit ────────────────────────────────────────────────────────────────
 
     async def submit(

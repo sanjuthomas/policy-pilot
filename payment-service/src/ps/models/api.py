@@ -35,6 +35,9 @@ class CreatePaymentRequest(BaseModel):
     amount: float = Field(gt=0)
 
 
+UpdatePaymentRequest = CreatePaymentRequest
+
+
 class DeletePaymentRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=1024)
 

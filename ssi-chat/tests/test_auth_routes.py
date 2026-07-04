@@ -62,3 +62,14 @@ def test_auth_login_missing_pat(
         json={"user_id": "comp-001", "password": "Password1!"},
     )
     assert response.status_code == 503
+
+
+def test_auth_login_failure(client: TestClient) -> None:
+    with patch("chat_application.main.ZitadelAuthClient") as client_cls:
+        client_cls.return_value.login = AsyncMock(side_effect=RuntimeError("bad password"))
+        response = client.post(
+            "/api/auth/login",
+            json={"user_id": "comp-001", "password": "wrong"},
+        )
+    assert response.status_code == 401
+    assert "login failed" in response.json()["detail"]

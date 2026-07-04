@@ -144,4 +144,5 @@ def test_payment_status_enum_values() -> None:
     assert PaymentStatus.DRAFT.value == "DRAFT"
     assert PaymentAction.CANCEL_PAYMENT.value == "CANCEL_PAYMENT"
     assert PaymentAction.DELETE_PAYMENT.value == "DELETE_PAYMENT"
+    assert PaymentAction.UPDATE_PAYMENT.value == "UPDATE_PAYMENT"
     assert PaymentStatus.DELETED.value == "DELETED"
