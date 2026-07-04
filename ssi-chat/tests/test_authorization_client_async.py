@@ -2,8 +2,10 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
-
-from chat_application.authorization_client import EligibilityClient, EligibilityClientError
+from chat_application.authorization_client import (
+    EligibilityClient,
+    EligibilityClientError,
+)
 
 
 @pytest.mark.asyncio

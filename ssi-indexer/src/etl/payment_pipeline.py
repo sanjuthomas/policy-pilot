@@ -10,6 +10,8 @@ import json
 import logging
 from typing import Any
 
+from vertex_client import VertexEmbeddingClient
+
 from etl.authorization_context import authorization_merged_fields
 from etl.multimodal_store import (
     MultimodalNeo4jStore,
@@ -18,7 +20,6 @@ from etl.multimodal_store import (
 )
 from etl.multimodal_write import MultimodalWrite
 from etl.neo4j_client import Neo4jGraphWriter
-from etl.ollama_client import OllamaEmbeddingClient
 from etl.search_text.builder import build_search_text_from_profile
 from etl.search_text.context import payment_security_event_context
 
@@ -58,11 +59,11 @@ class PaymentSecurityEventPipeline:
         self,
         *,
         neo4j_writer: Neo4jGraphWriter,
-        ollama_client: OllamaEmbeddingClient,
+        embedding_client: VertexEmbeddingClient,
         multimodal_store: MultimodalNeo4jStore,
     ) -> None:
         self.neo4j_writer = neo4j_writer
-        self.ollama_client = ollama_client
+        self.embedding_client = embedding_client
         self.multimodal_store = multimodal_store
         self._multimodal_ready = False
 
@@ -73,12 +74,12 @@ class PaymentSecurityEventPipeline:
             return
 
         if not self._multimodal_ready:
-            await self.ollama_client.warmup()
-            await self.multimodal_store.ensure_indexes(self.ollama_client.dimension)
+            await self.embedding_client.warmup()
+            await self.multimodal_store.ensure_indexes(self.embedding_client.dimension)
             self._multimodal_ready = True
 
         search_text = build_payment_event_search_text(event)
-        dense_vector = await self.ollama_client.embed(search_text)
+        dense_vector = await self.embedding_client.embed(search_text)
 
         resource = event.get("resource") or {}
         actor = event.get("actor") or {}
@@ -132,11 +133,11 @@ class PaymentFactPipeline:
         self,
         *,
         neo4j_writer: Neo4jGraphWriter,
-        ollama_client: OllamaEmbeddingClient,
+        embedding_client: VertexEmbeddingClient,
         multimodal_store: MultimodalNeo4jStore,
     ) -> None:
         self.neo4j_writer = neo4j_writer
-        self.ollama_client = ollama_client
+        self.embedding_client = embedding_client
         self.multimodal_store = multimodal_store
         self._multimodal_ready = False
 
@@ -147,12 +148,12 @@ class PaymentFactPipeline:
             return
 
         if not self._multimodal_ready:
-            await self.ollama_client.warmup()
-            await self.multimodal_store.ensure_indexes(self.ollama_client.dimension)
+            await self.embedding_client.warmup()
+            await self.multimodal_store.ensure_indexes(self.embedding_client.dimension)
             self._multimodal_ready = True
 
         search_text = build_payment_fact_search_text(fact)
-        dense_vector = await self.ollama_client.embed(search_text)
+        dense_vector = await self.embedding_client.embed(search_text)
 
         created_by = fact.get("created_by") or {}
         approved_by = fact.get("approved_by") or {}

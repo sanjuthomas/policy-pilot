@@ -1,6 +1,5 @@
 import pytest
 from fastapi import HTTPException
-
 from inst.admin import get_admin_subject
 from inst.dependencies import get_compliance_subject
 from inst.models.api import Subject

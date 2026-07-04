@@ -170,6 +170,16 @@ class PaymentService:
         self.instruction_service = InstructionServiceClient()
         self.sequence = sequence_client or SequenceClient(settings.sequence_service_url)
 
+    @staticmethod
+    def _should_record_security_event(subject: Subject) -> bool:
+        return subject.user_id not in settings.security_event_excluded_user_id_set
+
+    @staticmethod
+    def _should_record_view_security_event(subject: Subject) -> bool:
+        if subject.user_id in settings.security_event_view_excluded_user_id_set:
+            return False
+        return PaymentService._should_record_security_event(subject)
+
     async def _evaluate_policy(
         self,
         action: PaymentAction,
@@ -235,13 +245,14 @@ class PaymentService:
             ),
         )
         if not decision.allowed:
-            await self.event_repo.record_policy_denial(
-                action,
-                subject,
-                payment,
-                reason=authorization["summary"],
-                details=details_with_authorization(None, authorization),
-            )
+            if self._should_record_security_event(subject):
+                await self.event_repo.record_policy_denial(
+                    action,
+                    subject,
+                    payment,
+                    reason=authorization["summary"],
+                    details=details_with_authorization(None, authorization),
+                )
             raise PermissionError(authorization["summary"])
         return authorization
 
@@ -261,18 +272,19 @@ class PaymentService:
             else:
                 saved = await self.repo.append_version(payment, session=session)
 
-            event_id = await self.event_repo.allocate_event_id(payment.payment_id)
-            event = PaymentSecurityEvent.authorized_action(
-                action,
-                subject,
-                saved.payment,
-                version_number=saved.version_number,
-                details=details,
-            )
-            await self.event_repo.insert_document(
-                security_event_to_document(event, document_id=event_id),
-                session=session,
-            )
+            if self._should_record_security_event(subject):
+                event_id = await self.event_repo.allocate_event_id(payment.payment_id)
+                event = PaymentSecurityEvent.authorized_action(
+                    action,
+                    subject,
+                    saved.payment,
+                    version_number=saved.version_number,
+                    details=details,
+                )
+                await self.event_repo.insert_document(
+                    security_event_to_document(event, document_id=event_id),
+                    session=session,
+                )
 
         return saved
 
@@ -397,22 +409,24 @@ class PaymentService:
                     session_id=session_id,
                 )
             except InstructionStateError as exc:
-                await self.event_repo.record_policy_denial(
-                    PaymentAction.CREATE_PAYMENT,
-                    subject,
-                    payment,
-                    reason=f"Saga step failed — instruction cannot be marked USED: {exc}",
-                    details={"saga_step": "mark_used", "saga_error": str(exc)},
-                )
+                if self._should_record_security_event(subject):
+                    await self.event_repo.record_policy_denial(
+                        PaymentAction.CREATE_PAYMENT,
+                        subject,
+                        payment,
+                        reason=f"Saga step failed — instruction cannot be marked USED: {exc}",
+                        details={"saga_step": "mark_used", "saga_error": str(exc)},
+                    )
                 raise ValueError(str(exc)) from exc
             except Exception as exc:
-                await self.event_repo.record_policy_denial(
-                    PaymentAction.CREATE_PAYMENT,
-                    subject,
-                    payment,
-                    reason=f"Saga step failed — instruction-service unreachable: {exc}",
-                    details={"saga_step": "mark_used", "saga_error": str(exc)},
-                )
+                if self._should_record_security_event(subject):
+                    await self.event_repo.record_policy_denial(
+                        PaymentAction.CREATE_PAYMENT,
+                        subject,
+                        payment,
+                        reason=f"Saga step failed — instruction-service unreachable: {exc}",
+                        details={"saga_step": "mark_used", "saga_error": str(exc)},
+                    )
                 raise RuntimeError(
                     f"Could not mark instruction as USED before creating payment: {exc}"
                 ) from exc

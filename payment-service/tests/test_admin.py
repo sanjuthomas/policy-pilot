@@ -5,10 +5,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from ps.admin import get_admin_subject
 from ps.auth_routes import router as auth_router
-from ps.dependencies import get_subject
 from ps.models.api import Subject
 
 

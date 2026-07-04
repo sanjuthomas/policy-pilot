@@ -2,8 +2,6 @@ from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from pymongo.errors import DuplicateKeyError, OperationFailure
-
 from inst.constants import INSTRUCTION_CURRENT_OUT
 from inst.models.instruction import CashSettlementInstruction
 from inst.repository import (
@@ -14,6 +12,7 @@ from inst.repository import (
 from inst.storage import (
     versioned_instruction_to_document,
 )
+from pymongo.errors import DuplicateKeyError, OperationFailure
 
 
 def _current_doc(sample_instruction: CashSettlementInstruction) -> dict:

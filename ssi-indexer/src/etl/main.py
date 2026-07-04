@@ -18,6 +18,7 @@ from telemetry import (
     instrument_app,
     shutdown_telemetry,
 )
+from vertex_client import VertexEmbeddingClient
 
 from etl.admin import get_admin_subject
 from etl.auth_routes import router as auth_router
@@ -31,7 +32,7 @@ from etl.instruction_security_event_consumer import (
 from etl.instruction_security_event_pipeline import InstructionSecurityEventPipeline
 from etl.multimodal_store import MultimodalNeo4jStore
 from etl.neo4j_client import Neo4jGraphWriter
-from etl.ollama_client import OllamaEmbeddingClient
+from etl.ollama_client import OllamaChatClient
 from etl.payment_consumer import (
     PaymentFactKafkaConsumer,
     PaymentSecurityEventKafkaConsumer,
@@ -46,28 +47,34 @@ logger = get_logger(__name__)
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 neo4j_writer = Neo4jGraphWriter()
-ollama_client = OllamaEmbeddingClient()
+embedding_client = VertexEmbeddingClient(
+    project_id=settings.gcp_project_id,
+    region=settings.gcp_region,
+    model=settings.vertex_embedding_model,
+    dimension=settings.embedding_dimension,
+)
+ollama_client = OllamaChatClient()
 multimodal_store = MultimodalNeo4jStore(neo4j_writer)
 
 instruction_security_event_pipeline = InstructionSecurityEventPipeline(
     neo4j_writer=neo4j_writer,
-    ollama_client=ollama_client,
+    embedding_client=embedding_client,
     multimodal_store=multimodal_store,
 )
 instruction_pipeline = InstructionPipeline(
     neo4j_writer=neo4j_writer,
-    ollama_client=ollama_client,
+    embedding_client=embedding_client,
     multimodal_store=multimodal_store,
 )
 
 payment_security_event_pipeline = PaymentSecurityEventPipeline(
     neo4j_writer=neo4j_writer,
-    ollama_client=ollama_client,
+    embedding_client=embedding_client,
     multimodal_store=multimodal_store,
 )
 payment_fact_pipeline = PaymentFactPipeline(
     neo4j_writer=neo4j_writer,
-    ollama_client=ollama_client,
+    embedding_client=embedding_client,
     multimodal_store=multimodal_store,
 )
 
@@ -96,8 +103,8 @@ async def lifespan(app: FastAPI):
     await payment_fact_consumer.start()
 
     try:
-        await ollama_client.warmup()
-        await multimodal_store.ensure_indexes(ollama_client.dimension)
+        await embedding_client.warmup()
+        await multimodal_store.ensure_indexes(embedding_client.dimension)
     except Exception as exc:
         logger.warning("search backends not fully warmed up yet: %s", exc)
 
@@ -109,6 +116,7 @@ async def lifespan(app: FastAPI):
     await payment_security_event_consumer.close()
     await payment_fact_consumer.close()
     await neo4j_writer.close()
+    await embedding_client.close()
     await ollama_client.close()
     shutdown_telemetry()
 
@@ -136,6 +144,7 @@ async def health() -> dict:
         instruction_security_event_consumer=instruction_security_event_consumer,
         multimodal_store=multimodal_store,
         neo4j_writer=neo4j_writer,
+        embedding_client=embedding_client,
         ollama_client=ollama_client,
     )
     overall = "UP" if all(c["ok"] for c in components.values()) else "DEGRADED"
@@ -193,6 +202,7 @@ async def stats() -> dict:
         instruction_security_event_consumer=instruction_security_event_consumer,
         multimodal_store=multimodal_store,
         neo4j_writer=neo4j_writer,
+        embedding_client=embedding_client,
         ollama_client=ollama_client,
     )
     return {
@@ -204,7 +214,7 @@ async def stats() -> dict:
 @api_router.post("/search/vector")
 async def search_vector(request: SearchRequest) -> dict:
     try:
-        vector = await ollama_client.embed(request.query)
+        vector = await embedding_client.embed_query(request.query)
         results = await multimodal_store.search_dense(
             vector,
             limit=request.limit,
@@ -229,7 +239,7 @@ async def search_bm25(request: SearchRequest) -> dict:
 @api_router.post("/search/hybrid")
 async def search_hybrid(request: SearchRequest) -> dict:
     try:
-        vector = await ollama_client.embed(request.query)
+        vector = await embedding_client.embed_query(request.query)
         results = await multimodal_store.search_hybrid(
             request.query,
             vector,

@@ -1,6 +1,5 @@
 import pytest
 from fastapi import HTTPException
-
 from inst.dependencies import _subject_from_headers
 
 

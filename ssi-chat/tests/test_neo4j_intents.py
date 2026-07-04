@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 from chat_application.neo4j_formatters import (
@@ -137,7 +137,7 @@ class TestNeo4jDirectExecution:
 class TestRagNeo4jDirectEarlyExit:
     @pytest.mark.asyncio
     async def test_ask_uses_neo4j_direct_without_llm(
-        self, rag_service, mock_ollama, mock_multimodal, mock_neo4j
+        self, rag_service, mock_ml_client, mock_multimodal, mock_neo4j
     ) -> None:
         mock_neo4j.run_cypher = AsyncMock(
             return_value=[
@@ -149,8 +149,8 @@ class TestRagNeo4jDirectEarlyExit:
         )
         mock_multimodal.search_vector = AsyncMock(return_value=[])
         mock_multimodal.search_bm25 = AsyncMock(return_value=[])
-        mock_ollama.embed = AsyncMock(return_value=[0.1, 0.2])
-        mock_ollama.synthesize_answer = AsyncMock(return_value="should not be called")
+        mock_ml_client.embed = AsyncMock(return_value=[0.1, 0.2])
+        mock_ml_client.synthesize_answer = AsyncMock(return_value="should not be called")
 
         response = await rag_service.ask(
             "Who created 20260703-FICC-I-1?",
@@ -160,5 +160,5 @@ class TestRagNeo4jDirectEarlyExit:
 
         assert "Walsh, Patricia (mo-010)" in response.answer
         assert response.generation_ms == 0.0
-        mock_ollama.synthesize_answer.assert_not_called()
-        mock_ollama.embed.assert_not_called()
+        mock_ml_client.synthesize_answer.assert_not_called()
+        mock_ml_client.embed.assert_not_called()

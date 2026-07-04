@@ -27,24 +27,24 @@ def _security_event(**overrides) -> dict:
 async def test_process_instruction_security_event():
     neo4j = AsyncMock()
     neo4j.upsert = AsyncMock()
-    ollama = AsyncMock()
-    ollama.dimension = 4
-    ollama.warmup = AsyncMock()
-    ollama.embed = AsyncMock(return_value=[0.1, 0.2, 0.3, 0.4])
+    embedding = AsyncMock()
+    embedding.dimension = 4
+    embedding.warmup = AsyncMock()
+    embedding.embed = AsyncMock(return_value=[0.1, 0.2, 0.3, 0.4])
     multimodal = MagicMock()
     multimodal.ensure_indexes = AsyncMock()
 
     pipeline = InstructionSecurityEventPipeline(
         neo4j_writer=neo4j,
-        ollama_client=ollama,
+        embedding_client=embedding,
         multimodal_store=multimodal,
     )
     event = _security_event()
     await pipeline.process_instruction_security_event(event)
 
     neo4j.upsert.assert_awaited_once()
-    ollama.warmup.assert_awaited_once()
-    ollama.embed.assert_awaited_once()
+    embedding.warmup.assert_awaited_once()
+    embedding.embed.assert_awaited_once()
     call_kwargs = neo4j.upsert.call_args.kwargs
     assert isinstance(call_kwargs["multimodal"], MultimodalWrite)
     assert call_kwargs["multimodal"].dense_vector == [0.1, 0.2, 0.3, 0.4]
@@ -53,9 +53,9 @@ async def test_process_instruction_security_event():
 async def test_process_approve_patches_authorization_in_same_tx():
     neo4j = AsyncMock()
     neo4j.upsert = AsyncMock()
-    ollama = AsyncMock()
-    ollama.dimension = 2
-    ollama.embed = AsyncMock(side_effect=[[0.5, 0.5], [0.6, 0.6]])
+    embedding = AsyncMock()
+    embedding.dimension = 2
+    embedding.embed = AsyncMock(side_effect=[[0.5, 0.5], [0.6, 0.6]])
     multimodal = MagicMock()
     multimodal.build_instruction_state_authorization_patch = AsyncMock(
         return_value=("doc-1", "patched search text", {"instruction_id": "instr-1"})
@@ -63,7 +63,7 @@ async def test_process_approve_patches_authorization_in_same_tx():
 
     pipeline = InstructionSecurityEventPipeline(
         neo4j_writer=neo4j,
-        ollama_client=ollama,
+        embedding_client=embedding,
         multimodal_store=multimodal,
     )
     pipeline._multimodal_ready = True
@@ -90,7 +90,7 @@ async def test_process_approve_patches_authorization_in_same_tx():
         authorization_summary="approved by manager",
         authorization_basis=["role-match"],
     )
-    assert ollama.embed.await_count == 2
+    assert embedding.embed.await_count == 2
     extra = neo4j.upsert.call_args.kwargs["extra_multimodal"]
     assert len(extra) == 1
     assert extra[0].search_text == "patched search text"

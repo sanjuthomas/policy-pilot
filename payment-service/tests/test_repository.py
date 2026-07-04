@@ -4,8 +4,6 @@ from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from pymongo.errors import DuplicateKeyError
-
 from ps.constants import PAYMENT_CURRENT_OUT
 from ps.models.enums import PaymentAction, PaymentStatus, SecurityEventSeverity
 from ps.models.payment import Payment
@@ -16,6 +14,7 @@ from ps.repository import (
 )
 from ps.security_event_repository import SecurityEventRepository
 from ps.storage import VersionedPayment, versioned_payment_to_document
+from pymongo.errors import DuplicateKeyError
 
 
 @pytest.fixture

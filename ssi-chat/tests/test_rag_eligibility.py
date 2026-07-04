@@ -9,7 +9,7 @@ from chat_application.rag import RagService
 @pytest.fixture
 def rag_service() -> RagService:
     return RagService(
-        ollama=MagicMock(),
+        ml_client=MagicMock(),
         multimodal=MagicMock(),
         neo4j=MagicMock(),
     )

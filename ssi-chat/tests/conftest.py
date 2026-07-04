@@ -14,15 +14,17 @@ def disable_open_telemetry_for_tests() -> None:
 
 
 @pytest.fixture
-def mock_ollama():
+def mock_ml_client():
     client = MagicMock()
+    client.dimension = 768
     client.embed = AsyncMock(return_value=[0.1, 0.2, 0.3])
-    client.chat = AsyncMock(return_value="mocked answer")
+    client.warmup = AsyncMock()
     client.generate_cypher = AsyncMock(
         return_value="MATCH (e:SecurityEvent) RETURN e LIMIT 1"
     )
     client.synthesize_answer = AsyncMock(return_value="Synthesized answer.")
     client.summarize_authorization_why = AsyncMock(return_value="Policy allowed approval.")
+    client.close = AsyncMock()
     return client
 
 
@@ -51,9 +53,13 @@ def mock_neo4j():
 
 
 @pytest.fixture
-def rag_service(mock_ollama, mock_multimodal, mock_neo4j, monkeypatch):
+def rag_service(mock_ml_client, mock_multimodal, mock_neo4j, monkeypatch):
     monkeypatch.setattr("chat_application.rag.load_graph_schema", lambda: "schema")
-    return RagService(ollama=mock_ollama, multimodal=mock_multimodal, neo4j=mock_neo4j)
+    return RagService(
+        ml_client=mock_ml_client,
+        multimodal=mock_multimodal,
+        neo4j=mock_neo4j,
+    )
 
 
 @pytest.fixture
@@ -68,11 +74,11 @@ def compliance_subject():
 
 
 @pytest.fixture
-def test_client(mock_ollama, mock_multimodal, mock_neo4j, compliance_subject):
+def test_client(mock_ml_client, mock_multimodal, mock_neo4j, compliance_subject):
     import chat_application.main as main_module
     from chat_application.dependencies import get_compliance_subject
 
-    main_module.ollama_client = mock_ollama
+    main_module.ml_client = mock_ml_client
     main_module.multimodal_client = mock_multimodal
     main_module.neo4j_client = mock_neo4j
     main_module.rag_service = None

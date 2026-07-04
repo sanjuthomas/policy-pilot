@@ -4,9 +4,7 @@ from collections import Counter
 from pathlib import Path
 
 import yaml
-
 from regression.models import RegressionCase, RegressionSuite
-
 
 QUESTIONS = Path(__file__).resolve().parents[1] / "regression" / "questions.yaml"
 

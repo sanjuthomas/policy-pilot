@@ -19,11 +19,12 @@ def mock_neo4j() -> AsyncMock:
 
 
 @pytest.fixture
-def mock_ollama() -> AsyncMock:
+def mock_embedding_client() -> AsyncMock:
     client = AsyncMock()
     client.dimension = 3
     client.warmup = AsyncMock()
     client.embed = AsyncMock(return_value=[0.1, 0.2, 0.3])
+    client.embed_query = AsyncMock(return_value=[0.1, 0.2, 0.3])
     return client
 
 
@@ -59,20 +60,20 @@ def _instruction_fact(**overrides) -> dict:
     return base
 
 
-async def test_instruction_pipeline_skips_missing_id(mock_neo4j, mock_ollama, mock_multimodal):
+async def test_instruction_pipeline_skips_missing_id(mock_neo4j, mock_embedding_client, mock_multimodal):
     pipeline = InstructionPipeline(
         neo4j_writer=mock_neo4j,
-        ollama_client=mock_ollama,
+        embedding_client=mock_embedding_client,
         multimodal_store=mock_multimodal,
     )
     await pipeline.process_instruction_fact({})
     mock_neo4j.upsert_instruction_fact.assert_not_called()
 
 
-async def test_instruction_pipeline_processes_new_fact(mock_neo4j, mock_ollama, mock_multimodal):
+async def test_instruction_pipeline_processes_new_fact(mock_neo4j, mock_embedding_client, mock_multimodal):
     pipeline = InstructionPipeline(
         neo4j_writer=mock_neo4j,
-        ollama_client=mock_ollama,
+        embedding_client=mock_embedding_client,
         multimodal_store=mock_multimodal,
     )
     fact = _instruction_fact()
@@ -82,12 +83,12 @@ async def test_instruction_pipeline_processes_new_fact(mock_neo4j, mock_ollama, 
     call_kwargs = mock_neo4j.upsert_instruction_fact.call_args
     assert call_kwargs.args[0] == fact
     assert "multimodal" in call_kwargs.kwargs
-    mock_ollama.warmup.assert_awaited_once()
+    mock_embedding_client.warmup.assert_awaited_once()
     mock_multimodal.ensure_indexes.assert_awaited_once_with(3)
-    mock_ollama.embed.assert_awaited_once()
+    mock_embedding_client.embed.assert_awaited_once()
 
 
-async def test_instruction_pipeline_merges_existing_payload(mock_neo4j, mock_ollama, mock_multimodal):
+async def test_instruction_pipeline_merges_existing_payload(mock_neo4j, mock_embedding_client, mock_multimodal):
     mock_multimodal.get_instruction_state_payload.return_value = {
         "authorization_summary": "prev summary",
         "authorization_basis": ["old-rule"],
@@ -101,7 +102,7 @@ async def test_instruction_pipeline_merges_existing_payload(mock_neo4j, mock_oll
     }
     pipeline = InstructionPipeline(
         neo4j_writer=mock_neo4j,
-        ollama_client=mock_ollama,
+        embedding_client=mock_embedding_client,
         multimodal_store=mock_multimodal,
     )
     pipeline._multimodal_ready = True
@@ -130,14 +131,14 @@ async def test_instruction_pipeline_merges_existing_payload(mock_neo4j, mock_oll
     assert payload["rejection_reason"] == "old reason"
 
 
-async def test_instruction_pipeline_approve_does_not_preserve_old_auth(mock_neo4j, mock_ollama, mock_multimodal):
+async def test_instruction_pipeline_approve_does_not_preserve_old_auth(mock_neo4j, mock_embedding_client, mock_multimodal):
     mock_multimodal.get_instruction_state_payload.return_value = {
         "authorization_summary": "stale",
         "authorization_basis": ["stale-rule"],
     }
     pipeline = InstructionPipeline(
         neo4j_writer=mock_neo4j,
-        ollama_client=mock_ollama,
+        embedding_client=mock_embedding_client,
         multimodal_store=mock_multimodal,
     )
     pipeline._multimodal_ready = True
@@ -153,10 +154,10 @@ async def test_instruction_pipeline_approve_does_not_preserve_old_auth(mock_neo4
     assert payload["authorization_basis"] == ["new-rule"]
 
 
-async def test_payment_security_event_pipeline(mock_neo4j, mock_ollama, mock_multimodal):
+async def test_payment_security_event_pipeline(mock_neo4j, mock_embedding_client, mock_multimodal):
     pipeline = PaymentSecurityEventPipeline(
         neo4j_writer=mock_neo4j,
-        ollama_client=mock_ollama,
+        embedding_client=mock_embedding_client,
         multimodal_store=mock_multimodal,
     )
     event = {
@@ -172,20 +173,20 @@ async def test_payment_security_event_pipeline(mock_neo4j, mock_ollama, mock_mul
     assert "multimodal" in mock_neo4j.upsert_payment_security_event.call_args.kwargs
 
 
-async def test_payment_security_event_skips_missing_event_id(mock_neo4j, mock_ollama, mock_multimodal):
+async def test_payment_security_event_skips_missing_event_id(mock_neo4j, mock_embedding_client, mock_multimodal):
     pipeline = PaymentSecurityEventPipeline(
         neo4j_writer=mock_neo4j,
-        ollama_client=mock_ollama,
+        embedding_client=mock_embedding_client,
         multimodal_store=mock_multimodal,
     )
     await pipeline.process({})
     mock_neo4j.upsert_payment_security_event.assert_not_called()
 
 
-async def test_payment_fact_pipeline(mock_neo4j, mock_ollama, mock_multimodal):
+async def test_payment_fact_pipeline(mock_neo4j, mock_embedding_client, mock_multimodal):
     pipeline = PaymentFactPipeline(
         neo4j_writer=mock_neo4j,
-        ollama_client=mock_ollama,
+        embedding_client=mock_embedding_client,
         multimodal_store=mock_multimodal,
     )
     fact = {
@@ -203,10 +204,10 @@ async def test_payment_fact_pipeline(mock_neo4j, mock_ollama, mock_multimodal):
     assert payload["source"] == "payment_fact"
 
 
-async def test_payment_fact_skips_missing_payment_id(mock_neo4j, mock_ollama, mock_multimodal):
+async def test_payment_fact_skips_missing_payment_id(mock_neo4j, mock_embedding_client, mock_multimodal):
     pipeline = PaymentFactPipeline(
         neo4j_writer=mock_neo4j,
-        ollama_client=mock_ollama,
+        embedding_client=mock_embedding_client,
         multimodal_store=mock_multimodal,
     )
     await pipeline.process({})

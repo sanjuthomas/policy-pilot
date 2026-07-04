@@ -3,7 +3,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from inst.dependencies import get_subject
 from inst.models.api import InstructionResponse, Subject
 from inst.routes import get_service, router
@@ -53,6 +52,7 @@ def _sample_response() -> InstructionResponse:
     from inst.models.api import CreateInstructionRequest
     from inst.service import _instruction_from_request, _to_response
     from inst.storage import VersionedInstruction
+
     from tests.helpers import domestic_payload
 
     req = CreateInstructionRequest.model_validate(domestic_payload())

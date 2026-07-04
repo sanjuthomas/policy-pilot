@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -8,22 +8,22 @@ import pytest
 class TestRagServiceAsk:
     @pytest.mark.asyncio
     async def test_ask_returns_chat_response(
-        self, rag_service, mock_ollama, mock_multimodal, mock_neo4j
+        self, rag_service, mock_ml_client, mock_multimodal, mock_neo4j
     ) -> None:
         mock_multimodal.search_vector = AsyncMock(return_value=[])
         mock_multimodal.search_bm25 = AsyncMock(return_value=[])
         mock_neo4j.run_cypher = AsyncMock(return_value=[{"total": 0}])
-        mock_ollama.synthesize_answer = AsyncMock(return_value="There were 0 alerts.")
+        mock_ml_client.synthesize_answer = AsyncMock(return_value="There were 0 alerts.")
 
         response = await rag_service.ask("How many alerts?", [], mode="events")
         assert response.answer == "The count is 0."
-        mock_ollama.synthesize_answer.assert_not_called()
+        mock_ml_client.synthesize_answer.assert_not_called()
         assert response.retrieval_ms is not None
         assert response.generation_ms is not None
 
     @pytest.mark.asyncio
     async def test_ask_with_event_uuid_triggers_exact_lookup(
-        self, rag_service, mock_multimodal, mock_neo4j, mock_ollama
+        self, rag_service, mock_multimodal, mock_neo4j, mock_ml_client
     ) -> None:
         event_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
         mock_multimodal.fetch_by_event_id = AsyncMock(
@@ -39,7 +39,7 @@ class TestRagServiceAsk:
         mock_neo4j.lookup_instruction_for_event = AsyncMock(
             return_value=[{"event_id": event_id, "instruction_id": "inst-1"}]
         )
-        mock_ollama.synthesize_answer = AsyncMock(return_value="Found event.")
+        mock_ml_client.synthesize_answer = AsyncMock(return_value="Found event.")
 
         response = await rag_service.ask(f"What about event {event_id}?", [], mode="events")
         assert "Found event" in response.answer
@@ -47,7 +47,7 @@ class TestRagServiceAsk:
 
     @pytest.mark.asyncio
     async def test_ask_instruction_approval_synthesis(
-        self, rag_service, mock_ollama, mock_multimodal, mock_neo4j
+        self, rag_service, mock_ml_client, mock_multimodal, mock_neo4j
     ) -> None:
         iid = "2846a7c0-4734-4626-bb58-13a966f935a1"
         mock_multimodal.search_vector = AsyncMock(return_value=[])
@@ -78,17 +78,17 @@ class TestRagServiceAsk:
                 }
             ]
         )
-        mock_ollama.summarize_authorization_why = AsyncMock(return_value="Readable why.")
+        mock_ml_client.summarize_authorization_why = AsyncMock(return_value="Readable why.")
 
         response = await rag_service.ask(f"Who approved instruction {iid}?", [], mode="instructions")
         assert response.answer.startswith("WHO:")
         assert "WHY:" in response.answer
         assert "OPA allowed" in response.answer
-        mock_ollama.summarize_authorization_why.assert_not_called()
+        mock_ml_client.summarize_authorization_why.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_ask_instruction_approval_synthesis_sequence_id(
-        self, rag_service, mock_ollama, mock_multimodal, mock_neo4j
+        self, rag_service, mock_ml_client, mock_multimodal, mock_neo4j
     ) -> None:
         iid = "20260628-FICC-I-13"
         mock_multimodal.search_vector = AsyncMock(return_value=[])
@@ -119,7 +119,7 @@ class TestRagServiceAsk:
                 }
             ]
         )
-        mock_ollama.summarize_authorization_why = AsyncMock(return_value="Elena was allowed as FICC supervisor.")
+        mock_ml_client.summarize_authorization_why = AsyncMock(return_value="Elena was allowed as FICC supervisor.")
 
         response = await rag_service.ask(
             f"Who approved instructions like {iid} in the past?",
@@ -128,11 +128,11 @@ class TestRagServiceAsk:
         )
         assert response.answer.startswith("WHO:")
         assert "Vasquez, Elena (ficc-300)" in response.answer
-        mock_ollama.synthesize_answer.assert_not_called()
+        mock_ml_client.synthesize_answer.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_ask_payment_approval_synthesis(
-        self, rag_service, mock_ollama, mock_multimodal, mock_neo4j
+        self, rag_service, mock_ml_client, mock_multimodal, mock_neo4j
     ) -> None:
         pid = "9b3251c9-d28e-4ad5-9bf4-dbc3c4fc13d8"
         mock_multimodal.search_vector = AsyncMock(return_value=[])
@@ -178,7 +178,7 @@ class TestRagServiceAsk:
             ]
         )
         mock_neo4j.run_cypher = AsyncMock(return_value=[])
-        mock_ollama.summarize_authorization_why = AsyncMock(
+        mock_ml_client.summarize_authorization_why = AsyncMock(
             return_value="Sophie Laurent was authorized as a funding approver covering FICC."
         )
 
@@ -194,11 +194,11 @@ class TestRagServiceAsk:
         assert "covers LOB FICC" in response.answer
         assert "amount $1 million within subject and absolute limits" in response.answer
         assert "1e+06" not in response.answer
-        mock_ollama.synthesize_answer.assert_not_called()
+        mock_ml_client.synthesize_answer.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_ask_max_payments_per_instruction(
-        self, rag_service, mock_ollama, mock_multimodal, mock_neo4j
+        self, rag_service, mock_ml_client, mock_multimodal, mock_neo4j
     ) -> None:
         iid = "3bcb9b9a-9415-44ce-b707-4cc4c8281bb9"
         mock_multimodal.search_vector = AsyncMock(return_value=[])
@@ -233,11 +233,11 @@ class TestRagServiceAsk:
         assert "Total payments: 2" in response.answer
         assert "Payment ID" in response.answer
         assert "| pay-1" in response.answer
-        mock_ollama.synthesize_answer.assert_not_called()
+        mock_ml_client.synthesize_answer.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_ask_payments_for_instruction(
-        self, rag_service, mock_ollama, mock_multimodal, mock_neo4j
+        self, rag_service, mock_ml_client, mock_multimodal, mock_neo4j
     ) -> None:
         iid = "3bcb9b9a-9415-44ce-b707-4cc4c8281bb9"
         mock_multimodal.search_vector = AsyncMock(return_value=[])
@@ -267,11 +267,11 @@ class TestRagServiceAsk:
         assert "Payment ID" in response.answer
         assert "92831268-b1d0-44c8-a24a-b84a912cb051" in response.answer
         assert "10,000,000.00 USD" in response.answer
-        mock_ollama.synthesize_answer.assert_not_called()
+        mock_ml_client.synthesize_answer.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_ask_payment_total_amount_ficc_today(
-        self, rag_service, mock_ollama, mock_multimodal, mock_neo4j
+        self, rag_service, mock_ml_client, mock_multimodal, mock_neo4j
     ) -> None:
         mock_multimodal.search_vector = AsyncMock(return_value=[])
         mock_multimodal.search_bm25 = AsyncMock(return_value=[])
@@ -293,11 +293,11 @@ class TestRagServiceAsk:
         assert "125,000,000.00 USD" in response.answer
         assert "18 payments" in response.answer
         assert "LOB FICC" in response.answer
-        mock_ollama.synthesize_answer.assert_not_called()
+        mock_ml_client.synthesize_answer.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_ask_alert_ranking(
-        self, rag_service, mock_ollama, mock_multimodal, mock_neo4j
+        self, rag_service, mock_ml_client, mock_multimodal, mock_neo4j
     ) -> None:
         mock_multimodal.search_vector = AsyncMock(return_value=[])
         mock_multimodal.search_bm25 = AsyncMock(return_value=[])
@@ -324,11 +324,11 @@ class TestRagServiceAsk:
         assert "policy denial alerts (this week)" in response.answer
         assert "Hassan, Amira (fx-201)" in response.answer
         assert "Total Alerts" in response.answer
-        mock_ollama.synthesize_answer.assert_not_called()
+        mock_ml_client.synthesize_answer.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_search_vector_handles_embed_failure(self, rag_service, mock_ollama) -> None:
-        mock_ollama.embed = AsyncMock(side_effect=RuntimeError("embed down"))
+    async def test_search_vector_handles_embed_failure(self, rag_service, mock_ml_client) -> None:
+        mock_ml_client.embed = AsyncMock(side_effect=RuntimeError("embed down"))
         hits = await rag_service._search_vector("query", 5)
         assert hits == []
 
@@ -342,9 +342,9 @@ class TestRagServiceAsk:
 
     @pytest.mark.asyncio
     async def test_search_graph_falls_back_on_invalid_llm_cypher(
-        self, rag_service, mock_ollama, mock_neo4j
+        self, rag_service, mock_ml_client, mock_neo4j
     ) -> None:
-        mock_ollama.generate_cypher = AsyncMock(return_value="CREATE (n) RETURN n LIMIT 1")
+        mock_ml_client.generate_cypher = AsyncMock(return_value="CREATE (n) RETURN n LIMIT 1")
 
         async def run_cypher_side_effect(cypher: str):
             from chat_application.cypher import validate_read_only_cypher

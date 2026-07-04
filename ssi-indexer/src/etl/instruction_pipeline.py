@@ -10,11 +10,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from vertex_client import VertexEmbeddingClient
+
 from etl.authorization_context import authorization_merged_from_fact
 from etl.multimodal_store import MultimodalNeo4jStore, instruction_document_id
 from etl.multimodal_write import MultimodalWrite
 from etl.neo4j_client import Neo4jGraphWriter
-from etl.ollama_client import OllamaEmbeddingClient
 from etl.search_text.builder import build_search_text_from_profile
 from etl.search_text.context import instruction_state_context
 
@@ -30,11 +31,11 @@ class InstructionPipeline:
         self,
         *,
         neo4j_writer: Neo4jGraphWriter,
-        ollama_client: OllamaEmbeddingClient,
+        embedding_client: VertexEmbeddingClient,
         multimodal_store: MultimodalNeo4jStore,
     ) -> None:
         self.neo4j_writer = neo4j_writer
-        self.ollama_client = ollama_client
+        self.embedding_client = embedding_client
         self.multimodal_store = multimodal_store
         self._multimodal_ready = False
 
@@ -45,8 +46,8 @@ class InstructionPipeline:
             return
 
         if not self._multimodal_ready:
-            await self.ollama_client.warmup()
-            await self.multimodal_store.ensure_indexes(self.ollama_client.dimension)
+            await self.embedding_client.warmup()
+            await self.multimodal_store.ensure_indexes(self.embedding_client.dimension)
             self._multimodal_ready = True
 
         search_text = build_instruction_state_search_text(fact)
@@ -106,7 +107,7 @@ class InstructionPipeline:
                 if not payload.get("rejection_reason"):
                     payload["rejection_reason"] = existing.get("rejection_reason")
 
-        dense_vector = await self.ollama_client.embed(search_text)
+        dense_vector = await self.embedding_client.embed(search_text)
         multimodal = MultimodalWrite(
             document_id=instruction_document_id(instruction_id),
             search_text=search_text,

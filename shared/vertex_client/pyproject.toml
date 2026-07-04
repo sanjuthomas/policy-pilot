@@ -1,0 +1,33 @@
+[project]
+name = "vertex-client"
+version = "0.1.0"
+description = "Vertex AI embedding client for security-event-rag-demo"
+requires-python = ">=3.12"
+dependencies = [
+    "google-genai>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.coverage.run]
+source = ["vertex_client"]
+
+[tool.coverage.report]
+fail_under = 70
+
+[build-system]
+requires = ["setuptools>=75.0.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

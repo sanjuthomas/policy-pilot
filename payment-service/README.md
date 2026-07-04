@@ -99,6 +99,14 @@ Security event documents:
 
 Authorized actions store `details.authorization` (`allow_basis`, `summary`, subject snapshot) and set `event.reason` to the summary. Same pattern as instruction-service.
 
+**Excluded actors:**
+
+| User / setting | Effect |
+|----------------|--------|
+| `admin-001` | Reserved for future **VIEW** read-audit events (`SECURITY_EVENT_VIEW_EXCLUDED_USER_IDS`); `GET /payments` does not emit security events today |
+
+Optional `SECURITY_EVENT_EXCLUDED_USER_IDS` (comma-separated) suppresses **all** security events for listed user ids (empty by default).
+
 Downstream indexing is **Mongo → Kafka Connect → Kafka → ssi-indexer**; this service does not publish to Kafka.
 
 ## Example: create payment

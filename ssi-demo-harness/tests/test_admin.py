@@ -5,7 +5,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from harness.admin import get_admin_subject
 from harness.auth_routes import router as auth_router
 from harness.models import Subject

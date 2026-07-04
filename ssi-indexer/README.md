@@ -8,6 +8,15 @@ Also exposes a **Search Console** UI for manual vector / BM25 / hybrid / Neo4j q
 
 http://localhost:8090
 
+## ML stack
+
+| Role | Provider | Model |
+|------|----------|-------|
+| Document embeddings | **Vertex AI** | `text-embedding-004` (768-dim) |
+| Admin Cypher generation (Search Console) | **Ollama** (host) | `hmahmood/neo4j-gemma-3-27b-inst-q8` |
+
+Embeddings use `RETRIEVAL_DOCUMENT` task type at index time; PolicyPilot uses the same model with `RETRIEVAL_QUERY` at chat time.
+
 ## Pipelines
 
 Four independent consumers run in the same process. Kafka messages are published by **MongoDB Kafka Connect** (`publish.full.document.only=true`) from the domain Mongo collections — the ETL makes no API calls to instruction-service or the payment service. `etl.mongo_cdc` normalizes versioned Mongo rows and security-event `_id` values into the shapes the pipelines expect. `etl.kafka_deserialize` unwraps JSON values from the broker (handles both `StringConverter` and legacy double-encoded records).
@@ -22,11 +31,11 @@ flowchart TB
     P2 --> NEO
     P3 --> NEO
     P4 --> NEO
-    P1 --> OLL[Ollama embed]
-    P2 --> OLL
-    P3 --> OLL
-    P4 --> OLL
-    OLL --> MM[Neo4j MultimodalDocument]
+    P1 --> VTX[Vertex embed]
+    P2 --> VTX
+    P3 --> VTX
+    P4 --> VTX
+    VTX --> MM[Neo4j MultimodalDocument]
 ```
 
 | Pipeline | Kafka topic | Consumer group | Multimodal `source` tag |
@@ -40,7 +49,9 @@ For each message:
 
 1. Parse the fact event (security event or state snapshot).
 2. Upsert Neo4j nodes/relationships (see `neo4j-graph-model/`). User upserts also write `REPORTS_TO` from `supervisor_id`.
-3. Embed `search_text` with Ollama **`qwen3-embedding:0.6b`** → upsert a `MultimodalDocument` with `embedding` + `search_text`.
+3. Embed `search_text` with **Vertex `text-embedding-004`** → upsert a `MultimodalDocument` with `embedding` + `search_text`.
+
+Each pipeline message is processed as: **build search text → Vertex embed → one Neo4j transaction** (graph nodes/relationships + `MultimodalDocument` vector/fulltext payload).
 
 ## Enriched document shape (instruction security events)
 
@@ -64,8 +75,6 @@ Stored in the multimodal document payload (and used for search text):
 
 On APPROVE instruction security events, the pipeline **patches** the existing `instruction_state` multimodal document with approval authorization in the **same Neo4j transaction** as the security-event graph + vector write. Non-APPROVE instruction facts preserve existing approval fields when upserting.
 
-Each pipeline message is processed as: **build search text → Ollama embed → one Neo4j transaction** (graph nodes/relationships + `MultimodalDocument` vector/fulltext payload).
-
 ## Search Console
 
 | Mode | Backend |
@@ -74,8 +83,9 @@ Each pipeline message is processed as: **build search text → Ollama embed → 
 | Vector | Neo4j vector index (`multimodal_embedding`) |
 | BM25 | Neo4j fulltext index (`multimodal_search_text`) |
 | Neo4j | Text search on `SecurityEvent` nodes |
+| Cypher generate | Ollama → read-only Cypher (admin API) |
 
-Component status bar shows Kafka, multimodal vector/fulltext indexes, Neo4j graph, and Ollama health.
+Component status bar shows Kafka, multimodal vector/fulltext indexes, Neo4j graph, Vertex embeddings, and Ollama (Cypher) health.
 
 ## Configuration (Docker)
 
@@ -83,23 +93,30 @@ Copy `.env.example` to `.env` at the repo root to override defaults. Docker Comp
 
 | Variable | Default |
 |----------|---------|
+| `GCP_PROJECT_ID` | `rag-demos-501323` |
+| `GCP_REGION` | `us-central1` |
+| `VERTEX_EMBEDDING_MODEL` | `text-embedding-004` |
+| `EMBEDDING_DIMENSION` | `768` |
+| `GCP_SA_KEY_PATH` | host path to service account JSON (Compose mount) |
+| `GOOGLE_APPLICATION_CREDENTIALS` | `/run/secrets/gcp-sa.json` (in container) |
 | `KAFKA_INSTRUCTION_SECURITY_EVENTS_TOPIC` | `instruction_security_events` |
 | `KAFKA_INSTRUCTION_TOPIC` | `instructions` |
 | `KAFKA_PAYMENT_SECURITY_EVENTS_TOPIC` | `payment_security_events` |
 | `KAFKA_PAYMENTS_TOPIC` | `payments` |
-| `OLLAMA_EMBEDDING_MODEL` | `qwen3-embedding:0.6b` |
 | `OLLAMA_CHAT_MODEL` | `hmahmood/neo4j-gemma-3-27b-inst-q8` |
+| `OLLAMA_URL` | `http://host.docker.internal:11434` |
 | `MULTIMODAL_VECTOR_INDEX` | `multimodal_embedding` |
 | `MULTIMODAL_FULLTEXT_INDEX` | `multimodal_search_text` |
 | `NEO4J_URI` | `bolt://neo4j:7687` |
 
-Requires **host Ollama** (`OLLAMA_URL=http://host.docker.internal:11434`).
+Requires **GCP Vertex AI** credentials and **host Ollama** for Search Console Cypher generation (`OLLAMA_URL=http://host.docker.internal:11434`).
 
 ## Run locally
 
 ```bash
 cd ssi-indexer
-pip install -e .
+pip install -e ../shared/vertex_client -e .
+export GOOGLE_APPLICATION_CREDENTIALS=~/.config/gcloud/your-vertex-key.json
 ssi-indexer   # serves on :8090
 ```
 
@@ -109,14 +126,51 @@ ssi-indexer   # serves on :8090
 |--------|------|-------------|
 | GET | `/api/stats` | Component health + multimodal document counts |
 | POST | `/api/search/hybrid` | Hybrid search |
-| POST | `/api/search/vector` | Dense vector search |
+| POST | `/api/search/vector` | Dense vector search (Vertex embed query) |
 | POST | `/api/search/bm25` | Fulltext BM25 search |
+| POST | `/api/cypher/generate` | Natural language → Cypher (Ollama) |
 | GET | `/api/graph/events` | Neo4j event text search |
 | GET | `/api/graph/events/{event_id}` | Event subgraph |
 
+## Reindex / replay vectors
+
+If Neo4j was wiped or embedding dimension changed, replay Kafka messages so the indexer re-embeds all documents with Vertex:
+
+```bash
+docker compose stop ssi-indexer
+
+# Drop stale indexes if dimension changed (768 for text-embedding-004)
+docker exec neo4j cypher-shell -u neo4j -p devpassword "
+DROP INDEX multimodal_embedding IF EXISTS;
+DROP INDEX multimodal_search_text IF EXISTS;
+"
+
+# Re-apply constraints + fulltext index
+docker exec -i neo4j cypher-shell -u neo4j -p devpassword < neo4j-graph-model/schema.cypher
+
+for TOPIC_GROUP in \
+  "instruction_security_events:instruction-security-event-etl" \
+  "instructions:ssi-instruction-etl" \
+  "payment_security_events:payment-security-event-etl" \
+  "payments:payment-fact-etl"
+do
+  TOPIC="${TOPIC_GROUP%%:*}"
+  GROUP="${TOPIC_GROUP##*:}"
+  docker exec kafka /opt/kafka/bin/kafka-consumer-groups.sh \
+    --bootstrap-server kafka:9092 \
+    --group "$GROUP" \
+    --topic "$TOPIC" \
+    --reset-offsets --to-earliest --execute
+done
+
+docker compose start ssi-indexer
+```
+
+Verify: `SHOW VECTOR INDEXES` in Neo4j Browser; Search Console status bar should show vector index **up**.
+
 ## Reset consumer offsets
 
-If Neo4j is empty but Kafka has messages, reset each consumer group:
+If Neo4j is empty but Kafka has messages, reset each consumer group (same loop as above without the index drop):
 
 ```bash
 docker compose stop ssi-indexer

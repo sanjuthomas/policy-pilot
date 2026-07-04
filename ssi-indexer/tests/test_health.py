@@ -12,6 +12,7 @@ from etl.health import (
     check_multimodal_vector,
     check_neo4j,
     check_ollama,
+    check_vertex_embeddings,
     component_status,
 )
 
@@ -116,9 +117,27 @@ async def test_check_multimodal_fulltext_up():
     assert result["documents_count"] == 7
 
 
+async def test_check_vertex_embeddings_not_ready():
+    client = MagicMock()
+    client._ready = False
+    client._dimension = 768
+    result = await check_vertex_embeddings(client)
+    assert result["ok"] is False
+    assert "not warmed up" in result["detail"]
+
+
+async def test_check_vertex_embeddings_up():
+    client = MagicMock()
+    client._ready = True
+    client._dimension = 768
+    result = await check_vertex_embeddings(client)
+    assert result["ok"] is True
+    assert result["embeddings"] == "ready"
+    assert result["dimension"] == 768
+
+
 async def test_check_ollama_model_missing():
     client = MagicMock()
-    client._dimension = None
 
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
@@ -138,12 +157,11 @@ async def test_check_ollama_model_missing():
 
 async def test_check_ollama_up():
     client = MagicMock()
-    client._dimension = 1024
 
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
     mock_response.json.return_value = {
-        "models": [{"name": settings.ollama_embedding_model}, {"name": "llama3"}]
+        "models": [{"name": settings.ollama_chat_model}, {"name": "llama3"}]
     }
 
     mock_http = AsyncMock()
@@ -155,8 +173,6 @@ async def test_check_ollama_up():
         result = await check_ollama(client)
 
     assert result["ok"] is True
-    assert result["dimension"] == 1024
-    assert result["embeddings"] == "ready"
 
 
 async def test_check_neo4j_not_connected():
@@ -189,11 +205,16 @@ async def test_component_status_aggregates():
     consumer = MagicMock()
     store = MagicMock()
     writer = MagicMock()
+    embedding = MagicMock()
     ollama = MagicMock()
 
     with (
         patch("etl.health.check_kafka", AsyncMock(return_value={"ok": True, "status": "up"})),
         patch("etl.health.check_neo4j", AsyncMock(return_value={"ok": True, "status": "up"})),
+        patch(
+            "etl.health.check_vertex_embeddings",
+            AsyncMock(return_value={"ok": True, "status": "up"}),
+        ),
         patch("etl.health.check_ollama", AsyncMock(return_value={"ok": False, "status": "down"})),
         patch(
             "etl.health.check_multimodal_vector",
@@ -208,11 +229,13 @@ async def test_component_status_aggregates():
             instruction_security_event_consumer=consumer,
             multimodal_store=store,
             neo4j_writer=writer,
+            embedding_client=embedding,
             ollama_client=ollama,
         )
 
     assert set(result.keys()) == {
         "kafka",
+        "vertex_embeddings",
         "ollama",
         "multimodal_vector",
         "multimodal_fulltext",

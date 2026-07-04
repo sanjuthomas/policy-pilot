@@ -41,8 +41,12 @@ class Settings(BaseSettings):
     multimodal_vector_index: str = "multimodal_embedding"
     multimodal_fulltext_index: str = "multimodal_search_text"
 
+    gcp_project_id: str = "rag-demos-501323"
+    gcp_region: str = "us-central1"
+    vertex_embedding_model: str = "text-embedding-004"
+    embedding_dimension: int = 768
+
     ollama_url: str = "http://host.docker.internal:11434"
-    ollama_embedding_model: str = "qwen3-embedding:0.6b"
     ollama_chat_model: str = "hmahmood/neo4j-gemma-3-27b-inst-q8"
     ollama_timeout_seconds: float = 300.0
     search_default_limit: int = 10

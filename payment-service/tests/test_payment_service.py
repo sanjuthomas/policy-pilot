@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from ps.authorization import PolicyDecision
+from ps.config import settings
 from ps.instruction_client import InstructionNotFoundError, InstructionStateError
 from ps.models.api import RejectPaymentRequest, Subject
 from ps.models.enums import PaymentAction, PaymentStatus
@@ -502,3 +503,33 @@ async def test_save_payment_with_security_event_uses_transaction(
     mock_tx.assert_called_once()
     service.repo.insert_initial.assert_awaited_once()
     service.event_repo.insert_document.assert_awaited_once()
+
+
+def test_should_record_security_event_excludes_configured_users(subject: Subject) -> None:
+    assert PaymentService._should_record_security_event(subject) is True
+    excluded = subject.model_copy(update={"user_id": "excluded-svc"})
+    with patch.object(settings, "security_event_excluded_user_ids", "excluded-svc"):
+        assert PaymentService._should_record_security_event(excluded) is False
+
+
+def test_should_record_view_security_event_excludes_admin(subject: Subject) -> None:
+    admin = subject.model_copy(update={"user_id": "admin-001", "roles": ["PLATFORM_ADMIN"]})
+    assert PaymentService._should_record_view_security_event(admin) is False
+    assert PaymentService._should_record_view_security_event(subject) is True
+
+
+@pytest.mark.asyncio
+async def test_save_payment_skips_security_event_for_excluded_user(
+    service: PaymentService,
+    subject: Subject,
+    payment: Payment,
+) -> None:
+    excluded = subject.model_copy(update={"user_id": "excluded-svc"})
+    with _patched_txn(), patch.object(settings, "security_event_excluded_user_ids", "excluded-svc"):
+        await service._save_payment_with_security_event(
+            payment,
+            PaymentAction.CREATE_PAYMENT,
+            excluded,
+            initial=True,
+        )
+    service.event_repo.insert_document.assert_not_awaited()

@@ -4,11 +4,11 @@ import os
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from inst.models.api import CreateInstructionRequest, Subject
 from inst.models.enums import InstructionStatus
 from inst.models.instruction import CashSettlementInstruction, UserReference
 from inst.service import _instruction_from_request
+
 from tests.helpers import domestic_payload
 
 

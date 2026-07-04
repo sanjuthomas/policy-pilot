@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     ui_initial_instruction_limit: int = 200
     ui_initial_security_event_limit: int = 200
     sequence_service_url: str = "http://localhost:8095"
-    security_event_excluded_user_ids: str = "etl-reader"
+    security_event_excluded_user_ids: str = ""
     security_event_view_excluded_user_ids: str = "admin-001"
 
     @property

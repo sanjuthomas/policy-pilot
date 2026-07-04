@@ -1,6 +1,6 @@
 # Security Event RAG Demo
 
-A monorepo demonstrating how to build a **retrieval-augmented generation (RAG) system over financial security events** using a fully local, containerized stack.
+A monorepo demonstrating how to build a **retrieval-augmented generation (RAG) system over financial security events** using a containerized stack with **Vertex AI** (embeddings + Gemini) and **host Ollama** (Cypher generation).
 
 **PolicyPilot** — the chat application in this repo — gives supervisors and compliance officers a single conversational surface over the cash leg of the Standard Settlement Instructions (SSI).
 
@@ -84,8 +84,9 @@ flowchart TB
         NEO[(Neo4j :7474 — graph + multimodal)]
     end
 
-    subgraph ml [Host ML]
-        OLLAMA[Ollama — qwen3-embed + neo4j-gemma-3-27b]
+    subgraph ml [ML]
+        VERTEX[Vertex AI — text-embedding-004 + gemini-2.5-flash]
+        OLLAMA[Ollama host — neo4j-gemma Cypher only]
     end
 
     ZITADEL --> INST
@@ -102,8 +103,10 @@ flowchart TB
     CONNECT -->|CDC full documents| KAFKA
     KAFKA --> ETL
     ETL --> NEO
+    ETL --> VERTEX
     ETL --> OLLAMA
     CHAT --> NEO
+    CHAT --> VERTEX
     CHAT --> OLLAMA
     CHAT -->|eligible-approvers| INST
     CHAT -->|eligible-approvers| PAY
@@ -122,7 +125,7 @@ flowchart TB
    - **InstructionPipeline** (`instructions`) → instruction master graph + multimodal `source=instruction_state`
    - **PaymentSecurityEventPipeline** (`payment_security_events`) → payment security graph + multimodal `source=payment_security_event`
    - **PaymentFactPipeline** (`payments`) → payment master graph + multimodal `source=payment_fact`
-6. **Chat** — selects a retrieval mode (`events` / `instructions` / `payments` / `all`), runs vector + BM25 + Neo4j in parallel, merges with reciprocal rank fusion. Count, ranking, hierarchy, and approval-by-ID questions use **deterministic planned Cypher** or exact lookups. Instruction approval audit questions return **Who / When** from indexed data and **Why** via LLM rewrite of OPA `authorization_summary`. Live **who can approve?** questions bypass RAG and call instruction-service or payment-service eligible-approvers APIs (compliance JWT). Other questions use full Ollama synthesis.
+6. **Chat** — selects a retrieval mode (`events` / `instructions` / `payments` / `all`), runs vector + BM25 + Neo4j in parallel, merges with reciprocal rank fusion. Count, ranking, hierarchy, and approval-by-ID questions use **deterministic planned Cypher** or exact lookups. Instruction approval audit questions return **Who / When** from indexed data and **Why** via **Vertex Gemini** rewrite of OPA `authorization_summary`. Live **who can approve?** questions bypass RAG and call instruction-service or payment-service eligible-approvers APIs (compliance JWT). Other questions use **Vertex Gemini** synthesis over retrieved context; **Ollama** generates read-only Cypher when the graph fallback path runs.
 
 ---
 
@@ -249,7 +252,7 @@ In this demo Kafka runs as a single broker with no replication, which is appropr
 
 No single retrieval strategy reliably handles the full range of questions a user asks over security events.
 
-**Dense vector search** (via `qwen3-embedding:0.6b` embeddings stored on `MultimodalDocument` nodes) excels at **semantic similarity** — "who tried to approve each other's instructions?" or "show me policy denial events for FX desk" — where the meaning matters more than the exact words. But dense search struggles with **exact identifiers**: if the user pastes a UUID like `2f75858d-d845-40d4-b9fb-43951a8c40e2`, the embedding of that string carries little semantic signal and the cosine similarity ranking is unreliable.
+**Dense vector search** (via **Vertex AI `text-embedding-004`** embeddings stored on `MultimodalDocument` nodes) excels at **semantic similarity** — "who tried to approve each other's instructions?" or "show me policy denial events for FX desk" — where the meaning matters more than the exact words. But dense search struggles with **exact identifiers**: if the user pastes a UUID like `2f75858d-d845-40d4-b9fb-43951a8c40e2`, the embedding of that string carries little semantic signal and the cosine similarity ranking is unreliable.
 
 **BM25 fulltext search** (Neo4j Lucene index on `search_text`) is a classical term-frequency model. It excels precisely where dense search fails: **exact-match tokens** — UUIDs, user IDs (`mo-100`, `ficc-300`), action names (`APPROVE`, `REJECT`), currency codes (`USD`, `EUR`). However, BM25 has no concept of synonymy or paraphrase — "declined" and "rejected" are unrelated tokens to BM25.
 
@@ -286,66 +289,66 @@ The graph enables questions that are **structurally impossible** with flat retri
 
 **Role in improving RAG recall:**
 
-The chat pipeline asks Ollama to generate a Cypher query for every user question. That query runs against Neo4j and returns structured rows (event IDs, user IDs, instruction IDs, timestamps). Those rows are injected into the LLM context alongside the vector and BM25 results. The LLM then synthesises an answer that combines semantic context (from vector search) with precise relational facts (from the graph). Neither source alone would produce a complete, accurate answer for relationship-heavy questions.
+The chat pipeline may ask **Ollama** to generate a Cypher query for exploratory graph retrieval. That query runs against Neo4j and returns structured rows (event IDs, user IDs, instruction IDs, timestamps). Those rows are injected into the LLM context alongside the vector and BM25 results. **Vertex Gemini** then synthesises an answer that combines semantic context (from vector search) with precise relational facts (from the graph). Neither source alone would produce a complete, accurate answer for relationship-heavy questions.
 
 The graph also serves as a **cross-validation layer**: if a UUID is present in the question, the pipeline runs a deterministic Cypher lookup (`MATCH (e:SecurityEvent {event_id: $id})-[:TARGETS_VERSION]->(v)`) that is guaranteed to be exact regardless of embedding similarity.
 
 ---
 
-### Why Ollama? Why run it on the host?
+### Why Vertex AI?
 
-**What Ollama is:** Ollama is an open-source LLM serving runtime that packages model weights, quantisation, and an HTTP API (`/api/embed`, `/api/chat`) into a single binary. It supports Metal (Apple GPU), CUDA (NVIDIA GPU), and CPU backends and exposes an OpenAI-compatible interface.
+**What Vertex provides in this demo:** Google Cloud Vertex AI hosts the **embedding** and **generative** models used for semantic search and natural-language answers. Both **ssi-indexer** and **PolicyPilot** call Vertex through the shared `vertex_client` package (`shared/vertex_client/`).
 
-**Why run Ollama on the host, not in Docker:** Docker on macOS runs containers inside a Linux VM (via Apple Hypervisor Framework). That VM has **no visibility into the host GPU** — neither Metal nor MPS (Metal Performance Shaders) is accessible from within a Docker container on macOS. Running `ollama` natively on the host means it can use the Apple M1 Max GPU directly via Metal, achieving 4–8× the inference throughput of CPU-only mode. The containers reach the host Ollama instance via `host.docker.internal:11434`.
+| Role | Model | Used by |
+|------|-------|---------|
+| Document + query embeddings | `text-embedding-004` (768-dim) | ssi-indexer (write), PolicyPilot (query) |
+| Answer synthesis + authorization WHY rewrite | `gemini-2.5-flash` | PolicyPilot only |
 
-**Model selection — embedding:**
+**Why move embeddings and generation to Vertex:**
 
-| Model | Dim | Context | Strengths | Why not used here |
-|---|---|---|---|---|
-| `qwen3-embedding:0.6b` ✓ | 1024 | 32 768 | Excellent retrieval, long context | — |
-| `snowflake-arctic-embed:m` | 768 | 512 | Compact English retrieval | Prior default; 512-token clipping risk |
-| `nomic-embed-text` | 768 | 8192 | Fast, good English recall | Lower retrieval vs Qwen3 embed |
-| `bge-m3:latest` | 1024 | 8192 | Multilingual, hybrid modes | Heavier; redundant with Neo4j fulltext |
-| `mxbai-embed-large` | 1024 | 512 | Strong English MTEB scores | Very short context window |
-| `text-embedding-3-small` (OpenAI) | 1536 | 8191 | High quality | Requires API key, not local |
+- **Consistent vectors** — indexer and chat use the same embedding model and dimension (`768`), so query vectors match indexed documents.
+- **No local GPU for chat** — answer synthesis runs in GCP; only Cypher generation stays on host Ollama.
+- **Production-shaped** — mirrors how many teams run retrieval locally/in-VPC and call a managed LLM for generation.
 
-`qwen3-embedding:0.6b` is the default embedding model — **1024-dimensional** dense vectors indexed in Neo4j alongside fulltext BM25. After changing embedding models, wipe Neo4j multimodal documents and re-seed so vector indexes are recreated with the new dimension.
+**GCP setup (one-time):** enable Vertex AI API, create a service account with `roles/aiplatform.user`, download a JSON key, and set `GCP_SA_KEY_PATH` / `GOOGLE_APPLICATION_CREDENTIALS` (see `.env.example`). Docker Compose mounts the key into **ssi-indexer** and **ssi-chat** at `/run/secrets/gcp-sa.json`. Smoke test: `python scripts/vertex_smoke_test.py`.
 
-**Model selection — LLM (Cypher generation + answer synthesis):**
-
-| Model | Params | Context | Cypher quality | Notes |
-|---|---|---|---|---|
-| `hmahmood/neo4j-gemma-3-27b-inst-q8` ✓ | 27B | 128 000 | Very good | Default — Neo4j fine-tuned Gemma 3 for Cypher |
-| `gemma3:27b` | 27B | 128 000 | Very good | Base model alternative |
-| `qwen3:30b` | 30B | 32 768 | Excellent | Strong alternative |
-| `llama3:8b` | 8B | 8 192 | Good | Lighter alternative; faster on smaller GPUs |
-| `llama3:70b` | 70B | 8 192 | Excellent | Higher quality; needs more RAM/GPU |
-| `llama3.1:8b` | 8B | 128 000 | Good | Fast, lower quality Cypher for multi-hop queries |
-| `mistral:7b` | 7B | 32 768 | Fair | Tends to hallucinate relationship directions |
-| `codellama:13b` | 13B | 16 384 | Good | Strong on code but weaker on natural-language synthesis |
-
-`hmahmood/neo4j-gemma-3-27b-inst-q8` is the default for PolicyPilot answer synthesis and Cypher generation. Ensure the model is pulled locally before starting the stack (`ollama pull hmahmood/neo4j-gemma-3-27b-inst-q8`).
-
-> To swap models: copy `.env.example` to `.env` and set `OLLAMA_CHAT_MODEL` / `OLLAMA_EMBEDDING_MODEL`, then re-pull via `ollama pull`.
+> **Important:** changing the embedding model or dimension requires dropping Neo4j vector indexes, resetting Kafka consumer offsets, and replaying the ETL (see `ssi-indexer/README.md`).
 
 ---
 
-### Test hardware
+### Why Ollama (Cypher only)? Why run it on the host?
 
-All models and benchmarks in this demo were run on the following hardware:
+**What Ollama does now:** Ollama is still required, but only for **read-only Cypher generation** — the Neo4j fine-tuned Gemma model translates natural language into graph queries. PolicyPilot and the indexer Search Console admin API call `POST /api/chat` on the host; embeddings and answer synthesis no longer go through Ollama.
+
+**Why keep Ollama for Cypher:**
+
+| Model | Params | Role |
+|---|---|---|
+| `hmahmood/neo4j-gemma-3-27b-inst-q8` ✓ | 27B Q8 | Default — Neo4j fine-tuned Gemma 3 for Cypher |
+
+The model excels at schema-aware Cypher from `neo4j-graph-model/relationships.cypher`. Managed Gemini is used for final answers because it is faster to operate at chat scale and does not require a 27B model loaded locally.
+
+**Why run Ollama on the host, not in Docker:** Docker on macOS runs containers inside a Linux VM with **no access to the host GPU** (Metal/MPS). Running `ollama` natively lets the 27B Cypher model use Apple GPU via Metal. Containers reach it via `host.docker.internal:11434`.
+
+```bash
+ollama pull hmahmood/neo4j-gemma-3-27b-inst-q8
+```
+
+> To swap the Cypher model: set `OLLAMA_CHAT_MODEL` in `.env` and re-pull via `ollama pull`.
+
+---
+
+### Test hardware (Ollama Cypher)
+
+Cypher generation benchmarks were run on:
 
 | Component | Specification |
 |---|---|
 | Chip | Apple M1 Max |
 | Unified RAM | 64 GB |
-| GPU cores | 32 (built-in, Metal 3) |
-| GPU vendor | Apple (0x106b) |
-| GPU bus | Built-in (unified memory — no PCIe transfer overhead) |
-| Metal support | Metal 3 |
+| GPU cores | 32 (Metal 3) |
 
-The unified memory architecture means the CPU, GPU, and Neural Engine share the same 64 GB pool with no PCIe copy overhead between host and device memory. The default `hmahmood/neo4j-gemma-3-27b-inst-q8` chat model runs comfortably on this hardware; use `llama3:70b` only if you have enough RAM/GPU headroom.
-
-Embedding throughput with `qwen3-embedding:0.6b` is sufficient for real-time ETL indexing at demo event rates, with a 32K-token context window that avoids clipping typical security-event `search_text`.
+The unified memory architecture means the CPU and GPU share the same 64 GB pool. The default `hmahmood/neo4j-gemma-3-27b-inst-q8` Cypher model runs comfortably on this hardware.
 
 ---
 
@@ -377,9 +380,10 @@ Embedding throughput with `qwen3-embedding:0.6b` is sufficient for real-time ETL
 |-----------|------|
 | `instruction-service` | FastAPI lifecycle API — routes policy checks to authorization-service (OBO), `details.authorization` audit block, Mongo persistence (Connect CDC to Kafka), compliance eligible-approvers API |
 | `payment-service` | Cash payment lifecycle against approved SSI instructions — same authz/OBO pattern, Mongo persistence (Connect CDC to Kafka), payment and security event UIs, compliance eligible-approvers API |
-| `ssi-indexer` | Four Kafka consumers — instruction + payment security events and state facts → Neo4j graph + multimodal indexer + search console UI |
+| `ssi-indexer` | Four Kafka consumers — instruction + payment security events and state facts → Neo4j graph + multimodal indexer (Vertex embeddings) + search console UI |
 | `kafka-connect` | MongoDB source connectors — change streams → domain Kafka topics (full documents, no transforms) |
-| `ssi-chat` | **PolicyPilot** — RAG chat assistant; four search modes, triple retrieval, Who/When/Why approval audit (deterministic facts + LLM WHY rewrite), planned Cypher, regression suite; compliance sign-in for live **who can approve?** via payment-service and instruction-service |
+| `ssi-chat` | **PolicyPilot** — RAG chat assistant; Vertex Gemini synthesis; Ollama Cypher fallback; four search modes, triple retrieval, Who/When/Why approval audit, planned Cypher, regression suite |
+| `shared/vertex_client` | Shared Vertex AI client — embeddings (`text-embedding-004`) and generation (`gemini-2.5-flash`) |
 | `authorization-service` | Stateless OPA gateway — lifecycle evaluate + batch eligible-approvers; user directory UI; reads `users.yaml`; no database |
 | `ssi-demo-harness` | ZITADEL-authenticated UI to drive lifecycles and OPA policy scenarios |
 | `neo4j-graph-model` | Graph schema docs, Cypher constraints/indexes, example queries |
@@ -391,45 +395,61 @@ Embedding throughput with `qwen3-embedding:0.6b` is sufficient for real-time ETL
 
 ## Models
 
-### Embedding model — `qwen3-embedding:0.6b`
+### Embedding model — Vertex `text-embedding-004`
 
-The ETL and Chat use [Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B) served via Ollama for dense vector embeddings.
+The ETL and PolicyPilot use [Google `text-embedding-004`](https://cloud.google.com/vertex-ai/generative-ai/docs/embeddings/get-text-embeddings) via the shared `vertex_client` package.
 
 | Property | Value |
 |----------|-------|
-| Model | `qwen3-embedding:0.6b` |
-| Provider | Alibaba (Qwen) |
-| Output dimension | **1024** float32 |
-| Context window | 32 768 tokens |
-| Strengths | Strong retrieval quality, long context for OPA authorization summaries |
+| Model | `text-embedding-004` |
+| Provider | Google Vertex AI |
+| Output dimension | **768** float32 |
+| Index task | `RETRIEVAL_DOCUMENT` (ETL) / `RETRIEVAL_QUERY` (chat) |
 
-Embeddings are queried through `POST /api/embed` on the local Ollama instance. Each document is embedded at write time by the ETL and at query time by PolicyPilot for similarity search.
+Each document is embedded at write time by **ssi-indexer** and at query time by **PolicyPilot** for similarity search.
 
-> **Important:** changing the embedding model changes the Neo4j vector dimension. Run `./ssi-demo-harness/seed-demo-data.sh` (full reset) after switching models.
+> **Important:** changing the embedding model or dimension requires dropping Neo4j vector indexes and replaying the ETL (reset Kafka offsets — see `ssi-indexer/README.md`).
+
+### Generative model — Vertex `gemini-2.5-flash`
+
+PolicyPilot uses Gemini for natural-language answers and authorization WHY rewrites.
+
+| Property | Value |
+|----------|-------|
+| Model | `gemini-2.5-flash` (configurable via `VERTEX_GEMINI_MODEL`) |
+| Provider | Google Vertex AI |
+| Used for | Answer synthesis, authorization WHY summarization |
+
+Retrieved context (vector + BM25 + graph rows) is passed to Gemini; the model does **not** generate Cypher.
+
+### Cypher model — `hmahmood/neo4j-gemma-3-27b-inst-q8` (Ollama)
+
+Read-only Cypher generation uses a **Neo4j fine-tuned Gemma 3 27B** (Q8) on host Ollama.
+
+| Property | Value |
+|----------|-------|
+| Model | `hmahmood/neo4j-gemma-3-27b-inst-q8` (configurable via `OLLAMA_CHAT_MODEL`) |
+| Provider | Ollama on the host |
+| Used for | LLM Cypher fallback in PolicyPilot; admin Cypher generation in indexer Search Console |
+
+Called via `POST /api/chat` on `host.docker.internal:11434` with `stream: false`.
+
+> To use a different Cypher model: set `OLLAMA_CHAT_MODEL` in `.env` and re-pull via `ollama pull`.
 
 ### Lexical retrieval — Neo4j fulltext (BM25)
 
 Alongside dense vectors, both the ETL indexer and chat retriever use Neo4j's **fulltext index** on `MultimodalDocument.search_text` (Lucene BM25). BM25 complements dense semantic search by excelling at exact-match terms like UUIDs, user IDs (`mo-100`, `ficc-300`), and action names (`APPROVE`, `REJECT`).
 
-### Chat / answer model — `hmahmood/neo4j-gemma-3-27b-inst-q8`
+**Per-question LLM calls (PolicyPilot):**
 
-The LLM used for Cypher generation and answer synthesis is a **Neo4j fine-tuned Gemma 3 27B** (Q8) served via Ollama.
+| Step | Provider | When |
+|------|----------|------|
+| Query embedding | Vertex `text-embedding-004` | Every question (vector search) |
+| Cypher generation | Ollama `neo4j-gemma` | Graph fallback path (not planned Cypher) |
+| Answer synthesis | Vertex `gemini-2.5-flash` | Open-ended questions |
+| Authorization WHY rewrite | Vertex `gemini-2.5-flash` | Approval audit questions only |
 
-| Property | Value |
-|----------|-------|
-| Model | `hmahmood/neo4j-gemma-3-27b-inst-q8` (default, configurable via `OLLAMA_CHAT_MODEL` in `.env`) |
-| Base | Gemma 3 27B instruction-tuned for Neo4j Cypher |
-| Parameters | 27B (Q8 quantisation) |
-| Strengths | Long context, graph-aware Cypher generation, natural-language synthesis |
-
-The model is called twice per user question (or three times for instruction approval audit questions — see below):
-1. **Cypher generation** — mode-specific system prompt + schema + question → a read-only Neo4j Cypher query
-2. **Answer synthesis** — mode-specific system prompt + retrieved context → a natural-language answer with event IDs, actors, and LOB attribution
-3. **Authorization WHY summarization** (Instructions mode, approval-audit questions only) — rewrites the OPA `authorization_summary` into 2–4 readable sentences while preserving every material policy check; WHO and WHEN remain deterministic from indexed data
-
-Both calls are made via `POST /api/chat` on the local Ollama instance with `stream: false`.
-
-> To use a different chat model: set `OLLAMA_CHAT_MODEL=gemma3:27b` in `.env` (or export it) and re-pull via `ollama pull`.
+WHO and WHEN in approval audit answers remain deterministic from indexed data.
 
 ---
 
@@ -438,33 +458,37 @@ Both calls are made via `POST /api/chat` on the local Ollama instance with `stre
 | Requirement | Notes |
 |-------------|-------|
 | Docker + Docker Compose | All containers are defined in `docker-compose.yml` |
-| [Ollama](https://ollama.com) running on the host | Needed by ETL and Chat; containers reach it via `host.docker.internal:11434` |
-| `qwen3-embedding:0.6b` model pulled | `ollama pull qwen3-embedding:0.6b` |
-| Chat model pulled | Default: `hmahmood/neo4j-gemma-3-27b-inst-q8` — `ollama pull hmahmood/neo4j-gemma-3-27b-inst-q8` |
+| GCP project + Vertex AI | Enable `aiplatform.googleapis.com`; service account with `roles/aiplatform.user` |
+| GCP service account key | Set `GCP_SA_KEY_PATH` in `.env` (mounted into ssi-indexer and ssi-chat) |
+| [Ollama](https://ollama.com) on the host | Cypher generation only; containers reach it via `host.docker.internal:11434` |
+| Cypher model pulled | `ollama pull hmahmood/neo4j-gemma-3-27b-inst-q8` |
 
 ---
 
 ## Quick start
 
 ```bash
-# 0. Optional: configure Ollama models (defaults work out of the box)
+# 0. Configure Vertex + Ollama (copy and edit paths)
 cp .env.example .env
+# Set GCP_SA_KEY_PATH and GOOGLE_APPLICATION_CREDENTIALS to your service account JSON
 
-# 1. Pull Ollama models on the host
-ollama pull qwen3-embedding:0.6b
+# 1. Pull Ollama Cypher model on the host
 ollama pull hmahmood/neo4j-gemma-3-27b-inst-q8
 
-# 2. Start the full stack
+# 2. Optional: verify Vertex connectivity
+python scripts/vertex_smoke_test.py
+
+# 3. Start the full stack
 docker compose up -d
 
-# 3. Seed demo users (after ZITADEL has initialised — ~30 s)
+# 4. Seed demo users (after ZITADEL has initialised — ~30 s)
 PAT=$(docker exec zitadel-login cat /zitadel/bootstrap/login-client.pat | tr -d '\n')
 cd zitadel-seed && ZITADEL_PAT="$PAT" python3 seed.py
 
-# 4. Open the test harness — run instruction and payment policy scenarios
+# 5. Open the test harness — run instruction and payment policy scenarios
 open http://localhost:8091
 
-# 5. Open the chat and start asking questions (try Security Events mode first)
+# 6. Open the chat and start asking questions (try Security Events mode first)
 open http://localhost:8092
 ```
 
@@ -499,7 +523,6 @@ All passwords are `Password1!`. Login names follow `{user_id}@ssi.local`.
 | `pay-201` | Sophie Laurent | VP — funding approver | FICC, FX |
 | `fo-ficc-101` | Alex Morrison | Analyst — front-office submitter | FICC |
 | `fo-fx-101` | Jordan Blake | Analyst — front-office submitter | FX |
-| `etl-reader` | — | Service account — excluded from **all** security event emission (`SECURITY_EVENT_EXCLUDED_USER_IDS`) | — |
 | `svc-instruction` | — | Service account — instruction service → authorization-service (OBO) | — |
 | `svc-payment` | — | Service account — payment service → authorization-service and instruction-service (OBO) | — |
 | `admin-001` | Platform Administrator | **Platform admin** — secured UIs (harness, browsers, ETL console, user directory) and **PolicyPilot** | — |
@@ -694,15 +717,15 @@ User question + search mode (events | instructions | payments | all)
 │
 ├─ UUID detected? ──► Exact multimodal fetch + fixed Neo4j lookup (pinned to top of context)
 │
-├─► Neo4j dense vector search (qwen3-embedding:0.6b), filtered by mode
+├─► Neo4j dense vector search (Vertex text-embedding-004), filtered by mode
 ├─► Neo4j fulltext BM25 search, filtered by mode
-└─► Ollama → Cypher → Neo4j (mode-specific system prompt)
+└─► Ollama → Cypher → Neo4j (graph fallback; mode-specific system prompt)
          │
          ▼
     RRF merge (k=60) + dedupe by event_id / payment_id
          │
          ▼
-    Ollama answer synthesis (or structured Who/When/Why for approval audit)
+    Vertex Gemini answer synthesis (or structured Who/When/Why for approval audit)
 ```
 
 | Chat mode | Multimodal `source` filter | Neo4j focus |
@@ -736,7 +759,7 @@ The ETL denormalizes these onto multimodal documents (`authorization_summary`, `
 |------|--------|--------|
 | **WHO** | `approver_display` / graph | Deterministic |
 | **WHEN** | `approved_at` / event timestamp | Deterministic |
-| **WHY** | OPA `authorization_summary` + `allow_basis` | LLM rewrite into readable prose (falls back to raw summary if Ollama fails) |
+| **WHY** | OPA `authorization_summary` + `allow_basis` | Gemini rewrite into readable prose (falls back to raw summary if Vertex fails) |
 
 **Chat behaviour (live policy — who can approve this payment?):**
 
@@ -788,7 +811,7 @@ cd ssi-demo-harness && pip install -e .
 ssi-demo-harness-ui   # :8091
 ```
 
-Each service reads configuration from environment variables (see its own README for the full list). Requires local MongoDB (replica set), Kafka, Kafka Connect, Neo4j, OPA, ZITADEL, and Ollama.
+Each service reads configuration from environment variables (see its own README for the full list). Requires local MongoDB (replica set), Kafka, Kafka Connect, Neo4j, OPA, ZITADEL, **Vertex AI** (GCP credentials), and **host Ollama** (Cypher model).
 
 ---
 
@@ -800,6 +823,7 @@ Each service reads configuration from environment variables (see its own README 
 ├── instruction-service/             # Instruction lifecycle API + UIs
 ├── payment-service/                 # Payment lifecycle API + UIs
 ├── authorization-service/           # OPA gateway + user directory UI
+├── shared/vertex_client/            # Vertex AI embeddings + Gemini generation
 ├── shared/authz_client/             # HTTP client used by domain services → authz
 ├── kafka-connect/                   # Mongo CDC → Kafka (four source connectors)
 ├── ssi-indexer/                     # Kafka indexer + search console

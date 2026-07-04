@@ -1,5 +1,4 @@
 import pytest
-
 from inst.models.enums import is_valid_owning_lob
 
 

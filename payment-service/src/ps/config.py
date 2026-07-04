@@ -36,10 +36,28 @@ class Settings(BaseSettings):
     compliance_roles: str = "COMPLIANCE_ANALYST,COMPLIANCE_OFFICER,PLATFORM_ADMIN"
 
     ui_initial_security_event_limit: int = 200
+    security_event_excluded_user_ids: str = ""
+    security_event_view_excluded_user_ids: str = "admin-001"
 
     @property
     def compliance_role_set(self) -> set[str]:
         return {role.strip() for role in self.compliance_roles.split(",") if role.strip()}
+
+    @property
+    def security_event_excluded_user_id_set(self) -> set[str]:
+        return {
+            user_id.strip()
+            for user_id in self.security_event_excluded_user_ids.split(",")
+            if user_id.strip()
+        }
+
+    @property
+    def security_event_view_excluded_user_id_set(self) -> set[str]:
+        return {
+            user_id.strip()
+            for user_id in self.security_event_view_excluded_user_ids.split(",")
+            if user_id.strip()
+        }
 
     @model_validator(mode="after")
     def load_service_pat_from_file(self) -> "Settings":

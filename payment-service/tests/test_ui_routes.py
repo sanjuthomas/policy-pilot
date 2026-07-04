@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from ps.admin import get_admin_subject
 from ps.models.api import Subject
 from ps.ui_routes import router

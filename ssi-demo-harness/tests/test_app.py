@@ -3,7 +3,6 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-
 from harness.admin import get_admin_subject
 from harness.app import app
 from harness.dependencies import get_admin_session

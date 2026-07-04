@@ -16,7 +16,7 @@ class TestChatEndpoint:
     def test_chat_returns_rag_response(
         self,
         test_client: TestClient,
-        mock_ollama,
+        mock_ml_client,
         mock_multimodal,
         mock_neo4j,
     ) -> None:

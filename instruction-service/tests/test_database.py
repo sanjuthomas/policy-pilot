@@ -2,7 +2,6 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from inst.config import Settings
 from inst.database import (
     close,
@@ -19,6 +18,7 @@ async def test_connect_and_close(monkeypatch) -> None:
     mock_client.admin.command = AsyncMock()
     mock_db = MagicMock()
     mock_collection = MagicMock()
+    mock_collection.drop_index = AsyncMock()
     mock_collection.create_index = AsyncMock()
     mock_db.__getitem__ = MagicMock(return_value=mock_collection)
     mock_db.instructions = mock_collection

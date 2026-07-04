@@ -256,6 +256,10 @@ class InstructionService:
         version_number: int | None = None,
         details: dict | None = None,
     ) -> None:
+        if action == LifecycleAction.VIEW and not self._should_record_view_security_event(
+            subject
+        ):
+            return
         if not self._should_record_security_event(subject):
             return
         await self.security_events.record_authorized_action(

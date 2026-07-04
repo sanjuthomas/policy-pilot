@@ -7,10 +7,17 @@ from motor.motor_asyncio import (
     AsyncIOMotorDatabase,
 )
 from pymongo import ReadPreference
+from pymongo.errors import OperationFailure
 
 from inst.config import settings
 
 _client: AsyncIOMotorClient | None = None
+
+# Pre–composite-_id schema; documents store instruction_id only in _id ({id}|{version}).
+_LEGACY_INSTRUCTION_INDEXES = (
+    "instruction_id_1_version_number_1",
+    "instruction_id_current_unique",
+)
 
 
 def get_client() -> AsyncIOMotorClient:
@@ -42,6 +49,12 @@ async def connect() -> None:
     await client.admin.command("ping")
     db = get_database()
     collection = db.instructions
+    for index_name in _LEGACY_INSTRUCTION_INDEXES:
+        try:
+            await collection.drop_index(index_name)
+        except OperationFailure as exc:
+            if exc.code != 27:  # IndexNotFound
+                raise
     await collection.create_index(
         [("_id", 1), ("out", 1)],
         unique=True,

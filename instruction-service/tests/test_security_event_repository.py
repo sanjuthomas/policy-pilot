@@ -1,7 +1,6 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from inst.models.enums import LifecycleAction
 from inst.models.security_event import SecurityEvent
 from inst.security_event_repository import SecurityEventRepository

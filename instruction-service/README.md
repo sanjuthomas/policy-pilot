@@ -160,8 +160,9 @@ On successful actions, `event.reason` is set to `authorization.summary`.
 
 | User / setting | Effect |
 |----------------|--------|
-| `etl-reader` | No security events at all (`SECURITY_EVENT_EXCLUDED_USER_IDS`) |
 | `admin-001` | No **VIEW** security events on `GET /instructions` or `GET /instructions/{id}` (`SECURITY_EVENT_VIEW_EXCLUDED_USER_IDS`, default `admin-001`) |
+
+Optional `SECURITY_EVENT_EXCLUDED_USER_IDS` (comma-separated) suppresses **all** security events for listed user ids (empty by default).
 
 The instruction browser UI (`GET /api/ui/instructions`) reads Mongo directly and does not record VIEW events. Downstream indexing is **Mongo → Kafka Connect → Kafka → ssi-indexer**; this service does not publish to Kafka.
 
@@ -231,5 +232,5 @@ Requires MongoDB (replica set), **authorization-service**, **sequence-service**,
 | `MONGODB_URI` | `mongodb://localhost:27017/?replicaSet=rs0` |
 | `AUTHORIZATION_SERVICE_URL` | `http://authorization-service:8094` |
 | `SEQUENCE_SERVICE_URL` | `http://localhost:8095` |
-| `SECURITY_EVENT_EXCLUDED_USER_IDS` | `etl-reader` |
+| `SECURITY_EVENT_EXCLUDED_USER_IDS` | *(empty)* |
 | `SECURITY_EVENT_VIEW_EXCLUDED_USER_IDS` | `admin-001` |

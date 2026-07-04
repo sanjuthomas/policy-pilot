@@ -13,6 +13,9 @@ htmlcov/
 .env.*
 !.env.example
 
+# Local GCP / Vertex notes (paths, SA email — not for version control)
+gcp-vertex-setup.local.md
+
 # IDE
 .idea/
 .vscode/

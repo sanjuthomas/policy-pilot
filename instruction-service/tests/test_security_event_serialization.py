@@ -1,7 +1,6 @@
 from datetime import datetime
 
 from bson import ObjectId
-
 from inst.security_event_serialization import (
     security_event_to_document,
     serialize_security_event,

@@ -14,6 +14,17 @@ See the root [README.md](../README.md#why-this-exists) for the problem narrative
 
 http://localhost:8092
 
+## ML stack
+
+| Role | Provider | Model |
+|------|----------|-------|
+| Query embedding (vector search) | **Vertex AI** | `text-embedding-004` (768-dim) |
+| Answer synthesis | **Vertex AI** | `gemini-2.5-flash` |
+| Authorization WHY rewrite | **Vertex AI** | `gemini-2.5-flash` |
+| Cypher generation (graph fallback) | **Ollama** (host) | `hmahmood/neo4j-gemma-3-27b-inst-q8` |
+
+`PolicyPilotMlClient` (`ml_client.py`) orchestrates all three: retrieval and context assembly run locally; Gemini receives the merged context for generation.
+
 ## Search modes
 
 The sidebar radio buttons select what the **Neo4j multimodal store** and graph focus on:
@@ -37,21 +48,23 @@ flowchart LR
     Q --> B[BM25 / Neo4j fulltext]
     Q --> C[Ollama → Cypher]
     C --> N
+    V --> VE[Vertex embed query]
+    VE --> V
     V --> R[RRF merge + dedupe]
     B --> R
     N --> R
     R --> A{Approval audit?}
-    A -->|yes| W[Who/When deterministic + LLM WHY rewrite]
-    A -->|no| L[Ollama full answer]
+    A -->|yes| W[Who/When deterministic + Gemini WHY]
+    A -->|no| G[Vertex Gemini full answer]
 ```
 
 1. **Planned Cypher** — count, ranking, hierarchy, and instruction approval-by-ID questions bypass LLM Cypher generation (Neo4j is authoritative)
 2. **Exact lookup** — UUID in question triggers multimodal fetch by ID; Instructions mode also fetches APPROVE security events for approval questions
-3. **Vector** — `qwen3-embedding:0.6b` embed → Neo4j vector index search (mode-filtered)
+3. **Vector** — Vertex `text-embedding-004` embed → Neo4j vector index search (mode-filtered)
 4. **BM25** — Neo4j fulltext lexical search (mode-filtered)
-5. **Neo4j** — Ollama generates read-only Cypher from mode-specific prompts + `neo4j-graph-model/relationships.cypher`
+5. **Neo4j** — Ollama generates read-only Cypher from mode-specific prompts + `neo4j-graph-model/relationships.cypher` (graph fallback)
 6. **Merge** — reciprocal rank fusion (k=60), dedupe by `event_id` / `instruction_id`
-7. **Answer** — full Ollama synthesis, **or** structured Who/When/Why for instruction and payment approval audit questions
+7. **Answer** — Vertex Gemini synthesis over merged context, **or** structured Who/When/Why for instruction and payment approval audit questions
 
 ## Who / When / Why (approval audit)
 
@@ -61,7 +74,7 @@ For questions like _"Who approved instruction `<uuid>`?"_ in **Instructions** mo
 |------|--------|--------|
 | **WHO** | `approver_display` from instruction state or graph | Deterministic — no LLM |
 | **WHEN** | `approved_at` or APPROVE event timestamp | Deterministic — no LLM |
-| **WHY** | `authorization_summary` + `allow_basis` from OPA | **LLM rewrite** into 2–4 readable sentences; preserves all material policy checks; falls back to raw OPA text if Ollama fails |
+| **WHY** | `authorization_summary` + `allow_basis` from OPA | **Gemini rewrite** into 2–4 readable sentences; preserves all material policy checks; falls back to raw OPA text if Vertex fails |
 
 Example answer shape:
 
@@ -109,8 +122,15 @@ Copy `.env.example` to `.env` at the repo root to override defaults. Docker Comp
 
 | Variable | Default |
 |----------|---------|
-| `OLLAMA_EMBEDDING_MODEL` | `qwen3-embedding:0.6b` |
+| `GCP_PROJECT_ID` | `rag-demos-501323` |
+| `GCP_REGION` | `us-central1` |
+| `VERTEX_EMBEDDING_MODEL` | `text-embedding-004` |
+| `VERTEX_GEMINI_MODEL` | `gemini-2.5-flash` |
+| `EMBEDDING_DIMENSION` | `768` |
+| `GCP_SA_KEY_PATH` | host path to service account JSON (Compose mount) |
+| `GOOGLE_APPLICATION_CREDENTIALS` | `/run/secrets/gcp-sa.json` (in container) |
 | `OLLAMA_CHAT_MODEL` | `hmahmood/neo4j-gemma-3-27b-inst-q8` |
+| `OLLAMA_URL` | `http://host.docker.internal:11434` |
 | `MULTIMODAL_VECTOR_INDEX` | `multimodal_embedding` |
 | `MULTIMODAL_FULLTEXT_INDEX` | `multimodal_search_text` |
 | `NEO4J_URI` | `bolt://neo4j:7687` |
@@ -119,13 +139,14 @@ Copy `.env.example` to `.env` at the repo root to override defaults. Docker Comp
 | `INSTRUCTION_SERVICE_URL` | `http://instruction-service:8000` |
 | `OIDC_ISSUER_URL` | `http://localhost:8080` |
 
-Requires Neo4j multimodal documents populated by `ssi-indexer` and **host Ollama**.
+Requires Neo4j multimodal documents populated by **ssi-indexer**, **GCP Vertex AI** credentials, and **host Ollama** (Cypher model only).
 
 ## Run locally
 
 ```bash
 cd ssi-chat
-pip install -e .
+pip install -e ../shared/vertex_client -e ../shared/cypher_gen -e ../shared/telemetry -e .
+export GOOGLE_APPLICATION_CREDENTIALS=~/.config/gcloud/your-vertex-key.json
 ssi-chat
 ```
 
@@ -140,7 +161,6 @@ curl -s -X POST http://localhost:8092/api/chat \
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/health` | Liveness |
-| GET | `/api/status` | Ollama models + multimodal index health |
 | POST | `/api/chat` | Ask a question (`mode`, multi-turn via `history`) |
 
 ## Docker
@@ -148,6 +168,8 @@ curl -s -X POST http://localhost:8092/api/chat \
 ```bash
 docker compose up -d ssi-chat
 ```
+
+Ensure `GCP_SA_KEY_PATH` in `.env` points to a valid service account key (same as ssi-indexer).
 
 ## Regression suite
 

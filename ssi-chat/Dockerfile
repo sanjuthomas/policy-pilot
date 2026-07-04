@@ -2,6 +2,10 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+COPY shared/vertex_client/pyproject.toml shared/vertex_client/pyproject.toml
+COPY shared/vertex_client/src shared/vertex_client/src
+RUN pip install --no-cache-dir ./shared/vertex_client
+
 COPY shared/cypher_gen/pyproject.toml shared/cypher_gen/pyproject.toml
 COPY shared/cypher_gen/src shared/cypher_gen/src
 RUN pip install --no-cache-dir ./shared/cypher_gen

@@ -12,7 +12,7 @@ Includes:
 - **Profit center approvers** — FICC, FX, DESK_RATES (`ficc-201`, `fx-300`, …)
 - **Front office** — payment submitters per desk (`fo-ficc-101`, `fo-fx-101`, `fo-rates-101`)
 - **Payment creators / approvers** — middle office payment staff (`pay-101` … `pay-400`) with amount-limit clubs and `covering_lobs`
-- **Service accounts** — `etl-reader` (excluded from all security events), `svc-instruction` (instruction service → authz), `svc-payment` (payment service → authz and instruction-service)
+- **Service accounts** — `svc-instruction` (instruction service → authz), `svc-payment` (payment service → authz and instruction-service)
 - **Platform admin** — `admin-001` (secured UIs and PolicyPilot; VIEW events suppressed on instruction REST list/get — see `SECURITY_EVENT_VIEW_EXCLUDED_USER_IDS`)
 
 Default password: **`Password1!`** (see `defaults.password` in `users.yaml`).

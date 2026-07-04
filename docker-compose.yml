@@ -310,6 +310,11 @@ services:
     environment:
       <<: *otel-ollama-environment
       OTEL_SERVICE_NAME: ssi-indexer
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID:-rag-demos-501323}
+      GCP_REGION: ${GCP_REGION:-us-central1}
+      VERTEX_EMBEDDING_MODEL: ${VERTEX_EMBEDDING_MODEL:-text-embedding-004}
+      EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-768}
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/gcp-sa.json
       KAFKA_ENABLED: "true"
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_INSTRUCTION_SECURITY_EVENTS_TOPIC: instruction_security_events
@@ -336,6 +341,7 @@ services:
       - zitadel-bootstrap:/zitadel/bootstrap:ro
       - ./neo4j-graph-model:/app/neo4j-graph-model:ro
       - ./ssi-indexer/search-profiles:/app/search-profiles:ro
+      - ${GCP_SA_KEY_PATH:-${HOME}/.config/gcloud/rag-demos-501323-vertex-client-key.json}:/run/secrets/gcp-sa.json:ro
     depends_on:
       kafka-init:
         condition: service_completed_successfully
@@ -497,6 +503,12 @@ services:
     environment:
       <<: *otel-ollama-environment
       OTEL_SERVICE_NAME: ssi-chat
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID:-rag-demos-501323}
+      GCP_REGION: ${GCP_REGION:-us-central1}
+      VERTEX_EMBEDDING_MODEL: ${VERTEX_EMBEDDING_MODEL:-text-embedding-004}
+      VERTEX_GEMINI_MODEL: ${VERTEX_GEMINI_MODEL:-gemini-2.5-flash}
+      EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-768}
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/gcp-sa.json
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: neo4j
       NEO4J_PASSWORD: devpassword
@@ -517,6 +529,7 @@ services:
       - zitadel-bootstrap:/zitadel/bootstrap:ro
       - ./zitadel-seed:/app/zitadel-seed:ro
       - ./ssi-chat/src/chat_application/static:/usr/local/lib/python3.12/site-packages/chat_application/static:ro
+      - ${GCP_SA_KEY_PATH:-${HOME}/.config/gcloud/rag-demos-501323-vertex-client-key.json}:/run/secrets/gcp-sa.json:ro
     depends_on:
       neo4j:
         condition: service_healthy

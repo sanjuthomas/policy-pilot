@@ -20,6 +20,7 @@ async def test_lifespan_starts_and_stops_consumers() -> None:
         patch("etl.main.instrument_app"),
         patch("etl.main.shutdown_telemetry") as mock_shutdown,
         patch("etl.main.neo4j_writer") as mock_neo4j,
+        patch("etl.main.embedding_client") as mock_embedding,
         patch("etl.main.ollama_client") as mock_ollama,
         patch("etl.main.multimodal_store") as mock_multimodal,
         patch("etl.main.instruction_security_event_consumer") as mock_ise,
@@ -29,7 +30,9 @@ async def test_lifespan_starts_and_stops_consumers() -> None:
     ):
         mock_neo4j.connect = AsyncMock()
         mock_neo4j.close = AsyncMock()
-        mock_ollama.warmup = AsyncMock()
+        mock_embedding.warmup = AsyncMock()
+        mock_embedding.close = AsyncMock()
+        mock_embedding.dimension = 768
         mock_ollama.close = AsyncMock()
         mock_multimodal.ensure_indexes = AsyncMock()
         for consumer in (mock_ise, mock_ic, mock_pse, mock_pfc):
@@ -47,12 +50,13 @@ async def test_lifespan_starts_and_stops_consumers() -> None:
             mock_ic.start.assert_awaited_once()
             mock_pse.start.assert_awaited_once()
             mock_pfc.start.assert_awaited_once()
-            mock_ollama.warmup.assert_awaited_once()
+            mock_embedding.warmup.assert_awaited_once()
             mock_multimodal.ensure_indexes.assert_awaited_once()
 
         for consumer in (mock_ise, mock_ic, mock_pse, mock_pfc):
             consumer.close.assert_awaited_once()
         mock_neo4j.close.assert_awaited_once()
+        mock_embedding.close.assert_awaited_once()
         mock_ollama.close.assert_awaited_once()
         mock_shutdown.assert_called_once()
 
@@ -68,6 +72,7 @@ async def test_lifespan_continues_when_warmup_fails() -> None:
         patch("etl.main.instrument_app"),
         patch("etl.main.shutdown_telemetry"),
         patch("etl.main.neo4j_writer") as mock_neo4j,
+        patch("etl.main.embedding_client") as mock_embedding,
         patch("etl.main.ollama_client") as mock_ollama,
         patch("etl.main.multimodal_store") as mock_multimodal,
         patch("etl.main.instruction_security_event_consumer") as mock_ise,
@@ -77,7 +82,8 @@ async def test_lifespan_continues_when_warmup_fails() -> None:
     ):
         mock_neo4j.connect = AsyncMock()
         mock_neo4j.close = AsyncMock()
-        mock_ollama.warmup = AsyncMock(side_effect=RuntimeError("ollama down"))
+        mock_embedding.warmup = AsyncMock(side_effect=RuntimeError("vertex down"))
+        mock_embedding.close = AsyncMock()
         mock_ollama.close = AsyncMock()
         mock_multimodal.ensure_indexes = AsyncMock()
         for consumer in (mock_ise, mock_ic, mock_pse, mock_pfc):

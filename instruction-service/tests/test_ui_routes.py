@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from inst.admin import get_admin_subject
 from inst.models.api import Subject
 from inst.repository import InstructionNotFoundError

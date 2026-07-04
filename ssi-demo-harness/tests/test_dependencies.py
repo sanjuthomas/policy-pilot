@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi import HTTPException
-
 from harness.dependencies import get_admin_session, get_subject
 from harness.models import Subject
 

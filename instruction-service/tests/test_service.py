@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from inst.authorization import PolicyDecision
+from inst.config import settings
 from inst.models.api import (
     CreateInstructionRequest,
     DeleteInstructionRequest,
@@ -437,12 +438,13 @@ async def test_list_skips_denied(
 
 
 @pytest.mark.asyncio
-async def test_should_record_security_event_excludes_etl_reader(
+async def test_should_record_security_event_excludes_configured_users(
     sample_subject: Subject,
 ) -> None:
     assert InstructionService._should_record_security_event(sample_subject) is True
-    excluded = sample_subject.model_copy(update={"user_id": "etl-reader"})
-    assert InstructionService._should_record_security_event(excluded) is False
+    excluded = sample_subject.model_copy(update={"user_id": "excluded-svc"})
+    with patch.object(settings, "security_event_excluded_user_ids", "excluded-svc"):
+        assert InstructionService._should_record_security_event(excluded) is False
 
 
 @pytest.mark.asyncio
@@ -492,6 +494,25 @@ async def test_get_skips_view_security_events_for_admin(
     response = await service.get("instr-001", admin)
 
     assert response.instruction_id == "instr-001"
+    mock_security_events.record_authorized_action.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_record_authorized_action_skips_view_for_admin(
+    service: InstructionService,
+    mock_security_events: MagicMock,
+    sample_subject: Subject,
+    sample_instruction: CashSettlementInstruction,
+) -> None:
+    admin = sample_subject.model_copy(
+        update={"user_id": "admin-001", "roles": ["PLATFORM_ADMIN"]}
+    )
+    await service._record_authorized_action(
+        LifecycleAction.VIEW,
+        admin,
+        sample_instruction,
+        version_number=1,
+    )
     mock_security_events.record_authorized_action.assert_not_called()
 
 

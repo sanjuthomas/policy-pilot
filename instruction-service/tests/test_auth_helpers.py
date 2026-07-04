@@ -1,7 +1,6 @@
 import base64
 
 import pytest
-
 from inst.auth import (
     _decode_metadata_values,
     _parse_json_list,

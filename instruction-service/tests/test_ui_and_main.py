@@ -3,7 +3,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-
 from inst.security_event_ui_store import (
     SecurityEventUiStore,
     _document_id,

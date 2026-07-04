@@ -3,11 +3,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from vertex_client import VertexEmbeddingClient
+
 from etl.enrichment import enrich_document
 from etl.multimodal_store import MultimodalNeo4jStore, event_document_id
 from etl.multimodal_write import MultimodalWrite
 from etl.neo4j_client import Neo4jGraphWriter
-from etl.ollama_client import OllamaEmbeddingClient
 
 logger = logging.getLogger(__name__)
 
@@ -22,11 +23,11 @@ class InstructionSecurityEventPipeline:
         self,
         *,
         neo4j_writer: Neo4jGraphWriter,
-        ollama_client: OllamaEmbeddingClient,
+        embedding_client: VertexEmbeddingClient,
         multimodal_store: MultimodalNeo4jStore,
     ) -> None:
         self.neo4j_writer = neo4j_writer
-        self.ollama_client = ollama_client
+        self.embedding_client = embedding_client
         self.multimodal_store = multimodal_store
         self._multimodal_ready = False
 
@@ -36,11 +37,11 @@ class InstructionSecurityEventPipeline:
         document = enrich_document(security_event, instruction)
 
         if not self._multimodal_ready:
-            await self.ollama_client.warmup()
-            await self.multimodal_store.ensure_indexes(self.ollama_client.dimension)
+            await self.embedding_client.warmup()
+            await self.multimodal_store.ensure_indexes(self.embedding_client.dimension)
             self._multimodal_ready = True
 
-        dense_vector = await self.ollama_client.embed(document.search_text)
+        dense_vector = await self.embedding_client.embed(document.search_text)
         event_payload = document.model_dump(mode="json")
         event_payload["source"] = "instruction_security_event"
         multimodal = MultimodalWrite(
@@ -65,7 +66,7 @@ class InstructionSecurityEventPipeline:
                 )
                 if patch:
                     patch_id, patch_text, patch_payload = patch
-                    patch_vector = await self.ollama_client.embed(patch_text)
+                    patch_vector = await self.embedding_client.embed(patch_text)
                     extra_multimodal.append(
                         MultimodalWrite(
                             document_id=patch_id,

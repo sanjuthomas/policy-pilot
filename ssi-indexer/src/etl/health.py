@@ -5,6 +5,7 @@ import logging
 from typing import Any
 
 import httpx
+from vertex_client import VertexEmbeddingClient
 
 from etl.config import settings
 from etl.instruction_security_event_consumer import (
@@ -12,7 +13,7 @@ from etl.instruction_security_event_consumer import (
 )
 from etl.multimodal_store import MultimodalNeo4jStore
 from etl.neo4j_client import Neo4jGraphWriter
-from etl.ollama_client import OllamaEmbeddingClient
+from etl.ollama_client import OllamaChatClient
 
 logger = logging.getLogger(__name__)
 
@@ -125,10 +126,36 @@ async def check_multimodal_fulltext(
         return _status(False, "down", detail=str(exc), **base)
 
 
-async def check_ollama(ollama_client: OllamaEmbeddingClient) -> ComponentStatus:
+async def check_vertex_embeddings(
+    embedding_client: VertexEmbeddingClient,
+) -> ComponentStatus:
+    base = {
+        "project": settings.gcp_project_id,
+        "region": settings.gcp_region,
+        "model": settings.vertex_embedding_model,
+    }
+    try:
+        dimension = embedding_client._dimension
+        extra: dict[str, Any] = {}
+        if embedding_client._ready and dimension is not None:
+            extra["dimension"] = dimension
+            extra["embeddings"] = "ready"
+            return _status(True, "up", **base, **extra)
+        return _status(
+            False,
+            "down",
+            detail="embeddings not warmed up yet",
+            **base,
+        )
+    except Exception as exc:
+        logger.warning("vertex embedding health check failed: %s", exc)
+        return _status(False, "down", detail=str(exc), **base)
+
+
+async def check_ollama(ollama_client: OllamaChatClient) -> ComponentStatus:
     base = {
         "url": settings.ollama_url,
-        "model": settings.ollama_embedding_model,
+        "model": settings.ollama_chat_model,
     }
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
@@ -141,7 +168,7 @@ async def check_ollama(ollama_client: OllamaEmbeddingClient) -> ComponentStatus:
             for model in body.get("models", [])
             if isinstance(model, dict) and model.get("name")
         ]
-        requested = settings.ollama_embedding_model
+        requested = settings.ollama_chat_model
         requested_base = requested.split(":")[0]
         model_available = any(
             name == requested
@@ -150,20 +177,13 @@ async def check_ollama(ollama_client: OllamaEmbeddingClient) -> ComponentStatus:
             for name in available_names
         )
 
-        dimension = ollama_client._dimension
-        extra: dict[str, Any] = {}
-        if dimension is not None:
-            extra["dimension"] = dimension
-            extra["embeddings"] = "ready"
-
         if not model_available:
             return _status(
                 False,
                 "down",
-                detail=f"model {settings.ollama_embedding_model!r} not found",
+                detail=f"model {settings.ollama_chat_model!r} not found",
                 models=available_names,
                 **base,
-                **extra,
             )
 
         return _status(
@@ -171,7 +191,6 @@ async def check_ollama(ollama_client: OllamaEmbeddingClient) -> ComponentStatus:
             "up",
             models_available=len(body.get("models", [])),
             **base,
-            **extra,
         )
     except Exception as exc:
         logger.warning("ollama health check failed: %s", exc)
@@ -208,17 +227,27 @@ async def component_status(
     instruction_security_event_consumer: InstructionSecurityEventKafkaConsumer,
     multimodal_store: MultimodalNeo4jStore,
     neo4j_writer: Neo4jGraphWriter,
-    ollama_client: OllamaEmbeddingClient,
+    embedding_client: VertexEmbeddingClient,
+    ollama_client: OllamaChatClient,
 ) -> dict[str, ComponentStatus]:
-    kafka_status, neo4j_status, ollama_status, vector_status, fulltext_status = await asyncio.gather(
+    (
+        kafka_status,
+        neo4j_status,
+        vertex_status,
+        ollama_status,
+        vector_status,
+        fulltext_status,
+    ) = await asyncio.gather(
         check_kafka(instruction_security_event_consumer),
         check_neo4j(neo4j_writer),
+        check_vertex_embeddings(embedding_client),
         check_ollama(ollama_client),
         check_multimodal_vector(multimodal_store),
         check_multimodal_fulltext(multimodal_store),
     )
     return {
         "kafka": kafka_status,
+        "vertex_embeddings": vertex_status,
         "ollama": ollama_status,
         "multimodal_vector": vector_status,
         "multimodal_fulltext": fulltext_status,

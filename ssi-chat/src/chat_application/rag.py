@@ -41,11 +41,11 @@ from chat_application.formatting import (
     humanize_authorization_text,
     humanize_policy_basis,
 )
+from chat_application.ml_client import PolicyPilotMlClient
 from chat_application.models import ChatMessage, ChatResponse, SearchMode, SourceHit
 from chat_application.multimodal_search import MultimodalSearchClient
 from chat_application.neo4j import Neo4jClient
 from chat_application.neo4j_intents import try_neo4j_direct_answer
-from chat_application.ollama import OllamaClient
 from chat_application.reranker import RankedHit, graph_rows_to_hits, rrf_merge
 from chat_application.response_formatter import format_chat_response
 
@@ -372,11 +372,11 @@ class RagService:
     def __init__(
         self,
         *,
-        ollama: OllamaClient,
+        ml_client: PolicyPilotMlClient,
         multimodal: MultimodalSearchClient,
         neo4j: Neo4jClient,
     ) -> None:
-        self.ollama = ollama
+        self.ml_client = ml_client
         self.multimodal = multimodal
         self.neo4j = neo4j
         self._schema = load_graph_schema()
@@ -563,7 +563,7 @@ class RagService:
         if answer is None and _should_format_instruction_count_aggregate(message, mode):
             answer = _format_instruction_count_aggregate_answer(message, graph_result["rows"])
         if answer is None:
-            answer = await self.ollama.synthesize_answer(
+            answer = await self.ml_client.synthesize_answer(
                 message, context, chat_history, mode=mode
             )
         answer = format_chat_response(answer)
@@ -582,7 +582,7 @@ class RagService:
         self, query: str, limit: int, source: str | None = None
     ) -> list[dict[str, Any]]:
         try:
-            vector = await self.ollama.embed(query)
+            vector = await self.ml_client.embed(query)
             return await self.multimodal.search_vector(vector, limit=limit, source=source)
         except Exception as exc:
             logger.warning("vector search failed: %s", exc)
@@ -692,7 +692,7 @@ class RagService:
 
         cypher: str | None = None
         try:
-            cypher = await self.ollama.generate_cypher(question, self._schema, mode=mode)
+            cypher = await self.ml_client.generate_cypher(question, self._schema, mode=mode)
             cypher = normalize_read_only_cypher(cypher)
             rows = await self.neo4j.run_cypher(cypher)
             return {"cypher": cypher, "rows": rows}
@@ -856,7 +856,7 @@ class RagService:
         if not approver or not summary:
             return None
 
-        why = await self.ollama.summarize_authorization_why(
+        why = await self.ml_client.summarize_authorization_why(
             approver=approver,
             authorization_summary=humanize_authorization_text(summary),
             authorization_basis=humanize_policy_basis(basis) if basis else None,
@@ -941,7 +941,7 @@ class RagService:
 
         summary = summary or f"{approver} was allowed to APPROVE_PAYMENT"
         readable_basis = humanize_policy_basis(basis) if basis else None
-        why = await self.ollama.summarize_authorization_why(
+        why = await self.ml_client.summarize_authorization_why(
             approver=approver,
             authorization_summary=humanize_authorization_text(summary),
             authorization_basis=readable_basis,

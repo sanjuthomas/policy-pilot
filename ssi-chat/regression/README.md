@@ -18,7 +18,8 @@ PolicyPilot still runs dense vector search **in parallel** for every case except
 ## Prerequisites
 
 - Full stack running (`docker compose up -d`), including **Kafka Connect** and **ssi-indexer**
-- Host **Ollama** with `qwen3-embedding:0.6b` and `hmahmood/neo4j-gemma-3-27b-inst-q8` (or models configured in `.env`)
+- **GCP Vertex AI** credentials mounted into ssi-indexer and ssi-chat (embeddings + Gemini)
+- Host **Ollama** with `hmahmood/neo4j-gemma-3-27b-inst-q8` for Cypher fallback (or model configured in `.env`)
 - Harness reachable at http://localhost:8091 (for `--seed`)
 - Neo4j populated by the indexer (run harness seed or `./ssi-demo-harness/seed-demo-data.sh` before `--seed`)
 
@@ -77,7 +78,7 @@ Use `CHAT_REGRESSION_SEED=1` to run harness seed steps before the suite.
 Before chat cases, the runner executes **API smoke checks** across services (health, auth gates, admin UI APIs, indexer search/graph/cypher, payment/instruction eligible-approvers). Use:
 
 ```bash
-# Smoke only (fast, no Ollama chat cases)
+# Smoke only (fast, no Vertex/Ollama chat cases)
 PYTHONPATH=. python -m regression.runner --api-smoke-only
 
 # Full run: smoke + ~60 chat cases
@@ -87,7 +88,7 @@ PYTHONPATH=. python -m regression.runner --seed
 PYTHONPATH=. python -m regression.runner --skip-api-smoke
 ```
 
-Set `API_SMOKE_SKIP_OLLAMA=1` to skip indexer vector search and cypher generation when Ollama is unavailable.
+Set `API_SMOKE_SKIP_OLLAMA=1` to skip indexer vector search and Cypher generation when Ollama is unavailable. Vector search also requires Vertex credentials on ssi-indexer.
 
 Pytest:
 

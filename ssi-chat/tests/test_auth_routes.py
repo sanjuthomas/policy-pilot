@@ -4,9 +4,8 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
-
 from chat_application.zitadel_auth import SessionCredentials
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture

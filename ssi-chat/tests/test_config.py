@@ -25,6 +25,12 @@ class TestSettings:
         assert s.port == 9999
         assert s.retrieval_limit == 25
 
+    def test_vertex_defaults(self) -> None:
+        s = Settings()
+        assert s.gcp_project_id == "rag-demos-501323"
+        assert s.vertex_gemini_model == "gemini-2.5-flash"
+        assert s.embedding_dimension == 768
+
     def test_module_level_settings_instance(self) -> None:
         assert isinstance(settings, Settings)
         assert settings.multimodal_vector_index == "multimodal_embedding"

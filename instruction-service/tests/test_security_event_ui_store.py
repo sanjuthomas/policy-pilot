@@ -2,7 +2,6 @@ from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from inst.security_event_ui_store import SecurityEventUiStore
 
 
