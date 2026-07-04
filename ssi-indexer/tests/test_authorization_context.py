@@ -164,3 +164,10 @@ def test_authorization_fact_neo4j_params():
     assert params["approved_at"] == "2024-03-01"
     assert params["authorization_summary"] == "ok"
     assert json.loads(params["authorization_basis"]) == ["r1"]
+
+
+def test_authorization_fact_neo4j_params_empty_basis_is_none():
+    fact = {"authorization": None, "instruction_snapshot": {"approved_at": "2024-03-01"}}
+    params = authorization_fact_neo4j_params(fact)
+    assert params["authorization_summary"] is None
+    assert params["authorization_basis"] is None

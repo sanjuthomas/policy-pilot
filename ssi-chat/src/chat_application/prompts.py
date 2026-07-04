@@ -78,7 +78,11 @@ Answer the user's question using ONLY the provided context (retrieved events and
 - The context may include INSTRUCTION SECURITY EVENT rows (instruction lifecycle) and \
 PAYMENT SECURITY EVENT rows (payment lifecycle). Treat them separately when listing.
 - When the answer involves a list of events, always enumerate each one.
-- For "how many" questions, if the context includes `Neo4j aggregate count: N`, answer with N.
+- For "how many" questions, if the context includes `Neo4j security event count: total=N, ALERT=A, INFO=I`,
+  answer with the total and explicitly break out ALERT vs INFO counts.
+- For "how many" questions, if the context includes `Neo4j aggregate count: N` without a severity breakdown,
+  answer with N and note when the count is ALERT-only if the question asked for all security events.
+- For other "how many" questions, if the context includes `Neo4j aggregate count: N`, answer with N.
   Otherwise count the Neo4j graph result rows (not vector/BM25 hits). Vector/BM25 retrieval
   is a sample and must not be used as the total for count questions.
 - For ranking questions ("most alerts", "top users"), use Neo4j rows with alert_count /

@@ -85,6 +85,21 @@ PREFERRED_DELETE_ORDER = (
     "payment/common.rego",
 )
 
+# Upload helpers before consumers so partial uploads compile cleanly.
+PREFERRED_UPLOAD_ORDER = (
+    "instruction/common.rego",
+    "instruction/approval_matrix.rego",
+    "instruction/lifecycle_rules.rego",
+    "instruction/violations.rego",
+    "instruction/allow_basis.rego",
+    "instruction/lifecycle.rego",
+    "payment/common.rego",
+    "payment/amount_limits.rego",
+    "payment/violations.rego",
+    "payment/allow_basis.rego",
+    "payment/lifecycle.rego",
+)
+
 
 def delete_policy(policy_id: str) -> bool:
     url = f"{OPA_URL}/v1/policies/{policy_id}"
@@ -124,10 +139,21 @@ def clear_policies() -> None:
     print(f"cleared {deleted} existing policy file(s)")
 
 
+def _ordered_policies(policies: list[Path], root: Path) -> list[Path]:
+    by_id = {policy_id(policy_path, root): policy_path for policy_path in policies}
+    ordered: list[Path] = []
+    for policy_key in PREFERRED_UPLOAD_ORDER:
+        path = by_id.pop(policy_key, None)
+        if path is not None:
+            ordered.append(path)
+    ordered.extend(by_id[path_key] for path_key in sorted(by_id))
+    return ordered
+
+
 def upload_all(policies: list[Path], root: Path) -> list[str]:
     errors: list[str] = []
 
-    for policy_path in policies:
+    for policy_path in _ordered_policies(policies, root):
         key = policy_id(policy_path, root)
         try:
             upload_policy(policy_path, root)

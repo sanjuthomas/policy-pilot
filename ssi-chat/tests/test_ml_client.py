@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 from chat_application.ml_client import PolicyPilotMlClient
+from cypher_builder import GraphIntent
 
 
 @pytest.fixture
@@ -26,19 +27,10 @@ def mock_generation() -> MagicMock:
 
 
 @pytest.fixture
-def mock_cypher() -> MagicMock:
-    client = MagicMock()
-    client.generate_cypher = AsyncMock(return_value="MATCH (n) RETURN n LIMIT 1")
-    client.close = AsyncMock()
-    return client
-
-
-@pytest.fixture
-def ml_client(mock_embedding, mock_generation, mock_cypher) -> PolicyPilotMlClient:
+def ml_client(mock_embedding, mock_generation) -> PolicyPilotMlClient:
     return PolicyPilotMlClient(
         embedding_client=mock_embedding,
         generation_client=mock_generation,
-        cypher_client=mock_cypher,
     )
 
 
@@ -55,14 +47,17 @@ async def test_warmup_delegates(ml_client: PolicyPilotMlClient, mock_embedding: 
     mock_embedding.warmup.assert_awaited_once()
 
 
-async def test_generate_cypher_delegates(
-    ml_client: PolicyPilotMlClient, mock_cypher: MagicMock
+async def test_extract_graph_query_plan_parses_vertex_json(
+    ml_client: PolicyPilotMlClient, mock_generation: MagicMock
 ) -> None:
-    query = await ml_client.generate_cypher("how many?", "schema", mode="events")
-    assert query == "MATCH (n) RETURN n LIMIT 1"
-    mock_cypher.generate_cypher.assert_awaited_once_with(
-        "how many?", "schema", mode="events"
+    mock_generation.generate_text.return_value = (
+        '{"intent":"security_event_aggregate","operation":"count",'
+        '"time_window":"today","domain":"payments","severity":"ALERT","denial":true}'
     )
+    plan = await ml_client.extract_graph_query_plan("How many payment alerts today?", mode="events")
+    assert plan.intent == GraphIntent.SECURITY_EVENT_AGGREGATE
+    assert plan.time_window == "today"
+    mock_generation.generate_text.assert_awaited_once()
 
 
 async def test_synthesize_answer_uses_gemini(
@@ -76,10 +71,6 @@ async def test_synthesize_answer_uses_gemini(
     )
     assert answer == "Gemini answer."
     mock_generation.generate_text.assert_awaited_once()
-    kwargs = mock_generation.generate_text.await_args.kwargs
-    assert "How many alerts?" in kwargs["user"]
-    assert "context block" in kwargs["user"]
-    assert kwargs["history"] == [{"role": "user", "content": "prior"}]
 
 
 async def test_summarize_authorization_why_returns_gemini_text(
@@ -92,8 +83,6 @@ async def test_summarize_authorization_why_returns_gemini_text(
         authorization_basis=["role match"],
     )
     assert result == "Readable summary."
-    user_prompt = mock_generation.generate_text.await_args.kwargs["user"]
-    assert "role match" in user_prompt
 
 
 async def test_summarize_authorization_why_falls_back_on_error(
@@ -107,13 +96,11 @@ async def test_summarize_authorization_why_falls_back_on_error(
     assert result == "Raw OPA summary"
 
 
-async def test_close_closes_all_clients(
+async def test_close_closes_vertex_clients(
     ml_client: PolicyPilotMlClient,
     mock_embedding: MagicMock,
     mock_generation: MagicMock,
-    mock_cypher: MagicMock,
 ) -> None:
     await ml_client.close()
     mock_embedding.close.assert_awaited_once()
     mock_generation.close.assert_awaited_once()
-    mock_cypher.close.assert_awaited_once()

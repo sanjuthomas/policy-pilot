@@ -108,6 +108,26 @@ class TestPlanGraphQueries:
         assert "details" in labels
         assert "date()" in planned[0][1]
 
+    def test_count_total_security_events(self) -> None:
+        planned = plan_graph_queries(
+            "How many security events are there in the system?",
+            mode="events",
+        )
+        assert planned is not None
+        assert planned[0][0] == "security_event_count"
+        assert "alert_count" in planned[0][1]
+        assert "info_count" in planned[0][1]
+        assert "severity: 'ALERT'" not in planned[0][1]
+
+    def test_summarize_all_alerts_list(self) -> None:
+        planned = plan_graph_queries(
+            "Can you summarize all alerts with actor and action for me?",
+            mode="events",
+        )
+        assert planned is not None
+        assert planned[0][0] == "security_event_alert_list"
+        assert "entity_id" in planned[0][1]
+
     def test_count_payment_alerts_this_week(self) -> None:
         planned = plan_graph_queries(
             "How many payment alerts in the past 7 days?",
@@ -144,6 +164,7 @@ class TestPlanGraphQueries:
         assert planned is not None
         assert planned[0][0] == "approval_lookup"
         assert iid in planned[0][1]
+        assert "approveEvent.authorization_basis" in planned[0][1]
 
     def test_payment_approval_lookup_by_uuid(self) -> None:
         pid = "9b3251c9-d28e-4ad5-9bf4-dbc3c4fc13d8"

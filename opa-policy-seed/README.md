@@ -127,6 +127,14 @@ curl -s http://localhost:8181/v1/data/payment/lifecycle/allow \
 
 ## Docker
 
-The `opa-policy-seed` service runs once after `opa` starts and uploads policies from the mounted `policies/` directory.
+OPA loads policies from the mounted `policies/` directory on every start (`opa run --server /policies` in Compose). Restarting the `opa` container therefore does **not** require a separate upload step.
+
+The `opa-policy-seed` service waits until OPA has compiled those policies and passes a CREATE smoke evaluation before dependent services start. Use it as a startup gate only — not for reloading policies after an OPA restart.
+
+For manual hot-reload during Rego development (optional):
+
+```bash
+docker compose run --rm --entrypoint python opa-policy-seed /app/upload_policies.py
+```
 
 OPA API (unauthenticated demo): http://localhost:8181

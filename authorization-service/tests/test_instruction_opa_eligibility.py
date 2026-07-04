@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 from authz.instruction_opa import instruction_opa_context_for_approval_eligibility
 
 

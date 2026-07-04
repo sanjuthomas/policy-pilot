@@ -63,8 +63,12 @@ app.mount("/ui/static", StaticFiles(directory=STATIC_DIR), name="ui-static")
 
 
 @app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "UP"}
+async def health() -> dict[str, object]:
+    opa = OpaClient()
+    opa_status = await opa.policy_health()
+    components = {"opa": opa_status}
+    overall = "UP" if opa_status.get("ok") else "DEGRADED"
+    return {"status": overall, "components": components}
 
 
 def run() -> None:

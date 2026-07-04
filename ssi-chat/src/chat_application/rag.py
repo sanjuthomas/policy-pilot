@@ -26,25 +26,31 @@ from chat_application.cypher import (
     is_payment_count_aggregate_question,
     is_payment_total_amount_question,
     is_payments_for_instruction_question,
-    load_graph_schema,
+    is_security_event_alert_count_question,
+    is_security_event_alert_list_question,
+    is_security_event_count_aggregate_question,
     lob_filter_from_question,
     normalize_read_only_cypher,
     payment_aggregate_period_label,
     plan_graph_queries,
+    plans_from_graph_query,
     ranking_period_label,
     validate_read_only_cypher,
 )
 from chat_application.eligibility import eligible_approver_target
 from chat_application.formatting import (
+    format_approval_auth_lines,
     format_markdown_table,
     format_money_amount,
     humanize_authorization_text,
     humanize_policy_basis,
+    parse_authorization_basis,
 )
 from chat_application.ml_client import PolicyPilotMlClient
 from chat_application.models import ChatMessage, ChatResponse, SearchMode, SourceHit
 from chat_application.multimodal_search import MultimodalSearchClient
 from chat_application.neo4j import Neo4jClient
+from chat_application.neo4j_formatters import format_security_event_alert_list
 from chat_application.neo4j_intents import try_neo4j_direct_answer
 from chat_application.reranker import RankedHit, graph_rows_to_hits, rrf_merge
 from chat_application.response_formatter import format_chat_response
@@ -56,19 +62,6 @@ def _format_basis_join(basis: list[str] | None) -> str:
     if not basis:
         return ""
     return " | ".join(humanize_policy_basis(basis))
-
-
-def _parse_authorization_basis(value: Any) -> list[str]:
-    if isinstance(value, list):
-        return [str(item) for item in value if item]
-    if isinstance(value, str) and value.strip():
-        try:
-            parsed = json.loads(value)
-            if isinstance(parsed, list):
-                return [str(item) for item in parsed if item]
-        except json.JSONDecodeError:
-            pass
-    return []
 
 
 def _append_policy_basis(why: str, basis: list[str]) -> str:
@@ -280,6 +273,82 @@ def _should_format_instruction_count_aggregate(message: str, mode: SearchMode) -
     return mode == "instructions" and is_instruction_count_aggregate_question(message)
 
 
+def _format_security_event_count_aggregate_answer(
+    message: str, graph_rows: list[dict[str, Any]]
+) -> str:
+    row = graph_rows[0] if graph_rows else {}
+    total = int(row.get("total") or 0)
+    alert_count = int(row.get("alert_count") or 0)
+    info_count = int(row.get("info_count") or 0)
+    period = payment_aggregate_period_label(message)
+    qualifier = f" ({period})" if period != "all time" else ""
+
+    if total == 0:
+        return f"There are no security events in the system{qualifier}."
+
+    if total == 1:
+        return (
+            f"There is 1 security event in the system{qualifier} "
+            f"({alert_count} ALERT, {info_count} INFO)."
+        )
+    return (
+        f"There are {total} security events in the system{qualifier} "
+        f"({alert_count} ALERT, {info_count} INFO)."
+    )
+
+
+def _security_event_alert_scope_label(message: str) -> str:
+    q = message.lower()
+    if "payment" in q:
+        return "payment"
+    if "instruction" in q:
+        return "instruction"
+    return ""
+
+
+def _format_security_event_alert_count_answer(
+    message: str, graph_rows: list[dict[str, Any]]
+) -> str:
+    total = int(graph_rows[0].get("total") or 0) if graph_rows else 0
+    scope = _security_event_alert_scope_label(message)
+    period = payment_aggregate_period_label(message)
+
+    if period == "today":
+        suffix = " today"
+    elif period == "this week":
+        suffix = " this week"
+    elif period != "all time":
+        suffix = f" ({period})"
+    else:
+        suffix = ""
+
+    scope_prefix = f"{scope} " if scope else ""
+
+    if total == 0:
+        return f"There were no {scope_prefix}ALERT events{suffix}.".replace("  ", " ")
+    if total == 1:
+        return f"There was 1 {scope_prefix}ALERT event{suffix}.".replace("  ", " ")
+    return f"There were {total} {scope_prefix}ALERT events{suffix}.".replace("  ", " ")
+
+
+def _should_format_security_event_count_aggregate(message: str, mode: SearchMode) -> bool:
+    return mode in ("events", "all") and is_security_event_count_aggregate_question(
+        message, mode=mode
+    )
+
+
+def _should_format_security_event_alert_count(message: str, mode: SearchMode) -> bool:
+    return mode in ("events", "all") and is_security_event_alert_count_question(
+        message, mode=mode
+    )
+
+
+def _should_format_security_event_alert_list(message: str, mode: SearchMode) -> bool:
+    return mode in ("events", "all") and is_security_event_alert_list_question(
+        message, mode=mode
+    )
+
+
 def _format_payment_count_aggregate_answer(message: str, graph_rows: list[dict[str, Any]]) -> str:
     total = graph_rows[0].get("total", 0) if graph_rows else 0
     period = payment_aggregate_period_label(message)
@@ -379,7 +448,6 @@ class RagService:
         self.ml_client = ml_client
         self.multimodal = multimodal
         self.neo4j = neo4j
-        self._schema = load_graph_schema()
         self._eligibility = EligibilityClient()
 
     async def _try_neo4j_direct_answer(
@@ -562,6 +630,16 @@ class RagService:
             answer = _format_payment_count_aggregate_answer(message, graph_result["rows"])
         if answer is None and _should_format_instruction_count_aggregate(message, mode):
             answer = _format_instruction_count_aggregate_answer(message, graph_result["rows"])
+        if answer is None and _should_format_security_event_count_aggregate(message, mode):
+            answer = _format_security_event_count_aggregate_answer(
+                message, graph_result["rows"]
+            )
+        if answer is None and _should_format_security_event_alert_count(message, mode):
+            answer = _format_security_event_alert_count_answer(
+                message, graph_result["rows"]
+            )
+        if answer is None and _should_format_security_event_alert_list(message, mode):
+            answer = format_security_event_alert_list(message, graph_result["rows"])
         if answer is None:
             answer = await self.ml_client.synthesize_answer(
                 message, context, chat_history, mode=mode
@@ -684,34 +762,24 @@ class RagService:
         self, question: str, *, mode: SearchMode = "events"
     ) -> dict[str, Any]:
         planned = plan_graph_queries(question, mode=mode)
+        if planned is None:
+            try:
+                graph_plan = await self.ml_client.extract_graph_query_plan(
+                    question, mode=mode
+                )
+                planned = plans_from_graph_query(
+                    graph_plan, mode=mode, question=question
+                )
+            except Exception as exc:
+                logger.warning("graph plan extraction failed: %s", exc)
+
         if planned is not None:
             try:
                 return await self._run_planned_graph_queries(planned)
             except Exception as exc:
                 logger.warning("planned graph query failed: %s", exc)
 
-        cypher: str | None = None
-        try:
-            cypher = await self.ml_client.generate_cypher(question, self._schema, mode=mode)
-            cypher = normalize_read_only_cypher(cypher)
-            rows = await self.neo4j.run_cypher(cypher)
-            return {"cypher": cypher, "rows": rows}
-        except ValueError as exc:
-            logger.warning(
-                "Cypher validation rejected LLM query — %s | query=%r", exc, cypher
-            )
-            fallback = (
-                plan_graph_queries(question, mode=mode) if planned is None else None
-            )
-            if fallback is not None:
-                try:
-                    return await self._run_planned_graph_queries(fallback)
-                except Exception as fallback_exc:
-                    logger.warning("planned graph fallback failed: %s", fallback_exc)
-            return {"cypher": cypher, "rows": [], "graph_unavailable": True}
-        except Exception as exc:
-            logger.warning("graph search failed: %s", exc)
-            return {"cypher": None, "rows": [], "graph_unavailable": True}
+        return {"cypher": None, "rows": []}
 
     async def _run_planned_graph_queries(
         self, planned: list[tuple[str, str]]
@@ -832,7 +900,7 @@ class RagService:
             summary = row.get("v.authorization_summary") or row.get("authorization_summary")
             approver = row.get("approver_display")
             when = row.get("v.approved_at") or row.get("approved_at")
-            basis = _parse_authorization_basis(
+            basis = parse_authorization_basis(
                 row.get("v.authorization_basis") or row.get("authorization_basis")
             )
             break
@@ -849,20 +917,22 @@ class RagService:
             approver = approver or payload.get("approver_display") or payload.get("actor_display")
             when = when or payload.get("approved_at") or payload.get("timestamp")
             if not basis:
-                basis = _parse_authorization_basis(payload.get("authorization_basis"))
+                basis = parse_authorization_basis(payload.get("authorization_basis"))
             if summary:
                 break
 
-        if not approver or not summary:
+        if not approver or (not summary and not basis):
             return None
 
-        why = await self.ml_client.summarize_authorization_why(
-            approver=approver,
-            authorization_summary=humanize_authorization_text(summary),
-            authorization_basis=humanize_policy_basis(basis) if basis else None,
-        )
-        why = _append_policy_basis(why, basis)
+        readable_summary = humanize_authorization_text(summary) if summary else None
+        if readable_summary:
+            readable_summary = await self.ml_client.summarize_authorization_why(
+                approver=approver,
+                authorization_summary=readable_summary,
+                authorization_basis=humanize_policy_basis(basis) if basis else None,
+            )
 
+        auth_lines = format_approval_auth_lines(summary=readable_summary, basis=basis)
         when_line = f"WHEN: {when}" if when else None
         header = (
             f"Instruction: {resolved_instruction_id} (via payment {target_payment_id})"
@@ -875,7 +945,7 @@ class RagService:
                 header,
                 f"WHO: {approver}",
                 when_line,
-                f"WHY: {why}",
+                *auth_lines,
             )
             if line
         )
@@ -904,7 +974,7 @@ class RagService:
             summary = row.get("authorization_summary")
             approver = row.get("approver_display")
             when = row.get("approved_at")
-            basis = _parse_authorization_basis(row.get("authorization_basis"))
+            basis = parse_authorization_basis(row.get("authorization_basis"))
             break
 
         for hit in hits:
@@ -926,7 +996,7 @@ class RagService:
                 )
                 when = payload.get("timestamp") or payload.get("approved_at") or when
                 if not basis:
-                    basis = _parse_authorization_basis(payload.get("authorization_basis"))
+                    basis = parse_authorization_basis(payload.get("authorization_basis"))
             else:
                 approver = approver or payload.get("approver_display")
                 when = when or payload.get("approved_at")
@@ -940,21 +1010,20 @@ class RagService:
             return None
 
         summary = summary or f"{approver} was allowed to APPROVE_PAYMENT"
-        readable_basis = humanize_policy_basis(basis) if basis else None
-        why = await self.ml_client.summarize_authorization_why(
+        readable_summary = await self.ml_client.summarize_authorization_why(
             approver=approver,
             authorization_summary=humanize_authorization_text(summary),
-            authorization_basis=readable_basis,
+            authorization_basis=humanize_policy_basis(basis) if basis else None,
         )
-        why = _append_policy_basis(why, basis)
 
+        auth_lines = format_approval_auth_lines(summary=readable_summary, basis=basis)
         when_line = f"WHEN: {when}" if when else None
         return "\n".join(
             line
             for line in (
                 f"WHO: {approver}",
                 when_line,
-                f"WHY: {why}",
+                *auth_lines,
             )
             if line
         )
@@ -1021,7 +1090,15 @@ class RagService:
             )
             if aggregate is not None:
                 total = aggregate.get("total", aggregate.get("count"))
-                sections.append(f"Neo4j aggregate count: {total}")
+                if aggregate.get("alert_count") is not None:
+                    sections.append(
+                        "Neo4j security event count: "
+                        f"total={total}, "
+                        f"ALERT={aggregate.get('alert_count')}, "
+                        f"INFO={aggregate.get('info_count')}"
+                    )
+                else:
+                    sections.append(f"Neo4j aggregate count: {total}")
             detail_rows = [
                 row for row in graph_rows if row not in ranking_rows and row is not aggregate
             ] if ranking_rows or aggregate else graph_rows

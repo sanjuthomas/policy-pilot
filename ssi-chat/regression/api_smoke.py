@@ -426,25 +426,23 @@ def run_api_smoke(
         )
 
         def indexer_cypher_generate() -> None:
-            if SKIP_OLLAMA:
-                raise SkipCheck("API_SMOKE_SKIP_OLLAMA set")
             response = client.post(
                 f"{indexer_url.rstrip('/')}/api/cypher/generate",
-                json={"question": "How many security events exist?", "mode": "events"},
+                json={"question": "How many ALERT events happened today?", "mode": "events"},
                 headers=admin_headers,
-                timeout=300.0,
+                timeout=30.0,
             )
             if response.status_code != 200:
                 raise RuntimeError(f"expected 200, got {response.status_code}: {response.text[:200]}")
             body = response.json()
-            if "cypher" not in body or "valid" not in body:
-                raise RuntimeError("missing cypher/valid in generate response")
+            if body.get("source") != "query_planner":
+                raise RuntimeError("expected query_planner source in generate response")
 
         _run_check(
             result,
             "indexer_cypher_generate",
             "ssi-indexer",
-            "POST /api/cypher/generate (admin, Ollama)",
+            "POST /api/cypher/generate (admin, query planner)",
             indexer_cypher_generate,
         )
 

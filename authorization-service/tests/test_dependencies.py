@@ -1,8 +1,8 @@
+import pytest
 from authz.config import settings
 from authz.dependencies import get_compliance_subject
 from authz.models import Subject
 from fastapi import HTTPException
-import pytest
 
 
 def test_compliance_role_set_includes_analyst() -> None:

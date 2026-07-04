@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from chat_application.rag import RagService
+from cypher_builder import GraphIntent, GraphQueryPlan
 from fastapi.testclient import TestClient
 
 
@@ -19,8 +20,8 @@ def mock_ml_client():
     client.dimension = 768
     client.embed = AsyncMock(return_value=[0.1, 0.2, 0.3])
     client.warmup = AsyncMock()
-    client.generate_cypher = AsyncMock(
-        return_value="MATCH (e:SecurityEvent) RETURN e LIMIT 1"
+    client.extract_graph_query_plan = AsyncMock(
+        return_value=GraphQueryPlan(intent=GraphIntent.SECURITY_EVENT_AGGREGATE)
     )
     client.synthesize_answer = AsyncMock(return_value="Synthesized answer.")
     client.summarize_authorization_why = AsyncMock(return_value="Policy allowed approval.")
@@ -53,8 +54,7 @@ def mock_neo4j():
 
 
 @pytest.fixture
-def rag_service(mock_ml_client, mock_multimodal, mock_neo4j, monkeypatch):
-    monkeypatch.setattr("chat_application.rag.load_graph_schema", lambda: "schema")
+def rag_service(mock_ml_client, mock_multimodal, mock_neo4j):
     return RagService(
         ml_client=mock_ml_client,
         multimodal=mock_multimodal,

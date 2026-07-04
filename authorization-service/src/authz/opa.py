@@ -34,6 +34,76 @@ class OpaClient:
             body: dict[str, Any] = response.json()
         return body.get("result")
 
+    async def list_policy_ids(self) -> list[str]:
+        url = f"{self.base_url}/v1/policies"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            body: dict[str, Any] = response.json()
+
+        result = body.get("result", [])
+        if not isinstance(result, list):
+            return []
+        return [
+            str(item["id"])
+            for item in result
+            if isinstance(item, dict) and item.get("id")
+        ]
+
+    async def policy_health(
+        self,
+        *,
+        minimum_policies: int = 11,
+    ) -> dict[str, Any]:
+        try:
+            policy_ids = await self.list_policy_ids()
+            count = len(policy_ids)
+            if count < minimum_policies:
+                return {
+                    "ok": False,
+                    "policy_count": count,
+                    "detail": f"expected at least {minimum_policies} policies",
+                }
+
+            allowed = bool(
+                await self._post_data(
+                    "instruction/lifecycle/allow",
+                    {
+                        "input": {
+                            "action": "CREATE",
+                            "subject": {
+                                "user_id": "mo-100",
+                                "title": "Analyst",
+                                "roles": ["INSTRUCTION_CREATOR"],
+                                "groups": ["MIDDLE_OFFICE"],
+                            },
+                            "instruction": {
+                                "status": "DRAFT",
+                                "type": "SINGLE_USE",
+                                "owning_lob": "FICC",
+                                "effective_date": "2026-07-04T00:00:00Z",
+                                "end_date": "2027-07-04T00:00:00Z",
+                                "created_by": {
+                                    "user_id": "mo-100",
+                                    "title": "Analyst",
+                                },
+                            },
+                            "account": {"owning_lob": "FICC"},
+                        }
+                    },
+                )
+            )
+            if not allowed:
+                return {
+                    "ok": False,
+                    "policy_count": count,
+                    "detail": "instruction CREATE smoke evaluation denied",
+                }
+
+            return {"ok": True, "policy_count": count, "detail": "policies loaded"}
+        except Exception as exc:
+            return {"ok": False, "policy_count": 0, "detail": str(exc)}
+
     @staticmethod
     def _as_string_list(value: Any) -> list[str]:
         if isinstance(value, list):

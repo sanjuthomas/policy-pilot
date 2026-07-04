@@ -131,7 +131,9 @@ class PaymentEligibleApproversResponse(BaseModel):
     instruction_status: str
     evaluated_at: str
     eligible: list[EligibleApprover]
+    prospective_eligible: list[EligibleApprover] = Field(default_factory=list)
     candidates_evaluated: int
+    approval_blocked_reason: str | None = None
 
 
 class InstructionEligibleApproversResponse(BaseModel):

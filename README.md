@@ -215,7 +215,7 @@ Example authorization block on an APPROVE security event:
 
 **Why policy-as-code matters for this demo:** Allows and denials both produce structured audit records in Kafka → Neo4j multimodal store. Denials surface as `ALERT` events for fraud-pattern questions (_"which users triggered the most policy denial alerts?"_). Allows carry `details.authorization` so the chat can answer approval audit questions with **Who / When / Why**, not just a name from instruction state.
 
-**Why OPA over embedding auth in domain services:** Policy logic changes independently of application logic. Adding a new rule (e.g. "MD-level approval required for international wire > $10M") requires editing a `.rego` file and reloading OPA — not rebuilding instruction-service or payment-service. The `opa-policy-seed` container loads policies from the `opa-policy-seed/policies/` directory at startup.
+**Why OPA over embedding auth in domain services:** Policy logic changes independently of application logic. Adding a new rule (e.g. "MD-level approval required for international wire > $10M") requires editing a `.rego` file and reloading OPA — not rebuilding instruction-service or payment-service. OPA mounts `opa-policy-seed/policies/` and loads Rego on every start; `opa-policy-seed` verifies policies are compiled before app services start.
 
 ---
 
@@ -387,7 +387,7 @@ The unified memory architecture means the CPU and GPU share the same 64 GB pool.
 | `authorization-service` | Stateless OPA gateway — lifecycle evaluate + batch eligible-approvers; user directory UI; reads `users.yaml`; no database |
 | `ssi-demo-harness` | ZITADEL-authenticated UI to drive lifecycles and OPA policy scenarios |
 | `neo4j-graph-model` | Graph schema docs, Cypher constraints/indexes, example queries |
-| `opa-policy-seed` | Rego policies — `instruction/` + `payment/` packages with `allow_basis`, `violations`, lifecycle rules |
+| `opa-policy-seed` | Startup gate — waits until OPA has compiled mounted Rego policies |
 | `zitadel-seed` | Demo user seed (`users.yaml`) — middle office, FICC/FX/DESK approvers, payment creators/approvers, front-office submitters, compliance analysts (`comp-001`, `comp-002`), service accounts |
 | `log-forwarder` | Optional container log shipping to Kafka |
 

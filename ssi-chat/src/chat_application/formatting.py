@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 
@@ -111,6 +112,60 @@ def humanize_policy_basis_point(point: str) -> str:
 
 def humanize_policy_basis(basis: list[str]) -> list[str]:
     return [humanize_policy_basis_point(point) for point in basis]
+
+
+def parse_authorization_basis(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value if item]
+    if isinstance(value, str) and value.strip():
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return [str(item) for item in parsed if item]
+        except json.JSONDecodeError:
+            pass
+    return []
+
+
+def format_approval_basis_line(basis: list[str]) -> str | None:
+    if not basis:
+        return None
+    return f"BASIS: {' | '.join(humanize_policy_basis(basis))}"
+
+
+def basis_redundant_with_summary(summary: str | None, basis: list[str]) -> bool:
+    """True when every OPA allow_basis point is already present in the summary text."""
+    if not summary or not basis:
+        return False
+    summary_lower = summary.lower()
+    readable = humanize_policy_basis(basis)
+    return all(point.lower() in summary_lower for point in readable)
+
+
+def format_approval_auth_lines(
+    *,
+    summary: str | None,
+    basis: list[str],
+) -> list[str]:
+    """Build WHY and/or BASIS lines without repeating the same OPA checks."""
+    readable_summary = humanize_authorization_text(str(summary)) if summary else None
+    readable_basis = humanize_policy_basis(basis) if basis else []
+    redundant = basis_redundant_with_summary(readable_summary, basis)
+
+    lines: list[str] = []
+    if readable_summary:
+        lines.append(f"WHY: {readable_summary}")
+    elif readable_basis:
+        basis_line = format_approval_basis_line(basis)
+        if basis_line:
+            lines.append(basis_line)
+
+    if readable_basis and readable_summary and not redundant:
+        basis_line = format_approval_basis_line(basis)
+        if basis_line:
+            lines.append(basis_line)
+
+    return lines
 
 
 def humanize_authorization_text(text: str) -> str:

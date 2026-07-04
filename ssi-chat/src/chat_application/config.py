@@ -14,10 +14,6 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8092
 
-    ollama_url: str = "http://host.docker.internal:11434"
-    ollama_chat_model: str = "hmahmood/neo4j-gemma-3-27b-inst-q8"
-    ollama_timeout_seconds: float = 300.0
-
     gcp_project_id: str = "rag-demos-501323"
     gcp_region: str = "us-central1"
     vertex_embedding_model: str = "text-embedding-004"

@@ -1,7 +1,5 @@
 from pathlib import Path
 
-import yaml
-
 from authz.directory import build_user_directory_rows
 from authz.user_directory import UserDirectory
 

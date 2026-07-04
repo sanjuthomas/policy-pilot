@@ -1,10 +1,9 @@
 from unittest.mock import patch
 
 import pytest
-from fastapi import HTTPException
-
 from authz.dependencies import get_subject
 from authz.models import Subject
+from fastapi import HTTPException
 
 
 def test_get_subject_requires_bearer() -> None:

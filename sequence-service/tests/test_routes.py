@@ -1,11 +1,5 @@
 from __future__ import annotations
 
-from datetime import date
-from unittest.mock import AsyncMock
-
-import pytest
-
-from seq.models import EntityType
 from seq.repository import SequenceRepositoryError
 
 

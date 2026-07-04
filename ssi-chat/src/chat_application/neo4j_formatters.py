@@ -5,8 +5,9 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from chat_application.formatting import (
+    format_approval_auth_lines,
     format_markdown_table,
-    humanize_authorization_text,
+    parse_authorization_basis,
 )
 
 Formatter = Callable[[str, list[dict[str, Any]]], str | None]
@@ -58,19 +59,25 @@ def format_instruction_creator_and_approver_by_id(
     return "\n".join(lines)
 
 
+def format_approval_lookup_answer(row: dict[str, Any]) -> str:
+    approver = row.get("approver_display") or "unknown"
+    when = row.get("approved_at") or row.get("v.approved_at")
+    summary = row.get("v.authorization_summary") or row.get("authorization_summary")
+    basis = parse_authorization_basis(
+        row.get("v.authorization_basis") or row.get("authorization_basis")
+    )
+    lines = [f"WHO: {approver}"]
+    if when:
+        lines.append(f"WHEN: {when}")
+    lines.extend(format_approval_auth_lines(summary=str(summary) if summary else None, basis=basis))
+    return "\n".join(lines)
+
+
 def format_instruction_approver_by_id(question: str, rows: list[dict[str, Any]]) -> str | None:
     row = _first_row(rows)
     if row is None:
         return "No approval record was found for that instruction in the graph."
-    approver = row.get("approver_display") or "unknown"
-    when = row.get("v.approved_at") or row.get("approved_at")
-    summary = row.get("v.authorization_summary") or row.get("authorization_summary")
-    lines = [f"WHO: {approver}"]
-    if when:
-        lines.append(f"WHEN: {when}")
-    if summary:
-        lines.append(f"WHY: {humanize_authorization_text(str(summary))}")
-    return "\n".join(lines)
+    return format_approval_lookup_answer(row)
 
 
 def format_instruction_inventory_table(question: str, rows: list[dict[str, Any]]) -> str | None:
@@ -198,6 +205,28 @@ def format_alert_count_today(question: str, rows: list[dict[str, Any]]) -> str |
     return f"There were {total} ALERT events today."
 
 
+def format_security_event_alert_list(question: str, rows: list[dict[str, Any]]) -> str | None:
+    detail_rows = [row for row in rows if row.get("event_id")]
+    if not detail_rows:
+        return "No ALERT security events were found in the graph."
+
+    table_rows = [
+        [
+            row.get("event_id") or "—",
+            row.get("timestamp") or "—",
+            row.get("entity_type") or "—",
+            row.get("entity_id") or "—",
+            row.get("actor_display") or "—",
+            row.get("action") or "—",
+        ]
+        for row in detail_rows
+    ]
+    return (
+        f"ALERT security events ({len(table_rows)}):\n\n"
+        f"{format_markdown_table(['Event ID', 'Event Time', 'Entity Type', 'Entity ID', 'Actor', 'Action'], table_rows)}"
+    )
+
+
 FORMATTERS: dict[str, Formatter] = {
     "instruction_creator_by_id": format_instruction_creator_by_id,
     "instruction_status_by_id": format_instruction_status_by_id,
@@ -209,4 +238,5 @@ FORMATTERS: dict[str, Formatter] = {
     "instruction_conflict_table": format_instruction_conflict_table,
     "security_event_timeline": format_security_event_timeline,
     "alert_count_today": format_alert_count_today,
+    "security_event_alert_list": format_security_event_alert_list,
 }

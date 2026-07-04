@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
-
 from seq.formatting import (
     build_counter_key,
     build_security_event_counter_key,
@@ -64,7 +63,6 @@ def test_request_normalizes_lob(lob: str, expected: str) -> None:
 
 def test_request_rejects_invalid_lob() -> None:
     from pydantic import ValidationError
-
     from seq.models import NextSequenceRequest
 
     with pytest.raises(ValidationError):

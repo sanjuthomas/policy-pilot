@@ -21,6 +21,7 @@ from chat_application.neo4j_formatters import (
     format_instruction_inventory_table,
     format_instruction_mutual_approval,
     format_instruction_status_by_id,
+    format_security_event_alert_list,
     format_security_event_timeline,
 )
 
@@ -152,6 +153,49 @@ class TestNeo4jFormatters:
         assert "Bob" in text
         assert "$1 million" in text
 
+    def test_instruction_approver_by_id_includes_basis(self) -> None:
+        text = format_instruction_approver_by_id(
+            "q",
+            [
+                {
+                    "approver_display": "Vasquez, Elena (ficc-300)",
+                    "approved_at": "2026-07-04T12:29:42.385807",
+                    "authorization_basis": [
+                        "amount 1000000 within subject and absolute limits",
+                        "role FICC_SUPERVISOR",
+                    ],
+                }
+            ],
+        )
+        assert "WHO: Vasquez, Elena (ficc-300)" in text
+        assert "WHEN: 2026-07-04T12:29:42.385807" in text
+        assert "BASIS:" in text
+        assert "WHY:" not in text
+        assert "FICC_SUPERVISOR" in text
+        assert "$1 million" in text
+
+    def test_instruction_approver_by_id_skips_redundant_basis(self) -> None:
+        summary = (
+            "Vasquez, Elena (ficc-300) was allowed to APPROVE because "
+            "role FICC_SUPERVISOR; valid transition for status SUBMITTED"
+        )
+        text = format_instruction_approver_by_id(
+            "q",
+            [
+                {
+                    "approver_display": "Vasquez, Elena (ficc-300)",
+                    "approved_at": "2026-07-04T12:29:42.385807",
+                    "authorization_summary": summary,
+                    "authorization_basis": [
+                        "role FICC_SUPERVISOR",
+                        "valid transition for status SUBMITTED",
+                    ],
+                }
+            ],
+        )
+        assert "WHY:" in text
+        assert "BASIS:" not in text
+
     def test_instruction_mutual_approval_table(self) -> None:
         text = format_instruction_mutual_approval(
             "q",
@@ -194,6 +238,25 @@ class TestNeo4jFormatters:
     def test_alert_count_today_singular_and_plural(self) -> None:
         assert "1 ALERT event" in format_alert_count_today("q", [{"total": 1}])
         assert "5 ALERT events" in format_alert_count_today("q", [{"total": 5}])
+
+    def test_security_event_alert_list_table(self) -> None:
+        text = format_security_event_alert_list(
+            "summarize all alerts",
+            [
+                {
+                    "event_id": "evt-1",
+                    "timestamp": "2026-07-04T10:00:00Z",
+                    "entity_type": "instruction",
+                    "entity_id": "20260704-FICC-I-1",
+                    "actor_display": "Chen, Sarah (mo-100)",
+                    "action": "APPROVE",
+                }
+            ],
+        )
+        assert "evt-1" in text
+        assert "Event ID" in text
+        assert "Entity Type" in text
+        assert "mo-100" in text
 
     def test_formatters_registry(self) -> None:
         assert "instruction_creator_by_id" in FORMATTERS

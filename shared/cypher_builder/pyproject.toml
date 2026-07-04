@@ -1,0 +1,31 @@
+[project]
+name = "cypher-builder"
+version = "0.1.0"
+description = "Dynamic read-only Cypher query builder with structured plan extraction"
+requires-python = ">=3.12"
+dependencies = [
+  "pydantic>=2.10.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+  "pytest-cov>=6",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.coverage.run]
+source = ["cypher_builder"]
+
+[tool.coverage.report]
+fail_under = 70
+
+[build-system]
+requires = ["setuptools>=75.0.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

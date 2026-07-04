@@ -3,9 +3,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import uvicorn
-from cypher_gen import (
-    load_graph_schema,
+from cypher_builder import (
     normalize_read_only_cypher,
+    plan_graph_queries,
     validate_read_only_cypher,
 )
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query
@@ -32,7 +32,6 @@ from etl.instruction_security_event_consumer import (
 from etl.instruction_security_event_pipeline import InstructionSecurityEventPipeline
 from etl.multimodal_store import MultimodalNeo4jStore
 from etl.neo4j_client import Neo4jGraphWriter
-from etl.ollama_client import OllamaChatClient
 from etl.payment_consumer import (
     PaymentFactKafkaConsumer,
     PaymentSecurityEventKafkaConsumer,
@@ -53,7 +52,6 @@ embedding_client = VertexEmbeddingClient(
     model=settings.vertex_embedding_model,
     dimension=settings.embedding_dimension,
 )
-ollama_client = OllamaChatClient()
 multimodal_store = MultimodalNeo4jStore(neo4j_writer)
 
 instruction_security_event_pipeline = InstructionSecurityEventPipeline(
@@ -117,7 +115,6 @@ async def lifespan(app: FastAPI):
     await payment_fact_consumer.close()
     await neo4j_writer.close()
     await embedding_client.close()
-    await ollama_client.close()
     shutdown_telemetry()
 
 
@@ -145,7 +142,6 @@ async def health() -> dict:
         multimodal_store=multimodal_store,
         neo4j_writer=neo4j_writer,
         embedding_client=embedding_client,
-        ollama_client=ollama_client,
     )
     overall = "UP" if all(c["ok"] for c in components.values()) else "DEGRADED"
     return {"status": overall, "components": components}
@@ -203,7 +199,6 @@ async def stats() -> dict:
         multimodal_store=multimodal_store,
         neo4j_writer=neo4j_writer,
         embedding_client=embedding_client,
-        ollama_client=ollama_client,
     )
     return {
         "components": components,
@@ -287,33 +282,30 @@ class CypherRunRequest(BaseModel):
 
 @api_router.post("/cypher/generate")
 async def cypher_generate(request: CypherGenerateRequest) -> dict:
-    """Translate natural language to a read-only Cypher query via Ollama."""
-    schema = load_graph_schema(settings.graph_schema_path)
-    try:
-        cypher = await ollama_client.generate_cypher(
-            request.question,
-            schema,
-            mode=request.mode,
+    """Translate natural language to read-only Cypher via the shared query planner."""
+    planned = plan_graph_queries(request.question, mode=request.mode)
+    if not planned:
+        raise HTTPException(
+            status_code=404,
+            detail="No deterministic query plan matches this question",
         )
-        cypher = normalize_read_only_cypher(cypher)
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"Cypher generation failed: {exc}") from exc
 
-    valid = True
-    error: str | None = None
-    try:
-        validate_read_only_cypher(cypher)
-    except ValueError as exc:
-        valid = False
-        error = str(exc)
+    cyphers: list[str] = []
+    labels: list[str] = []
+    for label, query in planned:
+        normalized = normalize_read_only_cypher(query)
+        validate_read_only_cypher(normalized)
+        labels.append(label)
+        cyphers.append(normalized)
 
     return {
         "question": request.question,
         "mode": request.mode,
-        "cypher": cypher,
-        "valid": valid,
-        "error": error,
-        "model": settings.ollama_chat_model,
+        "cypher": "\n\n".join(cyphers),
+        "valid": True,
+        "error": None,
+        "source": "query_planner",
+        "plan_labels": labels,
     }
 
 

@@ -73,3 +73,61 @@ def test_format_eligible_approvers_answer_empty() -> None:
         }
     )
     assert "No users currently satisfy" in text
+
+
+def test_format_eligible_approvers_answer_shows_used_instruction_block() -> None:
+    text = format_eligible_approvers_answer(
+        {
+            "payment_id": "20260704-FICC-P-2",
+            "instruction_id": "20260704-FICC-I-6",
+            "payment_status": "DRAFT",
+            "amount": 100_000_000,
+            "currency": "USD",
+            "owning_lob": "FICC",
+            "instruction_status": "USED",
+            "eligible": [],
+            "prospective_eligible": [],
+            "approval_blocked_reason": (
+                "The backing instruction 20260704-FICC-I-6 is USED and cannot support "
+                "payment approval."
+            ),
+        }
+    )
+
+    assert "20260704-FICC-P-2" in text
+    assert "20260704-FICC-I-6" in text
+    assert "backing instruction 20260704-FICC-I-6 (USED)" in text
+    assert "cannot support payment approval" in text
+    assert "No users currently satisfy" not in text
+
+
+def test_format_eligible_approvers_answer_shows_draft_block_and_prospective() -> None:
+    text = format_eligible_approvers_answer(
+        {
+            "payment_id": "p1",
+            "payment_status": "DRAFT",
+            "amount": 100,
+            "currency": "USD",
+            "owning_lob": "FICC",
+            "instruction_status": "APPROVED",
+            "eligible": [],
+            "prospective_eligible": [
+                {
+                    "user_id": "pay-400",
+                    "display_name": "Osei, Victoria (pay-400)",
+                    "title": "Vice President",
+                    "allow_basis": ["has_role"],
+                }
+            ],
+            "candidates_evaluated": 3,
+            "approval_blocked_reason": (
+                "Payment approval is not permitted while status is DRAFT. "
+                "Submit the payment first."
+            ),
+        }
+    )
+
+    assert "Payment approval is not permitted while status is DRAFT" in text
+    assert "After the payment is submitted" in text
+    assert "Osei, Victoria" in text
+    assert "Users who can approve this payment" not in text

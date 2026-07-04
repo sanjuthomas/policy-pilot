@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from pymongo.errors import ConnectionFailure
-
 from seq.models import EntityType, NextSequenceRequest
 from seq.repository import SequenceRepository, SequenceRepositoryError
 from seq.service import SequenceService

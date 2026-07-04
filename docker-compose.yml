@@ -180,6 +180,9 @@ services:
       - :8181
       - --log-level
       - info
+      - /policies
+    volumes:
+      - ./opa-policy-seed/policies:/policies:ro
     restart: unless-stopped
     networks:
       - security-event-net
@@ -311,7 +314,7 @@ services:
     ports:
       - "8090:8090"
     environment:
-      <<: *otel-ollama-environment
+      <<: *otel-environment
       OTEL_SERVICE_NAME: ssi-indexer
       GCP_PROJECT_ID: ${GCP_PROJECT_ID:-rag-demos-501323}
       GCP_REGION: ${GCP_REGION:-us-central1}
@@ -504,7 +507,7 @@ services:
     ports:
       - "8092:8092"
     environment:
-      <<: *otel-ollama-environment
+      <<: *otel-environment
       OTEL_SERVICE_NAME: ssi-chat
       GCP_PROJECT_ID: ${GCP_PROJECT_ID:-rag-demos-501323}
       GCP_REGION: ${GCP_REGION:-us-central1}

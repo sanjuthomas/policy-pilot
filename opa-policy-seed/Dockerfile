@@ -2,6 +2,6 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY upload_policies.py /app/upload_policies.py
+COPY upload_policies.py wait_for_policies.py /app/
 
-ENTRYPOINT ["python", "/app/upload_policies.py"]
+ENTRYPOINT ["python", "/app/wait_for_policies.py"]

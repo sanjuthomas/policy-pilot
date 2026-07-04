@@ -308,6 +308,26 @@ class Neo4jGraphWriter:
                         version_key=version_key,
                     )
 
+                    if action == "APPROVE" and outcome == "success":
+                        await tx.run(
+                            """
+                            MATCH (v:InstructionVersion {version_key: $version_key})
+                            SET v.approved_at = coalesce($approved_at, v.approved_at),
+                                v.approver_user_id = coalesce($approver_user_id, v.approver_user_id),
+                                v.authorization_summary = coalesce(
+                                    $authorization_summary, v.authorization_summary
+                                ),
+                                v.authorization_basis = coalesce(
+                                    $authorization_basis, v.authorization_basis
+                                )
+                            """,
+                            version_key=version_key,
+                            approved_at=instruction.get("approved_at") or event.get("timestamp"),
+                            approver_user_id=approved_by.get("user_id") or actor.get("user_id"),
+                            authorization_summary=auth_params.get("authorization_summary"),
+                            authorization_basis=auth_params.get("authorization_basis"),
+                        )
+
                     # SUPERSEDES — link to previous version if it exists
                     if prev_version_key:
                         await tx.run(

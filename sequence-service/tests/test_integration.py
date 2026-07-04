@@ -7,11 +7,10 @@ from datetime import date
 import httpx
 import pytest
 from motor.motor_asyncio import AsyncIOMotorClient
-
 from seq.config import Settings
+from seq.models import EntityType, NextSequenceRequest
 from seq.repository import SequenceRepository
 from seq.service import SequenceService
-from seq.models import EntityType, NextSequenceRequest
 
 
 def _integration_enabled() -> bool:

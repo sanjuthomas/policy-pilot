@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import logging
 
+from cypher_builder import (
+    GRAPH_QUERY_EXTRACTION_SYSTEM,
+    GraphQueryPlan,
+    build_extraction_user_prompt,
+    parse_graph_query_plan,
+)
 from vertex_client import VertexEmbeddingClient, VertexGenerativeClient
 
-from chat_application.config import settings
-from chat_application.ollama import OllamaCypherClient
 from chat_application.prompts import (
     AUTHORIZATION_WHY_SUMMARY_SYSTEM_PROMPT,
     answer_system_prompt,
@@ -15,15 +19,16 @@ logger = logging.getLogger(__name__)
 
 
 class PolicyPilotMlClient:
-    """Vertex embeddings + Gemini generation; local Ollama for Cypher fallback."""
+    """Vertex embeddings + Gemini for synthesis and structured graph plan extraction."""
 
     def __init__(
         self,
         *,
         embedding_client: VertexEmbeddingClient | None = None,
         generation_client: VertexGenerativeClient | None = None,
-        cypher_client: OllamaCypherClient | None = None,
     ) -> None:
+        from chat_application.config import settings
+
         self._embedding = embedding_client or VertexEmbeddingClient(
             project_id=settings.gcp_project_id,
             region=settings.gcp_region,
@@ -36,7 +41,6 @@ class PolicyPilotMlClient:
             model=settings.vertex_gemini_model,
             timeout_seconds=settings.vertex_timeout_seconds,
         )
-        self._cypher = cypher_client or OllamaCypherClient()
 
     @property
     def dimension(self) -> int:
@@ -48,14 +52,18 @@ class PolicyPilotMlClient:
     async def warmup(self) -> None:
         await self._embedding.warmup()
 
-    async def generate_cypher(
+    async def extract_graph_query_plan(
         self,
         question: str,
-        schema: str,
         *,
         mode: str = "events",
-    ) -> str:
-        return await self._cypher.generate_cypher(question, schema, mode=mode)
+    ) -> GraphQueryPlan:
+        raw = await self._generation.generate_text(
+            system=GRAPH_QUERY_EXTRACTION_SYSTEM,
+            user=build_extraction_user_prompt(question=question, mode=mode),
+            temperature=0.0,
+        )
+        return parse_graph_query_plan(raw)
 
     async def synthesize_answer(
         self,
@@ -113,4 +121,3 @@ Rewrite the authorization reason in clear English:"""
     async def close(self) -> None:
         await self._embedding.close()
         await self._generation.close()
-        await self._cypher.close()

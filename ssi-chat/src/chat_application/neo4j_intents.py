@@ -12,16 +12,7 @@ from typing import Any, Callable
 import yaml
 
 from chat_application.cypher import (
-    _alert_count_today_queries,
-    _instruction_approval_lookup_queries,
-    _instruction_detail_by_id_queries,
-    _instruction_duplicate_routes_queries,
-    _instruction_list_by_type_queries,
-    _instruction_mutual_approval_queries,
-    _instruction_security_event_timeline_queries,
-    _instruction_self_approval_queries,
-    _instruction_subordinate_approver_queries,
-    _instructions_created_by_user_queries,
+    CypherQueryBuilder,
     extract_entity_ids,
     extract_instruction_ids,
     extract_payment_ids,
@@ -33,6 +24,9 @@ from chat_application.cypher import (
     is_payment_count_aggregate_question,
     is_payment_total_amount_question,
     is_payments_for_instruction_question,
+    is_security_event_alert_count_question,
+    is_security_event_alert_list_question,
+    is_security_event_count_aggregate_question,
     lob_filter_from_question,
     normalize_read_only_cypher,
     plan_graph_queries,
@@ -50,6 +44,7 @@ _USER_ID_PATTERN = re.compile(
 )
 
 QueryBuilder = Callable[[dict[str, Any], str, SearchMode], list[tuple[str, str]]]
+_GRAPH_BUILDER = CypherQueryBuilder()
 
 
 def _instruction_id_from_context(context: dict[str, Any]) -> str | None:
@@ -66,43 +61,43 @@ def _build_instruction_detail(context: dict[str, Any], _question: str, _mode: Se
     instruction_id = _instruction_id_from_context(context)
     if not instruction_id:
         return []
-    return _instruction_detail_by_id_queries(instruction_id)
+    return _GRAPH_BUILDER.instruction_detail(instruction_id)
 
 
 def _build_instruction_approval_lookup(context: dict[str, Any], _question: str, _mode: SearchMode):
     instruction_id = _instruction_id_from_context(context)
     if not instruction_id:
         return []
-    return _instruction_approval_lookup_queries(instruction_id)
+    return _GRAPH_BUILDER.instruction_approval_lookup(instruction_id)
 
 
 def _build_instruction_list_single_use(context: dict[str, Any], question: str, _mode: SearchMode):
     lob = lob_filter_from_question(question)
-    return _instruction_list_by_type_queries(instruction_type="SINGLE_USE", lob=lob)
+    return _GRAPH_BUILDER.instruction_list_by_type(instruction_type="SINGLE_USE", lob=lob)
 
 
 def _build_instructions_created_by_user(context: dict[str, Any], _question: str, _mode: SearchMode):
     user_id = context.get("user_id")
     if not user_id:
         return []
-    return _instructions_created_by_user_queries(user_id)
+    return _GRAPH_BUILDER.instructions_created_by_user(user_id)
 
 
 def _build_instruction_mutual_approval(context: dict[str, Any], _question: str, _mode: SearchMode):
-    return _instruction_mutual_approval_queries()
+    return _GRAPH_BUILDER.instruction_mutual_approval()
 
 
 def _build_instruction_self_approval(context: dict[str, Any], _question: str, _mode: SearchMode):
-    return _instruction_self_approval_queries()
+    return _GRAPH_BUILDER.instruction_self_approval()
 
 
 def _build_instruction_duplicate_routes(context: dict[str, Any], question: str, _mode: SearchMode):
     lob = lob_filter_from_question(question)
-    return _instruction_duplicate_routes_queries(lob=lob)
+    return _GRAPH_BUILDER.instruction_duplicate_routes(lob=lob)
 
 
 def _build_instruction_subordinate_approver(context: dict[str, Any], _question: str, _mode: SearchMode):
-    return _instruction_subordinate_approver_queries()
+    return _GRAPH_BUILDER.instruction_subordinate_approver()
 
 
 def _build_instruction_security_event_timeline(
@@ -111,11 +106,15 @@ def _build_instruction_security_event_timeline(
     instruction_id = _instruction_id_from_context(context)
     if not instruction_id:
         return []
-    return _instruction_security_event_timeline_queries(instruction_id)
+    return _GRAPH_BUILDER.instruction_security_event_timeline(instruction_id)
 
 
 def _build_alert_count_today(context: dict[str, Any], _question: str, _mode: SearchMode):
-    return _alert_count_today_queries()
+    return _GRAPH_BUILDER.alert_count_today()
+
+
+def _build_security_event_alert_list(context: dict[str, Any], _question: str, _mode: SearchMode):
+    return _GRAPH_BUILDER.security_event_alert_list(time_filter="", domain="all")
 
 
 QUERY_BUILDERS: dict[str, QueryBuilder] = {
@@ -130,6 +129,7 @@ QUERY_BUILDERS: dict[str, QueryBuilder] = {
     "instruction_subordinate_approver": _build_instruction_subordinate_approver,
     "instruction_security_event_timeline": _build_instruction_security_event_timeline,
     "alert_count_today": _build_alert_count_today,
+    "security_event_alert_list": _build_security_event_alert_list,
 }
 
 
@@ -305,20 +305,37 @@ def _format_planned_graph_answer(
             return _format_payments_for_instruction_answer(instruction_id, rows)
 
     if "approval_lookup" in labels or "payment_approval_lookup" in labels:
-        from chat_application.formatting import humanize_authorization_text
+        from chat_application.neo4j_formatters import format_approval_lookup_answer
 
         row = rows[0] if rows else None
         if not row:
             return None
-        approver = row.get("approver_display") or "unknown"
-        when = row.get("approved_at") or row.get("v.approved_at")
-        summary = row.get("v.authorization_summary") or row.get("authorization_summary")
-        lines = [f"WHO: {approver}"]
-        if when:
-            lines.append(f"WHEN: {when}")
-        if summary:
-            lines.append(f"WHY: {humanize_authorization_text(str(summary))}")
-        return "\n".join(lines)
+        return format_approval_lookup_answer(row)
+
+    if "security_event_count" in labels and is_security_event_count_aggregate_question(
+        question, mode=mode
+    ):
+        from chat_application.rag import _format_security_event_count_aggregate_answer
+
+        count_rows = [
+            row
+            for row in rows
+            if row.get("total") is not None and row.get("alert_count") is not None
+        ]
+        return _format_security_event_count_aggregate_answer(question, count_rows or rows)
+
+    if "security_event_alert_list" in labels and is_security_event_alert_list_question(
+        question, mode=mode
+    ):
+        from chat_application.neo4j_formatters import format_security_event_alert_list
+
+        return format_security_event_alert_list(question, rows)
+
+    if "count" in labels and is_security_event_alert_count_question(question, mode=mode):
+        from chat_application.rag import _format_security_event_alert_count_answer
+
+        count_rows = [row for row in rows if row.get("total") is not None]
+        return _format_security_event_alert_count_answer(question, count_rows or rows)
 
     if "count" in labels and is_count_question(question):
         total = int(rows[0].get("total") or 0) if rows else 0

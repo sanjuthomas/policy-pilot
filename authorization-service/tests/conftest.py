@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import os
-from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
-
 from authz.admin import get_admin_subject
 from authz.models import Subject
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture(scope="session", autouse=True)

@@ -3,6 +3,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 import pytest
+from cypher_builder import GraphIntent, GraphQueryPlan
 
 
 class TestRagServiceAsk:
@@ -16,7 +17,7 @@ class TestRagServiceAsk:
         mock_ml_client.synthesize_answer = AsyncMock(return_value="There were 0 alerts.")
 
         response = await rag_service.ask("How many alerts?", [], mode="events")
-        assert response.answer == "The count is 0."
+        assert response.answer == "There were no ALERT events."
         mock_ml_client.synthesize_answer.assert_not_called()
         assert response.retrieval_ms is not None
         assert response.generation_ms is not None
@@ -188,12 +189,13 @@ class TestRagServiceAsk:
             mode="payments",
         )
         assert response.answer.startswith("WHO:")
-        assert "Policy basis:" in response.answer or "Policy basis (" in response.answer
-        assert "Policy check" in response.answer
+        assert "BASIS:" in response.answer
+        assert "WHY:" in response.answer
         assert "role FUNDING_APPROVER" in response.answer
         assert "covers LOB FICC" in response.answer
         assert "amount $1 million within subject and absolute limits" in response.answer
         assert "1e+06" not in response.answer
+        assert "Policy basis (" not in response.answer
         mock_ml_client.synthesize_answer.assert_not_called()
 
     @pytest.mark.asyncio
@@ -341,17 +343,30 @@ class TestRagServiceAsk:
         assert "count(e)" in result["cypher"]
 
     @pytest.mark.asyncio
-    async def test_search_graph_falls_back_on_invalid_llm_cypher(
+    async def test_search_graph_uses_vertex_plan_when_unmatched(
         self, rag_service, mock_ml_client, mock_neo4j
     ) -> None:
-        mock_ml_client.generate_cypher = AsyncMock(return_value="CREATE (n) RETURN n LIMIT 1")
+        mock_ml_client.extract_graph_query_plan = AsyncMock(
+            return_value=GraphQueryPlan(
+                intent=GraphIntent.SECURITY_EVENT_AGGREGATE,
+                operation="count",
+                time_window="today",
+                domain="all",
+                severity="ALERT",
+            )
+        )
+        mock_neo4j.run_cypher = AsyncMock(return_value=[{"total": 2}])
+        result = await rag_service._search_graph("unusual alert wording", mode="events")
+        assert {"total": 2} in result["rows"]
+        mock_ml_client.extract_graph_query_plan.assert_awaited_once()
 
-        async def run_cypher_side_effect(cypher: str):
-            from chat_application.cypher import validate_read_only_cypher
-
-            validate_read_only_cypher(cypher)
-            return []
-
-        mock_neo4j.run_cypher = AsyncMock(side_effect=run_cypher_side_effect)
+    @pytest.mark.asyncio
+    async def test_search_graph_returns_empty_when_no_plan(
+        self, rag_service, mock_ml_client, mock_neo4j
+    ) -> None:
+        mock_ml_client.extract_graph_query_plan = AsyncMock(
+            return_value=GraphQueryPlan(intent=GraphIntent.INSTRUCTION_LOOKUP)
+        )
         result = await rag_service._search_graph("random question", mode="events")
-        assert result.get("graph_unavailable") is True
+        assert result["rows"] == []
+        assert result.get("cypher") is None

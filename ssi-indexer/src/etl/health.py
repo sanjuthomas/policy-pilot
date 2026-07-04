@@ -4,7 +4,6 @@ import asyncio
 import logging
 from typing import Any
 
-import httpx
 from vertex_client import VertexEmbeddingClient
 
 from etl.config import settings
@@ -13,7 +12,6 @@ from etl.instruction_security_event_consumer import (
 )
 from etl.multimodal_store import MultimodalNeo4jStore
 from etl.neo4j_client import Neo4jGraphWriter
-from etl.ollama_client import OllamaChatClient
 
 logger = logging.getLogger(__name__)
 
@@ -152,51 +150,6 @@ async def check_vertex_embeddings(
         return _status(False, "down", detail=str(exc), **base)
 
 
-async def check_ollama(ollama_client: OllamaChatClient) -> ComponentStatus:
-    base = {
-        "url": settings.ollama_url,
-        "model": settings.ollama_chat_model,
-    }
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{settings.ollama_url.rstrip('/')}/api/tags")
-            response.raise_for_status()
-            body = response.json()
-
-        available_names = [
-            model.get("name", "")
-            for model in body.get("models", [])
-            if isinstance(model, dict) and model.get("name")
-        ]
-        requested = settings.ollama_chat_model
-        requested_base = requested.split(":")[0]
-        model_available = any(
-            name == requested
-            or name.startswith(f"{requested_base}:")
-            or name.split(":")[0] == requested_base
-            for name in available_names
-        )
-
-        if not model_available:
-            return _status(
-                False,
-                "down",
-                detail=f"model {settings.ollama_chat_model!r} not found",
-                models=available_names,
-                **base,
-            )
-
-        return _status(
-            True,
-            "up",
-            models_available=len(body.get("models", [])),
-            **base,
-        )
-    except Exception as exc:
-        logger.warning("ollama health check failed: %s", exc)
-        return _status(False, "down", detail=str(exc), **base)
-
-
 async def check_neo4j(neo4j_writer: Neo4jGraphWriter) -> ComponentStatus:
     base = {"uri": settings.neo4j_uri}
     if neo4j_writer._driver is None:
@@ -228,27 +181,23 @@ async def component_status(
     multimodal_store: MultimodalNeo4jStore,
     neo4j_writer: Neo4jGraphWriter,
     embedding_client: VertexEmbeddingClient,
-    ollama_client: OllamaChatClient,
 ) -> dict[str, ComponentStatus]:
     (
         kafka_status,
         neo4j_status,
         vertex_status,
-        ollama_status,
         vector_status,
         fulltext_status,
     ) = await asyncio.gather(
         check_kafka(instruction_security_event_consumer),
         check_neo4j(neo4j_writer),
         check_vertex_embeddings(embedding_client),
-        check_ollama(ollama_client),
         check_multimodal_vector(multimodal_store),
         check_multimodal_fulltext(multimodal_store),
     )
     return {
         "kafka": kafka_status,
         "vertex_embeddings": vertex_status,
-        "ollama": ollama_status,
         "multimodal_vector": vector_status,
         "multimodal_fulltext": fulltext_status,
         "neo4j": neo4j_status,

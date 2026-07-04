@@ -5,7 +5,6 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import httpx
-
 from harness.fixtures import load_users
 from harness.helpers import resolve_payment_update_amount
 from harness.payment_client import PaymentServiceClient

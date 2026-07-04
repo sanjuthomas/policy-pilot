@@ -5,6 +5,7 @@ from chat_application.formatting import (
     humanize_authorization_text,
     humanize_policy_basis,
     humanize_policy_basis_point,
+    parse_authorization_basis,
 )
 from chat_application.rag import (
     RagService,
@@ -16,27 +17,27 @@ from chat_application.rag import (
     _format_payment_count_aggregate_answer,
     _format_payment_total_amount_answer,
     _format_payments_for_instruction_answer,
+    _format_security_event_count_aggregate_answer,
     _instruction_lifecycle_party_lines,
-    _parse_authorization_basis,
 )
 from chat_application.reranker import RankedHit
 
 
 class TestParseAuthorizationBasis:
     def test_passthrough_list(self) -> None:
-        assert _parse_authorization_basis(["role:approver", "lob:FX"]) == [
+        assert parse_authorization_basis(["role:approver", "lob:FX"]) == [
             "role:approver",
             "lob:FX",
         ]
 
     def test_parses_json_array_string(self) -> None:
-        assert _parse_authorization_basis('["a", "b"]') == ["a", "b"]
+        assert parse_authorization_basis('["a", "b"]') == ["a", "b"]
 
     def test_invalid_json_returns_empty(self) -> None:
-        assert _parse_authorization_basis("not-json") == []
+        assert parse_authorization_basis("not-json") == []
 
     def test_empty_values_filtered(self) -> None:
-        assert _parse_authorization_basis(["ok", "", None]) == ["ok"]
+        assert parse_authorization_basis(["ok", "", None]) == ["ok"]
 
 
 class TestUsdAmountFormatting:
@@ -259,6 +260,15 @@ class TestPaymentAggregateAnswers:
             [{"total": 5}],
         )
         assert answer == "There are 5 instructions in the store (type SINGLE_USE)."
+
+    def test_formats_security_event_total_count(self) -> None:
+        answer = _format_security_event_count_aggregate_answer(
+            "How many security events are there in the system?",
+            [{"total": 42, "alert_count": 10, "info_count": 32}],
+        )
+        assert "42 security events" in answer
+        assert "10 ALERT" in answer
+        assert "32 INFO" in answer
 
 
 class TestDisplayFromSnapUser:

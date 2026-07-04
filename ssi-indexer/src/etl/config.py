@@ -46,9 +46,6 @@ class Settings(BaseSettings):
     vertex_embedding_model: str = "text-embedding-004"
     embedding_dimension: int = 768
 
-    ollama_url: str = "http://host.docker.internal:11434"
-    ollama_chat_model: str = "hmahmood/neo4j-gemma-3-27b-inst-q8"
-    ollama_timeout_seconds: float = 300.0
     search_default_limit: int = 10
     search_profiles_dir: str | None = None
 

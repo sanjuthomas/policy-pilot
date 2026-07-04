@@ -53,6 +53,16 @@ class TestNeo4jDirectMatching:
         assert match is not None
         assert match.intent_id == "events.alerts_today_count"
 
+    def test_payment_alerts_today_uses_planned_graph_not_yaml(self) -> None:
+        question = "How many payment ALERT events happened today?"
+        match = match_neo4j_direct_intent(question, mode="events")
+        assert match is None
+        from chat_application.neo4j_intents import match_planned_graph_intent
+
+        planned = match_planned_graph_intent(question, mode="events")
+        assert planned is not None
+        assert "e.payment_id IS NOT NULL" in planned.planned[0][1]
+
     def test_planned_graph_count_single_use_via_direct_path(self) -> None:
         question = "How many single use instructions are there?"
         match = match_neo4j_direct_intent(question, mode="instructions")

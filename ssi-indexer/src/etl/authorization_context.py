@@ -85,8 +85,9 @@ def authorization_merged_from_fact(fact: dict[str, Any]) -> dict[str, Any]:
 def authorization_fact_neo4j_params(fact: dict[str, Any]) -> dict[str, Any]:
     auth = authorization_from_fact(fact)
     snap = fact.get("instruction_snapshot") or {}
+    basis = auth.get("allow_basis") or []
     return {
         "approved_at": snap.get("approved_at") or "",
         "authorization_summary": auth.get("summary"),
-        "authorization_basis": json.dumps(auth.get("allow_basis") or []),
+        "authorization_basis": json.dumps(basis) if basis else None,
     }

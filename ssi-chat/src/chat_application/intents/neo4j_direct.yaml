@@ -109,5 +109,13 @@ intents:
     priority: 60
     modes: [events, all]
     match: '\bhow\s+many\b.*\bALERT\b.*\btoday\b|\bhow\s+many\b.*\balert\b.*\bhappened\s+today\b'
+    exclude: '\bpayment|\binstruction'
     query: alert_count_today
     formatter: alert_count_today
+
+  - id: events.alert_list
+    priority: 65
+    modes: [events, all]
+    match: '\b(list|show|summarize|summarise|all)\b.*\balerts?\b|\balerts?\b.*\b(actor|action)\b'
+    query: security_event_alert_list
+    formatter: security_event_alert_list

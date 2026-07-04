@@ -18,6 +18,10 @@ from authz.models import (
     UserReference,
 )
 from authz.opa import OpaClient
+from authz.payment_opa import (
+    payment_approval_blocked_reason,
+    payment_prospective_instruction_status,
+)
 from authz.user_directory import UserDirectory
 
 
@@ -73,17 +77,15 @@ class EligibilityService:
             ),
         )
 
-    async def eligible_approvers_for_payment(
+    async def _eligible_payment_approvers_for_context(
         self,
-        request: PaymentEligibleApproversEvaluateRequest,
-    ) -> PaymentEligibleApproversResponse:
-        payment = self._payment_record(request.payment)
-        instruction_status = request.instruction_status
-        instruction_end_date = request.instruction_end_date
-
-        candidates = self._users.funding_approver_candidates(payment.owning_lob)
+        candidates: list,
+        *,
+        payment: PaymentRecord,
+        instruction_end_date: str,
+        instruction_status: str,
+    ) -> list[EligibleApprover]:
         eligible: list[EligibleApprover] = []
-
         for candidate in candidates:
             allowed, basis = await self._opa.can_approve_payment(
                 candidate,
@@ -100,8 +102,41 @@ class EligibilityService:
                         allow_basis=basis,
                     )
                 )
-
         eligible.sort(key=lambda row: row.display_name)
+        return eligible
+
+    async def eligible_approvers_for_payment(
+        self,
+        request: PaymentEligibleApproversEvaluateRequest,
+    ) -> PaymentEligibleApproversResponse:
+        payment = self._payment_record(request.payment)
+        instruction_status = request.instruction_status
+        instruction_end_date = request.instruction_end_date
+        approval_blocked_reason = payment_approval_blocked_reason(
+            payment.status,
+            instruction_status,
+            instruction_id=payment.instruction_id,
+        )
+
+        candidates = self._users.funding_approver_candidates(payment.owning_lob)
+        eligible = await self._eligible_payment_approvers_for_context(
+            candidates,
+            payment=payment,
+            instruction_end_date=instruction_end_date,
+            instruction_status=instruction_status,
+        )
+
+        prospective_eligible: list[EligibleApprover] = []
+        prospective_instruction_status = payment_prospective_instruction_status(
+            instruction_status
+        )
+        if prospective_instruction_status and payment.status == "DRAFT":
+            prospective_eligible = await self._eligible_payment_approvers_for_context(
+                candidates,
+                payment=payment,
+                instruction_end_date=instruction_end_date,
+                instruction_status=prospective_instruction_status,
+            )
 
         return PaymentEligibleApproversResponse(
             payment_id=payment.payment_id,
@@ -113,7 +148,9 @@ class EligibilityService:
             instruction_status=instruction_status,
             evaluated_at=datetime.now(UTC).isoformat(),
             eligible=eligible,
+            prospective_eligible=prospective_eligible,
             candidates_evaluated=len(candidates),
+            approval_blocked_reason=approval_blocked_reason,
         )
 
     async def eligible_approvers_for_instruction(

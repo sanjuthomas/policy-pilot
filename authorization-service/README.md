@@ -88,4 +88,4 @@ Requires OPA (with policies seeded), ZITADEL, and `users.yaml` mounted or on dis
 docker compose up -d authorization-service
 ```
 
-Depends on `opa-policy-seed` completing successfully.
+Depends on `opa-policy-seed` completing successfully (OPA policies compiled and smoke-tested). `/health` reports `DEGRADED` when OPA has fewer than 11 policies or the CREATE smoke evaluation fails.

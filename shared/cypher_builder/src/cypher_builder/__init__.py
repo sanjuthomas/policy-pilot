@@ -1,12 +1,17 @@
-"""Backward-compatible facade over shared cypher_builder."""
-
-from __future__ import annotations
-
-from cypher_builder import (
-    LOOKUP_INSTRUCTION_BY_EVENT_CYPHER,
+from cypher_builder.builder import (
     CypherQueryBuilder,
-    GraphIntent,
-    GraphQueryPlan,
+    flags_from_plan,
+    plans_from_graph_query,
+    time_filter_from_flags,
+)
+from cypher_builder.extraction import (
+    GRAPH_QUERY_EXTRACTION_SYSTEM,
+    build_extraction_user_prompt,
+    parse_graph_query_plan,
+)
+from cypher_builder.models import GraphIntent, GraphQueryPlan
+from cypher_builder.query_engine import (
+    LOOKUP_INSTRUCTION_BY_EVENT_CYPHER,
     extract_entity_ids,
     extract_event_id,
     extract_instruction_ids,
@@ -28,36 +33,31 @@ from cypher_builder import (
     is_security_event_alert_count_question,
     is_security_event_alert_list_question,
     is_security_event_count_aggregate_question,
+    load_graph_schema,
     lob_filter_from_question,
     normalize_read_only_cypher,
     payment_aggregate_period_label,
     payment_status_filter_from_question,
     plan_graph_queries,
-    plans_from_graph_query,
     ranking_period_label,
     records_to_rows,
     row_summary,
     validate_read_only_cypher,
 )
-from cypher_builder import load_graph_schema as _load_graph_schema
-
-from chat_application.config import settings
-
-
-def load_graph_schema() -> str:
-    return _load_graph_schema(settings.graph_schema_path)
-
 
 __all__ = [
     "CypherQueryBuilder",
+    "GRAPH_QUERY_EXTRACTION_SYSTEM",
     "GraphIntent",
     "GraphQueryPlan",
     "LOOKUP_INSTRUCTION_BY_EVENT_CYPHER",
+    "build_extraction_user_prompt",
     "extract_entity_ids",
     "extract_event_id",
     "extract_instruction_ids",
     "extract_payment_ids",
     "extract_uuids",
+    "flags_from_plan",
     "instruction_count_filters_from_question",
     "instruction_id_from_list_payments_question",
     "instruction_status_filter_from_question",
@@ -77,6 +77,7 @@ __all__ = [
     "load_graph_schema",
     "lob_filter_from_question",
     "normalize_read_only_cypher",
+    "parse_graph_query_plan",
     "payment_aggregate_period_label",
     "payment_status_filter_from_question",
     "plan_graph_queries",
@@ -84,5 +85,6 @@ __all__ = [
     "ranking_period_label",
     "records_to_rows",
     "row_summary",
+    "time_filter_from_flags",
     "validate_read_only_cypher",
 ]

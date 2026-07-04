@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from chat_application.formatting import (
+    format_approval_auth_lines,
     format_markdown_table,
     format_money_amount,
     format_usd_compact,
@@ -55,3 +56,23 @@ class TestMoneyFormatting:
 
     def test_format_usd_compact(self) -> None:
         assert format_usd_compact(1_000_000) == "$1 million"
+
+
+class TestFormatApprovalAuthLines:
+    def test_basis_only_uses_basis_line(self) -> None:
+        lines = format_approval_auth_lines(
+            summary=None,
+            basis=["role FICC_SUPERVISOR"],
+        )
+        assert lines == ["BASIS: role FICC_SUPERVISOR"]
+
+    def test_summary_and_redundant_basis_uses_why_only(self) -> None:
+        summary = (
+            "Vasquez was allowed to APPROVE because role FICC_SUPERVISOR; "
+            "valid transition for status SUBMITTED"
+        )
+        basis = ["role FICC_SUPERVISOR", "valid transition for status SUBMITTED"]
+        lines = format_approval_auth_lines(summary=summary, basis=basis)
+        assert len(lines) == 1
+        assert lines[0].startswith("WHY:")
+        assert "BASIS:" not in lines[0]

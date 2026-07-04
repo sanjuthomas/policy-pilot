@@ -95,26 +95,86 @@ class EligibilityClient:
         return response.json()
 
 
+def _payment_instruction_summary(
+    instruction_id: str,
+    instruction_status: str,
+) -> str:
+    instruction_id = str(instruction_id or "").strip()
+    if instruction_id:
+        return f"backing instruction {instruction_id} ({instruction_status})"
+    return f"instruction {instruction_status}"
+
+
 def format_eligible_approvers_answer(data: dict[str, Any]) -> str:
     payment_id = data.get("payment_id", "")
     status = data.get("payment_status", "")
     amount_text = format_money_amount(data.get("amount"), data.get("currency", ""))
     owning_lob = data.get("owning_lob", "")
+    instruction_id = data.get("instruction_id", "")
     instruction_status = data.get("instruction_status", "")
+    instruction_summary = _payment_instruction_summary(instruction_id, instruction_status)
+    approval_blocked_reason = data.get("approval_blocked_reason")
+    prospective = data.get("prospective_eligible") or []
 
     header = (
         f"Live OPA evaluation for payment {payment_id} "
-        f"({status}, {amount_text}, desk {owning_lob}, instruction {instruction_status})."
+        f"({status}, {amount_text}, desk {owning_lob}, {instruction_summary})."
     )
+
+    if approval_blocked_reason:
+        parts = [header, "", approval_blocked_reason]
+        if prospective:
+            parts.append(
+                format_eligible_approvers_section(
+                    header=(
+                        "After the payment is submitted (DRAFT → SUBMITTED), these users "
+                        "would satisfy APPROVE_PAYMENT policy:"
+                    ),
+                    section_title="",
+                    eligible=prospective,
+                    empty_message=(
+                        "No users would satisfy APPROVE_PAYMENT policy after submission."
+                    ),
+                    candidate_role_label="FUNDING_APPROVER",
+                    candidates_evaluated=data.get("candidates_evaluated"),
+                )
+            )
+        return "\n\n".join(parts)
 
     return format_eligible_approvers_section(
         header=header,
         section_title="Users who can approve this payment:",
         eligible=data.get("eligible") or [],
-        empty_message="No users currently satisfy APPROVE_PAYMENT policy for this payment.",
+        empty_message=_payment_eligible_empty_message(
+            status,
+            instruction_status,
+            instruction_id=instruction_id,
+        ),
         candidate_role_label="FUNDING_APPROVER",
         candidates_evaluated=data.get("candidates_evaluated"),
     )
+
+
+def _payment_eligible_empty_message(
+    payment_status: str,
+    instruction_status: str,
+    *,
+    instruction_id: str = "",
+) -> str:
+    instruction_id = str(instruction_id or "").strip()
+    instruction_label = (
+        f"The backing instruction {instruction_id}"
+        if instruction_id
+        else "The backing instruction"
+    )
+    if payment_status == "APPROVED":
+        return "This payment is already APPROVED."
+    if instruction_status in {"USED", "REJECTED", "EXPIRED", "DELETED"}:
+        return (
+            f"{instruction_label} is {instruction_status} and cannot support "
+            "payment approval."
+        )
+    return "No users currently satisfy APPROVE_PAYMENT policy for this payment."
 
 
 def format_instruction_eligible_approvers_answer(data: dict[str, Any]) -> str:
