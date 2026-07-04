@@ -22,6 +22,8 @@ def client():
     with patch("etl.main.instruction_security_event_consumer") as mock_consumer, patch(
         "etl.main.neo4j_writer"
     ) as mock_neo4j, patch("etl.main.embedding_client") as mock_embedding, patch(
+        "etl.main.generation_client"
+    ) as mock_generation, patch(
         "etl.main.multimodal_store"
     ) as mock_multimodal, patch(
         "etl.main.instruction_consumer"
@@ -39,6 +41,10 @@ def client():
         mock_embedding.warmup = AsyncMock()
         mock_embedding.close = AsyncMock()
         mock_embedding.embed_query = AsyncMock(return_value=[0.1, 0.2])
+        mock_generation.close = AsyncMock()
+        mock_generation.generate_text = AsyncMock(
+            return_value='{"intent":"security_event_aggregate","operation":"count","severity":"ALERT","denial":true,"time_window":"today","confidence":0.95}'
+        )
         mock_multimodal.ensure_indexes = AsyncMock()
 
         _async_mocks(
@@ -271,25 +277,27 @@ def test_cypher_run_neo4j_error(client):
     assert response.status_code == 502
 
 
-def test_cypher_generate_success(client):
+def test_intent_extract_success(client):
     test_client, _, _, _ = client
 
     response = test_client.post(
-        "/api/cypher/generate",
-        json={"question": "How many ALERT events happened today?", "mode": "events"},
+        "/api/intent/extract",
+        json={"question": "How many payment ALERT events happened today?", "mode": "events"},
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["valid"] is True
-    assert body["source"] == "query_planner"
-    assert "count(e)" in body["cypher"]
+    assert body["source"] == "vertex_gemini"
+    assert body["plan"]["intent"] == "security_event_aggregate"
+    assert body["plan"]["severity"] == "ALERT"
 
 
-def test_cypher_generate_unmatched(client):
+def test_intent_extract_auth_required(client):
     test_client, _, _, _ = client
+    from etl.main import app
 
+    app.dependency_overrides.clear()
     response = test_client.post(
-        "/api/cypher/generate",
-        json={"question": "list events"},
+        "/api/intent/extract",
+        json={"question": "How many alerts today?", "mode": "events"},
     )
-    assert response.status_code == 404
+    assert response.status_code == 401

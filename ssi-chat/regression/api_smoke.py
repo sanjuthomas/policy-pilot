@@ -348,20 +348,20 @@ def run_api_smoke(
             indexer_stats_auth,
         )
 
-        def indexer_cypher_generate_auth() -> None:
+        def indexer_intent_extract_auth() -> None:
             response = client.post(
-                f"{indexer_url.rstrip('/')}/api/cypher/generate",
-                json={"question": "list events", "mode": "events"},
+                f"{indexer_url.rstrip('/')}/api/intent/extract",
+                json={"question": "How many alerts today?", "mode": "events"},
             )
             if response.status_code != 401:
                 raise RuntimeError(f"expected 401 without auth, got {response.status_code}")
 
         _run_check(
             result,
-            "indexer_cypher_generate_auth",
+            "indexer_intent_extract_auth",
             "ssi-indexer",
-            "POST /api/cypher/generate rejects unauthenticated",
-            indexer_cypher_generate_auth,
+            "POST /api/intent/extract rejects unauthenticated",
+            indexer_intent_extract_auth,
         )
 
         def indexer_search_vector() -> None:
@@ -383,7 +383,7 @@ def run_api_smoke(
             result,
             "indexer_search_vector",
             "ssi-indexer",
-            "POST /api/search/vector (admin, Ollama)",
+            "POST /api/search/vector (admin, Vertex embeddings)",
             indexer_search_vector,
         )
 
@@ -425,25 +425,32 @@ def run_api_smoke(
             indexer_cypher_run,
         )
 
-        def indexer_cypher_generate() -> None:
+        def indexer_intent_extract() -> None:
+            if SKIP_OLLAMA:
+                raise SkipCheck("API_SMOKE_SKIP_OLLAMA set")
             response = client.post(
-                f"{indexer_url.rstrip('/')}/api/cypher/generate",
-                json={"question": "How many ALERT events happened today?", "mode": "events"},
+                f"{indexer_url.rstrip('/')}/api/intent/extract",
+                json={
+                    "question": "How many payment ALERT events happened today?",
+                    "mode": "events",
+                },
                 headers=admin_headers,
-                timeout=30.0,
+                timeout=120.0,
             )
             if response.status_code != 200:
                 raise RuntimeError(f"expected 200, got {response.status_code}: {response.text[:200]}")
             body = response.json()
-            if body.get("source") != "query_planner":
-                raise RuntimeError("expected query_planner source in generate response")
+            if body.get("source") != "vertex_gemini":
+                raise RuntimeError("expected vertex_gemini source in intent response")
+            if not body.get("plan", {}).get("intent"):
+                raise RuntimeError("missing plan.intent in intent extract response")
 
         _run_check(
             result,
-            "indexer_cypher_generate",
+            "indexer_intent_extract",
             "ssi-indexer",
-            "POST /api/cypher/generate (admin, query planner)",
-            indexer_cypher_generate,
+            "POST /api/intent/extract (admin, Vertex Gemini)",
+            indexer_intent_extract,
         )
 
         def payment_eligible() -> None:

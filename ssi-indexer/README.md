@@ -16,7 +16,7 @@ http://localhost:8090
 
 Embeddings use `RETRIEVAL_DOCUMENT` task type at index time; PolicyPilot uses the same model with `RETRIEVAL_QUERY` at chat time.
 
-Graph query generation in the Search Console uses the shared **`cypher_builder`** query planner (deterministic intents only — no local LLM).
+Graph query generation in the Search Console uses **Vertex Gemini** to extract a structured graph query plan (`POST /api/intent/extract`).
 
 ## Pipelines
 
@@ -84,7 +84,7 @@ On APPROVE instruction security events, the pipeline **patches** the existing `i
 | Vector | Neo4j vector index (`multimodal_embedding`) |
 | BM25 | Neo4j fulltext index (`multimodal_search_text`) |
 | Neo4j | Text search on `SecurityEvent` nodes |
-| Cypher generate | `cypher_builder` query planner → read-only Cypher (admin API) |
+| Cypher generate | Vertex Gemini → structured graph query plan (admin API) |
 
 Component status bar shows Kafka, multimodal vector/fulltext indexes, Neo4j graph, and Vertex embedding health.
 
@@ -97,6 +97,7 @@ Copy `.env.example` to `.env` at the repo root to override defaults. Docker Comp
 | `GCP_PROJECT_ID` | `rag-demos-501323` |
 | `GCP_REGION` | `us-central1` |
 | `VERTEX_EMBEDDING_MODEL` | `text-embedding-004` |
+| `VERTEX_GEMINI_MODEL` | `gemini-2.5-flash` |
 | `EMBEDDING_DIMENSION` | `768` |
 | `GCP_SA_KEY_PATH` | host path to service account JSON (Compose mount) |
 | `GOOGLE_APPLICATION_CREDENTIALS` | `/run/secrets/gcp-sa.json` (in container) |
@@ -127,7 +128,8 @@ ssi-indexer   # serves on :8090
 | POST | `/api/search/hybrid` | Hybrid search |
 | POST | `/api/search/vector` | Dense vector search (Vertex embed query) |
 | POST | `/api/search/bm25` | Fulltext BM25 search |
-| POST | `/api/cypher/generate` | Natural language → Cypher (`cypher_builder` planner) |
+| POST | `/api/intent/extract` | Natural language → graph query plan (Vertex Gemini) |
+| POST | `/api/cypher/run` | Validate and run read-only Cypher against Neo4j |
 | GET | `/api/graph/events` | Neo4j event text search |
 | GET | `/api/graph/events/{event_id}` | Event subgraph |
 

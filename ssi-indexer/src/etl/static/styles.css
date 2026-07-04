@@ -713,9 +713,9 @@ button:disabled {
   }
 }
 
-/* ── Text → Cypher pane ─────────────────────────────────────────────────── */
+/* ── Question → Intent pane ─────────────────────────────────────────────── */
 
-.cypher-panel {
+.intent-panel {
   margin: 0 1.5rem 2rem;
 }
 
@@ -725,27 +725,15 @@ button:disabled {
   margin-bottom: 1rem;
 }
 
-.cypher-panel h2 .arrow {
+.intent-panel h2 .arrow {
   color: var(--color-accent);
 }
 
-#cypher-output {
-  font-family: var(--font-mono, "JetBrains Mono", "Fira Code", monospace);
-  font-size: 0.82rem;
-  background: var(--surface-2, #1a1d24);
-  border: 1px solid var(--border, #2e3340);
-  border-radius: 6px;
-  padding: 0.75rem;
-  resize: vertical;
-  width: 100%;
-  color: inherit;
-}
-
-#cypher-results-output {
-  max-height: 20rem;
+#intent-output {
+  max-height: 24rem;
   overflow-y: auto;
   white-space: pre-wrap;
-  word-break: break-all;
+  word-break: break-word;
 }
 
 select {
@@ -757,8 +745,7 @@ select {
   font-size: 0.85rem;
 }
 
-#cypher-generate-btn:disabled,
-#cypher-run-btn:disabled {
+#intent-extract-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }

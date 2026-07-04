@@ -550,62 +550,49 @@ AdminAuth.bindAdminAuthPanel({
   },
 });
 
-// ── Text → Cypher pane ────────────────────────────────────────────────────
+// ── Question → Intent pane ────────────────────────────────────────────────
 
-const cypherForm = document.getElementById("cypher-form");
-const cypherModeSelect = document.getElementById("cypher-mode-select");
-const cypherQuestionInput = document.getElementById("cypher-question-input");
-const cypherGenerateBtn = document.getElementById("cypher-generate-btn");
-const cypherGenerateStatus = document.getElementById("cypher-generate-status");
-const cypherOutputWrap = document.getElementById("cypher-output-wrap");
-const cypherOutput = document.getElementById("cypher-output");
-const cypherValidBadge = document.getElementById("cypher-valid-badge");
-const cypherErrorMsg = document.getElementById("cypher-error-msg");
-const cypherCopyBtn = document.getElementById("cypher-copy-btn");
-const cypherRunBtn = document.getElementById("cypher-run-btn");
-const cypherRunStatus = document.getElementById("cypher-run-status");
-const cypherResultsWrap = document.getElementById("cypher-results-wrap");
-const cypherResultsTitle = document.getElementById("cypher-results-title");
-const cypherResultsOutput = document.getElementById("cypher-results-output");
-const cypherClearBtn = document.getElementById("cypher-clear-btn");
+const intentForm = document.getElementById("intent-form");
+const intentModeSelect = document.getElementById("intent-mode-select");
+const intentQuestionInput = document.getElementById("intent-question-input");
+const intentExtractBtn = document.getElementById("intent-extract-btn");
+const intentExtractStatus = document.getElementById("intent-extract-status");
+const intentOutputWrap = document.getElementById("intent-output-wrap");
+const intentOutput = document.getElementById("intent-output");
+const intentOutputMeta = document.getElementById("intent-output-meta");
+const intentCopyBtn = document.getElementById("intent-copy-btn");
+const intentClearBtn = document.getElementById("intent-clear-btn");
 
-let cypherBusy = false;
+let intentBusy = false;
 
-function setCypherBusy(next) {
-  cypherBusy = next;
-  cypherGenerateBtn.disabled = next;
-  cypherRunBtn.disabled = next;
+function setIntentBusy(next) {
+  intentBusy = next;
+  intentExtractBtn.disabled = next;
 }
 
-function showCypherResult(data) {
-  cypherResultsTitle.textContent = `Neo4j result — ${data.row_count} row(s)`;
-  cypherResultsOutput.textContent = JSON.stringify(data.rows, null, 2);
-  cypherResultsWrap.classList.remove("hidden");
+function clearIntentOutput() {
+  intentOutputWrap.classList.add("hidden");
+  intentOutput.textContent = "";
+  intentOutputMeta.textContent = "";
+  intentExtractStatus.textContent = "";
 }
 
-function clearCypherResults() {
-  cypherResultsWrap.classList.add("hidden");
-  cypherResultsOutput.textContent = "";
-  cypherRunStatus.textContent = "";
-}
-
-cypherForm.addEventListener("submit", async (event) => {
+intentForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (cypherBusy) return;
+  if (intentBusy) return;
 
-  const question = cypherQuestionInput.value.trim();
+  const question = intentQuestionInput.value.trim();
   if (!question) return;
 
-  setCypherBusy(true);
-  cypherGenerateStatus.textContent = "Generating… (may take 20–60 s)";
-  cypherOutputWrap.classList.add("hidden");
-  clearCypherResults();
+  setIntentBusy(true);
+  intentExtractStatus.textContent = "Calling Vertex Gemini…";
+  intentOutputWrap.classList.add("hidden");
 
   try {
-    const response = await apiFetch("/api/cypher/generate", {
+    const response = await apiFetch("/api/intent/extract", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, mode: cypherModeSelect.value }),
+      body: JSON.stringify({ question, mode: intentModeSelect.value }),
     });
     const data = await response.json();
     if (!response.ok) {
@@ -613,72 +600,36 @@ cypherForm.addEventListener("submit", async (event) => {
       throw new Error(msg);
     }
 
-    cypherOutput.value = data.cypher || "";
-    cypherOutputWrap.classList.remove("hidden");
-
-    if (data.valid) {
-      cypherValidBadge.textContent = "valid";
-      cypherValidBadge.style.background = "var(--color-ok, #3a7d44)";
-      cypherErrorMsg.classList.add("hidden");
-    } else {
-      cypherValidBadge.textContent = "invalid";
-      cypherValidBadge.style.background = "var(--color-warn, #a0522d)";
-      cypherErrorMsg.textContent = data.error || "Validation failed";
-      cypherErrorMsg.classList.remove("hidden");
-    }
-
-    cypherGenerateStatus.textContent = `Generated via ${data.source || "query_planner"}`;
+    const plan = data.plan || {};
+    intentOutput.textContent = JSON.stringify(plan, null, 2);
+    intentOutputMeta.textContent = [
+      `intent: ${plan.intent || "—"}`,
+      plan.confidence != null ? `confidence: ${plan.confidence}` : null,
+      data.model ? `model: ${data.model}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    intentOutputWrap.classList.remove("hidden");
+    intentExtractStatus.textContent = `Extracted via ${data.source || "vertex_gemini"}`;
   } catch (error) {
-    cypherGenerateStatus.textContent = `Error: ${error.message}`;
+    intentExtractStatus.textContent = `Error: ${error.message}`;
   } finally {
-    setCypherBusy(false);
+    setIntentBusy(false);
   }
 });
 
-cypherCopyBtn.addEventListener("click", () => {
-  const text = cypherOutput.value;
+intentCopyBtn.addEventListener("click", () => {
+  const text = intentOutput.textContent;
   if (!text) return;
   navigator.clipboard.writeText(text).then(() => {
-    const prev = cypherCopyBtn.textContent;
-    cypherCopyBtn.textContent = "Copied!";
-    setTimeout(() => { cypherCopyBtn.textContent = prev; }, 1500);
+    const prev = intentCopyBtn.textContent;
+    intentCopyBtn.textContent = "Copied!";
+    setTimeout(() => {
+      intentCopyBtn.textContent = prev;
+    }, 1500);
   });
 });
 
-cypherRunBtn.addEventListener("click", async () => {
-  if (cypherBusy) return;
-  const cypher = cypherOutput.value.trim();
-  if (!cypher) return;
-
-  setCypherBusy(true);
-  cypherRunStatus.textContent = "Running…";
-  clearCypherResults();
-
-  try {
-    const response = await apiFetch("/api/cypher/run", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cypher }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      const msg = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || data);
-      throw new Error(msg);
-    }
-    showCypherResult(data);
-    cypherRunStatus.textContent = `${data.row_count} row(s) returned`;
-  } catch (error) {
-    cypherRunStatus.textContent = `Run failed: ${error.message}`;
-  } finally {
-    setCypherBusy(false);
-  }
-});
-
-cypherClearBtn.addEventListener("click", () => {
-  clearCypherResults();
-  cypherOutputWrap.classList.add("hidden");
-  cypherOutput.value = "";
-  cypherGenerateStatus.textContent = "";
-  cypherValidBadge.textContent = "";
-  cypherErrorMsg.classList.add("hidden");
+intentClearBtn.addEventListener("click", () => {
+  clearIntentOutput();
 });

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Security Event Search</title>
-    <link rel="stylesheet" href="/static/styles.css?v=7" />
+    <link rel="stylesheet" href="/static/styles.css?v=8" />
   </head>
   <body>
     <header class="topbar">
@@ -150,19 +150,20 @@
       </section>
     </main>
 
-    <!-- Text → Cypher pane -->
-    <section class="panel cypher-panel">
-      <h2>Text <span class="arrow">→</span> Cypher</h2>
+    <!-- Question → Intent pane -->
+    <section class="panel intent-panel">
+      <h2>Question <span class="arrow">→</span> Intent</h2>
       <p class="panel-intro">
-        Translate a natural-language question into a read-only Cypher query using the shared
-        <strong>cypher_builder</strong> query planner, then run it directly against Neo4j.
+        Send a natural-language question to <strong>Vertex Gemini</strong> and inspect the structured
+        graph query plan (<code>intent</code>, filters, confidence) that PolicyPilot uses before
+        building read-only Cypher.
       </p>
 
-      <form id="cypher-form" class="search-form">
+      <form id="intent-form" class="search-form">
         <div class="search-controls" style="margin-bottom: 0.75rem;">
-          <label class="field field-inline" for="cypher-mode-select">
+          <label class="field field-inline" for="intent-mode-select">
             <span class="field-label">Graph mode</span>
-            <select id="cypher-mode-select">
+            <select id="intent-mode-select">
               <option value="events" selected>Security events</option>
               <option value="instructions">Instructions</option>
               <option value="payments">Payments</option>
@@ -170,54 +171,38 @@
           </label>
         </div>
 
-        <label class="field" for="cypher-question-input">
+        <label class="field" for="intent-question-input">
           <span class="field-label">Natural language question</span>
           <textarea
-            id="cypher-question-input"
+            id="intent-question-input"
             rows="3"
-            placeholder="e.g. find all approvals where the approver reports to the creator"
+            placeholder="e.g. How many payment ALERT events happened today?"
             required
           ></textarea>
         </label>
 
         <div class="search-controls">
-          <button type="submit" id="cypher-generate-btn" class="btn-primary">Generate Cypher</button>
-          <span id="cypher-generate-status" class="muted" style="font-size:0.8rem;"></span>
+          <button type="submit" id="intent-extract-btn" class="btn-primary">Extract intent</button>
+          <span id="intent-extract-status" class="muted" style="font-size:0.8rem;"></span>
         </div>
       </form>
 
-      <div id="cypher-output-wrap" class="hidden" style="margin-top:1rem;">
-        <label class="field" for="cypher-output">
-          <span class="field-label">Generated Cypher
-            <span id="cypher-valid-badge" class="badge" style="margin-left:0.5rem;font-size:0.7rem;"></span>
-          </span>
-          <textarea
-            id="cypher-output"
-            rows="8"
-            class="mono"
-            spellcheck="false"
-            placeholder="Cypher will appear here…"
-          ></textarea>
-        </label>
-        <div id="cypher-error-msg" class="muted hidden" style="color:var(--color-warn,#e09550);font-size:0.8rem;margin-top:0.25rem;"></div>
-
-        <div class="search-controls" style="margin-top:0.75rem;">
-          <button type="button" id="cypher-copy-btn" class="btn btn-ghost">Copy</button>
-          <button type="button" id="cypher-run-btn" class="btn-secondary">Run against Neo4j</button>
-          <span id="cypher-run-status" class="muted" style="font-size:0.8rem;"></span>
-        </div>
-      </div>
-
-      <div id="cypher-results-wrap" class="hidden" style="margin-top:1rem;">
+      <div id="intent-output-wrap" class="hidden" style="margin-top:1rem;">
         <div class="results-header">
-          <h3 id="cypher-results-title">Neo4j result</h3>
-          <button type="button" id="cypher-clear-btn" class="btn btn-ghost">Clear</button>
+          <div>
+            <h3>Graph query plan</h3>
+            <p id="intent-output-meta" class="muted"></p>
+          </div>
+          <div>
+            <button type="button" id="intent-copy-btn" class="btn btn-ghost">Copy JSON</button>
+            <button type="button" id="intent-clear-btn" class="btn btn-ghost">Clear</button>
+          </div>
         </div>
-        <pre id="cypher-results-output" class="results-detail" aria-label="Cypher result JSON"></pre>
+        <pre id="intent-output" class="results-detail mono" aria-label="Extracted intent JSON"></pre>
       </div>
     </section>
 
     <script src="/static/admin-auth.js?v=1"></script>
-    <script src="/static/app.js?v=8"></script>
+    <script src="/static/app.js?v=9"></script>
   </body>
 </html>

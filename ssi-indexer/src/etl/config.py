@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     gcp_project_id: str = "rag-demos-501323"
     gcp_region: str = "us-central1"
     vertex_embedding_model: str = "text-embedding-004"
+    vertex_gemini_model: str = "gemini-2.5-flash"
+    vertex_timeout_seconds: float = 120.0
     embedding_dimension: int = 768
 
     search_default_limit: int = 10

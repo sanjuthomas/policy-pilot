@@ -21,6 +21,7 @@ async def test_lifespan_starts_and_stops_consumers() -> None:
         patch("etl.main.shutdown_telemetry") as mock_shutdown,
         patch("etl.main.neo4j_writer") as mock_neo4j,
         patch("etl.main.embedding_client") as mock_embedding,
+        patch("etl.main.generation_client") as mock_generation,
         patch("etl.main.multimodal_store") as mock_multimodal,
         patch("etl.main.instruction_security_event_consumer") as mock_ise,
         patch("etl.main.instruction_consumer") as mock_ic,
@@ -32,6 +33,7 @@ async def test_lifespan_starts_and_stops_consumers() -> None:
         mock_embedding.warmup = AsyncMock()
         mock_embedding.close = AsyncMock()
         mock_embedding.dimension = 768
+        mock_generation.close = AsyncMock()
         mock_multimodal.ensure_indexes = AsyncMock()
         for consumer in (mock_ise, mock_ic, mock_pse, mock_pfc):
             consumer.start = AsyncMock()
@@ -55,6 +57,7 @@ async def test_lifespan_starts_and_stops_consumers() -> None:
             consumer.close.assert_awaited_once()
         mock_neo4j.close.assert_awaited_once()
         mock_embedding.close.assert_awaited_once()
+        mock_generation.close.assert_awaited_once()
         mock_shutdown.assert_called_once()
 
 
@@ -70,6 +73,7 @@ async def test_lifespan_continues_when_warmup_fails() -> None:
         patch("etl.main.shutdown_telemetry"),
         patch("etl.main.neo4j_writer") as mock_neo4j,
         patch("etl.main.embedding_client") as mock_embedding,
+        patch("etl.main.generation_client") as mock_generation,
         patch("etl.main.multimodal_store") as mock_multimodal,
         patch("etl.main.instruction_security_event_consumer") as mock_ise,
         patch("etl.main.instruction_consumer") as mock_ic,
@@ -80,6 +84,7 @@ async def test_lifespan_continues_when_warmup_fails() -> None:
         mock_neo4j.close = AsyncMock()
         mock_embedding.warmup = AsyncMock(side_effect=RuntimeError("vertex down"))
         mock_embedding.close = AsyncMock()
+        mock_generation.close = AsyncMock()
         mock_multimodal.ensure_indexes = AsyncMock()
         for consumer in (mock_ise, mock_ic, mock_pse, mock_pfc):
             consumer.start = AsyncMock()

@@ -102,7 +102,7 @@ RUN_API_SMOKE=1 pytest tests/test_api_smoke.py -v
 | **ssi-demo-harness** | Seed actions, `/api/status`, auth on lifecycle actions (incl. suspend/reactivate) |
 | **instruction-service** | UI list (admin), REST auth gate; lifecycle via harness seed |
 | **payment-service** | UI list (admin), REST auth gate; lifecycle via harness seed |
-| **ssi-indexer** | Stats, vector search, graph events, cypher run/generate, auth gates |
+| **ssi-indexer** | Stats, vector search, graph events, intent extract, cypher run, auth gates |
 | **PolicyPilot** (`ssi-chat`) | Compliance login, `/api/chat` (~60 YAML cases), compliance-users |
 | **authorization-service** | Health, service-auth gate on evaluate endpoints |
 | **payment-service** / **instruction-service** | Payment/instruction eligible-approvers (compliance JWT), auth gate |

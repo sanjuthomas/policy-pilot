@@ -319,6 +319,7 @@ services:
       GCP_PROJECT_ID: ${GCP_PROJECT_ID:-rag-demos-501323}
       GCP_REGION: ${GCP_REGION:-us-central1}
       VERTEX_EMBEDDING_MODEL: ${VERTEX_EMBEDDING_MODEL:-text-embedding-004}
+      VERTEX_GEMINI_MODEL: ${VERTEX_GEMINI_MODEL:-gemini-2.5-flash}
       EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-768}
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/gcp-sa.json
       KAFKA_ENABLED: "true"

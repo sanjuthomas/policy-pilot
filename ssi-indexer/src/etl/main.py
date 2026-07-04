@@ -4,8 +4,9 @@ from pathlib import Path
 
 import uvicorn
 from cypher_builder import (
-    normalize_read_only_cypher,
-    plan_graph_queries,
+    GRAPH_QUERY_EXTRACTION_SYSTEM,
+    build_extraction_user_prompt,
+    parse_graph_query_plan,
     validate_read_only_cypher,
 )
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query
@@ -18,7 +19,7 @@ from telemetry import (
     instrument_app,
     shutdown_telemetry,
 )
-from vertex_client import VertexEmbeddingClient
+from vertex_client import VertexEmbeddingClient, VertexGenerativeClient
 
 from etl.admin import get_admin_subject
 from etl.auth_routes import router as auth_router
@@ -51,6 +52,12 @@ embedding_client = VertexEmbeddingClient(
     region=settings.gcp_region,
     model=settings.vertex_embedding_model,
     dimension=settings.embedding_dimension,
+)
+generation_client = VertexGenerativeClient(
+    project_id=settings.gcp_project_id,
+    region=settings.gcp_region,
+    model=settings.vertex_gemini_model,
+    timeout_seconds=settings.vertex_timeout_seconds,
 )
 multimodal_store = MultimodalNeo4jStore(neo4j_writer)
 
@@ -115,6 +122,7 @@ async def lifespan(app: FastAPI):
     await payment_fact_consumer.close()
     await neo4j_writer.close()
     await embedding_client.close()
+    await generation_client.close()
     shutdown_telemetry()
 
 
@@ -271,7 +279,7 @@ async def graph_instruction_detail(instruction_id: str) -> dict:
     return subgraph
 
 
-class CypherGenerateRequest(BaseModel):
+class IntentExtractRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     mode: str = Field(default="events", pattern="^(events|instructions|payments)$")
 
@@ -280,32 +288,29 @@ class CypherRunRequest(BaseModel):
     cypher: str = Field(min_length=1, max_length=4096)
 
 
-@api_router.post("/cypher/generate")
-async def cypher_generate(request: CypherGenerateRequest) -> dict:
-    """Translate natural language to read-only Cypher via the shared query planner."""
-    planned = plan_graph_queries(request.question, mode=request.mode)
-    if not planned:
-        raise HTTPException(
-            status_code=404,
-            detail="No deterministic query plan matches this question",
+@api_router.post("/intent/extract")
+async def intent_extract(request: IntentExtractRequest) -> dict:
+    """Extract a structured graph query plan from natural language via Vertex Gemini."""
+    try:
+        raw = await generation_client.generate_text(
+            system=GRAPH_QUERY_EXTRACTION_SYSTEM,
+            user=build_extraction_user_prompt(
+                question=request.question,
+                mode=request.mode,
+            ),
+            temperature=0.0,
         )
-
-    cyphers: list[str] = []
-    labels: list[str] = []
-    for label, query in planned:
-        normalized = normalize_read_only_cypher(query)
-        validate_read_only_cypher(normalized)
-        labels.append(label)
-        cyphers.append(normalized)
+        plan = parse_graph_query_plan(raw)
+    except Exception as exc:
+        logger.warning("intent extraction failed: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     return {
         "question": request.question,
         "mode": request.mode,
-        "cypher": "\n\n".join(cyphers),
-        "valid": True,
-        "error": None,
-        "source": "query_planner",
-        "plan_labels": labels,
+        "plan": plan.model_dump(mode="json"),
+        "model": settings.vertex_gemini_model,
+        "source": "vertex_gemini",
     }
 
 
