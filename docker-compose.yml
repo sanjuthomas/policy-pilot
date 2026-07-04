@@ -206,9 +206,9 @@ services:
       - "7687:7687"
     environment:
       NEO4J_AUTH: neo4j/devpassword
-      NEO4J_server_memory_heap_initial__size: 3g
-      NEO4J_server_memory_heap_max__size: 6g
-      NEO4J_server_memory_pagecache_size: 512m
+      NEO4J_server_memory_heap_initial__size: 8g
+      NEO4J_server_memory_heap_max__size: 16g
+      NEO4J_server_memory_pagecache_size: 1g
     volumes:
       - neo4j-data:/data
     restart: unless-stopped
