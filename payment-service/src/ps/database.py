@@ -8,6 +8,7 @@ from motor.motor_asyncio import (
     AsyncIOMotorDatabase,
 )
 from pymongo import ReadPreference
+from pymongo.errors import OperationFailure
 
 from ps.config import settings
 
@@ -15,12 +16,24 @@ logger = logging.getLogger(__name__)
 
 _client: AsyncIOMotorClient | None = None
 
+# Pre–composite-_id schema; documents store payment_id only in _id ({id}|{version}).
+_LEGACY_PAYMENT_INDEXES = (
+    "payment_id_1",
+    "payment_id_version_unique",
+)
+
 
 async def connect() -> None:
     global _client
     _client = AsyncIOMotorClient(settings.mongodb_uri)
     await _client.admin.command("ping")
     collection = get_db()[settings.mongodb_collection]
+    for index_name in _LEGACY_PAYMENT_INDEXES:
+        try:
+            await collection.drop_index(index_name)
+        except OperationFailure as exc:
+            if exc.code != 27:  # IndexNotFound
+                raise
     await collection.create_index(
         [("_id", 1), ("out", 1)],
         unique=True,

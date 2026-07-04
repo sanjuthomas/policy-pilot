@@ -53,6 +53,7 @@ async def test_connect_and_close() -> None:
     mock_client.admin.command = AsyncMock()
     mock_db = MagicMock()
     mock_collection = MagicMock()
+    mock_collection.drop_index = AsyncMock()
     mock_collection.create_index = AsyncMock()
     mock_client.__getitem__ = MagicMock(return_value=mock_db)
     mock_db.__getitem__ = MagicMock(return_value=mock_collection)
