@@ -2,7 +2,7 @@
 
 An event-driven, policy-aware knowledge platform for regulated financial systems combining OPA authorization, Neo4j knowledge graphs, hybrid retrieval, and LLM-powered investigation.
 
-**PolicyPilot** — the chat application in this repo — gives supervisors and compliance officers a single conversational surface over the cash leg of the Standard Settlement Instructions (SSI).
+Policy Pilot gives supervisors and compliance officers a single conversational surface over the cash leg of Standard Settlement Instructions (SSI). It unifies **live policy rules** (OPA), **operational state** (instructions and payments), and the **immutable audit trail** of what was allowed or denied — so teams investigate in natural language instead of stitching answers from LDAP, databases, and ticket queues.
 
 ## Why this exists
 
@@ -16,15 +16,15 @@ In a large bank, middle-office supervisors and compliance officers are accountab
 
 The answers rarely live in one place. Some rules sit in **LDAP**, some in an **OPA** or local rule engine, some are **hard-coded in application services**, and others linger in **database configuration** that only one team understands. Policy-based access control may exist on paper, but enforcement is partial — so investigators open tickets across operations, technology, and compliance, then spend days stitching fragments into a story everyone will trust.
 
-Worse, **what the permission model says** and **what actually happened** can diverge. A user may lack a role in one system yet still approve a payment because a downstream check passed, a stale entitlement was cached, or an exception path fired. For audit and supervision, the decisive record is not the org chart or the role matrix — it is the **security event**: the immutable fact that an action occurred, who performed it, whether policy allowed or denied it, and **why** (the OPA decision context captured at decision time).
+Worse, **what the permission model says** and **what actually happened** can diverge. A user may lack a role in one system yet still approve a payment because a downstream check passed, a stale entitlement was cached, or an exception path fired. For audit and supervision, investigators need both the **policy decision** (allow/deny and why) and the **operational fact** that the action occurred — captured together in structured security events with OPA context at decision time.
 
-This demo models that reality end to end. Every instruction or payment mutation — create, submit, approve, reject, and policy denial — is recorded as a structured security event, streamed through Kafka, indexed into Neo4j (graph + multimodal vector/fulltext), and made queryable in **natural language**. Stakeholders do not need to know which database, topic, or team owns the answer; they ask in conversation and get a **holistic, evidence-backed view** grounded in what the system actually did.
+Policy Pilot models that reality end to end. Every instruction or payment mutation — create, submit, approve, reject, and policy denial — is recorded, streamed through Kafka, indexed into Neo4j (graph + multimodal vector/fulltext), and made queryable in **natural language**. Stakeholders do not need to know which database, topic, or team owns the answer; they ask in conversation and get a **holistic, evidence-backed view** grounded in what the system actually did.
 
-The technical approach is **hybrid RAG** (vector search, BM25, and Neo4j) with **query-adaptive routing** — the assistant picks the right retrieval path and answer strategy for each question (planned graph queries, exact lookups, live eligibility checks, or full synthesis) instead of forcing every query through a single retrieval pattern.
+The platform uses **hybrid retrieval** (vector search, BM25, and Neo4j) with **query-adaptive routing** — Policy Pilot picks the right path for each question (planned graph queries, exact lookups, live eligibility checks, or full synthesis) instead of treating every query as a document search.
 
-## Demo questions
+## Example investigation questions
 
-The chat is designed to surface **fraud patterns, compliance violations, and collusion signals** — questions that go beyond what a standard application status screen can answer.
+Policy Pilot is designed to surface **fraud patterns, compliance violations, and collusion signals** — questions that go beyond what a standard application status screen can answer.
 
 **Collusion and mutual approval:**
 - _Are there any instances of approving each other's instructions?_
@@ -71,7 +71,7 @@ The chat is designed to surface **fraud patterns, compliance violations, and col
    - **InstructionPipeline** (`instructions`) → instruction master graph + multimodal `source=instruction_state`
    - **PaymentSecurityEventPipeline** (`payment_security_events`) → payment security graph + multimodal `source=payment_security_event`
    - **PaymentFactPipeline** (`payments`) → payment master graph + multimodal `source=payment_fact`
-6. **Chat** — selects a retrieval mode (`events` / `instructions` / `payments` / `all`), runs vector + BM25 + Neo4j in parallel, merges with reciprocal rank fusion. Count, ranking, hierarchy, and approval-by-ID questions use **deterministic planned Cypher** (`shared/cypher_builder`) or exact lookups. Instruction approval audit questions return **Who / When** from indexed data and **Why** via **Vertex Gemini** rewrite of OPA `authorization_summary`. Live **who can approve?** questions bypass RAG and call instruction-service or payment-service eligible-approvers APIs (compliance JWT). Other questions use **Vertex Gemini** synthesis over retrieved context; unresolved graph questions fall back to **Gemini structured graph plan extraction** → read-only Cypher.
+6. **Policy Pilot** (`ssi-chat`) — selects a retrieval mode (`events` / `instructions` / `payments` / `all`), runs vector + BM25 + Neo4j in parallel, merges with reciprocal rank fusion. Count, ranking, hierarchy, and approval-by-ID questions use **deterministic planned Cypher** (`shared/cypher_builder`) or exact lookups. Instruction approval audit questions return **Who / When** from indexed data and **Why** via **Vertex Gemini** rewrite of OPA `authorization_summary`. Live **who can approve?** questions bypass retrieval and call instruction-service or payment-service eligible-approvers APIs (compliance JWT). Other questions use **Vertex Gemini** synthesis over retrieved context; unresolved graph questions fall back to **Gemini structured graph plan extraction** → read-only Cypher.
 
 ---
 
@@ -196,7 +196,7 @@ In this demo Kafka runs as a single broker with no replication, which is appropr
 
 ### Why Neo4j vector + fulltext BM25 (hybrid search)?
 
-No single retrieval strategy reliably handles the full range of questions a user asks over security events.
+No single retrieval strategy reliably handles the full range of policy, lifecycle, and audit questions investigators ask.
 
 **Dense vector search** (via **Vertex AI `text-embedding-004`** embeddings stored on `MultimodalDocument` nodes) excels at **semantic similarity** — "who tried to approve each other's instructions?" or "show me policy denial events for FX desk" — where the meaning matters more than the exact words. But dense search struggles with **exact identifiers**: if the user pastes a UUID like `2f75858d-d845-40d4-b9fb-43951a8c40e2`, the embedding of that string carries little semantic signal and the cosine similarity ranking is unreliable.
 
@@ -243,13 +243,13 @@ The graph also serves as a **cross-validation layer**: if a UUID is present in t
 
 ### Why Vertex AI?
 
-**What Vertex provides in this demo:** Google Cloud Vertex AI hosts the **embedding** and **generative** models used for semantic search and natural-language answers. Both **ssi-indexer** and **PolicyPilot** call Vertex through the shared `vertex_client` package (`shared/vertex_client/`).
+**What Vertex provides in this demo:** Google Cloud Vertex AI hosts the **embedding** and **generative** models used for semantic search and natural-language answers. Both **ssi-indexer** and **Policy Pilot** call Vertex through the shared `vertex_client` package (`shared/vertex_client/`).
 
 | Role | Model | Used by |
 |------|-------|---------|
-| Document + query embeddings | `text-embedding-004` (768-dim) | ssi-indexer (write), PolicyPilot (query) |
-| Answer synthesis + authorization WHY rewrite | `gemini-2.5-flash` | PolicyPilot |
-| Graph query plan extraction (fallback) | `gemini-2.5-flash` | PolicyPilot (structured JSON → Cypher via `cypher_builder`) |
+| Document + query embeddings | `text-embedding-004` (768-dim) | ssi-indexer (write), Policy Pilot (query) |
+| Answer synthesis + authorization WHY rewrite | `gemini-2.5-flash` | Policy Pilot |
+| Graph query plan extraction (fallback) | `gemini-2.5-flash` | Policy Pilot (structured JSON → Cypher via `cypher_builder`) |
 
 **Why Vertex for all ML:**
 
@@ -268,7 +268,7 @@ The graph also serves as a **cross-validation layer**: if a UUID is present in t
 Neo4j graph retrieval uses a **two-tier** approach:
 
 1. **Planned Cypher** — rule-based intent matching in `shared/cypher_builder` for counts, rankings, hierarchy traversals, approval lookups, and other high-confidence question shapes. No LLM call.
-2. **Gemini graph plan extraction** — when no planner rule matches, PolicyPilot asks Gemini for a structured `GraphQueryPlan` (intent + parameters), which `cypher_builder` turns into validated read-only Cypher.
+2. **Gemini graph plan extraction** — when no planner rule matches, Policy Pilot asks Gemini for a structured `GraphQueryPlan` (intent + parameters), which `cypher_builder` turns into validated read-only Cypher.
 
 The indexer Search Console `POST /api/cypher/generate` endpoint uses the same planner (deterministic matches only).
 
@@ -319,7 +319,7 @@ To browse logs locally, open [OpenSearch Dashboards](http://localhost:5601), cre
 | `payment-service` | Cash payment lifecycle against approved SSI instructions — same authz/OBO pattern, Mongo persistence (Connect CDC to Kafka), payment and security event UIs, compliance eligible-approvers API |
 | `ssi-indexer` | Four Kafka consumers — instruction + payment security events and state facts → Neo4j graph + multimodal indexer (Vertex embeddings) + search console UI |
 | `kafka-connect` | MongoDB source connectors — change streams → domain Kafka topics (full documents, no transforms) |
-| `ssi-chat` | **PolicyPilot** — RAG chat assistant; Vertex Gemini synthesis + graph plan extraction; four search modes, triple retrieval, Who/When/Why approval audit, planned Cypher, regression suite |
+| `ssi-chat` | **Policy Pilot** — conversational investigation UI; Vertex Gemini synthesis + graph plan extraction; four search modes, hybrid retrieval, Who/When/Why approval audit, planned Cypher, regression suite |
 | `shared/cypher_builder` | Shared Neo4j query planner — deterministic Cypher intents + Gemini plan → Cypher conversion |
 | `shared/vertex_client` | Shared Vertex AI client — embeddings (`text-embedding-004`) and generation (`gemini-2.5-flash`) |
 | `authorization-service` | Stateless OPA gateway — lifecycle evaluate + batch eligible-approvers; user directory UI; reads `users.yaml`; no database |
@@ -334,7 +334,7 @@ To browse logs locally, open [OpenSearch Dashboards](http://localhost:5601), cre
 
 ### Embedding model — Vertex `text-embedding-004`
 
-The ETL and PolicyPilot use [Google `text-embedding-004`](https://cloud.google.com/vertex-ai/generative-ai/docs/embeddings/get-text-embeddings) via the shared `vertex_client` package.
+The ETL and Policy Pilot use [Google `text-embedding-004`](https://cloud.google.com/vertex-ai/generative-ai/docs/embeddings/get-text-embeddings) via the shared `vertex_client` package.
 
 | Property | Value |
 |----------|-------|
@@ -343,13 +343,13 @@ The ETL and PolicyPilot use [Google `text-embedding-004`](https://cloud.google.c
 | Output dimension | **768** float32 |
 | Index task | `RETRIEVAL_DOCUMENT` (ETL) / `RETRIEVAL_QUERY` (chat) |
 
-Each document is embedded at write time by **ssi-indexer** and at query time by **PolicyPilot** for similarity search.
+Each document is embedded at write time by **ssi-indexer** and at query time by **Policy Pilot** for similarity search.
 
 > **Important:** changing the embedding model or dimension requires dropping Neo4j vector indexes and replaying the ETL (reset Kafka offsets — see `ssi-indexer/README.md`).
 
 ### Generative model — Vertex `gemini-2.5-flash`
 
-PolicyPilot uses Gemini for natural-language answers and authorization WHY rewrites.
+Policy Pilot uses Gemini for natural-language answers and authorization WHY rewrites.
 
 | Property | Value |
 |----------|-------|
@@ -363,7 +363,7 @@ Retrieved context (vector + BM25 + graph rows) is passed to Gemini; the model do
 
 Alongside dense vectors, both the ETL indexer and chat retriever use Neo4j's **fulltext index** on `MultimodalDocument.search_text` (Lucene BM25). BM25 complements dense semantic search by excelling at exact-match terms like UUIDs, user IDs (`mo-100`, `ficc-300`), and action names (`APPROVE`, `REJECT`).
 
-**Per-question LLM calls (PolicyPilot):**
+**Per-question LLM calls (Policy Pilot):**
 
 | Step | Provider | When |
 |------|----------|------|
@@ -407,7 +407,7 @@ cd zitadel-seed && ZITADEL_PAT="$PAT" python3 seed.py
 # 5. Open the test harness — run instruction and payment policy scenarios
 open http://localhost:8091
 
-# 6. Open the chat and start asking questions (try Security Events mode first)
+# 6. Open Policy Pilot and start asking investigation questions (Instructions or Payments mode is a good starting point)
 open http://localhost:8092
 ```
 
@@ -444,10 +444,10 @@ All passwords are `Password1!`. Login names follow `{user_id}@ssi.local`.
 | `fo-fx-101` | Jordan Blake | Analyst — front-office submitter | FX |
 | `svc-instruction` | — | Service account — instruction service → authorization-service (OBO) | — |
 | `svc-payment` | — | Service account — payment service → authorization-service and instruction-service (OBO) | — |
-| `admin-001` | Platform Administrator | **Platform admin** — secured UIs (harness, browsers, ETL console, user directory) and **PolicyPilot** | — |
-| `comp-001` / `comp-002` | Compliance analysts | **PolicyPilot** and live eligible-approvers questions (via domain services) | — |
+| `admin-001` | Platform Administrator | **Platform admin** — secured UIs (harness, browsers, ETL console, user directory) and **Policy Pilot** | — |
+| `comp-001` / `comp-002` | Compliance analysts | **Policy Pilot** and live eligible-approvers questions (via domain services) | — |
 
-**Platform admin (`admin-001`)** — sign in at any secured admin UI (test harness, instruction browser, payment browser, ETL indexer, authorization user directory) and at **PolicyPilot** (`http://localhost:8092`). Requires `PLATFORM_ADMIN` role and `ADMIN` group. All `/api/ui/*` and harness `/api/*` routes require this login; chat and domain-service eligible-approvers APIs accept `PLATFORM_ADMIN` in addition to compliance roles. Business lifecycle APIs still use their respective seeded users via ZITADEL JWT. **`admin-001` does not emit VIEW security events** when listing or reading instructions via the REST API (`SECURITY_EVENT_VIEW_EXCLUDED_USER_IDS`), so harness status polling does not flood the audit log. The instruction browser UI (`/api/ui/instructions`) reads Mongo directly and never records VIEW events.
+**Platform admin (`admin-001`)** — sign in at any secured admin UI (test harness, instruction browser, payment browser, ETL indexer, authorization user directory) and at **Policy Pilot** (`http://localhost:8092`). Requires `PLATFORM_ADMIN` role and `ADMIN` group. All `/api/ui/*` and harness `/api/*` routes require this login; chat and domain-service eligible-approvers APIs accept `PLATFORM_ADMIN` in addition to compliance roles. Business lifecycle APIs still use their respective seeded users via ZITADEL JWT. **`admin-001` does not emit VIEW security events** when listing or reading instructions via the REST API (`SECURITY_EVENT_VIEW_EXCLUDED_USER_IDS`), so harness status polling does not flood the audit log. The instruction browser UI (`/api/ui/instructions`) reads Mongo directly and never records VIEW events.
 
 After changing `users.yaml`, re-seed Zitadel (`zitadel-seed` container or manual seed script).
 
@@ -622,9 +622,9 @@ See `neo4j-graph-model/` for the full property catalog and schema.
 
 ---
 
-## RAG pipeline detail
+## How Policy Pilot answers questions
 
-PolicyPilot uses **hybrid RAG** (vector, BM25, and Neo4j) with **rule-based query routing** to select the right retrieval and answer path per question — planned Cypher for aggregates and relationship traversals, exact ID lookups for audit trails, live OPA eligibility for “who can approve?”, and LLM synthesis when exploratory search is needed.
+Policy Pilot uses **hybrid retrieval** (vector, BM25, and Neo4j) with **rule-based query routing** to select the right answer path per question — planned Cypher for aggregates and relationship traversals, exact ID lookups for audit trails, live OPA eligibility for “who can approve?”, and LLM synthesis when exploratory search is needed.
 
 ```
 User question + search mode (events | instructions | payments | all)
@@ -727,7 +727,7 @@ ssi-indexer           # :8090
 
 # SSI chat
 cd ssi-chat && pip install -e .
-ssi-chat              # PolicyPilot :8092
+ssi-chat              # Policy Pilot :8092
 
 # Authorization service
 cd authorization-service && pip install -e .
@@ -864,7 +864,7 @@ Common failures:
 
 ### 7. Start the stack and seed demo data
 
-Once the smoke test passes, follow [Quick start](#quick-start) above: `docker compose up -d`, seed ZITADEL users, run scenarios in the harness (`http://localhost:8091`), then open PolicyPilot (`http://localhost:8092`).
+Once the smoke test passes, follow [Quick start](#quick-start) above: `docker compose up -d`, seed ZITADEL users, run scenarios in the harness (`http://localhost:8091`), then open Policy Pilot (`http://localhost:8092`).
 
 For regression or smoke tests without Vertex (e.g. CI without GCP secrets), set `API_SMOKE_SKIP_VERTEX=1` — see `ssi-chat/regression/README.md`.
 
@@ -884,7 +884,7 @@ For regression or smoke tests without Vertex (e.g. CI without GCP secrets), set 
 ├── shared/authz_client/             # HTTP client used by domain services → authz
 ├── kafka-connect/                   # Mongo CDC → Kafka (four source connectors)
 ├── ssi-indexer/                     # Kafka indexer + search console
-├── ssi-chat/                        # PolicyPilot — RAG chat + compliance policy Q&A
+├── ssi-chat/                        # Policy Pilot — conversational investigation UI
 ├── ssi-demo-harness/                # Demo scenario harness UI
 ├── neo4j-graph-model/               # Graph schema and example queries
 ├── opa-policy-seed/                 # Rego policies
