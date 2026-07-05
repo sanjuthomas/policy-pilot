@@ -10,6 +10,8 @@ from chat_application.cypher import (
     instruction_id_from_list_payments_question,
     is_alert_ranking_question,
     is_count_question,
+    is_instruction_group_by_status_question,
+    is_payment_group_by_status_question,
     is_largest_payment_question,
     is_payment_amount_threshold_question,
     is_max_payments_per_instruction_question,
@@ -205,7 +207,7 @@ class TestPlanGraphQueries:
         assert planned is not None
         assert planned[0][0] == "max_payments_per_instruction"
         assert "HAS_PAYMENT" in planned[0][1]
-        assert "count(DISTINCT pay)" in planned[0][1]
+        assert "count(DISTINCT pay.payment_id)" in planned[0][1]
         assert "collect(DISTINCT pay)" in planned[0][1]
         assert "creator_display" in planned[0][1]
 
@@ -273,8 +275,41 @@ class TestPlanGraphQueries:
         assert "p.status = 'APPROVED'" in query
         assert "p.owning_lob = 'FICC'" in query
         assert "sum(p.amount)" in query
-        assert "count(DISTINCT pay)" in query
+        assert "count(DISTINCT pay.payment_id)" in query
         assert "date(datetime(p.updated_at)) = date()" in query
+
+    def test_payment_count_all_payments(self) -> None:
+        planned = plan_graph_queries(
+            "How many payments do we have?",
+            mode="payments",
+        )
+        assert planned is not None
+        assert planned[0][0] == "payment_count"
+        assert "count(DISTINCT pay.payment_id) AS total" in planned[0][1]
+        assert "count(DISTINCT pay) AS total" not in planned[0][1]
+
+    def test_payment_group_by_status(self) -> None:
+        planned = plan_graph_queries(
+            "Can you group payments by status?",
+            mode="payments",
+        )
+        assert planned is not None
+        assert planned[0][0] == "facet_aggregate"
+        query = planned[0][1]
+        assert "count(DISTINCT pay.payment_id) AS total" in query
+        assert "RETURN bucket, total" in query
+
+    def test_payment_group_them_by_status(self) -> None:
+        assert is_payment_group_by_status_question(
+            "can you group them by status?",
+            mode="payments",
+        )
+        planned = plan_graph_queries(
+            "can you group them by status?",
+            mode="payments",
+        )
+        assert planned is not None
+        assert planned[0][0] == "facet_aggregate"
 
     def test_payment_count_approved_ficc_today(self) -> None:
         planned = plan_graph_queries(
@@ -299,7 +334,7 @@ class TestPlanGraphQueries:
         query = planned[0][1]
         assert "value_date STARTS WITH toString(date())" in query
         assert "updated_at" not in query
-        assert "count(DISTINCT pay) AS total" in query
+        assert "count(DISTINCT pay.payment_id) AS total" in query
 
     def test_instruction_count_in_store(self) -> None:
         planned = plan_graph_queries(
@@ -311,6 +346,30 @@ class TestPlanGraphQueries:
         assert "count(DISTINCT i.instruction_id)" in planned[0][1]
         assert "HAS_VERSION" in planned[0][1]
         assert "max(iv.version_number)" in planned[0][1]
+
+    def test_instruction_group_by_status(self) -> None:
+        planned = plan_graph_queries(
+            "Can you group instructions by status?",
+            mode="instructions",
+        )
+        assert planned is not None
+        assert planned[0][0] == "facet_aggregate"
+        query = planned[0][1]
+        assert "count(DISTINCT i.instruction_id) AS total" in query
+        assert "RETURN bucket, total" in query
+        assert "LIMIT 200" not in query
+
+    def test_instruction_group_them_by_status(self) -> None:
+        assert is_instruction_group_by_status_question(
+            "can you group them by status?",
+            mode="instructions",
+        )
+        planned = plan_graph_queries(
+            "can you group them by status?",
+            mode="instructions",
+        )
+        assert planned is not None
+        assert planned[0][0] == "facet_aggregate"
 
     def test_instruction_count_submitted(self) -> None:
         planned = plan_graph_queries(
@@ -350,7 +409,7 @@ class TestPlanGraphQueries:
             mode="instructions",
         )
         assert planned is not None
-        assert planned[0][0] == "count_by_lob"
+        assert planned[0][0] == "facet_aggregate"
         assert "count(DISTINCT i.instruction_id)" in planned[0][1]
 
     def test_lob_filter_for_ficc_phrase(self) -> None:

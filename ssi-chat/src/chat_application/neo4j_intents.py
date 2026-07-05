@@ -16,14 +16,15 @@ from chat_application.cypher import (
     extract_entity_ids,
     extract_instruction_ids,
     extract_payment_ids,
+    format_facet_aggregate_answer,
     instruction_id_from_list_payments_question,
     is_alert_ranking_question,
     is_count_question,
+    is_facet_aggregate_question,
     is_instruction_count_aggregate_question,
     is_largest_payment_question,
     is_max_payments_per_instruction_question,
     is_payment_amount_threshold_question,
-    is_payment_count_aggregate_question,
     is_payment_total_amount_question,
     is_payments_for_instruction_question,
     is_security_event_alert_count_question,
@@ -285,15 +286,10 @@ def _format_planned_graph_answer(
 
         return _format_alert_ranking_answer(question, rows)
 
-    if "count_by_lob" in labels or (
-        "count" in labels and is_instruction_count_aggregate_question(question)
-    ):
-        from chat_application.rag import _format_instruction_count_aggregate_answer
+    if "facet_aggregate" in labels and is_facet_aggregate_question(question, mode=mode):
+        return format_facet_aggregate_answer(question, rows, mode=mode)
 
-        count_rows = [row for row in rows if row.get("total") is not None or row.get("lob")]
-        return _format_instruction_count_aggregate_answer(question, count_rows or rows)
-
-    if "payment_count" in labels and is_payment_count_aggregate_question(question):
+    if "count" in labels and is_instruction_count_aggregate_question(question):
         from chat_application.rag import _format_payment_count_aggregate_answer
 
         return _format_payment_count_aggregate_answer(question, rows)

@@ -233,6 +233,10 @@ def is_payment_total_amount_question(question: str) -> bool:
 
 
 def is_payment_count_aggregate_question(question: str) -> bool:
+    from cypher_builder.facets import is_facet_aggregate_question
+
+    if is_facet_aggregate_question(question, mode="payments"):
+        return False
     if not is_count_question(question):
         return False
     if "payment" not in question.lower():
@@ -327,6 +331,10 @@ def is_payment_amount_threshold_question(question: str) -> bool:
 
 
 def is_instruction_count_aggregate_question(question: str) -> bool:
+    from cypher_builder.facets import is_facet_aggregate_question
+
+    if is_facet_aggregate_question(question, mode="instructions"):
+        return False
     if not is_count_question(question):
         return False
     q = question.lower()
@@ -335,6 +343,24 @@ def is_instruction_count_aggregate_question(question: str) -> bool:
     if is_payments_for_instruction_question(question):
         return False
     return "instruction" in q
+
+
+def is_instruction_group_by_status_question(question: str, *, mode: str = "instructions") -> bool:
+    from cypher_builder.facets import is_facet_aggregate_question, parse_facet_aggregate
+
+    if not is_facet_aggregate_question(question, mode=mode):
+        return False
+    spec = parse_facet_aggregate(question, mode=mode)
+    return spec is not None and spec.dimension.key == "status"
+
+
+def is_payment_group_by_status_question(question: str, *, mode: str = "payments") -> bool:
+    from cypher_builder.facets import is_facet_aggregate_question, parse_facet_aggregate
+
+    if not is_facet_aggregate_question(question, mode=mode):
+        return False
+    spec = parse_facet_aggregate(question, mode=mode)
+    return spec is not None and spec.dimension.key == "status"
 
 
 def is_security_event_alert_count_question(question: str, *, mode: str = "events") -> bool:
@@ -637,7 +663,7 @@ def _payment_aggregate_queries(
                 f"""{_payment_latest_status_match_prefix()}
 AND true {status_filter} {lob_filter} {time_filter}
 RETURN coalesce(p.currency, 'USD') AS currency,
-       count(DISTINCT pay) AS payment_count,
+       count(DISTINCT pay.payment_id) AS payment_count,
        sum(p.amount) AS total_amount
 ORDER BY currency
 LIMIT 10""",
@@ -649,7 +675,7 @@ LIMIT 10""",
             "payment_count",
             f"""{_payment_latest_status_match_prefix()}
 AND true {status_filter} {lob_filter} {time_filter}
-RETURN count(DISTINCT pay) AS total
+RETURN count(DISTINCT pay.payment_id) AS total
 LIMIT 1""",
         )
     ]
@@ -955,7 +981,7 @@ def _max_payments_per_instruction_queries() -> list[tuple[str, str]]:
         (
             "max_payments_per_instruction",
             """MATCH (i:Instruction)-[:HAS_PAYMENT]->(pay:Payment)
-WITH i.instruction_id AS instruction_id, count(DISTINCT pay) AS payment_count
+WITH i.instruction_id AS instruction_id, count(DISTINCT pay.payment_id) AS payment_count
 ORDER BY payment_count DESC, instruction_id ASC
 LIMIT 1
 WITH instruction_id, payment_count
@@ -1058,19 +1084,6 @@ def _instruction_count_queries(
             "AND v.timestamp IS NOT NULL "
             "AND date(datetime(v.timestamp)) >= date() - duration('P7D')"
         )
-
-    q = question.lower()
-    if "per lob" in q or "by lob" in q or "each lob" in q:
-        return [
-            (
-                "count_by_lob",
-                f"""{_instruction_latest_status_match_prefix()}
-AND true {status_clause} {type_clause} {time_clause}
-RETURN v.owning_lob AS lob, count(DISTINCT i.instruction_id) AS total
-ORDER BY lob
-LIMIT 20""",
-            ),
-        ]
 
     return [
         (
@@ -1511,6 +1524,10 @@ def plan_graph_queries(question: str, *, mode: str) -> list[tuple[str, str]] | N
 
     if mode in ("payments", "all") and is_payment_total_amount_question(question):
         return builder.payment_aggregate(question, flags, sum_amount=True)
+
+    facet_planned = builder.facet_aggregate(question, mode=mode)
+    if facet_planned is not None:
+        return facet_planned
 
     if mode in ("payments", "all") and is_payment_count_aggregate_question(question):
         return builder.payment_aggregate(question, flags, sum_amount=False)

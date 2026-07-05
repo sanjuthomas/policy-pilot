@@ -34,6 +34,13 @@ class CypherQueryBuilder:
     ) -> list[tuple[str, str]]:
         return qe._instruction_count_queries(question, flags)
 
+    def facet_aggregate(
+        self, question: str, *, mode: str
+    ) -> list[tuple[str, str]] | None:
+        from cypher_builder.facets import facet_aggregate_queries
+
+        return facet_aggregate_queries(question, mode=mode)
+
     def instruction_detail(self, instruction_id: str) -> list[tuple[str, str]]:
         return qe._instruction_detail_by_id_queries(instruction_id)
 

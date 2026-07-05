@@ -32,9 +32,6 @@ eligibility_service: EligibilityService | None = None
 async def lifespan(app: FastAPI):
     global user_directory, eligibility_service
 
-    configure_telemetry("authorization-service", service_version=__version__)
-    instrument_app(app)
-
     user_directory = UserDirectory(settings.users_file)
     eligibility_service = EligibilityService(
         users=user_directory,
@@ -55,6 +52,9 @@ app = FastAPI(
     version=__version__,
     lifespan=lifespan,
 )
+
+configure_telemetry("authorization-service", service_version=__version__)
+instrument_app(app)
 
 app.include_router(auth_router)
 app.include_router(authorization_router, prefix=settings.api_prefix)

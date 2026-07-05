@@ -18,10 +18,12 @@ from chat_application.cypher import (
     extract_entity_ids,
     extract_payment_ids,
     extract_uuids,
+    format_facet_aggregate_answer,
     instruction_count_filters_from_question,
     instruction_id_from_list_payments_question,
     is_alert_ranking_question,
     is_count_question,
+    is_facet_aggregate_question,
     is_instruction_approver_via_payment_question,
     is_instruction_count_aggregate_question,
     is_largest_payment_question,
@@ -352,6 +354,28 @@ def _payment_aggregate_scope_label(message: str) -> str:
 def _format_instruction_count_aggregate_answer(
     message: str, graph_rows: list[dict[str, Any]]
 ) -> str:
+    if graph_rows and graph_rows[0].get("status") is not None:
+        table_rows = [
+            (row.get("status") or "unknown", int(row.get("total") or 0))
+            for row in graph_rows
+            if row.get("status") is not None
+        ]
+        if not table_rows:
+            return "No instructions were found grouped by status."
+        total = sum(count for _, count in table_rows)
+        lob = lob_filter_from_question(message)
+        period = payment_aggregate_period_label(message)
+        qualifiers: list[str] = []
+        if lob:
+            qualifiers.append(f"LOB {lob}")
+        if period != "all time":
+            qualifiers.append(period)
+        qualifier = f" ({', '.join(qualifiers)})" if qualifiers else ""
+        return (
+            f"Instruction counts by status{qualifier} ({total} total):\n\n"
+            f"{format_markdown_table(['Status', 'Instructions'], table_rows)}"
+        )
+
     if graph_rows and graph_rows[0].get("lob") is not None:
         table_rows = [
             (row.get("lob") or "unknown", int(row.get("total") or 0))
@@ -388,6 +412,10 @@ def _format_instruction_count_aggregate_answer(
 
 def _should_format_instruction_count_aggregate(message: str, mode: SearchMode) -> bool:
     return mode == "instructions" and is_instruction_count_aggregate_question(message)
+
+
+def _should_format_facet_aggregate(message: str, mode: SearchMode) -> bool:
+    return is_facet_aggregate_question(message, mode=mode)
 
 
 def _format_security_event_count_aggregate_answer(
@@ -467,6 +495,23 @@ def _should_format_security_event_alert_list(message: str, mode: SearchMode) -> 
 
 
 def _format_payment_count_aggregate_answer(message: str, graph_rows: list[dict[str, Any]]) -> str:
+    if graph_rows and graph_rows[0].get("status") is not None:
+        table_rows = [
+            (row.get("status") or "unknown", int(row.get("total") or 0))
+            for row in graph_rows
+            if row.get("status") is not None
+        ]
+        if not table_rows:
+            return "No payments were found grouped by status."
+        total = sum(count for _, count in table_rows)
+        period = payment_aggregate_period_label(message)
+        scope = _payment_aggregate_scope_label(message)
+        period_suffix = f", {period}" if period != "all time" else ""
+        return (
+            f"Payment counts by status for {scope}{period_suffix} ({total} total):\n\n"
+            f"{format_markdown_table(['Status', 'Payments'], table_rows)}"
+        )
+
     total = graph_rows[0].get("total", 0) if graph_rows else 0
     period = payment_aggregate_period_label(message)
     scope = _payment_aggregate_scope_label(message)
@@ -773,6 +818,11 @@ class RagService:
             answer_synthesis = "formatter"
         if answer is None and _should_format_payment_count_aggregate(message, mode):
             answer = _format_payment_count_aggregate_answer(message, graph_result["rows"])
+            answer_synthesis = "formatter"
+        if answer is None and _should_format_facet_aggregate(message, mode):
+            answer = format_facet_aggregate_answer(
+                message, graph_result["rows"], mode=mode
+            )
             answer_synthesis = "formatter"
         if answer is None and _should_format_instruction_count_aggregate(message, mode):
             answer = _format_instruction_count_aggregate_answer(message, graph_result["rows"])

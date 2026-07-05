@@ -58,7 +58,7 @@ The chat is designed to surface **fraud patterns, compliance violations, and col
 
 ## Architecture
 
-![End-to-end architecture: App Dev, Data Engineering, RAG Engineering, Security Engineering, Vertex embeddings, and Gemini generation](docs/architecture-1.png)
+![End-to-end architecture: App Dev, Data Engineering, RAG Engineering, Security Engineering, Vertex embeddings, and Gemini generation](docs/architecture-2.png)
 
 ### Data flow
 

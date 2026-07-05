@@ -27,9 +27,6 @@ sequence_service: SequenceService | None = None
 async def lifespan(app: FastAPI):
     global sequence_repository, sequence_service
 
-    configure_telemetry("sequence-service", service_version=__version__)
-    instrument_app(app)
-
     sequence_repository = SequenceRepository()
     await sequence_repository.connect()
     await sequence_repository.ensure_indexes()
@@ -51,6 +48,9 @@ app = FastAPI(
     version=__version__,
     lifespan=lifespan,
 )
+
+configure_telemetry("sequence-service", service_version=__version__)
+instrument_app(app)
 
 app.include_router(router, prefix=settings.api_prefix)
 

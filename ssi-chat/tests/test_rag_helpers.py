@@ -7,6 +7,7 @@ from chat_application.formatting import (
     humanize_policy_basis_point,
     parse_authorization_basis,
 )
+from chat_application.cypher import format_facet_aggregate_answer
 from chat_application.rag import (
     RagService,
     _append_policy_basis,
@@ -331,13 +332,30 @@ class TestPaymentAggregateAnswers:
         assert "125,000,000.00 USD" in answer
         assert "18 payments" in answer
 
-    def test_formats_count_from_graph_rows(self) -> None:
+    def test_formats_payment_count_from_graph_rows(self) -> None:
         answer = _format_payment_count_aggregate_answer(
             "How many payments were approved today for FICC?",
             [{"total": 18}],
         )
         assert "18 matching payment(s)" in answer
         assert "LOB FICC" in answer
+
+    def test_formats_payment_group_by_status(self) -> None:
+        answer = format_facet_aggregate_answer(
+            "Can you group payments by status?",
+            [
+                {"bucket": "APPROVED", "total": 1800},
+                {"bucket": "REJECTED", "total": 100},
+                {"bucket": "DRAFT", "total": 49},
+                {"bucket": "SUBMITTED", "total": 51},
+            ],
+            mode="payments",
+        )
+        assert answer is not None
+        assert "Payment counts by status" in answer
+        assert "2000 total" in answer
+        assert "APPROVED" in answer
+        assert "1800" in answer
 
     def test_formats_instruction_count(self) -> None:
         answer = _format_instruction_count_aggregate_answer(
@@ -359,6 +377,24 @@ class TestPaymentAggregateAnswers:
             [{"total": 5}],
         )
         assert answer == "There are 5 instructions in the store (type SINGLE_USE)."
+
+    def test_formats_instruction_group_by_status(self) -> None:
+        answer = format_facet_aggregate_answer(
+            "Can you group instructions by status?",
+            [
+                {"bucket": "APPROVED", "total": 823},
+                {"bucket": "DRAFT", "total": 50},
+                {"bucket": "SUBMITTED", "total": 50},
+                {"bucket": "USED", "total": 77},
+            ],
+            mode="instructions",
+        )
+        assert answer is not None
+        assert "Instruction counts by status (1000 total)" in answer
+        assert "APPROVED" in answer
+        assert "823" in answer
+        assert "USED" in answer
+        assert "sample" not in answer.lower()
 
     def test_formats_security_event_total_count(self) -> None:
         answer = _format_security_event_count_aggregate_answer(

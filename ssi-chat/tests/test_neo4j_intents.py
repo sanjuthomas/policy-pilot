@@ -96,6 +96,15 @@ class TestNeo4jDirectMatching:
         assert "v.instruction_type = 'SINGLE_USE'" in planned.planned[0][1]
         assert "v.status = 'SINGLE_USE'" not in planned.planned[0][1]
 
+    def test_planned_graph_group_by_status_via_direct_path(self) -> None:
+        question = "Can you group instructions by status?"
+        from chat_application.neo4j_intents import match_planned_graph_intent
+
+        planned = match_planned_graph_intent(question, mode="instructions")
+        assert planned is not None
+        assert planned.intent_id == "planned_graph"
+        assert planned.planned[0][0] == "facet_aggregate"
+
     def test_no_match_for_vague_question(self) -> None:
         assert match_neo4j_direct_intent("Tell me about instructions", mode="instructions") is None
 

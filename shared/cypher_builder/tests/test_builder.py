@@ -80,6 +80,28 @@ def test_plan_graph_queries_total_security_events() -> None:
     assert "info_count" in planned[0][1]
 
 
+def test_plan_graph_queries_instruction_group_by_status() -> None:
+    planned = plan_graph_queries(
+        "can you group them by status?",
+        mode="instructions",
+    )
+    assert planned is not None
+    assert planned[0][0] == "facet_aggregate"
+    validate_read_only_cypher(planned[0][1])
+    assert "count(DISTINCT i.instruction_id)" in planned[0][1]
+
+
+def test_plan_graph_queries_payment_group_by_status() -> None:
+    planned = plan_graph_queries(
+        "Can you group payments by status?",
+        mode="payments",
+    )
+    assert planned is not None
+    assert planned[0][0] == "facet_aggregate"
+    validate_read_only_cypher(planned[0][1])
+    assert "count(DISTINCT pay.payment_id)" in planned[0][1]
+
+
 def test_plan_graph_queries_alert_list() -> None:
     planned = plan_graph_queries(
         "Can you summarize all alerts with actor and action for me?",
