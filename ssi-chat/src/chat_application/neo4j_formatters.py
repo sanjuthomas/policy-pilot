@@ -156,7 +156,10 @@ def format_instruction_mutual_approval(question: str, rows: list[dict[str, Any]]
     ]
     return (
         f"Found {len(table_rows)} mutual approval case(s).\n\n"
-        f"{format_markdown_table(['User A', 'User B', 'A approved', 'B approved'], table_rows)}"
+        f"{format_markdown_table(
+            ['User A', 'User B', 'B created, A approved', 'A created, B approved'],
+            table_rows,
+        )}"
     )
 
 

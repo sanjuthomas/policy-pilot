@@ -202,6 +202,8 @@ class TestNeo4jFormatters:
             [{"user_a_display": "A", "user_b_display": "B", "approved_by_a": "X", "approved_by_b": "Y"}],
         )
         assert "mutual approval" in text
+        assert "B created, A approved" in text
+        assert "A created, B approved" in text
 
     def test_instruction_compliance_table_with_approver(self) -> None:
         text = format_instruction_compliance_table(

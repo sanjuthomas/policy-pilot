@@ -130,3 +130,11 @@ def test_payment_detail_query_includes_creator_and_approver() -> None:
     assert "CREATED_PAYMENT" in query
     assert "APPROVED_PAYMENT" in query
     assert "creator_display" in query
+
+
+def test_instruction_mutual_approval_query_deduplicates_pairs() -> None:
+    from cypher_builder.builder import CypherQueryBuilder
+
+    query = CypherQueryBuilder().instruction_mutual_approval()[0][1]
+    assert "a.user_id < b.user_id" in query
+    assert "a.user_id <> b.user_id" not in query

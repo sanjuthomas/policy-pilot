@@ -1246,7 +1246,7 @@ def _instruction_mutual_approval_queries() -> list[tuple[str, str]]:
             "mutual_approval",
             """MATCH (a:User)-[:APPROVED]->(va:InstructionVersion)<-[:CREATED]-(b:User)
 MATCH (b)-[:APPROVED]->(vb:InstructionVersion)<-[:CREATED]-(a)
-WHERE a.user_id <> b.user_id
+WHERE a.user_id < b.user_id
 RETURN coalesce(a.display_name, a.user_id, '') AS user_a_display,
        a.user_id AS user_a_id,
        coalesce(b.display_name, b.user_id, '') AS user_b_display,

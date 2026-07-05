@@ -180,7 +180,7 @@ LIMIT 20
 Example — cross-approval conflict (users who approved each other's instructions):
 MATCH (approver:User)-[:APPROVED]->(v1:InstructionVersion)<-[:CREATED]-(creator:User)
 MATCH (creator)-[:APPROVED]->(v2:InstructionVersion)<-[:CREATED]-(approver)
-WHERE approver.user_id <> creator.user_id
+WHERE approver.user_id < creator.user_id
 OPTIONAL MATCH (e1:SecurityEvent)-[:TARGETS_VERSION]->(v1) WHERE e1.action = 'APPROVE'
 OPTIONAL MATCH (e2:SecurityEvent)-[:TARGETS_VERSION]->(v2) WHERE e2.action = 'APPROVE'
 RETURN coalesce(approver.display_name, approver.user_id) AS approver_display,
@@ -421,7 +421,7 @@ LIMIT 50
 Example — mutual approval (A approved B's instruction AND B approved A's instruction):
 MATCH (a:User)-[:APPROVED]->(va:InstructionVersion)<-[:CREATED]-(b:User)
 MATCH (b)-[:APPROVED]->(vb:InstructionVersion)<-[:CREATED]-(a)
-WHERE a.user_id <> b.user_id
+WHERE a.user_id < b.user_id
 RETURN a.display_name AS user_a, b.display_name AS user_b,
        va.instruction_id AS instruction_approved_by_a,
        vb.instruction_id AS instruction_approved_by_b
