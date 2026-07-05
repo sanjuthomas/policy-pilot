@@ -1,6 +1,6 @@
-# Security Event RAG Demo
+# Policy Pilot
 
-A monorepo demonstrating how to build a **retrieval-augmented generation (RAG) system over financial security events** using a containerized stack with **Vertex AI** (embeddings, answer synthesis, and structured graph query extraction).
+An event-driven, policy-aware knowledge platform for regulated financial systems combining OPA authorization, Neo4j knowledge graphs, hybrid retrieval, and LLM-powered investigation.
 
 **PolicyPilot** — the chat application in this repo — gives supervisors and compliance officers a single conversational surface over the cash leg of the Standard Settlement Instructions (SSI).
 
