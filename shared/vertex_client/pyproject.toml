@@ -1,7 +1,7 @@
 [project]
 name = "vertex-client"
 version = "0.1.0"
-description = "Vertex AI embedding client for security-event-rag-demo"
+description = "Vertex AI embedding client for Policy Pilot"
 requires-python = ">=3.12"
 dependencies = [
     "google-genai>=1.0.0",

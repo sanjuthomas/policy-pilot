@@ -5,6 +5,8 @@ x-otel-environment: &otel-environment
   OTEL_DEPLOYMENT_ENVIRONMENT: development
   OTEL_METRIC_EXPORT_INTERVAL: "15000"
 
+name: policy-pilot
+
 services:
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.96.0
@@ -26,7 +28,7 @@ services:
     image: opensearchproject/opensearch:2.11.1
     container_name: opensearch
     environment:
-      cluster.name: security-event-rag-demo
+      cluster.name: policy-pilot
       node.name: opensearch
       discovery.type: single-node
       bootstrap.memory_lock: "true"
