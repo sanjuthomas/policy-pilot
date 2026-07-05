@@ -60,6 +60,12 @@ Policy Pilot is designed to surface **fraud patterns, compliance violations, and
 
 ![End-to-end architecture: App Dev, Data Engineering, RAG Engineering, Security Engineering, Vertex embeddings, and Gemini generation](docs/architecture-2.png)
 
+### Intent Determination in Policy Pilot
+
+Policy Pilot (`ssi-chat`) routes each question through a **Route → Retrieve → Synthesize** pipeline before answering. A **Gemini Flash** call returns a strict `RouterDecision` JSON object (eligibility, graph, vector, or hybrid) — not fuzzy text classification or a growing regex phrase list. Eligibility questions (*who can approve / authorize / green-light?*) call live OPA; structured counts and lookups use Neo4j only; policy *why* questions use semantic retrieval. Selective retrieval avoids blindly merging graph facts with vector hits.
+
+For the full flow, strategy table, observability fields, and code map, see **[Intent Determination in Policy Pilot](docs/intent-determination.md)**.
+
 ### Data flow
 
 1. **Instruction service** — operator creates/mutates an instruction; ZITADEL JWT is validated; the service calls **authorization-service** with On-Behalf-Of (service account `svc-instruction` + user token); authz evaluates OPA and returns `allow` + `allow_basis`; instruction version and security event (with `details.authorization`) are written to MongoDB **in a single transaction** (`ssi_cash_instructions.instructions` and `security_events.instruction_service`). Domain services do **not** publish to Kafka directly.

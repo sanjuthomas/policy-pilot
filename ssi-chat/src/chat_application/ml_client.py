@@ -10,6 +10,8 @@ from cypher_builder import (
 )
 from vertex_client import VertexEmbeddingClient, VertexGenerativeClient
 
+from chat_application.pipeline.models import RouterDecision
+from chat_application.pipeline.prompts import ROUTER_SYSTEM_PROMPT
 from chat_application.prompts import (
     AUTHORIZATION_WHY_SUMMARY_SYSTEM_PROMPT,
     answer_system_prompt,
@@ -51,6 +53,20 @@ class PolicyPilotMlClient:
 
     async def warmup(self) -> None:
         await self._embedding.warmup()
+
+    async def route_query(
+        self,
+        question: str,
+        *,
+        mode: str = "events",
+    ) -> RouterDecision:
+        raw = await self._generation.generate_text(
+            system=ROUTER_SYSTEM_PROMPT,
+            user=f"Search mode: {mode}\nQuestion: {question}",
+            temperature=0.0,
+            response_schema=RouterDecision.model_json_schema(),
+        )
+        return RouterDecision.model_validate_json(raw)
 
     async def extract_graph_query_plan(
         self,

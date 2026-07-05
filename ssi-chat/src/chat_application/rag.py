@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import re
-import time
 from typing import Any
 
 from chat_application.authorization_client import (
@@ -17,17 +15,12 @@ from chat_application.config import settings
 from chat_application.cypher import (
     extract_entity_ids,
     extract_payment_ids,
-    extract_uuids,
-    format_facet_aggregate_answer,
     instruction_count_filters_from_question,
-    instruction_id_from_list_payments_question,
-    is_alert_ranking_question,
     is_analytics_question,
     is_count_question,
     is_instruction_approver_via_payment_question,
     is_instruction_count_aggregate_question,
     is_largest_payment_question,
-    is_max_payments_per_instruction_question,
     is_payment_amount_threshold_question,
     is_payment_count_aggregate_question,
     is_payment_id_lookup_for_instruction_question,
@@ -45,7 +38,6 @@ from chat_application.cypher import (
     ranking_period_label,
     validate_read_only_cypher,
 )
-from chat_application.eligibility import eligible_approver_target
 from chat_application.formatting import (
     format_approval_auth_lines,
     format_markdown_table,
@@ -58,15 +50,9 @@ from chat_application.ml_client import PolicyPilotMlClient
 from chat_application.models import ChatMessage, ChatResponse, SearchMode, SourceHit
 from chat_application.multimodal_search import MultimodalSearchClient
 from chat_application.neo4j import Neo4jClient
-from chat_application.neo4j_formatters import format_security_event_alert_list
 from chat_application.neo4j_intents import try_neo4j_direct_answer
-from chat_application.reranker import RankedHit, graph_rows_to_hits, rrf_merge
-from chat_application.response_formatter import format_chat_response
-from chat_application.routing_observability import (
-    AnswerSynthesis,
-    cypher_provenance_for_direct_intent,
-    finalize_chat_response,
-)
+from chat_application.pipeline.orchestrator import RagPipelineOrchestrator
+from chat_application.reranker import RankedHit, rrf_merge
 
 logger = logging.getLogger(__name__)
 
@@ -618,6 +604,7 @@ class RagService:
         self.multimodal = multimodal
         self.neo4j = neo4j
         self._eligibility = EligibilityClient()
+        self._pipeline = RagPipelineOrchestrator(self)
 
     async def _try_neo4j_direct_answer(
         self,
@@ -643,231 +630,13 @@ class RagService:
         bearer_token: str | None = None,
         session_id: str | None = None,
     ) -> ChatResponse:
-        """Run the full RAG pipeline.
-
-        mode="events"       — instruction + payment security events in multimodal store
-        mode="instructions" — instruction_state documents only
-        mode="payments"     — payment_fact documents only
-        mode="all"          — all points (no source filter)
-        """
-        started = time.perf_counter()
-
-        eligibility_target = eligible_approver_target(message, mode=mode)
-        if eligibility_target == "payment":
-            eligibility_answer = await self._answer_payment_eligible_approvers(
-                message,
-                bearer_token=bearer_token,
-                session_id=session_id,
-            )
-            if eligibility_answer is not None:
-                elapsed = (time.perf_counter() - started) * 1000
-                return finalize_chat_response(
-                    message,
-                    mode,
-                    answer=eligibility_answer,
-                    retrieval_ms=0.0,
-                    generation_ms=elapsed,
-                    path="eligibility",
-                    cypher_provenance="none",
-                    answer_synthesis="eligibility_api",
-                )
-        elif eligibility_target == "instruction":
-            eligibility_answer = await self._answer_instruction_eligible_approvers(
-                message,
-                bearer_token=bearer_token,
-                session_id=session_id,
-            )
-            if eligibility_answer is not None:
-                elapsed = (time.perf_counter() - started) * 1000
-                return finalize_chat_response(
-                    message,
-                    mode,
-                    answer=eligibility_answer,
-                    retrieval_ms=0.0,
-                    generation_ms=elapsed,
-                    path="eligibility",
-                    cypher_provenance="none",
-                    answer_synthesis="eligibility_api",
-                )
-
-        direct = await self._try_neo4j_direct_answer(message, mode=mode)
-        if direct is not None:
-            elapsed = (time.perf_counter() - started) * 1000
-            return finalize_chat_response(
-                message,
-                mode,
-                answer=format_chat_response(direct.answer),
-                cypher=direct.cypher,
-                graph_rows=direct.graph_rows,
-                retrieval_ms=elapsed,
-                generation_ms=0.0,
-                path="neo4j_direct",
-                cypher_provenance=cypher_provenance_for_direct_intent(
-                    direct.intent_id,
-                    source=direct.source,
-                ),
-                answer_synthesis="formatter",
-                intent_id=direct.intent_id,
-            )
-
-        limit = settings.retrieval_limit
-
-        # Map mode to multimodal source filter tag
-        search_source: str | None
-        if mode == "events":
-            search_source = "security_events"
-        elif mode == "instructions":
-            search_source = "instruction_state"
-        elif mode == "payments":
-            search_source = "payment"
-        else:
-            search_source = None  # no filter — search everything
-
-        event_ids = extract_uuids(message)
-        entity_ids = extract_entity_ids(message)
-
-        vector_task = asyncio.create_task(
-            self._search_vector(message, limit, source=search_source)
-        )
-        bm25_task = asyncio.create_task(
-            self._search_bm25(message, limit, search_source)
-        )
-        cypher_task = asyncio.create_task(self._search_graph(message, mode=mode))
-        exact_task = (
-            asyncio.create_task(self._lookup_exact_event_ids(event_ids))
-            if event_ids and mode != "instructions"
-            else None
-        )
-        instruction_exact_task = (
-            asyncio.create_task(self._lookup_exact_instruction_ids(entity_ids, message))
-            if entity_ids and mode == "instructions"
-            else None
-        )
-        payment_exact_task = (
-            asyncio.create_task(self._lookup_exact_payment_ids(entity_ids, message))
-            if entity_ids and _should_lookup_payment_ids(message, entity_ids, mode)
-            else None
-        )
-
-        vector_hits, bm25_hits, graph_result = await asyncio.gather(
-            vector_task, bm25_task, cypher_task
-        )
-
-        exact_hits: list[dict[str, Any]] = []
-        exact_graph_rows: list[dict[str, Any]] = []
-        if exact_task is not None:
-            exact_hits, exact_graph_rows = await exact_task
-        if instruction_exact_task is not None:
-            exact_hits.extend(await instruction_exact_task)
-        if payment_exact_task is not None:
-            exact_hits.extend(await payment_exact_task)
-
-        graph_rows = list(exact_graph_rows)
-        seen_graph = {json.dumps(row, sort_keys=True, default=str) for row in graph_rows}
-        for row in graph_result["rows"]:
-            key = json.dumps(row, sort_keys=True, default=str)
-            if key not in seen_graph:
-                graph_rows.append(row)
-                seen_graph.add(key)
-        graph_result = {**graph_result, "rows": graph_rows}
-
-        graph_hits = graph_rows_to_hits(graph_result["rows"])
-        merged = self._merge_with_exact(exact_hits, vector_hits, bm25_hits, graph_hits)
-        retrieval_ms = (time.perf_counter() - started) * 1000
-
-        context = self._build_context(
-            merged,
-            graph_result["rows"],
-            graph_result.get("cypher"),
-            graph_unavailable=graph_result.get("graph_unavailable", False),
-            mode=mode,
-        )
-        chat_history = [{"role": m.role, "content": m.content} for m in history[-8:]]
-
-        gen_started = time.perf_counter()
-        answer: str | None = None
-        answer_synthesis: AnswerSynthesis = "gemini_full"
-        if _is_instruction_approval_question(message, mode):
-            answer = await self._synthesize_instruction_approval_answer(
-                message, entity_ids, merged, graph_result["rows"]
-            )
-            if answer is not None:
-                answer_synthesis = "gemini_why_only"
-        if answer is None and _is_payment_approval_question(message, mode):
-            answer = await self._synthesize_payment_approval_answer(
-                message, entity_ids, merged, graph_result["rows"]
-            )
-            if answer is not None:
-                answer_synthesis = "gemini_why_only"
-        if answer is None and is_max_payments_per_instruction_question(message):
-            answer = _format_max_payments_per_instruction_answer(graph_result["rows"])
-            answer_synthesis = "formatter"
-        if answer is None and _should_format_largest_payment(message, mode):
-            answer = _format_largest_payment_answer(message, graph_result["rows"])
-            answer_synthesis = "formatter"
-        if answer is None and _should_format_payments_above_amount(message, mode):
-            answer = _format_payments_above_amount_answer(message, graph_result["rows"])
-            answer_synthesis = "formatter"
-        if answer is None and is_payments_for_instruction_question(message):
-            instruction_id = instruction_id_from_list_payments_question(message)
-            if instruction_id:
-                answer = _format_payments_for_instruction_answer(
-                    instruction_id,
-                    graph_result["rows"],
-                    question=message,
-                )
-                answer_synthesis = "formatter"
-        if answer is None and is_alert_ranking_question(message, mode=mode):
-            answer = _format_alert_ranking_answer(message, graph_result["rows"])
-            answer_synthesis = "formatter"
-        if answer is None and _should_format_payment_total_amount(message, mode):
-            answer = _format_payment_total_amount_answer(message, graph_result["rows"])
-            answer_synthesis = "formatter"
-        if answer is None and _should_format_payment_count_aggregate(message, mode):
-            answer = _format_payment_count_aggregate_answer(message, graph_result["rows"])
-            answer_synthesis = "formatter"
-        if answer is None and _should_format_facet_aggregate(message, mode):
-            answer = format_facet_aggregate_answer(
-                message, graph_result["rows"], mode=mode
-            )
-            answer_synthesis = "formatter"
-        if answer is None and _should_format_instruction_count_aggregate(message, mode):
-            answer = _format_instruction_count_aggregate_answer(message, graph_result["rows"])
-            answer_synthesis = "formatter"
-        if answer is None and _should_format_security_event_count_aggregate(message, mode):
-            answer = _format_security_event_count_aggregate_answer(
-                message, graph_result["rows"]
-            )
-            answer_synthesis = "formatter"
-        if answer is None and _should_format_security_event_alert_count(message, mode):
-            answer = _format_security_event_alert_count_answer(
-                message, graph_result["rows"]
-            )
-            answer_synthesis = "formatter"
-        if answer is None and _should_format_security_event_alert_list(message, mode):
-            answer = format_security_event_alert_list(message, graph_result["rows"])
-            answer_synthesis = "formatter"
-        if answer is None:
-            answer = await self.ml_client.synthesize_answer(
-                message, context, chat_history, mode=mode
-            )
-            answer_synthesis = "gemini_full"
-        answer = format_chat_response(answer)
-        generation_ms = (time.perf_counter() - gen_started) * 1000
-
-        graph_provenance = graph_result.get("cypher_provenance") or "none"
-        return finalize_chat_response(
+        """Run the full RAG pipeline (route → retrieve → synthesize)."""
+        return await self._pipeline.ask(
             message,
-            mode,
-            answer=answer,
-            sources=[self._to_source(hit) for hit in merged],
-            cypher=graph_result.get("cypher"),
-            graph_rows=graph_result["rows"],
-            retrieval_ms=retrieval_ms,
-            generation_ms=generation_ms,
-            path="full_rag",
-            cypher_provenance=graph_provenance,
-            answer_synthesis=answer_synthesis,
+            history,
+            mode=mode,
+            bearer_token=bearer_token,
+            session_id=session_id,
         )
 
     async def _search_vector(

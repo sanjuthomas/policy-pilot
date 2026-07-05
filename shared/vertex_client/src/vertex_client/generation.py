@@ -50,6 +50,7 @@ class VertexGenerativeClient:
         user: str,
         history: list[dict[str, str]] | None = None,
         temperature: float = 0.0,
+        response_schema: dict | None = None,
     ) -> str:
         try:
             from telemetry.gen_ai import summarize_generation_request
@@ -71,6 +72,7 @@ class VertexGenerativeClient:
                 user,
                 history,
                 temperature,
+                response_schema,
             )
             if telemetry_result is not None:
                 telemetry_result.response_text = text
@@ -84,6 +86,7 @@ class VertexGenerativeClient:
         user: str,
         history: list[dict[str, str]] | None,
         temperature: float,
+        response_schema: dict | None,
     ) -> tuple[str, int | None, int | None]:
         contents: list[types.Content] = []
         for message in history or []:
@@ -101,6 +104,10 @@ class VertexGenerativeClient:
             system_instruction=system,
             temperature=temperature,
         )
+        if response_schema is not None:
+            config.response_mime_type = "application/json"
+            config.response_schema = response_schema
+
         client = self._get_client()
         response = client.models.generate_content(
             model=self._model,

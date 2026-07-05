@@ -16,10 +16,17 @@ def disable_open_telemetry_for_tests() -> None:
 
 @pytest.fixture
 def mock_ml_client():
+    from chat_application.pipeline.heuristic_strategy import heuristic_router_decision
+
     client = MagicMock()
     client.dimension = 768
     client.embed = AsyncMock(return_value=[0.1, 0.2, 0.3])
     client.warmup = AsyncMock()
+    client.route_query = AsyncMock(
+        side_effect=lambda question, *, mode="events": heuristic_router_decision(
+            question, mode=mode
+        )
+    )
     client.extract_graph_query_plan = AsyncMock(
         return_value=GraphQueryPlan(intent=GraphIntent.SECURITY_EVENT_AGGREGATE)
     )
