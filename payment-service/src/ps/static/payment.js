@@ -72,9 +72,16 @@ function renderSummary(payment) {
       ${field("LOB", payment.owning_lob)}
       ${field("Instruction Type", payment.instruction_type)}
       ${userField("Created by", payment.created_by)}
+      ${userField("Submitted by", payment.submitted_by)}
       ${userField("Approved by", payment.approved_by)}
       ${userField("Rejected by", payment.rejected_by)}
+      ${userField("Cancelled by", payment.cancelled_by)}
       ${field("Rejection reason", payment.rejection_reason)}
+      ${field("Cancellation reason", payment.cancellation_reason)}
+      ${field("Submitted (UTC)", formatTime(payment.submitted_at))}
+      ${field("Approved (UTC)", formatTime(payment.approved_at))}
+      ${field("Rejected (UTC)", formatTime(payment.rejected_at))}
+      ${field("Cancelled (UTC)", formatTime(payment.cancelled_at))}
       ${field("Created (UTC)", formatTime(payment.created_at))}
       ${field("Updated (UTC)", formatTime(payment.updated_at))}
     </dl>

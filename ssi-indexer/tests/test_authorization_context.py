@@ -158,10 +158,15 @@ def test_authorization_merged_from_fact():
 def test_authorization_fact_neo4j_params():
     fact = {
         "authorization": {"summary": "ok", "allow_basis": ["r1"]},
-        "instruction_snapshot": {"approved_at": "2024-03-01"},
+        "instruction_snapshot": {
+            "approved_at": "2024-03-01",
+            "submitted_at": "2024-02-28",
+            "rejected_at": None,
+        },
     }
     params = authorization_fact_neo4j_params(fact)
     assert params["approved_at"] == "2024-03-01"
+    assert params["submitted_at"] == "2024-02-28"
     assert params["authorization_summary"] == "ok"
     assert json.loads(params["authorization_basis"]) == ["r1"]
 

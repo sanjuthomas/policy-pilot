@@ -52,11 +52,11 @@ allow if {
 }
 
 #
-# DELETE — soft delete draft or submitted instructions only
+# CANCEL — cancel draft or submitted instructions only
 #
 
 allow if {
-    input.action == "DELETE"
+    input.action == "CANCEL"
 
     has_role("INSTRUCTION_CREATOR")
 

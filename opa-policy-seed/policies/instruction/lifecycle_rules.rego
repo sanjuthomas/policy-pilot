@@ -6,7 +6,7 @@ valid_transition if {
 }
 
 valid_transition if {
-    input.action == "DELETE"
+    input.action == "CANCEL"
     input.instruction.status in {
         "DRAFT",
         "SUBMITTED"

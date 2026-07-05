@@ -50,7 +50,7 @@ curl -s -X POST "http://localhost:8093/api/v1/payments/{payment_id}/eligible-app
 ```
 DRAFT  →  SUBMITTED  →  APPROVED | REJECTED
                       ↘ CANCELLED (if instruction invalid at approval time)
-DRAFT / SUBMITTED  →  DELETED (soft delete)
+DRAFT / SUBMITTED  →  CANCELLED (cancel)
 ```
 
 | Step | Actor | Policy action (via authz) |
@@ -59,11 +59,11 @@ DRAFT / SUBMITTED  →  DELETED (soft delete)
 | Submit | Front-office user whose `lob` matches instruction LOB | `SUBMIT_PAYMENT` |
 | Approve | Funding approver covering the instruction LOB | `APPROVE_PAYMENT` |
 | Reject | Funding approver covering the instruction LOB | `REJECT_PAYMENT` |
-| Soft delete | Authorized roles while `DRAFT` or `SUBMITTED` | `DELETE_PAYMENT` |
+| Cancel | Authorized roles while `DRAFT` or `SUBMITTED` | `CANCEL_PAYMENT` |
 
 At create time the service validates the linked instruction is `APPROVED` and not expired. At approval time it re-checks instruction version drift, status, and dates — invalid instructions auto-cancel the payment.
 
-Terminal states (`APPROVED`, `REJECTED`, `CANCELLED`, `DELETED`) block further mutations.
+Terminal states (`APPROVED`, `REJECTED`, `CANCELLED`) block further mutations.
 
 ## Storage (append-only versions)
 

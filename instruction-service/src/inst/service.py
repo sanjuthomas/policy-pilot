@@ -14,8 +14,8 @@ from inst.config import settings
 from inst.constants import INSTRUCTION_CURRENT_OUT
 from inst.database import mongo_transaction
 from inst.models.api import (
+    CancelInstructionRequest,
     CreateInstructionRequest,
-    DeleteInstructionRequest,
     InstructionResponse,
     RejectInstructionRequest,
     Subject,
@@ -102,6 +102,7 @@ def _to_response(record: VersionedInstruction) -> InstructionResponse:
         rejected_by=instruction.rejected_by,
         rejected_at=_fmt_datetime(instruction.rejected_at),
         rejection_reason=instruction.rejection_reason,
+        cancelled_at=_fmt_datetime(instruction.cancelled_at),
         suspended_by=instruction.suspended_by,
         suspended_at=_fmt_datetime(instruction.suspended_at),
         last_used_at=_fmt_datetime(instruction.last_used_at),
@@ -420,6 +421,7 @@ class InstructionService:
         updated.rejected_by = instruction.rejected_by
         updated.rejected_at = instruction.rejected_at
         updated.rejection_reason = instruction.rejection_reason
+        updated.cancelled_at = instruction.cancelled_at
         updated.suspended_by = instruction.suspended_by
         updated.suspended_at = instruction.suspended_at
         updated.last_used_at = instruction.last_used_at
@@ -434,11 +436,11 @@ class InstructionService:
         )
         return _to_response(saved)
 
-    async def delete(
+    async def cancel(
         self,
         instruction_id: str,
         subject: Subject,
-        request: DeleteInstructionRequest | None = None,
+        request: CancelInstructionRequest | None = None,
         *,
         bearer_token: str | None = None,
         session_id: str | None = None,
@@ -446,20 +448,20 @@ class InstructionService:
         current = await self.repository.get_current(instruction_id)
         instruction = current.instruction.model_copy(deep=True)
 
-        if instruction.status == InstructionStatus.DELETED:
-            raise InvalidStateTransitionError("instruction is already deleted")
+        if instruction.status == InstructionStatus.CANCELLED:
+            raise InvalidStateTransitionError("instruction is already cancelled")
 
         if instruction.status not in {
             InstructionStatus.DRAFT,
             InstructionStatus.SUBMITTED,
         }:
             raise InvalidStateTransitionError(
-                "only DRAFT or SUBMITTED instructions can be deleted"
+                "only DRAFT or SUBMITTED instructions can be cancelled"
             )
 
         details = {"reason": request.reason} if request and request.reason else {}
         await self._authorize(
-            LifecycleAction.DELETE,
+            LifecycleAction.CANCEL,
             subject,
             instruction,
             bearer_token=bearer_token,
@@ -467,10 +469,12 @@ class InstructionService:
             record_security_event=True,
             security_event_details=details,
         )
-        instruction.status = InstructionStatus.DELETED
+        now = datetime.now(timezone.utc)
+        instruction.status = InstructionStatus.CANCELLED
+        instruction.cancelled_at = now
         saved = await self._persist_new_version(
             instruction,
-            LifecycleAction.DELETE,
+            LifecycleAction.CANCEL,
             subject,
             details,
             bearer_token=bearer_token,
@@ -531,7 +535,7 @@ class InstructionService:
         owning_lob: str | None = None,
         status: str | None = None,
         limit: int = 100,
-        include_deleted: bool = False,
+        include_cancelled: bool = False,
         bearer_token: str | None = None,
         session_id: str | None = None,
     ) -> list[InstructionResponse]:
@@ -541,8 +545,8 @@ class InstructionService:
         visible = []
         for record in records:
             if (
-                not include_deleted
-                and record.instruction.status == InstructionStatus.DELETED
+                not include_cancelled
+                and record.instruction.status == InstructionStatus.CANCELLED
             ):
                 continue
             try:

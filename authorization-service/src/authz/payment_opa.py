@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-_TERMINAL_INSTRUCTION_STATUSES = frozenset({"USED", "REJECTED", "EXPIRED", "DELETED"})
-_TERMINAL_PAYMENT_STATUSES = frozenset({"APPROVED", "REJECTED", "CANCELLED", "DELETED"})
+_TERMINAL_INSTRUCTION_STATUSES = frozenset({"USED", "REJECTED", "EXPIRED", "CANCELLED"})
+_TERMINAL_PAYMENT_STATUSES = frozenset({"APPROVED", "REJECTED", "CANCELLED"})
 
 
 def _backing_instruction_label(instruction_id: str | None) -> str:

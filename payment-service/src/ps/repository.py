@@ -134,7 +134,7 @@ class PaymentRepository:
         instruction_id: str | None = None,
         status: str | None = None,
         limit: int = 100,
-        include_deleted: bool = False,
+        include_cancelled: bool = False,
     ) -> list[VersionedPayment]:
         query: dict[str, Any] = {"out": PAYMENT_CURRENT_OUT}
         if instruction_id:
@@ -144,12 +144,12 @@ class PaymentRepository:
 
         cursor = self._col.find(query).sort("in", -1).limit(limit)
         records = [document_to_versioned_payment(doc) async for doc in cursor]
-        if include_deleted:
+        if include_cancelled:
             return records
         return [
             record
             for record in records
-            if record.payment.status != PaymentStatus.DELETED
+            if record.payment.status != PaymentStatus.CANCELLED
         ]
 
     async def list_versions(self, payment_id: str) -> list[VersionedPayment]:

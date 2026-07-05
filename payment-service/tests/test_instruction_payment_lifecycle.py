@@ -15,7 +15,7 @@ import pytest
 
 from ps.authorization import PolicyDecision
 from ps.instruction_client import InstructionNotFoundError, InstructionStateError
-from ps.models.api import DeletePaymentRequest, Subject
+from ps.models.api import CancelPaymentRequest, Subject
 from ps.models.enums import PaymentStatus
 from ps.repository import PaymentNotFoundError
 from ps.service import PaymentService
@@ -302,13 +302,13 @@ async def test_single_use_instruction_payment_lifecycle(
     assert repo.payment_status(payment_two_id) == PaymentStatus.DRAFT
 
     with _patched_txn():
-        deleted = await service.delete(
+        cancelled = await service.cancel(
             payment_two_id,
             creator_subject,
-            DeletePaymentRequest(reason="second payment no longer needed"),
+            CancelPaymentRequest(reason="second payment no longer needed"),
         )
-    # Soft delete via DELETE_PAYMENT moves the payment to DELETED (terminal state).
-    assert deleted.payment.status == PaymentStatus.DELETED
+    # Cancel via CANCEL_PAYMENT moves the payment to CANCELLED (terminal state).
+    assert cancelled.payment.status == PaymentStatus.CANCELLED
 
     with _patched_txn():
         approved = await service.approve(payment_one_id, approver_subject)

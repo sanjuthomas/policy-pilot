@@ -169,7 +169,7 @@ def _payment_eligible_empty_message(
     )
     if payment_status == "APPROVED":
         return "This payment is already APPROVED."
-    if instruction_status in {"USED", "REJECTED", "EXPIRED", "DELETED"}:
+    if instruction_status in {"USED", "REJECTED", "EXPIRED", "CANCELLED"}:
         return (
             f"{instruction_label} is {instruction_status} and cannot support "
             "payment approval."
@@ -221,6 +221,6 @@ def format_instruction_eligible_approvers_answer(data: dict[str, Any]) -> str:
 def _instruction_eligible_empty_message(status: str) -> str:
     if status == "APPROVED":
         return "This instruction is already APPROVED."
-    if status in {"REJECTED", "USED", "EXPIRED", "DELETED"}:
+    if status in {"REJECTED", "USED", "EXPIRED", "CANCELLED"}:
         return f"This instruction is {status} and cannot be approved."
     return "No users currently satisfy APPROVE policy for this instruction."

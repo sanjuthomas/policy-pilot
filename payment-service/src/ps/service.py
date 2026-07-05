@@ -23,7 +23,7 @@ from ps.instruction_client import (
     InstructionStateError,
 )
 from ps.models.api import (
-    DeletePaymentRequest,
+    CancelPaymentRequest,
     LifecycleEvent,
     RejectPaymentRequest,
     Subject,
@@ -589,6 +589,7 @@ class PaymentService:
         now = datetime.now(timezone.utc)
         payment.status = PaymentStatus.SUBMITTED
         payment.submitted_by = _user_ref(subject)
+        payment.submitted_at = now
         payment.updated_at = now
 
         details = details_with_authorization(None, authorization)
@@ -643,6 +644,7 @@ class PaymentService:
         now = datetime.now(timezone.utc)
         payment.status = PaymentStatus.APPROVED
         payment.approved_by = _user_ref(subject)
+        payment.approved_at = now
         payment.updated_at = now
 
         saved = await self._persist_new_version(
@@ -689,6 +691,7 @@ class PaymentService:
         payment.status = PaymentStatus.REJECTED
         payment.rejected_by = _user_ref(subject)
         payment.rejection_reason = request.reason
+        payment.rejected_at = now
         payment.updated_at = now
 
         saved = await self._persist_new_version(
@@ -705,11 +708,11 @@ class PaymentService:
         logger.info("payment rejected payment_id=%s by=%s", payment_id, subject.user_id)
         return saved
 
-    async def delete(
+    async def cancel(
         self,
         payment_id: str,
         subject: Subject,
-        request: DeletePaymentRequest | None = None,
+        request: CancelPaymentRequest | None = None,
         *,
         bearer_token: str | None = None,
         session_id: str | None = None,
@@ -717,12 +720,12 @@ class PaymentService:
         current = await self._get_current_or_404(payment_id)
         payment = current.payment.model_copy(deep=True)
 
-        if payment.status == PaymentStatus.DELETED:
-            raise InvalidStateTransitionError("payment is already deleted")
+        if payment.status == PaymentStatus.CANCELLED:
+            raise InvalidStateTransitionError("payment is already cancelled")
 
         if payment.status not in {PaymentStatus.DRAFT, PaymentStatus.SUBMITTED}:
             raise InvalidStateTransitionError(
-                "only DRAFT or SUBMITTED payments can be soft deleted"
+                "only DRAFT or SUBMITTED payments can be cancelled"
             )
 
         try:
@@ -735,13 +738,17 @@ class PaymentService:
         instruction_end_date = instruction.get("end_date") or ""
         instruction_status = instruction.get("status", "")
 
-        payment.status = PaymentStatus.DELETED
-        payment.updated_at = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        payment.status = PaymentStatus.CANCELLED
+        payment.cancelled_by = _user_ref(subject)
+        payment.cancellation_reason = request.reason if request and request.reason else None
+        payment.cancelled_at = now
+        payment.updated_at = now
         details = {"reason": request.reason} if request and request.reason else {}
 
         saved = await self._persist_new_version(
             payment,
-            PaymentAction.DELETE_PAYMENT,
+            PaymentAction.CANCEL_PAYMENT,
             subject,
             details=details,
             instruction_end_date=instruction_end_date,
@@ -750,7 +757,7 @@ class PaymentService:
             session_id=session_id,
         )
 
-        logger.info("payment soft-deleted payment_id=%s by=%s", payment_id, subject.user_id)
+        logger.info("payment cancelled payment_id=%s by=%s", payment_id, subject.user_id)
         return saved
 
     # ── Read ──────────────────────────────────────────────────────────────────
@@ -811,6 +818,7 @@ class PaymentService:
         payment.status = PaymentStatus.CANCELLED
         payment.cancelled_by = _user_ref(subject)
         payment.cancellation_reason = reason
+        payment.cancelled_at = now
         payment.updated_at = now
         self._record_event(
             payment,

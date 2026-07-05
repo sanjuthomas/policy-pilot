@@ -727,6 +727,9 @@ class Neo4jGraphWriter:
               v.approver_user_id   = $approver_user_id,
               v.rejector_user_id   = $rejector_user_id,
               v.approved_at        = coalesce($approved_at, v.approved_at),
+              v.submitted_at       = coalesce($submitted_at, v.submitted_at),
+              v.rejected_at        = coalesce($rejected_at, v.rejected_at),
+              v.cancelled_at       = coalesce($cancelled_at, v.cancelled_at),
               v.authorization_summary = coalesce($authorization_summary, v.authorization_summary),
               v.authorization_basis   = coalesce($authorization_basis, v.authorization_basis),
               v.is_expired         = (
@@ -1129,7 +1132,11 @@ class Neo4jGraphWriter:
               v.approver_user_id   = $approver_user_id,
               v.rejector_user_id   = $rejector_user_id,
               v.created_at         = $created_at,
-              v.updated_at         = $updated_at
+              v.updated_at         = $updated_at,
+              v.submitted_at       = coalesce($submitted_at, v.submitted_at),
+              v.approved_at        = coalesce($approved_at, v.approved_at),
+              v.rejected_at        = coalesce($rejected_at, v.rejected_at),
+              v.cancelled_at       = coalesce($cancelled_at, v.cancelled_at)
         MERGE (pay)-[:HAS_VERSION]->(v)
 
         // ── Mark CURRENT version (payment facts own lifecycle status) ───────────
@@ -1242,6 +1249,10 @@ class Neo4jGraphWriter:
             "rejector_user_id": rejector_user_id,
             "created_at": fact.get("created_at"),
             "updated_at": fact.get("updated_at"),
+            "submitted_at": fact.get("submitted_at"),
+            "approved_at": fact.get("approved_at"),
+            "rejected_at": fact.get("rejected_at"),
+            "cancelled_at": fact.get("cancelled_at"),
             "creator_given_name": created_by.get("given_name"),
             "creator_family_name": created_by.get("family_name"),
             "creator_title": created_by.get("title"),

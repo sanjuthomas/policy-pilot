@@ -73,6 +73,7 @@ def authorization_merged_from_fact(fact: dict[str, Any]) -> dict[str, Any]:
         "approved_at": snap.get("approved_at"),
         "rejected_at": snap.get("rejected_at"),
         "submitted_at": snap.get("submitted_at"),
+        "cancelled_at": snap.get("cancelled_at"),
         "rejection_reason": snap.get("rejection_reason"),
         "authorization_summary": auth.get("summary"),
         "authorization_decision": auth.get("decision"),
@@ -88,6 +89,9 @@ def authorization_fact_neo4j_params(fact: dict[str, Any]) -> dict[str, Any]:
     basis = auth.get("allow_basis") or []
     return {
         "approved_at": snap.get("approved_at") or "",
+        "submitted_at": snap.get("submitted_at") or "",
+        "rejected_at": snap.get("rejected_at") or "",
+        "cancelled_at": snap.get("cancelled_at") or "",
         "authorization_summary": auth.get("summary"),
         "authorization_basis": json.dumps(basis) if basis else None,
     }

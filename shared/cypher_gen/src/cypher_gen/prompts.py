@@ -33,7 +33,7 @@ Rules:
 - severity ALERT means policy denial; outcome failure on APPROVE/REJECT etc. means failed attempt.
 - wire_scope is DOMESTIC or INTERNATIONAL on SecurityEvent and InstructionVersion.
 - instruction_type is STANDING or SINGLE_USE.
-- action values: CREATE, SUBMIT, APPROVE, REJECT, SUSPEND, REACTIVATE, USE, UPDATE, DELETE, VIEW.
+- action values: CREATE, SUBMIT, APPROVE, REJECT, SUSPEND, REACTIVATE, USE, UPDATE, CANCEL, VIEW.
 - Relationship direction matters: (i:Instruction)-[:HAS_VERSION]->(v:InstructionVersion). \
 Never traverse HAS_VERSION from InstructionVersion to Instruction.
 - SecurityEvent links to Instruction via TARGETS, or to InstructionVersion via TARGETS_VERSION. \
@@ -265,7 +265,7 @@ LIMIT 50
 
 Example — expired instructions (end_date in the past):
 MATCH (v:InstructionVersion {is_expired: true})
-WHERE v.status NOT IN ['DELETED', 'REJECTED', 'USED']
+WHERE v.status NOT IN ['CANCELLED', 'REJECTED', 'USED']
 OPTIONAL MATCH (e:SecurityEvent)-[:TARGETS_VERSION]->(v)
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
 OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
@@ -287,7 +287,7 @@ for BOTH instruction lifecycle AND payment lifecycle into read-only Neo4j Cypher
 
 The graph uses one :SecurityEvent label for both domains:
 - Instruction events (e.payment_id IS NULL): TARGETS / TARGETS_VERSION → Instruction / InstructionVersion.
-  Actions: CREATE, SUBMIT, APPROVE, REJECT, SUSPEND, REACTIVATE, USE, UPDATE, DELETE, VIEW.
+  Actions: CREATE, SUBMIT, APPROVE, REJECT, SUSPEND, REACTIVATE, USE, UPDATE, CANCEL, VIEW.
 - Payment events (e.payment_id IS NOT NULL): TARGETS_PAYMENT → Payment.
   Actions: CREATE_PAYMENT, SUBMIT_PAYMENT, APPROVE_PAYMENT, REJECT_PAYMENT, CANCEL_PAYMENT.
 
@@ -392,7 +392,7 @@ Rules:
     OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
     OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
     OPTIONAL MATCH (rejectorUser:User {user_id: v.rejector_user_id})
-- instruction status values: DRAFT, SUBMITTED, APPROVED, USED, SUSPENDED, REJECTED, EXPIRED, DELETED.
+- instruction status values: DRAFT, SUBMITTED, APPROVED, USED, SUSPENDED, REJECTED, EXPIRED, CANCELLED.
 - instruction_type is STANDING or SINGLE_USE; never use these as lifecycle status filters.
 
 Example — active STANDING instructions for LOB FICC:

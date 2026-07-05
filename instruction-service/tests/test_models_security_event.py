@@ -30,7 +30,7 @@ def test_authorized_action(sample_subject: Subject, sample_instruction: CashSett
 
 def test_authorized_action_event_types() -> None:
     assert SecurityEvent._event_types_for_action(LifecycleAction.CREATE) == ["creation"]
-    assert SecurityEvent._event_types_for_action(LifecycleAction.DELETE) == ["deletion"]
+    assert SecurityEvent._event_types_for_action(LifecycleAction.CANCEL) == ["cancellation"]
     assert SecurityEvent._event_types_for_action(LifecycleAction.VIEW) == ["access"]
     assert SecurityEvent._event_types_for_action(LifecycleAction.APPROVE) == ["change"]
 

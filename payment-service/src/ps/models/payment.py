@@ -44,6 +44,10 @@ class Payment(BaseModel):
     cancellation_reason: str | None = None
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
+    submitted_at: datetime | None = None
+    approved_at: datetime | None = None
+    rejected_at: datetime | None = None
+    cancelled_at: datetime | None = None
     lifecycle_events: list[LifecycleEvent] = Field(default_factory=list)
 
     @classmethod

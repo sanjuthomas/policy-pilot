@@ -3,8 +3,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from ps.dependencies import get_compliance_subject, get_subject
 from ps.instruction_client import InstructionNotFoundError
 from ps.models.api import (
+    CancelPaymentRequest,
     CreatePaymentRequest,
-    DeletePaymentRequest,
     PaymentEligibleApproversResponse,
     PaymentResponse,
     RejectPaymentRequest,
@@ -62,8 +62,12 @@ def _to_response(record: VersionedPayment) -> PaymentResponse:
         cancelled_by=payment.cancelled_by,
         rejection_reason=payment.rejection_reason,
         cancellation_reason=payment.cancellation_reason,
-        created_at=payment.created_at.isoformat(),
-        updated_at=payment.updated_at.isoformat(),
+        created_at=_fmt_datetime(payment.created_at) or "",
+        updated_at=_fmt_datetime(payment.updated_at) or "",
+        submitted_at=_fmt_datetime(payment.submitted_at),
+        approved_at=_fmt_datetime(payment.approved_at),
+        rejected_at=_fmt_datetime(payment.rejected_at),
+        cancelled_at=_fmt_datetime(payment.cancelled_at),
         lifecycle_events=payment.lifecycle_events,
     )
 
@@ -212,17 +216,17 @@ async def reject_payment(
     )
 
 
-@router.post("/{payment_id}/delete", response_model=PaymentResponse)
-async def delete_payment(
+@router.post("/{payment_id}/cancel", response_model=PaymentResponse)
+async def cancel_payment(
     payment_id: str,
-    request: DeletePaymentRequest | None = None,
+    request: CancelPaymentRequest | None = None,
     subject: Subject = Depends(get_subject),
     service: PaymentService = Depends(get_service),
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
 ) -> PaymentResponse:
     return await _lifecycle_action(
-        service.delete,
+        service.cancel,
         payment_id,
         subject,
         request,

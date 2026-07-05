@@ -33,7 +33,7 @@ class InstructionStatus(StrEnum):
     REJECTED = "REJECTED"
     USED = "USED"
     EXPIRED = "EXPIRED"
-    DELETED = "DELETED"
+    CANCELLED = "CANCELLED"
 
 
 class WireScope(StrEnum):
@@ -71,7 +71,7 @@ class FinancialInstitutionIdScheme(StrEnum):
 class LifecycleAction(StrEnum):
     CREATE = "CREATE"
     UPDATE = "UPDATE"
-    DELETE = "DELETE"
+    CANCEL = "CANCEL"
     SUBMIT = "SUBMIT"
     APPROVE = "APPROVE"
     REJECT = "REJECT"
@@ -85,7 +85,7 @@ MUTATING_ACTIONS = frozenset(
     {
         LifecycleAction.CREATE,
         LifecycleAction.UPDATE,
-        LifecycleAction.DELETE,
+        LifecycleAction.CANCEL,
         LifecycleAction.SUBMIT,
         LifecycleAction.APPROVE,
         LifecycleAction.REJECT,

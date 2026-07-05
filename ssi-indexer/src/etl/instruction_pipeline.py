@@ -78,6 +78,7 @@ class InstructionPipeline:
             "rejector_user_id": (snap.get("rejected_by") or {}).get("user_id"),
             "rejector_display": _display_name(snap.get("rejected_by") or {}),
             "rejected_at": auth_merged.get("rejected_at") or snap.get("rejected_at"),
+            "cancelled_at": auth_merged.get("cancelled_at") or snap.get("cancelled_at"),
             "rejection_reason": auth_merged.get("rejection_reason") or snap.get("rejection_reason"),
             "authorization_summary": auth_merged.get("authorization_summary"),
             "authorization_basis": auth_merged.get("authorization_basis") or [],

@@ -1,6 +1,6 @@
 from inst.models.api import (
+    CancelInstructionRequest,
     CreateInstructionRequest,
-    DeleteInstructionRequest,
     InstructionResponse,
     RejectInstructionRequest,
     Subject,
@@ -51,7 +51,7 @@ __all__ = [
     "ChargeBearer",
     "ChargesInformation",
     "CreateInstructionRequest",
-    "DeleteInstructionRequest",
+    "CancelInstructionRequest",
     "FinancialInstitutionIdScheme",
     "FinancialInstitutionIdentification",
     "FundingAccount",

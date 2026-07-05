@@ -20,6 +20,10 @@ includes:
   - path: owning_lob
   - path: instruction_type
   - path: timestamp
+  - path: submitted_at
+  - path: approved_at
+  - path: rejected_at
+  - path: cancelled_at
   - path: created_by.user_id
   - path: created_by
     transform: display_name

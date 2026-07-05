@@ -37,6 +37,7 @@ includes:
   - path: instruction_snapshot.rejected_by.family_name
   - path: instruction_snapshot.approved_at
   - path: instruction_snapshot.rejected_at
+  - path: instruction_snapshot.cancelled_at
   - path: instruction_snapshot.rejection_reason
   - path: timestamp
   - path: actor_user_id

@@ -352,6 +352,7 @@ class CashSettlementInstruction(BaseModel):
     rejected_by: UserReference | None = None
     rejected_at: datetime | None = None
     rejection_reason: str | None = None
+    cancelled_at: datetime | None = None
     suspended_by: str | None = None
     suspended_at: datetime | None = None
     last_used_at: datetime | None = None

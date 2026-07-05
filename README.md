@@ -470,7 +470,7 @@ effective_date      template validity start
 end_date            template validity end
 ```
 
-Lifecycle: `DRAFT` → `SUBMITTED` → `APPROVED` or `REJECTED`; approved instructions may become `SUSPENDED`, `USED`, `EXPIRED`, or `DELETED`. `STANDING` and `SINGLE_USE` remain instruction types, not lifecycle statuses.
+Lifecycle: `DRAFT` → `SUBMITTED` → `APPROVED` or `REJECTED`; approved instructions may become `SUSPENDED`, `USED`, `EXPIRED`, or `CANCELLED`. `STANDING` and `SINGLE_USE` remain instruction types, not lifecycle statuses.
 
 ---
 

@@ -351,7 +351,7 @@ tbody tr.row-new {
 }
 
 .badge-REJECTED,
-.badge-DELETED {
+.badge-CANCELLED {
   color: #f87171;
   background: rgba(248, 113, 113, 0.14);
 }

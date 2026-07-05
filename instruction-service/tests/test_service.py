@@ -6,7 +6,7 @@ from inst.authorization import PolicyDecision
 from inst.config import settings
 from inst.models.api import (
     CreateInstructionRequest,
-    DeleteInstructionRequest,
+    CancelInstructionRequest,
     RejectInstructionRequest,
     Subject,
     UseInstructionRequest,
@@ -168,7 +168,7 @@ async def test_update_rejects_non_draft(
 
 
 @pytest.mark.asyncio
-async def test_delete_soft_deletes_draft(
+async def test_cancel_cancels_draft(
     service: InstructionService,
     mock_repo: MagicMock,
     sample_subject: Subject,
@@ -180,17 +180,17 @@ async def test_delete_soft_deletes_draft(
     with patch("inst.service.mongo_transaction") as mock_tx:
         mock_tx.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
         mock_tx.return_value.__aexit__ = AsyncMock(return_value=False)
-        response = await service.delete(
+        response = await service.cancel(
                 "instr-001",
                 sample_subject,
-                DeleteInstructionRequest(reason="cleanup"),
+                CancelInstructionRequest(reason="cleanup"),
             )
 
-    assert response.status == "DELETED"
+    assert response.status == "CANCELLED"
 
 
 @pytest.mark.asyncio
-async def test_delete_soft_deletes_submitted(
+async def test_cancel_cancels_submitted(
     service: InstructionService,
     mock_repo: MagicMock,
     sample_subject: Subject,
@@ -203,13 +203,13 @@ async def test_delete_soft_deletes_submitted(
     with patch("inst.service.mongo_transaction") as mock_tx:
         mock_tx.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
         mock_tx.return_value.__aexit__ = AsyncMock(return_value=False)
-        response = await service.delete(
+        response = await service.cancel(
             "instr-001",
             sample_subject,
-            DeleteInstructionRequest(reason="withdrawn"),
+            CancelInstructionRequest(reason="withdrawn"),
         )
 
-    assert response.status == "DELETED"
+    assert response.status == "CANCELLED"
 
 
 @pytest.mark.asyncio
@@ -222,7 +222,7 @@ async def test_delete_soft_deletes_submitted(
         InstructionStatus.USED,
     ],
 )
-async def test_delete_rejects_non_draft_or_submitted(
+async def test_cancel_rejects_non_draft_or_submitted(
     service: InstructionService,
     mock_repo: MagicMock,
     sample_subject: Subject,
@@ -233,11 +233,11 @@ async def test_delete_rejects_non_draft_or_submitted(
     mock_repo.get_current = AsyncMock(return_value=_versioned(blocked))
 
     with pytest.raises(InvalidStateTransitionError, match="DRAFT or SUBMITTED"):
-        await service.delete("instr-001", sample_subject)
+        await service.cancel("instr-001", sample_subject)
 
 
 @pytest.mark.asyncio
-async def test_delete_authorizes_before_status_change(
+async def test_cancel_authorizes_before_status_change(
     service: InstructionService,
     mock_authz: AsyncMock,
     mock_repo: MagicMock,
@@ -250,11 +250,11 @@ async def test_delete_authorizes_before_status_change(
     with patch("inst.service.mongo_transaction") as mock_tx:
         mock_tx.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
         mock_tx.return_value.__aexit__ = AsyncMock(return_value=False)
-        await service.delete("instr-001", sample_subject)
+        await service.cancel("instr-001", sample_subject)
 
     evaluate_call = mock_authz.evaluate_instruction.await_args
     assert evaluate_call is not None
-    assert evaluate_call.kwargs["action"] == LifecycleAction.DELETE.value
+    assert evaluate_call.kwargs["action"] == LifecycleAction.CANCEL.value
     assert evaluate_call.kwargs["instruction"]["status"] == InstructionStatus.DRAFT.value
 
 
@@ -568,21 +568,21 @@ async def test_list_versions(
 
 
 @pytest.mark.asyncio
-async def test_delete_already_deleted(
+async def test_cancel_already_cancelled(
     service: InstructionService,
     mock_repo: MagicMock,
     sample_subject: Subject,
     sample_instruction: CashSettlementInstruction,
 ) -> None:
-    deleted = sample_instruction.model_copy(update={"status": InstructionStatus.DELETED})
-    mock_repo.get_current = AsyncMock(return_value=_versioned(deleted))
+    cancelled = sample_instruction.model_copy(update={"status": InstructionStatus.CANCELLED})
+    mock_repo.get_current = AsyncMock(return_value=_versioned(cancelled))
 
-    with pytest.raises(InvalidStateTransitionError, match="already deleted"):
-        await service.delete("instr-001", sample_subject)
+    with pytest.raises(InvalidStateTransitionError, match="already cancelled"):
+        await service.cancel("instr-001", sample_subject)
 
 
 @pytest.mark.asyncio
-async def test_delete_rejects_non_draft_or_submitted_blocked_status(
+async def test_cancel_rejects_non_draft_or_submitted_blocked_status(
     service: InstructionService,
     mock_repo: MagicMock,
     sample_subject: Subject,
@@ -592,7 +592,7 @@ async def test_delete_rejects_non_draft_or_submitted_blocked_status(
     mock_repo.get_current = AsyncMock(return_value=_versioned(approved))
 
     with pytest.raises(InvalidStateTransitionError, match="DRAFT or SUBMITTED"):
-        await service.delete("instr-001", sample_subject)
+        await service.cancel("instr-001", sample_subject)
 
 
 @pytest.mark.asyncio

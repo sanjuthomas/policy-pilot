@@ -468,7 +468,7 @@ def instruction_status_filter_from_question(question: str) -> str | None:
         "REJECTED",
         "SUSPENDED",
         "EXPIRED",
-        "DELETED",
+        "CANCELLED",
         "DRAFT",
         "USED",
     ):
@@ -484,7 +484,8 @@ def instruction_status_filter_from_question(question: str) -> str | None:
         (r"\bsuspended\b", "SUSPENDED"),
         (r"\brejected\b", "REJECTED"),
         (r"\bexpired\b", "EXPIRED"),
-        (r"\bdeleted\b", "DELETED"),
+        (r"\bcancelled\b", "CANCELLED"),
+        (r"\bcanceled\b", "CANCELLED"),
         (r"\bdraft\b", "DRAFT"),
         (r"\bused\b", "USED"),
     )

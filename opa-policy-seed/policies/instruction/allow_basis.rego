@@ -7,32 +7,32 @@ package instruction.lifecycle
 # entry on the success SecurityEvent (details.authorization).
 # ---------------------------------------------------------------------------
 
-# ── CREATE / UPDATE / DELETE / SUBMIT (creator actions) ───────────────────────
+# ── CREATE / UPDATE / CANCEL / SUBMIT (creator actions) ───────────────────────
 
 allow_basis contains "role INSTRUCTION_CREATOR" if {
-    input.action in {"CREATE", "UPDATE", "DELETE", "SUBMIT"}
+    input.action in {"CREATE", "UPDATE", "CANCEL", "SUBMIT"}
     has_role("INSTRUCTION_CREATOR")
 }
 
 allow_basis contains "group MIDDLE_OFFICE" if {
-    input.action in {"CREATE", "UPDATE", "DELETE", "SUBMIT"}
+    input.action in {"CREATE", "UPDATE", "CANCEL", "SUBMIT"}
     is_middle_office
 }
 
 allow_basis contains msg if {
-    input.action in {"CREATE", "UPDATE", "DELETE", "SUBMIT"}
+    input.action in {"CREATE", "UPDATE", "CANCEL", "SUBMIT"}
     creator_eligible
     msg := sprintf("creator title %v eligible", [input.subject.title])
 }
 
 allow_basis contains msg if {
-    input.action in {"CREATE", "UPDATE", "DELETE"}
+    input.action in {"CREATE", "UPDATE", "CANCEL"}
     account_owning_lob_matches_instruction
     msg := sprintf("account LOB matches instruction LOB %v", [input.instruction.owning_lob])
 }
 
 allow_basis contains msg if {
-    input.action in {"CREATE", "UPDATE", "DELETE", "SUBMIT", "APPROVE", "REJECT", "SUSPEND", "REACTIVATE", "VIEW", "USE"}
+    input.action in {"CREATE", "UPDATE", "CANCEL", "SUBMIT", "APPROVE", "REJECT", "SUSPEND", "REACTIVATE", "VIEW", "USE"}
     is_valid_profit_center
     msg := sprintf("valid profit center LOB %v", [input.instruction.owning_lob])
 }
@@ -44,7 +44,7 @@ allow_basis contains msg if {
 }
 
 allow_basis contains msg if {
-    input.action in {"UPDATE", "DELETE", "SUBMIT", "APPROVE", "REJECT", "SUSPEND", "REACTIVATE"}
+    input.action in {"UPDATE", "CANCEL", "SUBMIT", "APPROVE", "REJECT", "SUSPEND", "REACTIVATE"}
     valid_transition
     msg := sprintf("valid transition for status %v", [input.instruction.status])
 }

@@ -106,8 +106,8 @@ class SecurityEvent(BaseModel):
     def _event_types_for_action(cls, action: LifecycleAction) -> list[str]:
         if action == LifecycleAction.CREATE:
             return ["creation"]
-        if action == LifecycleAction.DELETE:
-            return ["deletion"]
+        if action == LifecycleAction.CANCEL:
+            return ["cancellation"]
         if action == LifecycleAction.VIEW:
             return ["access"]
         return ["change"]

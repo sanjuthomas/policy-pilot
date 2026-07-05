@@ -134,7 +134,7 @@ class UseInstructionRequest(BaseModel):
 UpdateInstructionRequest = CreateInstructionRequest
 
 
-class DeleteInstructionRequest(BaseModel):
+class CancelInstructionRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=1024)
 
 
@@ -180,6 +180,7 @@ class InstructionResponse(BaseModel):
     rejected_by: UserReference | None = None
     rejected_at: str | None = None
     rejection_reason: str | None = None
+    cancelled_at: str | None = None
     suspended_by: str | None = None
     suspended_at: str | None = None
     last_used_at: str | None = None

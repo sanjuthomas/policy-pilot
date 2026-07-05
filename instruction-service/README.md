@@ -53,13 +53,13 @@ curl -s -X POST "http://localhost:8000/api/v1/instructions/{instruction_id}/elig
 
 Requires `COMPLIANCE_ANALYST`, `COMPLIANCE_OFFICER`, or `PLATFORM_ADMIN`. The service loads the instruction, then calls authz for batch OPA evaluation.
 
-## Lifecycle and soft delete
+## Lifecycle and cancel
 
 Status flow: `DRAFT` → `SUBMITTED` → `APPROVED` or `REJECTED`; approved instructions may become `SUSPENDED`, `USED`, or `EXPIRED`.
 
-**Soft delete** (`POST /api/v1/instructions/{id}/delete`) is allowed only while status is **`DRAFT`** or **`SUBMITTED`**. The instruction moves to `DELETED`; it cannot be approved, used, or deleted again. Middle-office creators with `INSTRUCTION_CREATOR` may delete drafts they created; OPA enforces title and LOB rules.
+**Cancel** (`POST /api/v1/instructions/{id}/cancel`) is allowed only while status is **`DRAFT`** or **`SUBMITTED`**. The instruction moves to `CANCELLED`; it cannot be approved, used, or cancelled again. Middle-office creators with `INSTRUCTION_CREATOR` may cancel drafts they created; OPA enforces title and LOB rules.
 
-Approve and reject require `SUBMITTED`. Instructions in `APPROVED`, `REJECTED`, `SUSPENDED`, `USED`, or `EXPIRED` cannot be soft-deleted.
+Approve and reject require `SUBMITTED`. Instructions in `APPROVED`, `REJECTED`, `SUSPENDED`, `USED`, or `EXPIRED` cannot be cancelled.
 
 ## Owning profit center (`owning_lob`)
 
@@ -88,7 +88,7 @@ No `instructed_amount`, `payment_identification`, or remittance fields.
 DRAFT / PENDING  →  STANDING | SINGLE_USE | REJECTED
 STANDING         →  SUSPENDED  →  STANDING (reactivate)
 SINGLE_USE       →  USED (after payment use)
-DRAFT / PENDING  →  DELETED (soft delete)
+DRAFT / PENDING  →  CANCELLED (cancel)
 ```
 
 | Step | Actor | Policy action (via authz) |
@@ -100,9 +100,9 @@ DRAFT / PENDING  →  DELETED (soft delete)
 | Reject | Approver covering instruction LOB | `REJECT` |
 | Suspend / reactivate | Authorized roles | `SUSPEND` / `REACTIVATE` |
 | Use | Payment flow | `USE` |
-| Soft delete | Creator while `DRAFT` or `PENDING` | `DELETE` (service layer; no HTTP route yet) |
+| Cancel | Creator while `DRAFT` or `PENDING` | `CANCEL` |
 
-Terminal states (`REJECTED`, `USED`, `EXPIRED`, `DELETED`) block further mutations — each change appends a new version row; existing history is never overwritten.
+Terminal states (`REJECTED`, `USED`, `EXPIRED`, `CANCELLED`) block further mutations — each change appends a new version row; existing history is never overwritten.
 
 ## Storage (append-only versions)
 

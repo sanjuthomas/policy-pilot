@@ -151,13 +151,13 @@ allow if {
 }
 
 # ---------------------------------------------------------------------------
-# DELETE_PAYMENT  (soft delete draft or submitted payments)
+# CANCEL_PAYMENT  (cancel draft or submitted payments)
 #
 # Middle-office payment creators may withdraw a payment before it is approved.
 # ---------------------------------------------------------------------------
 
 allow if {
-    input.action == "DELETE_PAYMENT"
+    input.action == "CANCEL_PAYMENT"
 
     has_role("PAYMENT_CREATOR")
 

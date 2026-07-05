@@ -38,7 +38,7 @@ class CreatePaymentRequest(BaseModel):
 UpdatePaymentRequest = CreatePaymentRequest
 
 
-class DeletePaymentRequest(BaseModel):
+class CancelPaymentRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=1024)
 
 
@@ -88,6 +88,10 @@ class PaymentResponse(BaseModel):
     cancellation_reason: str | None = None
     created_at: str
     updated_at: str
+    submitted_at: str | None = None
+    approved_at: str | None = None
+    rejected_at: str | None = None
+    cancelled_at: str | None = None
     lifecycle_events: list[LifecycleEvent] = Field(default_factory=list)
 
 

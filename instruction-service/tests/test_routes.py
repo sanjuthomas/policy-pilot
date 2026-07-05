@@ -26,7 +26,7 @@ def mock_service() -> MagicMock:
     service.list = AsyncMock(return_value=[])
     service.get = AsyncMock()
     service.update = AsyncMock()
-    service.delete = AsyncMock()
+    service.cancel = AsyncMock()
     service.submit = AsyncMock()
     service.approve = AsyncMock()
     service.reject = AsyncMock()

@@ -150,14 +150,14 @@ async def test_get_current(patched_db: MagicMock, payment: Payment) -> None:
 
 
 @pytest.mark.asyncio
-async def test_list_current_excludes_deleted(
+async def test_list_current_excludes_cancelled(
     patched_db: MagicMock,
     payment: Payment,
 ) -> None:
-    deleted = payment.model_copy(deep=True)
-    deleted.status = PaymentStatus.DELETED
-    deleted_doc = versioned_payment_to_document(
-        deleted,
+    cancelled = payment.model_copy(deep=True)
+    cancelled.status = PaymentStatus.CANCELLED
+    cancelled_doc = versioned_payment_to_document(
+        cancelled,
         version_number=2,
         valid_in=datetime.utcnow(),
     )
@@ -184,7 +184,7 @@ async def test_list_current_excludes_deleted(
 
             return generator()
 
-    patched_db.find = MagicMock(return_value=AsyncCursor([deleted_doc, active_doc]))
+    patched_db.find = MagicMock(return_value=AsyncCursor([cancelled_doc, active_doc]))
     repo = PaymentRepository()
     records = await repo.list_current()
     assert len(records) == 1

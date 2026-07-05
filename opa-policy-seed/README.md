@@ -39,7 +39,7 @@ Valid LOB values: `FICC`, `FX`, or `DESK_<name>`.
 
 ### Actions governed
 
-`CREATE`, `UPDATE`, `DELETE`, `SUBMIT`, `APPROVE`, `REJECT`, `SUSPEND`, `REACTIVATE`, `USE`, `VIEW`
+`CREATE`, `UPDATE`, `CANCEL`, `SUBMIT`, `APPROVE`, `REJECT`, `SUSPEND`, `REACTIVATE`, `USE`, `VIEW`
 
 Key rules: creator cannot approve own instruction; approver must not report directly to creator (inversion of control); approver LOB must match instruction LOB; approver title must satisfy the approval matrix.
 

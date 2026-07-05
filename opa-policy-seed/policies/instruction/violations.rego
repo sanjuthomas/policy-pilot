@@ -18,7 +18,7 @@ package instruction.lifecycle
 # ── Missing functional role ───────────────────────────────────────────────────
 
 violations["MISSING_ROLE_INSTRUCTION_CREATOR"] if {
-    input.action in {"CREATE", "UPDATE", "DELETE", "SUBMIT"}
+    input.action in {"CREATE", "UPDATE", "CANCEL", "SUBMIT"}
     not has_role("INSTRUCTION_CREATOR")
 }
 
@@ -28,12 +28,12 @@ violations["MISSING_ROLE_INSTRUCTION_APPROVER"] if {
 }
 
 # ── Middle-office group required for creator actions ──────────────────────────
-# Rule:     CREATE / UPDATE / DELETE / SUBMIT require MIDDLE_OFFICE group
+# Rule:     CREATE / UPDATE / CANCEL / SUBMIT require MIDDLE_OFFICE group
 #           membership in addition to INSTRUCTION_CREATOR.
 # Denial → ALERT security event — role without required group; likely misconfiguration.
 
 violations["NOT_MIDDLE_OFFICE_GROUP"] if {
-    input.action in {"CREATE", "UPDATE", "DELETE", "SUBMIT"}
+    input.action in {"CREATE", "UPDATE", "CANCEL", "SUBMIT"}
     has_role("INSTRUCTION_CREATOR")
     not is_middle_office
 }
@@ -43,7 +43,7 @@ violations["NOT_MIDDLE_OFFICE_GROUP"] if {
 # Denial → ALERT security event — title outside the permitted creator band.
 
 violations["CREATOR_TITLE_INELIGIBLE"] if {
-    input.action in {"CREATE", "UPDATE", "DELETE", "SUBMIT"}
+    input.action in {"CREATE", "UPDATE", "CANCEL", "SUBMIT"}
     has_role("INSTRUCTION_CREATOR")
     is_middle_office
     not creator_eligible
@@ -54,7 +54,7 @@ violations["CREATOR_TITLE_INELIGIBLE"] if {
 # Denial → ALERT security event — cross-LOB account routing attempt.
 
 violations["ACCOUNT_LOB_MISMATCH"] if {
-    input.action in {"CREATE", "UPDATE", "DELETE"}
+    input.action in {"CREATE", "UPDATE", "CANCEL"}
     has_role("INSTRUCTION_CREATOR")
     is_middle_office
     not account_owning_lob_matches_instruction
@@ -66,7 +66,7 @@ violations["ACCOUNT_LOB_MISMATCH"] if {
 
 violations["INVALID_PROFIT_CENTER"] if {
     input.action in {
-        "CREATE", "UPDATE", "DELETE", "SUBMIT",
+        "CREATE", "UPDATE", "CANCEL", "SUBMIT",
         "APPROVE", "REJECT", "SUSPEND", "REACTIVATE",
         "USE", "VIEW",
     }
@@ -93,7 +93,7 @@ violations["INVALID_INSTRUCTION_STATUS"] if {
 }
 
 violations["INVALID_INSTRUCTION_STATUS"] if {
-    input.action == "DELETE"
+    input.action == "CANCEL"
     not input.instruction.status in {"DRAFT", "SUBMITTED"}
 }
 
@@ -109,7 +109,7 @@ violations["INSTRUCTION_DURATION_EXCEEDS_3Y"] if {
 # ── Invalid lifecycle transition ──────────────────────────────────────────────
 
 violations["INVALID_STATE_TRANSITION"] if {
-    input.action in {"UPDATE", "DELETE", "SUBMIT", "APPROVE", "REJECT", "SUSPEND", "REACTIVATE"}
+    input.action in {"UPDATE", "CANCEL", "SUBMIT", "APPROVE", "REJECT", "SUSPEND", "REACTIVATE"}
     not valid_transition
 }
 

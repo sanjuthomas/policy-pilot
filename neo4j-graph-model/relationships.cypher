@@ -26,7 +26,7 @@
 //   version_key             unique "{instruction_id}:{version_number}" (Community Edition)
 //   instruction_id          + version_number also enforced as a composite unique constraint
 //   version_number
-//   status                  DRAFT | PENDING | STANDING | SINGLE_USE | SUSPENDED | REJECTED | USED | EXPIRED | DELETED
+//   status                  DRAFT | PENDING | STANDING | SINGLE_USE | SUSPENDED | REJECTED | USED | EXPIRED | CANCELLED
 //   action                  lifecycle action that produced this version (CREATE | SUBMIT | APPROVE | ...)
 //   instruction_type        STANDING | SINGLE_USE
 //   wire_scope              DOMESTIC | INTERNATIONAL
@@ -169,7 +169,7 @@
 //   version_key         unique "{payment_id}:{version_number}"
 //   payment_id          parent payment id
 //   version_number      monotonic lifecycle version (1 = create, increments per mutation)
-//   status              DRAFT | SUBMITTED | APPROVED | REJECTED | DELETED
+//   status              DRAFT | SUBMITTED | APPROVED | REJECTED | CANCELLED
 //   amount              numeric payment amount
 //   currency            ISO 4217 currency code (from instruction)
 //   value_date          intended settlement date (ISO string YYYY-MM-DD)

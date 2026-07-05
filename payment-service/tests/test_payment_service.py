@@ -200,39 +200,39 @@ async def test_update_policy_denied(
 
 
 @pytest.mark.asyncio
-async def test_delete_draft_payment_success(
+async def test_cancel_draft_payment_success(
     service: PaymentService,
     subject: Subject,
     payment: Payment,
     standing_instruction: dict,
 ) -> None:
-    from ps.models.api import DeletePaymentRequest
+    from ps.models.api import CancelPaymentRequest
 
     service.repo.get_current.return_value = _versioned(payment)
     service.instruction_service.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _allow_decision()
 
     with _patched_txn():
-        result = await service.delete(
+        result = await service.cancel(
             payment.payment_id,
             subject,
-            DeletePaymentRequest(reason="cleanup"),
+            CancelPaymentRequest(reason="cleanup"),
         )
 
-    assert result.payment.status == PaymentStatus.DELETED
+    assert result.payment.status == PaymentStatus.CANCELLED
     service.repo.append_version.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_delete_already_deleted(
+async def test_cancel_already_cancelled(
     service: PaymentService,
     subject: Subject,
     payment: Payment,
 ) -> None:
-    deleted = payment.model_copy(update={"status": PaymentStatus.DELETED})
-    service.repo.get_current.return_value = _versioned(deleted)
-    with pytest.raises(InvalidStateTransitionError, match="already deleted"):
-        await service.delete(deleted.payment_id, subject)
+    cancelled = payment.model_copy(update={"status": PaymentStatus.CANCELLED})
+    service.repo.get_current.return_value = _versioned(cancelled)
+    with pytest.raises(InvalidStateTransitionError, match="already cancelled"):
+        await service.cancel(cancelled.payment_id, subject)
 
 
 @pytest.mark.asyncio
@@ -386,6 +386,7 @@ async def test_submit_success(
 
     assert result.payment.status == PaymentStatus.SUBMITTED
     assert result.payment.submitted_by is not None
+    assert result.payment.submitted_at is not None
     service.repo.append_version.assert_awaited_once()
     service.event_repo.insert_document.assert_awaited_once()
 
@@ -444,6 +445,7 @@ async def test_approve_success(
 
     assert result.payment.status == PaymentStatus.APPROVED
     assert result.payment.approved_by is not None
+    assert result.payment.approved_at is not None
 
 
 @pytest.mark.asyncio
@@ -471,6 +473,7 @@ async def test_approve_cancels_when_instruction_missing(
 
     assert result.payment.status == PaymentStatus.CANCELLED
     assert result.payment.cancellation_reason is not None
+    assert result.payment.cancelled_at is not None
     assert "could not be found" in result.payment.cancellation_reason
 
 
@@ -489,6 +492,7 @@ async def test_approve_cancels_on_instruction_invalidity(
         result = await service.approve(submitted_payment.payment_id, approver_subject)
 
     assert result.payment.status == PaymentStatus.CANCELLED
+    assert result.payment.cancelled_at is not None
     assert "version" in (result.payment.cancellation_reason or "").lower()
 
 
@@ -524,6 +528,7 @@ async def test_reject_success(
 
     assert result.payment.status == PaymentStatus.REJECTED
     assert result.payment.rejection_reason == "Insufficient documentation"
+    assert result.payment.rejected_at is not None
 
 
 @pytest.mark.asyncio
