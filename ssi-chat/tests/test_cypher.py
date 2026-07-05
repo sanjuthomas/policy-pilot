@@ -488,6 +488,26 @@ class TestIsLargestPaymentQuestion:
     def test_excludes_user_ranking(self) -> None:
         assert not is_largest_payment_question("Which user has the most payments?")
 
+    def test_allows_who_created_max_amount(self) -> None:
+        assert is_largest_payment_question(
+            "Who created the payment with the maximum dollar value?"
+        )
+        planned = plan_graph_queries(
+            "Who created the payment with the maximum dollar value?",
+            mode="payments",
+        )
+        assert planned is not None
+        assert planned[0][0] == "largest_payment"
+
+    def test_superlative_routes_to_facet(self) -> None:
+        planned = plan_graph_queries(
+            "Who created the most payments?",
+            mode="payments",
+        )
+        assert planned is not None
+        assert planned[0][0] == "facet_aggregate"
+        assert "LIMIT 1" in planned[0][1]
+
 
 class TestIsMaxPaymentsPerInstructionQuestion:
     def test_detects_max_payments_question(self) -> None:

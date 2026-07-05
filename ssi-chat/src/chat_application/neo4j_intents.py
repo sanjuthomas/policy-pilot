@@ -19,8 +19,8 @@ from chat_application.cypher import (
     format_facet_aggregate_answer,
     instruction_id_from_list_payments_question,
     is_alert_ranking_question,
+    is_analytics_question,
     is_count_question,
-    is_facet_aggregate_question,
     is_instruction_count_aggregate_question,
     is_largest_payment_question,
     is_max_payments_per_instruction_question,
@@ -286,7 +286,7 @@ def _format_planned_graph_answer(
 
         return _format_alert_ranking_answer(question, rows)
 
-    if "facet_aggregate" in labels and is_facet_aggregate_question(question, mode=mode):
+    if "facet_aggregate" in labels and is_analytics_question(question, mode=mode):
         return format_facet_aggregate_answer(question, rows, mode=mode)
 
     if "count" in labels and is_instruction_count_aggregate_question(question):

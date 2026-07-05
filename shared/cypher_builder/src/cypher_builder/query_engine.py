@@ -233,9 +233,9 @@ def is_payment_total_amount_question(question: str) -> bool:
 
 
 def is_payment_count_aggregate_question(question: str) -> bool:
-    from cypher_builder.facets import is_facet_aggregate_question
+    from cypher_builder.facets import is_analytics_question
 
-    if is_facet_aggregate_question(question, mode="payments"):
+    if is_analytics_question(question, mode="payments"):
         return False
     if not is_count_question(question):
         return False
@@ -262,9 +262,22 @@ def is_largest_payment_question(question: str) -> bool:
     if is_payments_for_instruction_question(question):
         return False
     if re.search(r"\b(which|who)\s+(user|users|creator|approver)\b", q):
-        return False
+        if re.search(
+            r"\b(amount|dollar|\$|maximum|largest|highest|greatest|biggest|"
+            r"most expensive|payment with)\b",
+            q,
+        ):
+            pass
+        else:
+            return False
     if re.search(r"\b(user|users)\s+with\s+(the\s+)?(most|top)\b", q):
         return False
+    if re.search(
+        r"\bpayment\b.{0,60}\b(maximum|largest|highest|greatest|biggest|most expensive)\b|"
+        r"\b(maximum|largest|highest|greatest|biggest|most expensive)\b.{0,40}\bpayment\b",
+        q,
+    ):
+        return True
     if not _RANKING_QUESTION.search(question):
         return False
     if re.search(
@@ -331,9 +344,9 @@ def is_payment_amount_threshold_question(question: str) -> bool:
 
 
 def is_instruction_count_aggregate_question(question: str) -> bool:
-    from cypher_builder.facets import is_facet_aggregate_question
+    from cypher_builder.facets import is_analytics_question
 
-    if is_facet_aggregate_question(question, mode="instructions"):
+    if is_analytics_question(question, mode="instructions"):
         return False
     if not is_count_question(question):
         return False

@@ -11,6 +11,7 @@ from cypher_builder.extraction import (
 )
 from cypher_builder.facets import (
     format_facet_aggregate_answer,
+    is_analytics_question,
     is_facet_aggregate_question,
     parse_facet_aggregate,
 )
@@ -77,6 +78,7 @@ __all__ = [
     "is_alert_ranking_question",
     "is_count_question",
     "is_facet_aggregate_question",
+    "is_analytics_question",
     "is_instruction_approver_via_payment_question",
     "is_instruction_count_aggregate_question",
     "is_instruction_group_by_status_question",

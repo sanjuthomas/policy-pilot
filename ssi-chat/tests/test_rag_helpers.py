@@ -357,6 +357,22 @@ class TestPaymentAggregateAnswers:
         assert "APPROVED" in answer
         assert "1800" in answer
 
+    def test_formats_largest_payment_who_created(self) -> None:
+        answer = _format_largest_payment_answer(
+            "Who created the payment with the maximum dollar value?",
+            [
+                {
+                    "payment_id": "P-1",
+                    "amount": 25_000_000,
+                    "currency": "USD",
+                    "creator_display": "Rodriguez, Emily (pay-101)",
+                }
+            ],
+        )
+        assert "created by" in answer
+        assert "Rodriguez" in answer
+        assert "25,000,000.00 USD" in answer
+
     def test_formats_instruction_count(self) -> None:
         answer = _format_instruction_count_aggregate_answer(
             "How many instructions are there in the store?",

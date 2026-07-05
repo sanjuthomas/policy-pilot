@@ -22,8 +22,8 @@ from chat_application.cypher import (
     instruction_count_filters_from_question,
     instruction_id_from_list_payments_question,
     is_alert_ranking_question,
+    is_analytics_question,
     is_count_question,
-    is_facet_aggregate_question,
     is_instruction_approver_via_payment_question,
     is_instruction_count_aggregate_question,
     is_largest_payment_question,
@@ -168,8 +168,15 @@ def _format_largest_payment_answer(message: str, graph_rows: list[dict[str, Any]
         max_amount, top_rows[0].get("currency")
     )
 
+    q = message.lower()
     if len(top_rows) == 1:
         summary = f"The largest payment ({scope}, {period}) is {amount_text}."
+        if re.search(r"\bwho\s+created\b", q):
+            creator = top_rows[0].get("creator_display") or "unknown"
+            summary = (
+                f"The largest payment ({scope}, {period}) is {amount_text}, "
+                f"created by **{creator}**."
+            )
     else:
         summary = (
             f"The largest payment amount ({scope}, {period}) is {amount_text} "
@@ -415,7 +422,7 @@ def _should_format_instruction_count_aggregate(message: str, mode: SearchMode) -
 
 
 def _should_format_facet_aggregate(message: str, mode: SearchMode) -> bool:
-    return is_facet_aggregate_question(message, mode=mode)
+    return is_analytics_question(message, mode=mode)
 
 
 def _format_security_event_count_aggregate_answer(

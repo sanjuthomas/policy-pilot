@@ -862,3 +862,60 @@ cases:
   question: How many payments were created by middle office for FICC this week?
   expect:
     answer_has_number: true
+- id: instructions_group_by_status_facet
+  mode: instructions
+  retrieval: deterministic
+  tags:
+  - facet
+  - status
+  - regression
+  question: Can you group instructions by status?
+  expect:
+    answer_contains_any:
+    - status
+    - approved
+    - draft
+    - submitted
+    - used
+    min_answer_length: 20
+- id: payments_superlative_top_creator
+  mode: payments
+  retrieval: deterministic
+  tags:
+  - facet
+  - superlative
+  - regression
+  question: Who created the most payments?
+  expect:
+    answer_contains_any:
+    - created
+    - payment
+    - most
+    min_answer_length: 10
+- id: payments_group_by_approver
+  mode: payments
+  retrieval: deterministic
+  tags:
+  - facet
+  - approver
+  - regression
+  question: Can you group payments by approver?
+  expect:
+    answer_contains_any:
+    - approver
+    - payment
+    min_answer_length: 15
+- id: payments_largest_who_created
+  mode: payments
+  retrieval: deterministic
+  tags:
+  - extreme
+  - largest
+  - regression
+  question: Who created the payment with the maximum dollar value?
+  expect:
+    answer_contains_any:
+    - created by
+    - largest
+    - payment
+    min_answer_length: 15

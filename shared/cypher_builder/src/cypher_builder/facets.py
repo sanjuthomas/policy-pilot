@@ -8,7 +8,8 @@ from enum import StrEnum
 from typing import Literal
 
 FacetEntityName = Literal["instruction", "payment"]
-MetricName = Literal["count"]
+AnalyticsMetric = Literal["count", "sum_amount", "avg_approval_time"]
+ReturnMode = Literal["table", "single_winner"]
 
 _ISO_DATE = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
 _FROM_TO = re.compile(
@@ -60,6 +61,23 @@ _TRAILING_FILTER = re.compile(
     r"\s+(?:for|in|during|within)\s+(?:this|last|past)\s+(?:week|month|year|day|\d+\s+days?).*$",
     re.IGNORECASE,
 )
+_AND_INCLUDE = re.compile(r"\s+and\s+include\s+.+$", re.IGNORECASE)
+_TOP_N = re.compile(r"\btop\s+(\d+)\b", re.IGNORECASE)
+_SUPERLATIVE_CUE = re.compile(
+    r"\b(who|which)\b.{0,120}\b(most|top|highest|greatest|leading)\b|"
+    r"\b(most|top|highest|greatest|leading)\b.{0,40}\b(payments?|instructions?)\b",
+    re.IGNORECASE,
+)
+_AVG_APPROVAL_TIME = re.compile(
+    r"\baverage\s+approval\s+time\b|"
+    r"\bavg\s+approval\b|"
+    r"\b(?:average|avg|mean)\b.{0,60}\b(?:time|duration|hours|days|latency)\b.{0,40}"
+    r"\b(?:approve|approval|approving)\b|"
+    r"\b(?:time|duration)\b.{0,40}\b(?:approve|approval)\b|"
+    r"\baverage\s+time\s+they\s+have\s+taken\s+to\s+approve\b",
+    re.IGNORECASE,
+)
+_MEDIAN_CUE = re.compile(r"\bmedian\b", re.IGNORECASE)
 
 
 class FacetEntity(StrEnum):
@@ -88,12 +106,18 @@ class DateRangeSpec:
 class FacetAggregateSpec:
     entity: FacetEntity
     dimension: FacetDimension
-    metric: MetricName = "count"
+    metrics: tuple[str, ...] = ("count",)
     status_filter: str | None = None
     lob_filter: str | None = None
     instruction_type_filter: str | None = None
     date_range: DateRangeSpec | None = None
-    sum_amount: bool = False
+    limit: int = 50
+    return_mode: ReturnMode = "table"
+    unsupported_requests: tuple[str, ...] = ()
+
+    @property
+    def sum_amount(self) -> bool:
+        return "sum_amount" in self.metrics
 
 
 def _normalize_phrase(value: str) -> str:
@@ -146,7 +170,7 @@ def _instruction_dimensions() -> dict[str, FacetDimension]:
             key="approver",
             label="Approver",
             bucket_expr="coalesce(approver.display_name, v.approver_user_id, 'unknown')",
-            aliases=("approver", "approved by", "instruction approver"),
+            aliases=("approver", "approved by", "instruction approver", "approvers"),
             optional_match="OPTIONAL MATCH (approver:User {user_id: v.approver_user_id})",
         ),
         "rejector": FacetDimension(
@@ -212,7 +236,7 @@ def _payment_dimensions() -> dict[str, FacetDimension]:
             key="approver",
             label="Approver",
             bucket_expr="coalesce(approver.display_name, p.approver_user_id, 'unknown')",
-            aliases=("approver", "approved by", "payment approver"),
+            aliases=("approver", "approved by", "payment approver", "approvers"),
             optional_match="OPTIONAL MATCH (approver:User {user_id: p.approver_user_id})",
         ),
         "rejector": FacetDimension(
@@ -312,17 +336,71 @@ def _extract_group_by_phrase(question: str) -> str | None:
         return "lob"
     match = _GROUP_BY.search(question.strip())
     if match:
-        return match.group(1).strip()
+        phrase = _AND_INCLUDE.sub("", match.group(1).strip()).strip()
+        return phrase.rstrip("?.!")
     match = _COUNT_PER.search(question)
     if match:
-        return match.group(1).strip()
+        phrase = _AND_INCLUDE.sub("", match.group(1).strip()).strip()
+        return phrase.rstrip("?.!")
     match = _PER_DIMENSION.search(question)
     if match and _FACET_AGGREGATE.search(question):
-        return match.group(1).strip()
+        phrase = _AND_INCLUDE.sub("", match.group(1).strip()).strip()
+        return phrase.rstrip("?.!")
     return None
 
 
-def is_facet_aggregate_question(question: str, *, mode: str) -> bool:
+def _looks_superlative(question: str) -> bool:
+    if _is_payment_extreme_amount_question(question):
+        return False
+    return bool(_SUPERLATIVE_CUE.search(question))
+
+
+def _is_payment_extreme_amount_question(question: str) -> bool:
+    q = question.lower()
+    if "payment" not in q:
+        return False
+    return bool(
+        re.search(
+            r"\b(maximum|largest|highest|greatest|biggest|most expensive)\b",
+            q,
+        )
+        and re.search(r"\b(amount|dollar|\$|value)\b", q)
+    )
+
+
+def _superlative_limit(question: str) -> int:
+    match = _TOP_N.search(question)
+    if match:
+        return max(1, min(int(match.group(1)), 50))
+    if re.search(r"\b(who|which)\b", question, re.IGNORECASE):
+        return 1
+    return 50
+
+
+def _extract_superlative_dimension(
+    question: str, entity: FacetEntity
+) -> FacetDimension | None:
+    if not _looks_superlative(question):
+        return None
+    q = question.lower()
+    catalog = facet_dimensions(entity)
+    verb_to_key = (
+        (r"\b(?:creat(?:ed|es|or)|creation)\b", "creator"),
+        (r"\b(?:approv(?:ed|es|er|al))\b", "approver"),
+        (r"\b(?:submit(?:ted|s|ter))\b", "submitter"),
+        (r"\b(?:reject(?:ed|s|or))\b", "rejector"),
+    )
+    for pattern, key in verb_to_key:
+        if re.search(pattern, q) and key in catalog:
+            return catalog[key]
+    for dimension in catalog.values():
+        for alias in dimension.aliases:
+            if alias in q:
+                return dimension
+    return None
+
+
+def _is_group_by_facet_question(question: str, *, mode: str) -> bool:
     if mode not in ("instructions", "payments", "all"):
         return False
     if resolve_facet_entity(question, mode=mode) is None:
@@ -334,6 +412,53 @@ def is_facet_aggregate_question(question: str, *, mode: str) -> bool:
     if _GROUP_BY.search(question.strip()):
         return True
     return False
+
+
+def is_analytics_question(question: str, *, mode: str) -> bool:
+    entity = resolve_facet_entity(question, mode=mode)
+    if entity is None or mode not in ("instructions", "payments", "all"):
+        return False
+    if _extract_superlative_dimension(question, entity) is not None:
+        return True
+    return _is_group_by_facet_question(question, mode=mode)
+
+
+def is_facet_aggregate_question(question: str, *, mode: str) -> bool:
+    return is_analytics_question(question, mode=mode)
+
+
+def _parse_requested_metrics(
+    question: str, *, entity: FacetEntity
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    metrics: list[str] = ["count"]
+    unsupported: list[str] = []
+    q = question.lower()
+
+    if entity == FacetEntity.PAYMENT and (
+        "total amount" in q
+        or re.search(r"\bsum\b", q)
+        or (
+            "amount" in q
+            and "count" not in q
+            and "average" not in q
+            and "avg" not in q
+            and "mean" not in q
+        )
+    ):
+        if "sum_amount" not in metrics:
+            metrics.append("sum_amount")
+
+    if entity == FacetEntity.PAYMENT and _AVG_APPROVAL_TIME.search(question):
+        metrics.append("avg_approval_time")
+
+    if _MEDIAN_CUE.search(question):
+        unsupported.append("median")
+
+    deduped: list[str] = []
+    for metric in metrics:
+        if metric not in deduped:
+            deduped.append(metric)
+    return tuple(deduped), tuple(unsupported)
 
 
 def _payment_date_field_key(question: str, dimension: FacetDimension) -> str:
@@ -567,8 +692,6 @@ def _date_range_clause(
 
 
 def parse_facet_aggregate(question: str, *, mode: str) -> FacetAggregateSpec | None:
-    if not is_facet_aggregate_question(question, mode=mode):
-        return None
     from cypher_builder.query_engine import (
         instruction_status_filter_from_question,
         instruction_type_filter_from_question,
@@ -579,12 +702,25 @@ def parse_facet_aggregate(question: str, *, mode: str) -> FacetAggregateSpec | N
     entity = resolve_facet_entity(question, mode=mode)
     if entity is None:
         return None
-    phrase = _extract_group_by_phrase(question)
-    if not phrase:
-        return None
-    dimension = resolve_facet_dimension(phrase, entity)
-    if dimension is None:
-        return None
+
+    metrics, unsupported = _parse_requested_metrics(question, entity=entity)
+
+    superlative_dim = _extract_superlative_dimension(question, entity)
+    if superlative_dim is not None:
+        limit = _superlative_limit(question)
+        return_mode: ReturnMode = "single_winner" if limit == 1 else "table"
+        dimension = superlative_dim
+    else:
+        if not _is_group_by_facet_question(question, mode=mode):
+            return None
+        phrase = _extract_group_by_phrase(question)
+        if not phrase:
+            return None
+        dimension = resolve_facet_dimension(phrase, entity)
+        if dimension is None:
+            return None
+        limit = 50
+        return_mode = "table"
 
     status_filter = None
     instruction_type_filter = None
@@ -597,20 +733,47 @@ def parse_facet_aggregate(question: str, *, mode: str) -> FacetAggregateSpec | N
     lob_filter = lob_filter_from_question(question)
     date_range = _date_range_clause(question, entity=entity, dimension=dimension)
 
-    q = question.lower()
-    sum_amount = entity == FacetEntity.PAYMENT and (
-        "total amount" in q or "sum" in q or "amount" in q and "count" not in q
-    )
-
     return FacetAggregateSpec(
         entity=entity,
         dimension=dimension,
+        metrics=metrics,
         status_filter=status_filter,
         lob_filter=lob_filter,
         instruction_type_filter=instruction_type_filter,
         date_range=date_range,
-        sum_amount=sum_amount,
+        limit=limit,
+        return_mode=return_mode,
+        unsupported_requests=unsupported,
     )
+
+
+def _aggregate_with_clauses(spec: FacetAggregateSpec) -> tuple[str, list[str]]:
+    """Build WITH aggregations and RETURN column names."""
+    agg_parts: list[str] = [f"{spec.dimension.bucket_expr} AS bucket"]
+    return_cols = ["bucket"]
+
+    if "count" in spec.metrics:
+        if spec.entity == FacetEntity.INSTRUCTION:
+            agg_parts.append("count(DISTINCT i.instruction_id) AS total")
+        else:
+            agg_parts.append("count(DISTINCT pay.payment_id) AS total")
+        return_cols.append("total")
+
+    if "sum_amount" in spec.metrics and spec.entity == FacetEntity.PAYMENT:
+        agg_parts.append("sum(p.amount) AS total_amount")
+        return_cols.append("total_amount")
+
+    if "avg_approval_time" in spec.metrics and spec.entity == FacetEntity.PAYMENT:
+        agg_parts.append(
+            "avg("
+            "CASE WHEN p.approved_at IS NOT NULL AND p.created_at IS NOT NULL "
+            "THEN duration.inSeconds(datetime(p.created_at), datetime(p.approved_at)) / 3600.0 "
+            "ELSE NULL END"
+            ") AS avg_approval_hours"
+        )
+        return_cols.append("avg_approval_hours")
+
+    return ", ".join(agg_parts), return_cols
 
 
 def build_facet_aggregate_cypher(spec: FacetAggregateSpec) -> str:
@@ -629,6 +792,10 @@ def build_facet_aggregate_cypher(spec: FacetAggregateSpec) -> str:
 
     optional_match = spec.dimension.optional_match
     optional_line = f"{optional_match}\n" if optional_match else ""
+    with_aggs, return_cols = _aggregate_with_clauses(spec)
+    order_field = "total" if "total" in return_cols else return_cols[-1]
+    return_clause = ", ".join(return_cols)
+    limit = max(1, min(spec.limit, 50))
 
     if spec.entity == FacetEntity.INSTRUCTION:
         prefix = """
@@ -638,17 +805,15 @@ WITH i, max(iv.version_number) AS max_ver
 MATCH (i)-[:HAS_VERSION]->(v:InstructionVersion)
 WHERE v.version_number = max_ver AND v.status IS NOT NULL AND v.status <> ''
 """
-        aggregate = (
+        return (
             f"{prefix}"
             f"{filter_clause}\n"
             f"{optional_line}"
-            f"WITH {spec.dimension.bucket_expr} AS bucket, "
-            f"count(DISTINCT i.instruction_id) AS total\n"
-            f"RETURN bucket, total\n"
-            f"ORDER BY total DESC, bucket ASC\n"
-            f"LIMIT 50"
+            f"WITH {with_aggs}\n"
+            f"RETURN {return_clause}\n"
+            f"ORDER BY {order_field} DESC, bucket ASC\n"
+            f"LIMIT {limit}"
         )
-        return aggregate
 
     prefix = """
 MATCH (pay:Payment)-[:HAS_VERSION]->(pv:PaymentVersion)
@@ -657,27 +822,14 @@ WITH pay, max(pv.version_number) AS max_ver
 MATCH (pay)-[:HAS_VERSION]->(p:PaymentVersion)
 WHERE p.version_number = max_ver AND p.status IS NOT NULL
 """
-    if spec.sum_amount:
-        return (
-            f"{prefix}"
-            f"{filter_clause}\n"
-            f"{optional_line}"
-            f"WITH {spec.dimension.bucket_expr} AS bucket, "
-            f"count(DISTINCT pay.payment_id) AS total, "
-            f"sum(p.amount) AS total_amount\n"
-            f"RETURN bucket, total, total_amount\n"
-            f"ORDER BY total DESC, bucket ASC\n"
-            f"LIMIT 50"
-        )
     return (
         f"{prefix}"
         f"{filter_clause}\n"
         f"{optional_line}"
-        f"WITH {spec.dimension.bucket_expr} AS bucket, "
-        f"count(DISTINCT pay.payment_id) AS total\n"
-        f"RETURN bucket, total\n"
-        f"ORDER BY total DESC, bucket ASC\n"
-        f"LIMIT 50"
+        f"WITH {with_aggs}\n"
+        f"RETURN {return_clause}\n"
+        f"ORDER BY {order_field} DESC, bucket ASC\n"
+        f"LIMIT {limit}"
     )
 
 
@@ -715,6 +867,31 @@ def _facet_qualifier_suffix(spec: FacetAggregateSpec) -> str:
     return f" ({', '.join(qualifiers)})"
 
 
+def _dimension_action_verb(dimension_key: str) -> str:
+    return {
+        "creator": "created",
+        "approver": "approved",
+        "submitter": "submitted",
+        "rejector": "rejected",
+    }.get(dimension_key, "has")
+
+
+def _format_hours(value: object) -> str:
+    if value is None:
+        return "—"
+    hours = float(value)
+    if hours < 1:
+        return f"{hours * 60:.0f} minutes"
+    return f"{hours:.1f} hours"
+
+
+def _unsupported_note(spec: FacetAggregateSpec) -> str:
+    if not spec.unsupported_requests:
+        return ""
+    joined = ", ".join(spec.unsupported_requests)
+    return f"\n\n_Note: {joined} is not supported yet; showing available metrics only._"
+
+
 def format_facet_aggregate_answer(
     question: str,
     rows: list[dict[str, object]],
@@ -728,33 +905,60 @@ def format_facet_aggregate_answer(
     entity_label = "Instruction" if spec.entity == FacetEntity.INSTRUCTION else "Payment"
     entity_plural = f"{entity_label.lower()}s"
     qualifier = _facet_qualifier_suffix(spec)
+    note = _unsupported_note(spec)
 
-    bucket_rows = [
-        row for row in rows if row.get("bucket") is not None and row.get("total") is not None
-    ]
+    bucket_rows = [row for row in rows if row.get("bucket") is not None]
     if not bucket_rows:
-        return f"No {entity_plural} were found grouped by {spec.dimension.label.lower()}{qualifier}."
+        return (
+            f"No {entity_plural} were found grouped by "
+            f"{spec.dimension.label.lower()}{qualifier}."
+        )
 
-    if spec.sum_amount:
-        table_rows: list[tuple[str | int | float, ...]] = [
-            (
-                str(row.get("bucket") or "unknown"),
-                int(row.get("total") or 0),
-                float(row.get("total_amount") or 0),
+    if spec.return_mode == "single_winner" and bucket_rows:
+        winner = bucket_rows[0]
+        bucket = str(winner.get("bucket") or "unknown")
+        count = int(winner.get("total") or 0)
+        verb = _dimension_action_verb(spec.dimension.key)
+        if count == 1:
+            count_text = f"1 {entity_label.lower()}"
+        else:
+            count_text = f"{count} {entity_plural}"
+        answer = (
+            f"**{bucket}** {verb} the most {entity_plural}{qualifier} "
+            f"({count_text})."
+        )
+        if "avg_approval_time" in spec.metrics:
+            answer += (
+                f" Average approval time: "
+                f"{_format_hours(winner.get('avg_approval_hours'))}."
             )
-            for row in bucket_rows
-        ]
-        headers = [spec.dimension.label, entity_label + "s", "Total amount"]
-    else:
-        table_rows = [
-            (str(row.get("bucket") or "unknown"), int(row.get("total") or 0))
-            for row in bucket_rows
-        ]
-        headers = [spec.dimension.label, entity_label + "s"]
+        return answer + note
 
-    total = sum(int(row.get("total") or 0) for row in bucket_rows)
+    headers: list[str] = [spec.dimension.label]
+    table_rows: list[tuple[str | int | float, ...]] = []
+
+    if "count" in spec.metrics:
+        headers.append(f"{entity_label}s")
+    if "sum_amount" in spec.metrics:
+        headers.append("Total amount")
+    if "avg_approval_time" in spec.metrics:
+        headers.append("Avg approval time")
+
+    for row in bucket_rows:
+        cells: list[str | int | float] = [str(row.get("bucket") or "unknown")]
+        if "count" in spec.metrics:
+            cells.append(int(row.get("total") or 0))
+        if "sum_amount" in spec.metrics:
+            cells.append(float(row.get("total_amount") or 0))
+        if "avg_approval_time" in spec.metrics:
+            cells.append(_format_hours(row.get("avg_approval_hours")))
+        table_rows.append(tuple(cells))
+
+    total = sum(int(row.get("total") or 0) for row in bucket_rows if "count" in spec.metrics)
+    total_suffix = f" ({total} total)" if "count" in spec.metrics else ""
     return (
-        f"{entity_label} counts by {spec.dimension.label.lower()}{qualifier} "
-        f"({total} total):\n\n"
+        f"{entity_label} counts by {spec.dimension.label.lower()}{qualifier}"
+        f"{total_suffix}:\n\n"
         f"{_markdown_table(headers, table_rows)}"
+        f"{note}"
     )

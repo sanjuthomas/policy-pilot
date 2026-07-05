@@ -30,7 +30,7 @@ def test_regression_cases_all_have_retrieval():
 def test_regression_retrieval_distribution():
     suite = load_suite()
     counts = Counter(case.retrieval for case in suite.cases)
-    assert counts["deterministic"] == 18
+    assert counts["deterministic"] == 22
     assert counts["graph"] == 36
     assert counts["vector"] == 5
     assert counts.get("eligibility", 0) == 0
