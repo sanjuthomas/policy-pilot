@@ -11,7 +11,7 @@ Shared **Neo4j query planner** for PolicyPilot and the indexer Search Console. M
 
 ## Graph edge names
 
-Queries use lifecycle edges `CREATED_IV`, `APPROVED_IV`, `CREATED_PV`, `APPROVED_PV`, … and audit links `FOR` → version. See [neo4j-graph-model/PHASE-0.md](../../neo4j-graph-model/PHASE-0.md).
+Queries use lifecycle edges `CREATED_IV`, `APPROVED_IV`, `CREATED_PV`, `APPROVED_PV`, … and audit links `FOR` → version. See [neo4j-graph-model/README.md](../../neo4j-graph-model/README.md).
 
 Examples handled without LLM:
 

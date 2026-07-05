@@ -1,17 +1,29 @@
 # Neo4j Graph Model
 
-Version-controlled **graph schema and documentation** for security events, instruction lifecycle snapshots, and payment lifecycle.
+Canonical **graph schema and documentation** for security events, instruction lifecycle, and payment lifecycle. Keep this file up to date when the model changes.
 
-Symmetric **fact** vs **security-event** writers, named lifecycle edges (`_*IV` / `_*PV`), audit links via `FOR` → version, and root denormalization. See **[PHASE-0.md](./PHASE-0.md)** for the full specification.
+Symmetric **fact** vs **security-event** writers, named lifecycle edges (`_*IV` / `_*PV`), audit links via `FOR` → version, and root denormalization on instruction and payment roots.
 
 ## Layout
 
 ```
-schema.cypher              — constraints and indexes (applied by ETL on startup)
-PHASE-0.md                 — graph spec (writers, edges, domain rules)
-relationships.cypher       — node/relationship property reference (documentation)
-ssi-indexer/.../graph_model.py — action → edge maps consumed by ETL
+schema.cypher                    — constraints and indexes (applied by ETL on startup)
+relationships.cypher             — node/relationship property reference (documentation)
+ssi-indexer/src/etl/graph_model.py — action → edge maps consumed by ETL
 ```
+
+## Principles
+
+| Principle | Rule |
+|-----------|------|
+| Read-optimized | Redundant edges and denormalized root properties are intentional |
+| Append-only versions | Never delete `*Version` nodes; history via `HAS_VERSION`, `SUPERSEDES`, `valid_in`/`valid_out` |
+| Two writers, symmetric | **Fact pipelines** = state; **security-event pipelines** = audit only |
+| Named lifecycle | User → Version edges (`CREATED_IV`, `CREATED_PV`, …) per Mongo action |
+| Domain approval | `(User)-[:APPROVED_*]->(Version)` = regulatory sign-off on the **route** |
+| Property naming | `snake_case` everywhere in Neo4j (matches Mongo payloads) |
+
+Demo data is disposable — wipe Neo4j and replay Kafka when the model changes (see [Wipe and reload](#wipe-and-reload-demo-graph)).
 
 ## Four ETL pipelines, two writer types
 
@@ -24,6 +36,11 @@ ssi-indexer/.../graph_model.py — action → edge maps consumed by ETL
 
 All topics carry **full Mongo documents** via Kafka Connect — the ETL makes no API calls to instruction-service or payment-service.
 
+| Writer type | Pipelines | Owns |
+|-------------|-----------|------|
+| **Fact** (state) | `InstructionPipeline`, `PaymentFactPipeline` | Versions, `CURRENT`, `SUPERSEDES`, lifecycle edges (`_*IV` / `_*PV`), structural edges, root denorm, multimodal state docs |
+| **Audit** (events) | `InstructionSecurityEventPipeline`, `PaymentSecurityEventPipeline` | `SecurityEvent`, `ACTED_AS`, `FOR` → version, `INVOLVES_LOB`, multimodal event docs |
+
 ### Fact pipelines own state
 
 - Version nodes, `HAS_VERSION`, `CURRENT`, `SUPERSEDES`
@@ -35,7 +52,7 @@ All topics carry **full Mongo documents** via Kafka Connect — the ETL makes no
 ### Security-event pipelines own audit only
 
 - `SecurityEvent`, `ACTED_AS`, `FOR` → `InstructionVersion` or `PaymentVersion`, `INVOLVES_LOB`
-- Sparse version merge for search (no lifecycle or `CURRENT` writes)
+- Sparse version merge for search (no lifecycle, `CURRENT`, `CONSUMED`, `HAS_PAYMENT`, or `FOR_INSTRUCTION` writes)
 - Multimodal docs: `instruction_security_event`, `payment_security_event`
 
 ## Graph model
@@ -105,8 +122,8 @@ flowchart TB
 | `CONFLICTS_WITH` | Instruction ↔ Instruction | InstructionPipeline | Same creditor account + currency |
 | `FOR_INSTRUCTION` | Payment → Instruction | PaymentFactPipeline | Payment linked to instruction |
 | `HAS_PAYMENT` | Instruction → Payment | PaymentFactPipeline | Instruction has payment(s) |
-| `CONSUMED` | Payment → Instruction | PaymentFactPipeline | SINGLE_USE submit saga |
-| `CONSUMED_BY` | Instruction → Payment | PaymentFactPipeline | Same; **deleted** on instruction `RELEASE_USE` |
+| `CONSUMED` | Payment → Instruction | PaymentFactPipeline | SINGLE_USE submit saga; deleted on `RELEASE_USE` |
+| `CONSUMED_BY` | Instruction → Payment | PaymentFactPipeline | Same as `CONSUMED`; deleted on `RELEASE_USE` |
 | `CREATED_IV` | User → InstructionVersion | InstructionPipeline | Create |
 | `SUBMITTED_IV` | User → InstructionVersion | InstructionPipeline | Submit |
 | `APPROVED_IV` | User → InstructionVersion | InstructionPipeline | Regulatory sign-off on route |
@@ -114,11 +131,61 @@ flowchart TB
 | `CANCELLED_IV` | User → InstructionVersion | InstructionPipeline | Instruction cancel |
 | `SUSPENDED_IV` / `REACTIVATED_IV` | User → InstructionVersion | InstructionPipeline | Suspend / reactivate |
 | `USED_IV` / `RELEASED_IV` | User → InstructionVersion | InstructionPipeline | SINGLE_USE use / release |
-| `CREATED_PV` … `CANCELLED_PV` | User → PaymentVersion | PaymentFactPipeline | Payment lifecycle |
+| `CREATED_PV` | User → PaymentVersion | PaymentFactPipeline | Create payment |
+| `SUBMITTED_PV` | User → PaymentVersion | PaymentFactPipeline | Submit payment |
+| `APPROVED_PV` | User → PaymentVersion | PaymentFactPipeline | Approve payment |
+| `REJECTED_PV` | User → PaymentVersion | PaymentFactPipeline | Reject payment |
+| `CANCELLED_PV` | User → PaymentVersion | PaymentFactPipeline | Cancel payment (user or system) |
 | `ACTED_AS` | User → SecurityEvent | security-event pipelines | Event actor |
 | `FOR` | SecurityEvent → Version | security-event pipelines | Audit link to version at event time |
 | `INVOLVES_LOB` | SecurityEvent → ProfitCenter | security-event pipelines | Event LOB |
 | `REPORTS_TO` | User → User | all pipelines (user upsert) | Org hierarchy from `supervisor_id` |
+
+### Instruction lifecycle (Mongo action → edge)
+
+All: `(User)-[:<EDGE> {at: <iso>}]->(InstructionVersion)`
+
+| Edge | Mongo action |
+|------|--------------|
+| `CREATED_IV` | `CREATE` |
+| `SUBMITTED_IV` | `SUBMIT` |
+| `APPROVED_IV` | `APPROVE` |
+| `REJECTED_IV` | `REJECT` |
+| `CANCELLED_IV` | `CANCEL` |
+| `SUSPENDED_IV` | `SUSPEND` |
+| `REACTIVATED_IV` | `REACTIVATE` |
+| `USED_IV` | `USE` |
+| `RELEASED_IV` | `RELEASE_USE` |
+
+`USED_IV` is written by the payment submitter (OBO human) with edge props `{at, payment_id, delegated_by}`; version `used_by` holds the payment id.
+
+| Scenario | Instruction edge |
+|----------|------------------|
+| User cancels instruction | `CANCELLED_IV` |
+| Payment reject / cancel / system cancel on approve | `RELEASED_IV` |
+
+### Payment lifecycle (Mongo action → edge)
+
+All: `(User)-[:<EDGE> {at: <iso>}]->(PaymentVersion)`
+
+| Edge | Mongo action |
+|------|--------------|
+| `CREATED_PV` | `CREATE_PAYMENT` |
+| `SUBMITTED_PV` | `SUBMIT_PAYMENT` |
+| `APPROVED_PV` | `APPROVE_PAYMENT` |
+| `REJECTED_PV` | `REJECT_PAYMENT` |
+| `CANCELLED_PV` | `CANCEL_PAYMENT` |
+
+### SINGLE_USE (payment submit saga)
+
+| Step | Payment graph | Instruction graph |
+|------|---------------|-------------------|
+| Create payment | `DRAFT`, `FOR_INSTRUCTION`, `HAS_PAYMENT` | unchanged |
+| Submit | `SUBMITTED_PV`, `CONSUMED`, `CONSUMED_BY` | `USED_IV`, `used_by` |
+| Approve | `APPROVED_PV` | stays `USED` |
+| Reject / cancel / system cancel | `REJECTED_PV` or `CANCELLED_PV` | `RELEASED_IV`; **delete** consumption edges |
+
+ETL edge constants: `ssi-indexer/src/etl/graph_model.py`.
 
 ## Multimodal documents (four source tags)
 
@@ -161,21 +228,6 @@ RETURN v.instruction_id, v.approved_at,
        v.authorization_summary, v.authorization_basis
 LIMIT 1;
 
-// Mutual approval (collusion signal)
-MATCH (a:User)-[:APPROVED_IV]->(va:InstructionVersion)<-[:CREATED_IV]-(b:User)
-MATCH (b)-[:APPROVED_IV]->(vb:InstructionVersion)<-[:CREATED_IV]-(a)
-WHERE a.user_id < b.user_id
-RETURN a.display_name AS user_a, b.display_name AS user_b,
-       va.instruction_id AS approved_by_a,
-       vb.instruction_id AS approved_by_b;
-
-// Subordinate approved supervisor's instruction (inversion of control)
-MATCH (creator:User)-[:CREATED_IV]->(v:InstructionVersion)
-MATCH (approver:User)-[:APPROVED_IV]->(v)
-MATCH (approver)-[:REPORTS_TO]->(creator)
-RETURN creator.display_name AS supervisor, approver.display_name AS subordinate,
-       v.instruction_id, v.owning_lob;
-
 // ALERT events with actor and linked version
 MATCH (e:SecurityEvent {severity: 'ALERT'})
 WHERE date(datetime(e.timestamp)) = date()
@@ -191,6 +243,10 @@ ORDER BY e.timestamp DESC;
 MATCH (p:Payment {payment_id: $id})-[:CONSUMED]->(i:Instruction)
 RETURN i.instruction_id, i.current_status, i.current_used_by;
 
+// Who holds SINGLE_USE instruction
+MATCH (i:Instruction {instruction_id: $id})
+RETURN i.current_status, i.current_used_by;
+
 // Full version chain (newest → oldest)
 MATCH (i:Instruction {instruction_id: $uuid})-[:CURRENT]->(head:InstructionVersion)
 MATCH (head)-[:SUPERSEDES*0..]->(v:InstructionVersion)
@@ -198,7 +254,47 @@ RETURN v.version_number, v.status, v.action
 ORDER BY v.version_number DESC;
 ```
 
-Full specification: [PHASE-0.md](./PHASE-0.md). ETL edge constants: `ssi-indexer/src/etl/graph_model.py`.
+## Cross-graph queries
+
+Nodes are shared across pipelines — these join audit events, lifecycle edges, and current state:
+
+```cypher
+-- ALERT event actor + linked version + current instruction state
+MATCH (actor:User)-[:ACTED_AS]->(e:SecurityEvent {severity: 'ALERT'})
+OPTIONAL MATCH (e)-[:FOR]->(v:InstructionVersion)
+OPTIONAL MATCH (i:Instruction {instruction_id: v.instruction_id})-[:CURRENT]->(cv:InstructionVersion)
+RETURN actor.display_name, e.message, v.instruction_id, cv.status, cv.owning_lob
+ORDER BY e.timestamp DESC LIMIT 20;
+
+-- Mutual approval (collusion signal)
+MATCH (a:User)-[:APPROVED_IV]->(va:InstructionVersion)<-[:CREATED_IV]-(b:User)
+MATCH (b)-[:APPROVED_IV]->(vb:InstructionVersion)<-[:CREATED_IV]-(a)
+WHERE a.user_id < b.user_id
+RETURN a.display_name AS user_a, b.display_name AS user_b,
+       va.instruction_id AS approved_by_a, vb.instruction_id AS approved_by_b;
+
+-- Subordinate approved supervisor's instruction (inversion of control)
+MATCH (creator:User)-[:CREATED_IV]->(v:InstructionVersion)
+MATCH (approver:User)-[:APPROVED_IV]->(v)
+MATCH (approver)-[:REPORTS_TO]->(creator)
+RETURN creator.display_name AS supervisor, approver.display_name AS subordinate,
+       v.instruction_id, v.owning_lob;
+
+-- Payment approver reports to payment creator
+MATCH (p:Payment)-[:CURRENT]->(pv:PaymentVersion)
+MATCH (creator:User)-[:CREATED_PV]->(pv)
+MATCH (approver:User)-[:APPROVED_PV]->(pv)
+MATCH (approver)-[:REPORTS_TO]->(creator)
+RETURN creator.display_name, approver.display_name, p.payment_id, pv.amount
+LIMIT 50;
+
+-- Potential duplicate settlement routes
+MATCH (i1:Instruction)-[:CONFLICTS_WITH]->(i2:Instruction)
+MATCH (i1)-[:CURRENT]->(v1:InstructionVersion)
+MATCH (i2)-[:CURRENT]->(v2:InstructionVersion)
+RETURN v1.instruction_id, v1.creditor_account, v1.currency, v2.instruction_id
+LIMIT 50;
+```
 
 ## Wipe and reload demo graph
 

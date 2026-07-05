@@ -54,7 +54,7 @@ Policy denials surface as HTTP 403 and `ALERT` security events in Mongo (streame
 
 The same pattern applies under `/v1/data/payment/lifecycle/…` for payments.
 
-On allow, domain services build `details.authorization.summary` from `allow_basis` and persist it on Mongo security events; **Kafka Connect** relays those documents to Kafka and **ssi-indexer** indexes them into Neo4j (`SecurityEvent`, `ACTED_AS`, `FOR` → version, multimodal docs) for RAG **Who / When / Why** answers. Graph edge names: [neo4j-graph-model/PHASE-0.md](../neo4j-graph-model/PHASE-0.md).
+On allow, domain services build `details.authorization.summary` from `allow_basis` and persist it on Mongo security events; **Kafka Connect** relays those documents to Kafka and **ssi-indexer** indexes them into Neo4j (`SecurityEvent`, `ACTED_AS`, `FOR` → version, multimodal docs) for RAG **Who / When / Why** answers. Graph edge names: [neo4j-graph-model/README.md](../neo4j-graph-model/README.md).
 
 ## Payment authorization
 

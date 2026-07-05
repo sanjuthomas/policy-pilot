@@ -53,7 +53,7 @@ flowchart TB
 | **Fact (state)** | `InstructionPipeline`, `PaymentFactPipeline` | Versions, `CURRENT`, `SUPERSEDES`, `_*IV` / `_*PV` lifecycle, `CONFLICTS_WITH`, `HAS_PAYMENT`, `CONSUMED`, root denorm |
 | **Audit (events)** | `InstructionSecurityEventPipeline`, `PaymentSecurityEventPipeline` | `SecurityEvent`, `ACTED_AS`, `FOR` → version, `INVOLVES_LOB` only |
 
-Edge/action constants: `src/etl/graph_model.py`. Full spec: [neo4j-graph-model/PHASE-0.md](../neo4j-graph-model/PHASE-0.md).
+Edge/action constants: `src/etl/graph_model.py`. Full spec: [neo4j-graph-model/README.md](../neo4j-graph-model/README.md).
 
 For each message:
 

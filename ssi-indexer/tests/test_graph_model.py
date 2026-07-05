@@ -1,4 +1,4 @@
-"""Tests for etl.graph_model Phase 0 mappings."""
+"""Tests for etl.graph_model action → edge mappings."""
 
 from __future__ import annotations
 

@@ -59,80 +59,7 @@ Four ETL pipelines write to the **same Neo4j database**, sharing nodes (`Instruc
 
 Security-event pipelines write audit edges only — they do not write lifecycle edges, `CURRENT`, or `CONSUMED`. Each audit row links to the version that was current at event time via **`FOR`**.
 
-```mermaid
-flowchart TB
-    subgraph Audit["Security-event pipelines"]
-        UA[User actor] -->|ACTED_AS| SE[SecurityEvent]
-        SE -->|FOR| IV[InstructionVersion]
-        SE -->|FOR| PV[PaymentVersion]
-        SE -->|INVOLVES_LOB| PC[ProfitCenter]
-    end
-
-    subgraph InstructionFact["InstructionPipeline"]
-        I[Instruction] -->|HAS_VERSION| IV
-        I -->|CURRENT| IV
-        I -->|OWNED_BY| PC
-        IV -->|BELONGS_TO| PC
-        I1[Instruction A] -->|CONFLICTS_WITH| I2[Instruction B]
-        UC[User] -->|CREATED_IV / APPROVED_IV / …| IV
-    end
-
-    subgraph PaymentFact["PaymentFactPipeline"]
-        P[Payment] -->|FOR_INSTRUCTION| I
-        P -->|CONSUMED| I
-        P -->|HAS_VERSION| PV
-        P -->|CURRENT| PV
-        UPC[User] -->|CREATED_PV / APPROVED_PV / …| PV
-        I -->|HAS_PAYMENT| P
-    end
-
-    U[User] -->|REPORTS_TO| S[User supervisor]
-```
-
-Instruction lifecycle uses `CREATED_IV`, `APPROVED_IV`, …; payment lifecycle uses `CREATED_PV`, `APPROVED_PV`, … SINGLE_USE submit writes `USED_IV` plus `CONSUMED` / `CONSUMED_BY`; payment reject/cancel removes consumption on `RELEASE_USE`.
-
-Cross-graph queries work because nodes are shared:
-
-```cypher
--- ALERT event actor + linked version + current instruction state
-MATCH (actor:User)-[:ACTED_AS]->(e:SecurityEvent {severity: 'ALERT'})
-OPTIONAL MATCH (e)-[:FOR]->(v:InstructionVersion)
-OPTIONAL MATCH (i:Instruction {instruction_id: v.instruction_id})-[:CURRENT]->(cv:InstructionVersion)
-RETURN actor.display_name, e.message, v.instruction_id, cv.status, cv.owning_lob
-ORDER BY e.timestamp DESC LIMIT 20;
-
--- Mutual approval (collusion signal)
-MATCH (a:User)-[:APPROVED_IV]->(va:InstructionVersion)<-[:CREATED_IV]-(b:User)
-MATCH (b)-[:APPROVED_IV]->(vb:InstructionVersion)<-[:CREATED_IV]-(a)
-WHERE a.user_id < b.user_id
-RETURN a.display_name AS user_a, b.display_name AS user_b,
-       va.instruction_id AS approved_by_a, vb.instruction_id AS approved_by_b;
-
--- Subordinate approved supervisor's instruction (inversion of control)
-MATCH (creator:User)-[:CREATED_IV]->(v:InstructionVersion)
-MATCH (approver:User)-[:APPROVED_IV]->(v)
-MATCH (approver)-[:REPORTS_TO]->(creator)
-RETURN creator.display_name AS creator, approver.display_name AS approver,
-       v.instruction_id, v.owning_lob
-LIMIT 50;
-
--- Payment approver reports to payment creator
-MATCH (p:Payment)-[:CURRENT]->(pv:PaymentVersion)
-MATCH (creator:User)-[:CREATED_PV]->(pv)
-MATCH (approver:User)-[:APPROVED_PV]->(pv)
-MATCH (approver)-[:REPORTS_TO]->(creator)
-RETURN creator.display_name, approver.display_name, p.payment_id, pv.amount
-LIMIT 50;
-
--- Potential duplicate settlement routes
-MATCH (i1:Instruction)-[:CONFLICTS_WITH]->(i2:Instruction)
-MATCH (i1)-[:CURRENT]->(v1:InstructionVersion)
-MATCH (i2)-[:CURRENT]->(v2:InstructionVersion)
-RETURN v1.instruction_id, v1.creditor_account, v1.currency, v2.instruction_id
-LIMIT 50;
-```
-
-Full property catalog, edge matrix, and reload procedure: **`neo4j-graph-model/`** — see [neo4j-graph-model/README.md](neo4j-graph-model/README.md) and [neo4j-graph-model/PHASE-0.md](neo4j-graph-model/PHASE-0.md).
+Full specification, diagrams, example queries, and reload procedure: **[neo4j-graph-model/README.md](neo4j-graph-model/README.md)**.
 
 ---
 
@@ -220,7 +147,7 @@ Each application directory also has its own README — see table below.
 ├── ssi-indexer/                     # Kafka → Neo4j + multimodal index
 ├── ssi-chat/                        # Policy Pilot
 ├── ssi-demo-harness/                # Scenario harness + seed-demo-data.sh
-├── neo4j-graph-model/               # Graph schema (PHASE-0.md)
+├── neo4j-graph-model/               # Graph schema (README.md)
 ├── opa-policy-seed/                 # Rego policies
 └── zitadel-seed/                    # Demo user definitions
 ```

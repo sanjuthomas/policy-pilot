@@ -69,7 +69,7 @@ Terminal states (`APPROVED`, `REJECTED`, `CANCELLED`) block further mutations.
 
 When the linked instruction is `SINGLE_USE`, **submit payment** runs a saga: payment moves to `SUBMITTED`, instruction moves to `USED` with `used_by` set, and OPA evaluates both sides. Reject, cancel, or system-cancel on approve triggers instruction `RELEASE_USE`, reverting the instruction and releasing consumption.
 
-In Neo4j, submit creates `USED_IV`, `CONSUMED`, and `CONSUMED_BY`; release deletes consumption edges. See [neo4j-graph-model/PHASE-0.md](../neo4j-graph-model/PHASE-0.md).
+In Neo4j, submit creates `USED_IV`, `CONSUMED`, and `CONSUMED_BY`; release deletes consumption edges. See [neo4j-graph-model/README.md](../neo4j-graph-model/README.md).
 
 ## Storage (append-only versions)
 
@@ -122,7 +122,7 @@ Downstream indexing is **Mongo → Kafka Connect → Kafka → ssi-indexer**, wh
 | `ssi_cash_activities.payments` | `payments` | `PaymentFactPipeline` | `CURRENT`, `_*PV`, `HAS_PAYMENT`, `FOR_INSTRUCTION`, `CONSUMED` |
 | `security_events.payment_service` | `payment_security_events` | `PaymentSecurityEventPipeline` | `ACTED_AS`, `FOR` → `PaymentVersion` |
 
-SINGLE_USE submit/reject flows produce instruction `USED_IV` / `RELEASED_IV` via instruction-service facts. See [neo4j-graph-model/PHASE-0.md](../neo4j-graph-model/PHASE-0.md).
+SINGLE_USE submit/reject flows produce instruction `USED_IV` / `RELEASED_IV` via instruction-service facts. See [neo4j-graph-model/README.md](../neo4j-graph-model/README.md).
 
 ## Example: create payment
 

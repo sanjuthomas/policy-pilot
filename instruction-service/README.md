@@ -173,7 +173,7 @@ The instruction browser UI (`GET /api/ui/instructions`) reads Mongo directly and
 | `ssi_cash_instructions.instructions` | `instructions` | `InstructionPipeline` | `CURRENT`, `_*IV`, `SUPERSEDES`, `CONFLICTS_WITH` |
 | `security_events.instruction_service` | `instruction_security_events` | `InstructionSecurityEventPipeline` | `ACTED_AS`, `FOR` → `InstructionVersion` |
 
-SINGLE_USE payment submit (via payment-service) produces instruction `USE` / `RELEASE_USE` facts indexed as `USED_IV` / `RELEASED_IV` with optional `CONSUMED` edges. See [neo4j-graph-model/PHASE-0.md](../neo4j-graph-model/PHASE-0.md).
+SINGLE_USE payment submit (via payment-service) produces instruction `USE` / `RELEASE_USE` facts indexed as `USED_IV` / `RELEASED_IV` with optional `CONSUMED` edges. See [neo4j-graph-model/README.md](../neo4j-graph-model/README.md).
 
 ## Example: create instruction
 

@@ -24,7 +24,7 @@ http://localhost:8092
 | Authorization WHY rewrite | **Vertex AI** | `gemini-2.5-flash` |
 | Graph plan extraction (fallback) | **Vertex AI** | `gemini-2.5-flash` → `cypher_builder` |
 
-Planned Cypher for counts, rankings, hierarchy, and known audit shapes comes from **[`shared/cypher_builder`](../shared/cypher_builder/README.md)** with no LLM call. Graph queries use `CREATED_IV`, `APPROVED_IV`, `CREATED_PV`, `FOR`, … — see [neo4j-graph-model/PHASE-0.md](../neo4j-graph-model/PHASE-0.md).
+Planned Cypher for counts, rankings, hierarchy, and known audit shapes comes from **[`shared/cypher_builder`](../shared/cypher_builder/README.md)** with no LLM call. Graph queries use `CREATED_IV`, `APPROVED_IV`, `CREATED_PV`, `FOR`, … — see [neo4j-graph-model/README.md](../neo4j-graph-model/README.md).
 
 `PolicyPilotMlClient` (`ml_client.py`) orchestrates Vertex embeddings and Gemini generation; retrieval and context assembly run locally.
 

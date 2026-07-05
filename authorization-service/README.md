@@ -22,7 +22,7 @@ Domain services (instruction-service, payment-service) call authz for lifecycle 
 
 **Not callers:** ssi-chat (uses domain eligible-approvers APIs), ssi-indexer (Kafka consumer only; projects graph from streamed events), demo harness, Kafka Connect, sequence-service.
 
-Policy denials evaluated here surface as `ALERT` security events in Mongo and, after Kafka Connect + ssi-indexer, as `SecurityEvent` nodes linked via `FOR` → version in Neo4j. See [neo4j-graph-model/PHASE-0.md](../neo4j-graph-model/PHASE-0.md).
+Policy denials evaluated here surface as `ALERT` security events in Mongo and, after Kafka Connect + ssi-indexer, as `SecurityEvent` nodes linked via `FOR` → version in Neo4j. See [neo4j-graph-model/README.md](../neo4j-graph-model/README.md).
 
 ## Service API (programmatic)
 

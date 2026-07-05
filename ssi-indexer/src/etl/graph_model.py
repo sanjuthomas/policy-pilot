@@ -1,4 +1,4 @@
-"""Phase 0 Neo4j graph model constants and action → lifecycle edge mapping."""
+"""Neo4j graph model constants and action → lifecycle edge mapping."""
 
 from __future__ import annotations
 
