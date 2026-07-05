@@ -22,14 +22,17 @@ from chat_application.cypher import (
     is_analytics_question,
     is_count_question,
     is_instruction_count_aggregate_question,
+    is_instruction_versions_list_question,
     is_largest_payment_question,
     is_max_payments_per_instruction_question,
     is_payment_amount_threshold_question,
     is_payment_total_amount_question,
+    is_payment_versions_list_question,
     is_payments_for_instruction_question,
     is_security_event_alert_count_question,
     is_security_event_alert_list_question,
     is_security_event_count_aggregate_question,
+    is_security_event_group_by_lob_question,
     lob_filter_from_question,
     normalize_read_only_cypher,
     plan_graph_queries,
@@ -123,13 +126,29 @@ def _build_alert_count_today(context: dict[str, Any], _question: str, _mode: Sea
     return _GRAPH_BUILDER.alert_count_today()
 
 
+def _build_instruction_versions(context: dict[str, Any], _question: str, _mode: SearchMode):
+    instruction_id = _instruction_id_from_context(context)
+    if not instruction_id:
+        return []
+    return _GRAPH_BUILDER.instruction_versions(instruction_id)
+
+
+def _build_payment_versions(context: dict[str, Any], _question: str, _mode: SearchMode):
+    payment_id = _payment_id_from_context(context)
+    if not payment_id:
+        return []
+    return _GRAPH_BUILDER.payment_versions(payment_id)
+
+
 def _build_security_event_alert_list(context: dict[str, Any], _question: str, _mode: SearchMode):
     return _GRAPH_BUILDER.security_event_alert_list(time_filter="", domain="all")
 
 
 QUERY_BUILDERS: dict[str, QueryBuilder] = {
     "instruction_detail_by_id": _build_instruction_detail,
+    "instruction_versions_by_id": _build_instruction_versions,
     "payment_detail_by_id": _build_payment_detail,
+    "payment_versions_by_id": _build_payment_versions,
     "instruction_approval_lookup": _build_instruction_approval_lookup,
     "instruction_list_by_status": _build_instruction_list_single_use,
     "instruction_list_single_use": _build_instruction_list_single_use,
@@ -321,6 +340,18 @@ def _format_planned_graph_answer(
         if instruction_id:
             return _format_payments_for_instruction_answer(instruction_id, rows, question=question)
 
+    if "instruction_versions" in labels and is_instruction_versions_list_question(
+        question, mode=mode
+    ):
+        from chat_application.neo4j_formatters import format_instruction_versions_table
+
+        return format_instruction_versions_table(question, rows)
+
+    if "payment_versions" in labels and is_payment_versions_list_question(question, mode=mode):
+        from chat_application.neo4j_formatters import format_payment_versions_table
+
+        return format_payment_versions_table(question, rows)
+
     if "approval_lookup" in labels or "payment_approval_lookup" in labels:
         from chat_application.neo4j_formatters import format_approval_lookup_answer
 
@@ -347,6 +378,17 @@ def _format_planned_graph_answer(
         from chat_application.neo4j_formatters import format_security_event_alert_list
 
         return format_security_event_alert_list(question, rows)
+
+    if (
+        (
+            "security_event_alert_group_by_lob" in labels
+            or "security_event_group_by_lob" in labels
+        )
+        and is_security_event_group_by_lob_question(question, mode=mode)
+    ):
+        from chat_application.rag import _format_security_event_group_by_lob_answer
+
+        return _format_security_event_group_by_lob_answer(question, rows)
 
     if "count" in labels and is_security_event_alert_count_question(question, mode=mode):
         from chat_application.rag import _format_security_event_alert_count_answer

@@ -106,9 +106,9 @@ class PaymentSecurityEvent(BaseModel):
 
     @classmethod
     def _event_types_for_action(cls, action: PaymentAction) -> list[str]:
-        if action == PaymentAction.CREATE_PAYMENT:
+        if action == PaymentAction.CREATE:
             return ["creation"]
-        if action == PaymentAction.CANCEL_PAYMENT:
+        if action == PaymentAction.CANCEL:
             return ["cancellation"]
         return ["change"]
 

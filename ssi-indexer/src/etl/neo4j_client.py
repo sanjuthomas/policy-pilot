@@ -631,10 +631,10 @@ class Neo4jGraphWriter:
         actor_user_id = fact.get("actor_user_id")
         auth_params = authorization_fact_neo4j_params(fact)
 
-        valid_in = fact.get("valid_in") or timestamp
         valid_out = fact.get("valid_out")
         used_by = snap.get("used_by")
         is_current = is_version_open(valid_out)
+        created_at = timestamp or fact.get("valid_in") or snap.get("created_at")
         prev_version_key = (
             _instruction_version_key(instruction_id, version_number - 1)
             if version_number > 1
@@ -659,8 +659,7 @@ class Neo4jGraphWriter:
               v.status             = $status,
               v.action             = $action,
               v.timestamp          = $timestamp,
-              v.valid_in           = $valid_in,
-              v.valid_out          = $valid_out,
+              v.created_at         = $created_at,
               v.used_by            = $used_by,
               v.owning_lob         = $owning_lob,
               v.instruction_type   = $instruction_type,
@@ -732,8 +731,7 @@ class Neo4jGraphWriter:
             "version_number": version_number,
             "action": action,
             "timestamp": timestamp,
-            "valid_in": valid_in,
-            "valid_out": valid_out,
+            "created_at": created_at,
             "used_by": used_by,
             "is_current": is_current,
             "prev_version_key": prev_version_key,
@@ -1026,7 +1024,6 @@ class Neo4jGraphWriter:
         payment_version = _payment_version_number(fact)
         payment_version_key = _payment_version_key(payment_id, payment_version)
         timestamp = fact.get("timestamp") or fact.get("updated_at")
-        valid_in = fact.get("valid_in") or timestamp
         valid_out = fact.get("valid_out")
         is_current = is_version_open(valid_out)
         action = fact.get("action", "")
@@ -1051,8 +1048,6 @@ class Neo4jGraphWriter:
               v.status             = $status,
               v.action             = $action,
               v.timestamp          = $timestamp,
-              v.valid_in           = $valid_in,
-              v.valid_out          = $valid_out,
               v.instruction_id     = $instruction_id,
               v.amount             = $amount,
               v.currency           = $currency,
@@ -1115,7 +1110,7 @@ class Neo4jGraphWriter:
         // ── SINGLE_USE consumption on submit ────────────────────────────────────
         WITH pay, v
         FOREACH (_ IN CASE
-            WHEN $action = 'SUBMIT_PAYMENT'
+            WHEN $action IN ['SUBMIT', 'SUBMIT_PAYMENT']
              AND $instruction_type = 'SINGLE_USE'
              AND $instruction_id IS NOT NULL AND $instruction_id <> ''
             THEN [1] ELSE [] END |
@@ -1138,8 +1133,6 @@ class Neo4jGraphWriter:
             "action": action,
             "status": fact.get("status"),
             "timestamp": timestamp,
-            "valid_in": valid_in,
-            "valid_out": valid_out,
             "is_current": is_current,
             "prev_version_key": prev_version_key,
             "amount": fact.get("amount"),
@@ -1154,7 +1147,7 @@ class Neo4jGraphWriter:
             "submitter_user_id": submitter_user_id,
             "approver_user_id": approver_user_id,
             "rejector_user_id": rejector_user_id,
-            "created_at": fact.get("created_at"),
+            "created_at": fact.get("created_at") or timestamp,
             "updated_at": fact.get("updated_at"),
             "submitted_at": fact.get("submitted_at"),
             "approved_at": fact.get("approved_at"),

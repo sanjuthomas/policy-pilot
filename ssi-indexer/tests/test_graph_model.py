@@ -24,7 +24,16 @@ def test_instruction_action_mapping():
 
 
 def test_payment_action_mapping():
+    assert PAYMENT_ACTION_TO_EDGE["SUBMIT"] == "SUBMITTED_PV"
     assert PAYMENT_ACTION_TO_EDGE["SUBMIT_PAYMENT"] == "SUBMITTED_PV"
+
+
+def test_payment_lifecycle_actor_submit():
+    fact = {
+        "action": "SUBMIT",
+        "submitted_by": {"user_id": "fo-200", "given_name": "A", "family_name": "B"},
+    }
+    assert payment_lifecycle_actor(fact) == "fo-200"
 
 
 def test_instruction_use_actor_props():
@@ -60,7 +69,7 @@ def test_release_use_payment_id():
     assert release_use_payment_id(fact) == "pay-99"
 
 
-def test_payment_lifecycle_actor_submit():
+def test_payment_lifecycle_actor_submit_legacy():
     fact = {
         "action": "SUBMIT_PAYMENT",
         "submitted_by": {"user_id": "fo-200", "given_name": "A", "family_name": "B"},

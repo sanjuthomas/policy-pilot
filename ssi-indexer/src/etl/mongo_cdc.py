@@ -151,6 +151,11 @@ def versioned_payment_to_fact(document: dict[str, Any]) -> dict[str, Any] | None
 def _payment_actor_fields(snapshot: dict[str, Any], action: str) -> dict[str, Any]:
     """Map payment lifecycle action to the acting user ref on the snapshot."""
     action_to_field = {
+        "CREATE": "created_by",
+        "SUBMIT": "submitted_by",
+        "APPROVE": "approved_by",
+        "REJECT": "rejected_by",
+        "CANCEL": "cancelled_by",
         "CREATE_PAYMENT": "created_by",
         "SUBMIT_PAYMENT": "submitted_by",
         "APPROVE_PAYMENT": "approved_by",

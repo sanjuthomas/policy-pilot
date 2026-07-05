@@ -115,6 +115,57 @@ def test_plan_graph_queries_alert_list() -> None:
     assert "actor_display" in planned[0][1]
 
 
+def test_plan_graph_queries_alert_group_by_lob() -> None:
+    planned = plan_graph_queries(
+        "Can you group alerts by LOB?",
+        mode="events",
+    )
+    assert planned is not None
+    assert planned[0][0] == "security_event_alert_group_by_lob"
+    validate_read_only_cypher(planned[0][1])
+    assert "INVOLVES_LOB" in planned[0][1]
+    assert "alert_count" in planned[0][1]
+    assert "severity: 'ALERT'" in planned[0][1]
+
+
+def test_plan_graph_queries_security_events_group_by_lob() -> None:
+    planned = plan_graph_queries(
+        "Can you group security events by LOB?",
+        mode="events",
+    )
+    assert planned is not None
+    assert planned[0][0] == "security_event_group_by_lob"
+    validate_read_only_cypher(planned[0][1])
+    assert "INVOLVES_LOB" in planned[0][1]
+    assert "event_count" in planned[0][1]
+    assert "severity: 'ALERT'" not in planned[0][1]
+
+
+def test_plan_graph_queries_instruction_versions_list() -> None:
+    planned = plan_graph_queries(
+        "Can you list all versions of 20260704-DESK_RATES-I-84?",
+        mode="instructions",
+    )
+    assert planned is not None
+    assert planned[0][0] == "instruction_versions"
+    validate_read_only_cypher(planned[0][1])
+    assert "HAS_VERSION" in planned[0][1]
+    assert "CURRENT" not in planned[0][1]
+    assert "20260704-DESK_RATES-I-84" in planned[0][1]
+
+
+def test_plan_graph_queries_payment_versions_list() -> None:
+    planned = plan_graph_queries(
+        "Show version history for 20260704-FICC-P-1",
+        mode="payments",
+    )
+    assert planned is not None
+    assert planned[0][0] == "payment_versions"
+    validate_read_only_cypher(planned[0][1])
+    assert "HAS_VERSION" in planned[0][1]
+    assert "CREATED_PV" in planned[0][1]
+
+
 def test_validate_read_only_cypher_rejects_writes() -> None:
     with pytest.raises(ValueError, match="disallowed write keyword"):
         validate_read_only_cypher("MATCH (n) CREATE (m) RETURN n LIMIT 1")

@@ -128,12 +128,12 @@ def format_eligible_approvers_answer(data: dict[str, Any]) -> str:
                 format_eligible_approvers_section(
                     header=(
                         "After the payment is submitted (DRAFT → SUBMITTED), these users "
-                        "would satisfy APPROVE_PAYMENT policy:"
+                        "would satisfy APPROVE policy:"
                     ),
                     section_title="",
                     eligible=prospective,
                     empty_message=(
-                        "No users would satisfy APPROVE_PAYMENT policy after submission."
+                        "No users would satisfy APPROVE policy after submission."
                     ),
                     candidate_role_label="FUNDING_APPROVER",
                     candidates_evaluated=data.get("candidates_evaluated"),
@@ -174,7 +174,7 @@ def _payment_eligible_empty_message(
             f"{instruction_label} is {instruction_status} and cannot support "
             "payment approval."
         )
-    return "No users currently satisfy APPROVE_PAYMENT policy for this payment."
+    return "No users currently satisfy APPROVE policy for this payment."
 
 
 def format_instruction_eligible_approvers_answer(data: dict[str, Any]) -> str:

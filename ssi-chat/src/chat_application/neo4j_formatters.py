@@ -272,6 +272,50 @@ def format_security_event_alert_list(question: str, rows: list[dict[str, Any]]) 
     )
 
 
+def format_instruction_versions_table(question: str, rows: list[dict[str, Any]]) -> str | None:
+    if not rows:
+        return "No instruction versions were found in the graph."
+    instruction_id = rows[0].get("instruction_id") or "unknown"
+    table_rows = [
+        [
+            row.get("version_number") or "—",
+            row.get("status") or "—",
+            row.get("action") or "—",
+            row.get("created_at") or "—",
+            row.get("creator_display") or "—",
+            row.get("approver_display") or "—",
+        ]
+        for row in rows
+    ]
+    return (
+        f"Instruction {instruction_id} versions ({len(table_rows)}):\n\n"
+        f"{format_markdown_table(['Ver', 'Status', 'Action', 'Created At', 'Creator', 'Approver'], table_rows)}"
+    )
+
+
+def format_payment_versions_table(question: str, rows: list[dict[str, Any]]) -> str | None:
+    if not rows:
+        return "No payment versions were found in the graph."
+    payment_id = rows[0].get("payment_id") or "unknown"
+    table_rows = [
+        [
+            row.get("version_number") or "—",
+            row.get("status") or "—",
+            row.get("action") or "—",
+            row.get("amount") or "—",
+            row.get("currency") or "—",
+            row.get("created_at") or "—",
+            row.get("creator_display") or "—",
+            row.get("approver_display") or "—",
+        ]
+        for row in rows
+    ]
+    return (
+        f"Payment {payment_id} versions ({len(table_rows)}):\n\n"
+        f"{format_markdown_table(['Ver', 'Status', 'Action', 'Amount', 'Currency', 'Created At', 'Creator', 'Approver'], table_rows)}"
+    )
+
+
 FORMATTERS: dict[str, Formatter] = {
     "instruction_creator_by_id": format_instruction_creator_by_id,
     "instruction_status_by_id": format_instruction_status_by_id,
@@ -287,4 +331,6 @@ FORMATTERS: dict[str, Formatter] = {
     "security_event_timeline": format_security_event_timeline,
     "alert_count_today": format_alert_count_today,
     "security_event_alert_list": format_security_event_alert_list,
+    "instruction_versions_table": format_instruction_versions_table,
+    "payment_versions_table": format_payment_versions_table,
 }

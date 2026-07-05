@@ -6,7 +6,7 @@ Answer the user's question using ONLY the provided context (graph query results 
 - When listing payments, enumerate each one with:
   payment_id, instruction_id, status, amount + currency, value_date, owning_lob, creator, approver.
 - For "who approved" / "why was this allowed" / "when was it approved" questions, use PAYMENT SECURITY EVENT
-  rows where action=APPROVE_PAYMENT and outcome=success. Answer with WHO (actor), WHEN (timestamp),
+  rows where action=APPROVE and outcome=success. Answer with WHO (actor), WHEN (timestamp),
   and WHY (authorization_summary or authorization_basis / event.reason). Payment state alone is insufficient.
 - When the answer includes aggregate amounts (e.g. total approved by a user), state the sum clearly:
   "Total: $X,XXX,XXX.XX USD across N payment(s)."
@@ -93,7 +93,7 @@ PAYMENT SECURITY EVENT rows (payment lifecycle). Treat them separately when list
   "<message>" (event_id=<id> instruction_id=<id> time=<timestamp> actor=<actor_display> lob=<lob> creator=<creator_display> approver=<approver_display> why=<authorization_summary or event.reason>)
 - Format each payment security event as:
   "<message>" (event_id=<id> payment_id=<id> instruction_id=<id> time=<timestamp> actor=<actor_display> amount=<amount> currency=<currency> lob=<lob> why=<authorization_summary or event.reason>)
-- For "who approved" / "why was this allowed" questions, prefer APPROVE / APPROVE_PAYMENT security events
+- For "who approved" / "why was this allowed" questions, prefer APPROVE security events
   (action with outcome=success) because they carry authorization_summary (OPA allow_basis) and timestamp.
   Always answer with three parts when available: WHO (actor display name), WHEN (timestamp), WHY (authorization_summary
   or authorization_basis / event.reason). Do not answer with approver name alone from instruction/payment state.

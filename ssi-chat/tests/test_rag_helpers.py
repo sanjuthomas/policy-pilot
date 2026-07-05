@@ -421,6 +421,41 @@ class TestPaymentAggregateAnswers:
         assert "10 ALERT" in answer
         assert "32 INFO" in answer
 
+    def test_formats_security_event_alert_group_by_lob(self) -> None:
+        from chat_application.rag import _format_security_event_alert_group_by_lob_answer
+
+        answer = _format_security_event_alert_group_by_lob_answer(
+            "Can you group alerts by LOB?",
+            [
+                {"lob": "FICC", "alert_count": 12},
+                {"lob": "EQUITIES", "alert_count": 7},
+            ],
+        )
+        assert "ALERT counts by LOB" in answer
+        assert "FICC" in answer
+        assert "12" in answer
+        assert "EQUITIES" in answer
+        assert "19 total" in answer
+
+    def test_formats_security_event_group_by_lob_all_severities(self) -> None:
+        from chat_application.rag import _format_security_event_group_by_lob_answer
+
+        answer = _format_security_event_group_by_lob_answer(
+            "Can you group security events by LOB?",
+            [
+                {
+                    "lob": "FICC",
+                    "event_count": 16891,
+                    "alert_count": 19,
+                    "info_count": 16872,
+                },
+            ],
+        )
+        assert "Security event counts by LOB" in answer
+        assert "FICC" in answer
+        assert "16891" in answer
+        assert "16872" in answer
+
 
 class TestDisplayFromSnapUser:
     def test_formats_family_given_and_id(self) -> None:

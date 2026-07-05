@@ -38,7 +38,7 @@ instruction_usable_for_draft_payment if {
     input.payment.instruction_status in {"DRAFT", "SUBMITTED", "APPROVED"}
 }
 
-# After SUBMIT_PAYMENT on a SINGLE_USE instruction the saga marks the instruction
+# After SUBMIT on a SINGLE_USE instruction the saga marks the instruction
 # USED before the payment moves to SUBMITTED.  Funding approval must accept that
 # consumed state while STANDING instructions remain APPROVED.
 instruction_backing_valid_for_approval if {

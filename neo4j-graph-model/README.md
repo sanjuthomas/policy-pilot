@@ -17,7 +17,7 @@ ssi-indexer/src/etl/graph_model.py — action → edge maps consumed by ETL
 | Principle | Rule |
 |-----------|------|
 | Read-optimized | Redundant edges and denormalized root properties are intentional |
-| Append-only versions | Never delete `*Version` nodes; history via `HAS_VERSION`, `SUPERSEDES`, `valid_in`/`valid_out` |
+| Append-only versions | Never delete `*Version` nodes; history via `HAS_VERSION`, `SUPERSEDES`, `created_at` |
 | Two writers, symmetric | **Fact pipelines** = state; **security-event pipelines** = audit only |
 | Named lifecycle | User → Version edges (`CREATED_IV`, `CREATED_PV`, …) per Mongo action |
 | Domain approval | `(User)-[:APPROVED_*]->(Version)` = regulatory sign-off on the **route** |
@@ -101,9 +101,9 @@ flowchart TB
 | Node | Key properties |
 |---|---|
 | `Instruction` | `instruction_id`, `instruction_type`, `owning_lob`, `wire_scope`, `currency`, `current_status`, `current_version_number`, `current_used_by` (denorm from `CURRENT`) |
-| `InstructionVersion` | `version_key`, `version_number`, `status`, `action`, `valid_in`, `valid_out`, `used_by`, route/auth fields, `creator_user_id`, `approver_user_id`, … |
+| `InstructionVersion` | `version_key`, `version_number`, `status`, `action`, `created_at`, `used_by`, route/auth fields, `creator_user_id`, `approver_user_id`, … |
 | `Payment` | `payment_id`, `instruction_id`, `current_status`, `current_version_number`, `current_amount`, `current_currency` (denorm) |
-| `PaymentVersion` | `version_key`, `version_number`, `status`, `valid_in`, `valid_out`, `amount`, `currency`, `value_date`, `cancellation_reason`, actor ids, … |
+| `PaymentVersion` | `version_key`, `version_number`, `status`, `created_at`, `amount`, `currency`, `value_date`, `cancellation_reason`, actor ids, … |
 | `SecurityEvent` | `event_id`, `timestamp`, `severity`, `action`, `outcome`, `message`, `authorization_summary`, … |
 | `User` | `user_id`, `given_name`, `family_name`, `display_name` (\*), `title`, `lob`, `roles`, `supervisor_id` |
 | `ProfitCenter` | `lob` (unique), `name` |
@@ -170,11 +170,11 @@ All: `(User)-[:<EDGE> {at: <iso>}]->(PaymentVersion)`
 
 | Edge | Mongo action |
 |------|--------------|
-| `CREATED_PV` | `CREATE_PAYMENT` |
-| `SUBMITTED_PV` | `SUBMIT_PAYMENT` |
-| `APPROVED_PV` | `APPROVE_PAYMENT` |
-| `REJECTED_PV` | `REJECT_PAYMENT` |
-| `CANCELLED_PV` | `CANCEL_PAYMENT` |
+| `CREATED_PV` | `CREATE` |
+| `SUBMITTED_PV` | `SUBMIT` |
+| `APPROVED_PV` | `APPROVE` |
+| `REJECTED_PV` | `REJECT` |
+| `CANCELLED_PV` | `CANCEL` |
 
 ### SINGLE_USE (payment submit saga)
 

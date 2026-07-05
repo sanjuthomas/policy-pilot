@@ -209,7 +209,7 @@ class MultimodalSearchClient:
                 MATCH (d:MultimodalDocument)
                 WHERE d.payment_id = $payment_id
                   AND d.source = 'payment_security_event'
-                  AND d.action = 'APPROVE_PAYMENT'
+                  AND d.action IN ['APPROVE', 'APPROVE_PAYMENT']
                   AND (d.outcome IS NULL OR d.outcome = 'success')
                 RETURN d
                 ORDER BY d.updated_at DESC

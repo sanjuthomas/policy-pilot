@@ -3,7 +3,7 @@ package payment.lifecycle
 default allow := false
 
 # ---------------------------------------------------------------------------
-# CREATE_PAYMENT  (middle-office data entry)
+# CREATE  (middle-office data entry)
 #
 # Middle-office analysts enter payments on behalf of a trading desk.
 # They must:
@@ -19,7 +19,7 @@ default allow := false
 # ---------------------------------------------------------------------------
 
 allow if {
-    input.action == "CREATE_PAYMENT"
+    input.action == "CREATE"
 
     has_role("PAYMENT_CREATOR")
 
@@ -36,14 +36,14 @@ allow if {
 }
 
 # ---------------------------------------------------------------------------
-# UPDATE_PAYMENT  (middle-office edits draft payments)
+# UPDATE  (middle-office edits draft payments)
 #
-# Same desk-coverage and instruction validity rules as CREATE_PAYMENT.
+# Same desk-coverage and instruction validity rules as CREATE.
 # Only payments in DRAFT may be edited; each update appends a new version.
 # ---------------------------------------------------------------------------
 
 allow if {
-    input.action == "UPDATE_PAYMENT"
+    input.action == "UPDATE"
 
     has_role("PAYMENT_CREATOR")
 
@@ -62,7 +62,7 @@ allow if {
 }
 
 # ---------------------------------------------------------------------------
-# SUBMIT_PAYMENT  (front-office review and hand-off)
+# SUBMIT  (front-office review and hand-off)
 #
 # A front-office analyst who belongs to the trading desk that owns the
 # instruction reviews the draft and submits it for funding approval.
@@ -80,7 +80,7 @@ allow if {
 # ---------------------------------------------------------------------------
 
 allow if {
-    input.action == "SUBMIT_PAYMENT"
+    input.action == "SUBMIT"
 
     has_role("PAYMENT_CREATOR")
 
@@ -92,7 +92,7 @@ allow if {
 }
 
 # ---------------------------------------------------------------------------
-# APPROVE_PAYMENT  (middle-office treasury / funding approval)
+# APPROVE  (middle-office treasury / funding approval)
 #
 # Funding approval is a back-office (treasury / middle-office) function.
 # The approver must:
@@ -109,7 +109,7 @@ allow if {
 # ---------------------------------------------------------------------------
 
 allow if {
-    input.action == "APPROVE_PAYMENT"
+    input.action == "APPROVE"
 
     has_role("FUNDING_APPROVER")
 
@@ -128,7 +128,7 @@ allow if {
 }
 
 # ---------------------------------------------------------------------------
-# REJECT_PAYMENT  (middle-office treasury / funding rejection)
+# REJECT  (middle-office treasury / funding rejection)
 #
 # Rejection is symmetric to approval in terms of who is authorised:
 # the same middle-office funding team that can approve may also reject.
@@ -142,7 +142,7 @@ allow if {
 # ---------------------------------------------------------------------------
 
 allow if {
-    input.action == "REJECT_PAYMENT"
+    input.action == "REJECT"
 
     has_role("FUNDING_APPROVER")
 
@@ -151,13 +151,13 @@ allow if {
 }
 
 # ---------------------------------------------------------------------------
-# CANCEL_PAYMENT  (cancel draft or submitted payments)
+# CANCEL  (cancel draft or submitted payments)
 #
 # Middle-office payment creators may withdraw a payment before it is approved.
 # ---------------------------------------------------------------------------
 
 allow if {
-    input.action == "CANCEL_PAYMENT"
+    input.action == "CANCEL"
 
     has_role("PAYMENT_CREATOR")
 

@@ -288,7 +288,7 @@ The graph uses one :SecurityEvent label for both domains:
 - Instruction events (e.payment_id IS NULL): FOR → InstructionVersion.
   Actions: CREATE, SUBMIT, APPROVE, REJECT, SUSPEND, REACTIVATE, USE, UPDATE, CANCEL, VIEW.
 - Payment events (e.payment_id IS NOT NULL): FOR → PaymentVersion.
-  Actions: CREATE_PAYMENT, SUBMIT_PAYMENT, APPROVE_PAYMENT, REJECT_PAYMENT, CANCEL_PAYMENT.
+  Actions: CREATE, SUBMIT, APPROVE, REJECT, CANCEL.
 
 Rules:
 - Output ONLY a single Cypher query. No markdown fences, no explanation.
@@ -501,7 +501,7 @@ The Payment graph:
 - (:User)-[:CREATED_PV]->(:Payment)
 - (:User)-[:APPROVED_PV]->(:Payment)
 - (:User)-[:REJECTED_PAYMENT]->(:Payment)
-- (:SecurityEvent)-[:FOR]->(:PaymentVersion)   action values: CREATE_PAYMENT, APPROVE_PAYMENT, REJECT_PAYMENT
+- (:SecurityEvent)-[:FOR]->(:PaymentVersion)   action values: CREATE, SUBMIT, APPROVE, REJECT, CANCEL
 - (:User)-[:ACTS_AS]->(:SecurityEvent)
 - (:User)-[:REPORTS_TO]->(:User)   — (subordinate)-[:REPORTS_TO]->(manager); never reverse.
 - User.supervisor_id is the user_id of the direct manager.
@@ -548,8 +548,8 @@ RETURN p.payment_id, p.instruction_id, p.status, p.amount, p.currency,
 ORDER BY p.created_at DESC
 LIMIT 50
 
-Example — who approved payment with a specific payment_id (use the APPROVE_PAYMENT security event):
-MATCH (e:SecurityEvent {payment_id: '00000000-0000-0000-0000-000000000002', action: 'APPROVE_PAYMENT', outcome: 'success'})
+Example — who approved payment with a specific payment_id (use the APPROVE security event):
+MATCH (e:SecurityEvent {payment_id: '00000000-0000-0000-0000-000000000002', action: 'APPROVE', outcome: 'success'})
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
 OPTIONAL MATCH (p:Payment {payment_id: e.payment_id})
 OPTIONAL MATCH (creator:User)-[:CREATED_PV]->(p)

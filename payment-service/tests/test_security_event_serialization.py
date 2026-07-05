@@ -53,7 +53,7 @@ def test_security_event_to_document_uses_sequence_id_as_id(
     from ps.models.security_event import PaymentSecurityEvent
 
     event = PaymentSecurityEvent.authorized_action(
-        PaymentAction.CREATE_PAYMENT,
+        PaymentAction.CREATE,
         subject,
         payment,
         version_number=1,

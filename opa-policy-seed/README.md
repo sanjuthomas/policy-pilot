@@ -66,7 +66,7 @@ On allow, domain services build `details.authorization.summary` from `allow_basi
 
 ### Actions governed
 
-`CREATE_PAYMENT`, `SUBMIT_PAYMENT`, `APPROVE_PAYMENT`, `REJECT_PAYMENT`
+`CREATE`, `SUBMIT`, `APPROVE`, `REJECT`, `CANCEL`
 
 Key rules: payment amount within user's club ceiling and absolute $100 B limit; instruction status must be `APPROVED` and not expired; creator cannot approve own payment; approver must not report directly to creator; approver must cover the instruction LOB.
 
@@ -107,7 +107,7 @@ curl -s http://localhost:8181/v1/data/payment/lifecycle/allow \
   -H 'Content-Type: application/json' \
   -d '{
     "input": {
-      "action": "CREATE_PAYMENT",
+      "action": "CREATE",
       "subject": {
         "user_id": "pay-101",
         "roles": ["PAYMENT_CREATOR"],

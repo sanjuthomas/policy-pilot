@@ -231,14 +231,14 @@ async def test_security_event_record_authorized_action(
 ) -> None:
     repo, col = event_repo
     event = await repo.record_authorized_action(
-        PaymentAction.CREATE_PAYMENT,
+        PaymentAction.CREATE,
         subject,
         payment,
         version_number=1,
         details={"authorization": {"summary": "ok"}},
     )
     col.insert_one.assert_awaited_once()
-    assert event.event.action == "CREATE_PAYMENT"
+    assert event.event.action == "CREATE"
     stored = col.insert_one.call_args[0][0]
     assert stored["_id"] == "20260628-FICC-P-1-SE-1"
     assert "event_id" not in stored
@@ -252,7 +252,7 @@ async def test_security_event_policy_denial(
 ) -> None:
     repo, col = event_repo
     event = await repo.record_policy_denial(
-        PaymentAction.APPROVE_PAYMENT,
+        PaymentAction.APPROVE,
         subject,
         payment,
         reason="denied",

@@ -29,6 +29,7 @@ from chat_application.cypher import (
     is_security_event_alert_count_question,
     is_security_event_alert_list_question,
     is_security_event_count_aggregate_question,
+    is_security_event_group_by_lob_question,
     lob_filter_from_question,
     normalize_read_only_cypher,
     payment_aggregate_period_label,
@@ -36,6 +37,7 @@ from chat_application.cypher import (
     plan_graph_queries,
     plans_from_graph_query,
     ranking_period_label,
+    security_event_group_by_lob_scope,
     validate_read_only_cypher,
 )
 from chat_application.formatting import (
@@ -485,6 +487,72 @@ def _should_format_security_event_alert_list(message: str, mode: SearchMode) -> 
     return mode in ("events", "all") and is_security_event_alert_list_question(
         message, mode=mode
     )
+
+
+def _format_security_event_group_by_lob_answer(
+    message: str, graph_rows: list[dict[str, Any]]
+) -> str:
+    scope = security_event_group_by_lob_scope(message)
+    scope_label = _security_event_alert_scope_label(message)
+    scope_prefix = f"{scope_label} " if scope_label else ""
+    period = payment_aggregate_period_label(message)
+    period_suffix = f" ({period})" if period != "all time" else ""
+
+    if scope == "alert":
+        table_rows = [
+            (row.get("lob") or "unknown", int(row.get("alert_count") or 0))
+            for row in graph_rows
+            if row.get("lob") is not None or row.get("alert_count") is not None
+        ]
+        if not table_rows:
+            return "No ALERT events were found to group by LOB."
+
+        total = sum(count for _, count in table_rows)
+        if total == 0:
+            return f"There were no {scope_prefix}ALERT events{period_suffix}."
+
+        return (
+            f"ALERT counts by LOB for {scope_prefix}events{period_suffix} ({total} total):\n\n"
+            f"{format_markdown_table(['LOB', 'Alerts'], table_rows)}"
+        ).replace("  ", " ")
+
+    table_rows = [
+        (
+            row.get("lob") or "unknown",
+            int(row.get("event_count") or 0),
+            int(row.get("alert_count") or 0),
+            int(row.get("info_count") or 0),
+        )
+        for row in graph_rows
+        if row.get("lob") is not None or row.get("event_count") is not None
+    ]
+    if not table_rows:
+        return "No security events were found to group by LOB."
+
+    total = sum(count for _, count, _, _ in table_rows)
+    if total == 0:
+        return f"There were no {scope_prefix}security events{period_suffix}."
+
+    return (
+        f"Security event counts by LOB for {scope_prefix}events{period_suffix} ({total} total):\n\n"
+        f"{format_markdown_table(['LOB', 'Events', 'ALERT', 'INFO'], table_rows)}"
+    ).replace("  ", " ")
+
+
+def _format_security_event_alert_group_by_lob_answer(
+    message: str, graph_rows: list[dict[str, Any]]
+) -> str:
+    return _format_security_event_group_by_lob_answer(message, graph_rows)
+
+
+def _should_format_security_event_group_by_lob(message: str, mode: SearchMode) -> bool:
+    return mode in ("events", "all") and is_security_event_group_by_lob_question(
+        message, mode=mode
+    )
+
+
+def _should_format_security_event_alert_group_by_lob(message: str, mode: SearchMode) -> bool:
+    return _should_format_security_event_group_by_lob(message, mode)
 
 
 def _format_payment_count_aggregate_answer(message: str, graph_rows: list[dict[str, Any]]) -> str:
@@ -971,7 +1039,7 @@ class RagService:
             if str(payload_id) != target_id:
                 continue
 
-            is_approve_event = payload.get("action") == "APPROVE_PAYMENT" or payload.get(
+            is_approve_event = payload.get("action") in ("APPROVE", "APPROVE_PAYMENT") or payload.get(
                 "source"
             ) in {"exact_approve_payment_event", "payment_security_event"}
 
@@ -997,7 +1065,7 @@ class RagService:
         if not summary and not basis:
             return None
 
-        summary = summary or f"{approver} was allowed to APPROVE_PAYMENT"
+        summary = summary or f"{approver} was allowed to APPROVE"
         readable_summary = await self.ml_client.summarize_authorization_why(
             approver=approver,
             authorization_summary=humanize_authorization_text(summary),

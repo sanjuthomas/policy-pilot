@@ -134,6 +134,34 @@ class TestPlanGraphQueries:
         assert planned[0][0] == "security_event_alert_list"
         assert "entity_id" in planned[0][1]
 
+    def test_group_alerts_by_lob(self) -> None:
+        planned = plan_graph_queries(
+            "Can you group alerts by LOB?",
+            mode="events",
+        )
+        assert planned is not None
+        assert planned[0][0] == "security_event_alert_group_by_lob"
+        assert "INVOLVES_LOB" in planned[0][1]
+
+    def test_group_security_events_by_lob(self) -> None:
+        planned = plan_graph_queries(
+            "Can you group security events by LOB?",
+            mode="events",
+        )
+        assert planned is not None
+        assert planned[0][0] == "security_event_group_by_lob"
+        assert "INVOLVES_LOB" in planned[0][1]
+        assert "event_count" in planned[0][1]
+
+    def test_list_instruction_versions(self) -> None:
+        planned = plan_graph_queries(
+            "Can you list all versions of 20260704-DESK_RATES-I-84?",
+            mode="instructions",
+        )
+        assert planned is not None
+        assert planned[0][0] == "instruction_versions"
+        assert "HAS_VERSION" in planned[0][1]
+
     def test_count_payment_alerts_this_week(self) -> None:
         planned = plan_graph_queries(
             "How many payment alerts in the past 7 days?",
@@ -181,6 +209,7 @@ class TestPlanGraphQueries:
         assert planned is not None
         assert planned[0][0] == "payment_approval_lookup"
         assert pid in planned[0][1]
+        assert "APPROVE" in planned[0][1]
         assert "APPROVE_PAYMENT" in planned[0][1]
 
     def test_instruction_approver_via_payment(self) -> None:

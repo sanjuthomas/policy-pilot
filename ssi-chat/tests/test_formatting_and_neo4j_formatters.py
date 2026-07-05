@@ -262,7 +262,40 @@ class TestNeo4jFormatters:
 
     def test_formatters_registry(self) -> None:
         assert "instruction_creator_by_id" in FORMATTERS
+        assert "instruction_versions_table" in FORMATTERS
         assert FORMATTERS["alert_count_today"] is format_alert_count_today
+
+    def test_instruction_versions_table(self) -> None:
+        from chat_application.neo4j_formatters import format_instruction_versions_table
+
+        text = format_instruction_versions_table(
+            "list all versions",
+            [
+                {
+                    "instruction_id": "20260704-DESK_RATES-I-84",
+                    "version_number": 1,
+                    "status": "DRAFT",
+                    "action": "CREATE",
+                    "created_at": "2026-07-04T10:00:00Z",
+                    "creator_display": "Patel, James (mo-101)",
+                    "approver_display": "",
+                },
+                {
+                    "instruction_id": "20260704-DESK_RATES-I-84",
+                    "version_number": 3,
+                    "status": "APPROVED",
+                    "action": "APPROVE",
+                    "created_at": "2026-07-04T23:40:00Z",
+                    "creator_display": "Patel, James (mo-101)",
+                    "approver_display": "Johansson, Nina (rates-201)",
+                },
+            ],
+        )
+        assert text is not None
+        assert "versions (2)" in text
+        assert "DRAFT" in text
+        assert "APPROVED" in text
+        assert "Ver" in text
 
 
 class TestMultimodalIds:

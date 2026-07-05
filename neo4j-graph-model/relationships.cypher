@@ -45,6 +45,7 @@
 //   creator_user_id
 //   approver_user_id
 //   rejector_user_id
+//   created_at              when this version was created (from Mongo version row)
 //   timestamp               ISO datetime of the mutation that created this version
 //
 // (:SecurityEvent)

@@ -19,7 +19,7 @@ class PolicyDecision:
 
 class OpaClient:
     _PAYMENT_PACKAGE = "payment/lifecycle"
-    _PAYMENT_ACTION = "APPROVE_PAYMENT"
+    _PAYMENT_ACTION = "APPROVE"
     _INSTRUCTION_PACKAGE = "instruction/lifecycle"
     _INSTRUCTION_ACTION = "APPROVE"
 

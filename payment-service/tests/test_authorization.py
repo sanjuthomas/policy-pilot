@@ -58,12 +58,12 @@ def test_build_authorization_block_allow_with_basis(subject: Subject) -> None:
     block = build_authorization_block(
         decision,
         subject,
-        PaymentAction.CREATE_PAYMENT,
+        PaymentAction.CREATE,
         resource_context={"payment_id": "pay-1"},
     )
     assert block["engine"] == "opa"
     assert block["package"] == "payment.lifecycle"
-    assert block["action"] == "CREATE_PAYMENT"
+    assert block["action"] == "CREATE"
     assert block["decision"] == "allow"
     assert block["allow_basis"] == ["subject has PAYMENT_CREATOR role"]
     assert block["violations"] == []
@@ -75,9 +75,9 @@ def test_build_authorization_block_allow_with_basis(subject: Subject) -> None:
 
 def test_build_authorization_block_allow_without_basis(subject: Subject) -> None:
     decision = PolicyDecision(allowed=True, allow_basis=[], violations=[], is_alert=False)
-    block = build_authorization_block(decision, subject, PaymentAction.SUBMIT_PAYMENT)
+    block = build_authorization_block(decision, subject, PaymentAction.SUBMIT)
     assert block["decision"] == "allow"
-    assert block["summary"] == "Smith, Alice (alice) was allowed to SUBMIT_PAYMENT"
+    assert block["summary"] == "Smith, Alice (alice) was allowed to SUBMIT"
 
 
 def test_build_authorization_block_deny_single_violation(subject: Subject) -> None:
@@ -87,7 +87,7 @@ def test_build_authorization_block_deny_single_violation(subject: Subject) -> No
         violations=["SELF_APPROVAL"],
         is_alert=False,
     )
-    block = build_authorization_block(decision, subject, PaymentAction.APPROVE_PAYMENT)
+    block = build_authorization_block(decision, subject, PaymentAction.APPROVE)
     assert block["decision"] == "deny"
     assert block["violations"] == ["SELF_APPROVAL"]
     assert block["is_alert"] is False
@@ -101,7 +101,7 @@ def test_build_authorization_block_deny_prefers_alert_violation(subject: Subject
         violations=["SELF_APPROVAL", "ALERT_AMOUNT_EXCEEDS_100B_LIMIT"],
         is_alert=True,
     )
-    block = build_authorization_block(decision, subject, PaymentAction.CREATE_PAYMENT)
+    block = build_authorization_block(decision, subject, PaymentAction.CREATE)
     assert "100B USD ceiling" in block["summary"]
     assert "also:" in block["summary"]
     assert block["is_alert"] is True
@@ -114,15 +114,15 @@ def test_build_authorization_block_deny_unknown_violation_code(subject: Subject)
         violations=["CUSTOM_RULE"],
         is_alert=False,
     )
-    block = build_authorization_block(decision, subject, PaymentAction.REJECT_PAYMENT)
+    block = build_authorization_block(decision, subject, PaymentAction.REJECT)
     assert "custom rule" in block["summary"]
 
 
 def test_build_authorization_block_display_name_user_id_only() -> None:
     subject = Subject(user_id="svc-user", title="Service Account", roles=["PAYMENT_CREATOR"])
     decision = PolicyDecision(allowed=True, allow_basis=[], violations=[], is_alert=False)
-    block = build_authorization_block(decision, subject, PaymentAction.CREATE_PAYMENT)
-    assert block["summary"] == "svc-user was allowed to CREATE_PAYMENT"
+    block = build_authorization_block(decision, subject, PaymentAction.CREATE)
+    assert block["summary"] == "svc-user was allowed to CREATE"
 
 
 def test_details_with_authorization_merges_details() -> None:

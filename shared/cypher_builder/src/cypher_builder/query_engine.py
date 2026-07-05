@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +120,19 @@ _LIST_ALERT_QUESTION = re.compile(
     r"\b(list|show|summarize|summarise|summary|enumerate|display)\b.*\balerts?\b|"
     r"\balerts?\b.*\b(list|show|summarize|summarise|summary|enumerate|display|all)\b|"
     r"\b(all|every)\b.*\balerts?\b",
+    re.IGNORECASE,
+)
+_ALERT_GROUP_BY_LOB = re.compile(
+    r"\b(?:group(?:ed)?|break\s*down|split|bucket(?:ed)?|distribut(?:e|ion)|"
+    r"count\s+per|number\s+of\s+\w+\s+per|how\s+many\s+\w+\s+per)\b.{0,60}\b(?:by|per)\s+(?:lob|line\s+of\s+business)\b|"
+    r"\b(?:by|per)\s+(?:lob|line\s+of\s+business)\b.{0,60}\b(?:group|break|split|count|bucket)",
+    re.IGNORECASE,
+)
+
+_LIST_VERSIONS_QUESTION = re.compile(
+    r"\b(?:list|show|get|display|enumerate|all)\b.{0,50}\b(?:all\s+)?versions?\b|"
+    r"\bversions?\b.{0,50}\b(?:list|show|history|timeline)\b|"
+    r"\bversion\s+history\b",
     re.IGNORECASE,
 )
 
@@ -417,6 +430,102 @@ def is_security_event_alert_list_question(question: str, *, mode: str = "events"
         return True
     q = question.lower()
     return "alert" in q and "actor" in q and "action" in q
+
+
+def is_instruction_versions_list_question(question: str, *, mode: str = "instructions") -> bool:
+    """True when the user wants every InstructionVersion for a specific instruction."""
+    if mode not in ("instructions", "all"):
+        return False
+    if not _LIST_VERSIONS_QUESTION.search(question):
+        return False
+    q = question.lower()
+    if re.search(r"\bcurrent\b.{0,20}\bversion\b", q) and "all" not in q:
+        return False
+    if is_payment_versions_list_question(question, mode=mode):
+        return False
+    return bool(extract_instruction_ids(question) or _instruction_id_in_entity_ids(question))
+
+
+def is_payment_versions_list_question(question: str, *, mode: str = "payments") -> bool:
+    """True when the user wants every PaymentVersion for a specific payment."""
+    if mode not in ("payments", "all"):
+        return False
+    if not _LIST_VERSIONS_QUESTION.search(question):
+        return False
+    q = question.lower()
+    if re.search(r"\bcurrent\b.{0,20}\bversion\b", q) and "all" not in q:
+        return False
+    return bool(extract_payment_ids(question) or _payment_id_in_entity_ids(question))
+
+
+def _instruction_id_in_entity_ids(question: str) -> bool:
+    return any("-I-" in item.upper() for item in extract_entity_ids(question))
+
+
+def _payment_id_in_entity_ids(question: str) -> bool:
+    return any("-P-" in item.upper() for item in extract_entity_ids(question))
+
+
+def instruction_id_from_versions_list_question(question: str) -> str | None:
+    ids = extract_instruction_ids(question)
+    if ids:
+        return ids[0]
+    for entity_id in extract_entity_ids(question):
+        if "-I-" in entity_id.upper():
+            return normalize_sequence_entity_id(entity_id)
+    return None
+
+
+def payment_id_from_versions_list_question(question: str) -> str | None:
+    ids = extract_payment_ids(question)
+    if ids:
+        return ids[0]
+    for entity_id in extract_entity_ids(question):
+        if "-P-" in entity_id.upper():
+            return normalize_sequence_entity_id(entity_id)
+    return None
+
+
+def security_event_group_by_lob_scope(question: str) -> Literal["alert", "all"]:
+    """Return whether grouping should include all security events or ALERT-only."""
+    q = question.lower()
+    if re.search(r"\bsecurity\s+events?\b", q):
+        return "all"
+    if re.search(r"\bevents?\b", q) and "alert" not in q and not _DENIAL_QUESTION.search(question):
+        return "all"
+    return "alert"
+
+
+def is_security_event_group_by_lob_question(question: str, *, mode: str = "events") -> bool:
+    """True when the user wants security event counts broken down by LOB."""
+    if mode not in ("events", "all"):
+        return False
+    if not _ALERT_GROUP_BY_LOB.search(question):
+        return False
+    q = question.lower()
+    if not re.search(
+        r"\b(?:alert|alerts|denial|denials|security\s+events?|events?)\b", q
+    ):
+        return False
+    if is_alert_ranking_question(question, mode=mode):
+        return False
+    if is_security_event_alert_list_question(question, mode=mode):
+        return False
+    if lob_filter_from_question(question) and re.search(
+        r"\b(?:show|list|all)\b.*\b(?:alert|security\s+events?|events?)\b",
+        question,
+        re.IGNORECASE,
+    ):
+        return False
+    return True
+
+
+def is_security_event_alert_group_by_lob_question(question: str, *, mode: str = "events") -> bool:
+    """True when the user wants ALERT counts broken down by LOB (not all severities)."""
+    return (
+        is_security_event_group_by_lob_question(question, mode=mode)
+        and security_event_group_by_lob_scope(question) == "alert"
+    )
 
 
 def instruction_type_filter_from_question(question: str) -> str | None:
@@ -1026,19 +1135,26 @@ LIMIT 200""",
 
 
 def _payment_approval_lookup_queries(payment_id: str) -> list[tuple[str, str]]:
+    safe_id = _escape_cypher_literal(payment_id)
     return [
         (
             "payment_approval_lookup",
-            f"""MATCH (e:SecurityEvent)
-WHERE e.payment_id = '{payment_id}'
-  AND e.action = 'APPROVE_PAYMENT'
-  AND e.outcome = 'success'
+            f"""MATCH (e:SecurityEvent)-[:FOR]->(pv:PaymentVersion {{payment_id: '{safe_id}'}})
+WHERE e.action IN ['APPROVE', 'APPROVE_PAYMENT'] AND e.outcome = 'success'
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
-RETURN e.payment_id AS payment_id,
-       e.timestamp AS approved_at,
-       coalesce(actor.display_name, actor.user_id, '') AS approver_display,
-       e.authorization_summary AS authorization_summary,
-       e.authorization_basis AS authorization_basis
+RETURN pv.payment_id AS payment_id,
+       coalesce(pv.approved_at, e.timestamp) AS approved_at,
+       coalesce(actor.display_name, actor.user_id, pv.approver_user_id, '') AS approver_display,
+       coalesce(
+         CASE WHEN pv.authorization_summary IS NULL OR trim(toString(pv.authorization_summary)) = ''
+              THEN null ELSE pv.authorization_summary END,
+         e.authorization_summary
+       ) AS authorization_summary,
+       coalesce(
+         CASE WHEN pv.authorization_basis IS NULL OR trim(toString(pv.authorization_basis)) IN ['', '[]']
+              THEN null ELSE pv.authorization_basis END,
+         e.authorization_basis
+       ) AS authorization_basis
 ORDER BY e.timestamp DESC
 LIMIT 1""",
         ),
@@ -1165,7 +1281,6 @@ RETURN v.instruction_id AS instruction_id,
        coalesce(approver.display_name, v.approver_user_id, '') AS approver_display,
        coalesce(rejector.display_name, v.rejector_user_id, '') AS rejector_display,
        v.approved_at AS approved_at,
-       v.rejection_reason AS rejection_reason,
        v.authorization_summary AS authorization_summary
 LIMIT 1""",
         ),
@@ -1304,6 +1419,62 @@ RETURN i1.instruction_id AS instruction_id_a,
        v1.creditor_name AS creditor_name
 ORDER BY v1.creditor_account, v1.currency
 LIMIT 50""",
+        ),
+    ]
+
+
+def _instruction_versions_by_id_queries(instruction_id: str) -> list[tuple[str, str]]:
+    safe_id = _escape_cypher_literal(instruction_id)
+    return [
+        (
+            "instruction_versions",
+            f"""MATCH (i:Instruction {{instruction_id: '{safe_id}'}})-[:HAS_VERSION]->(v:InstructionVersion)
+OPTIONAL MATCH (creator:User {{user_id: v.creator_user_id}})
+OPTIONAL MATCH (approver:User {{user_id: v.approver_user_id}})
+OPTIONAL MATCH (rejector:User {{user_id: v.rejector_user_id}})
+RETURN v.instruction_id AS instruction_id,
+       v.version_number AS version_number,
+       v.version_key AS version_key,
+       v.status AS status,
+       v.action AS action,
+       v.created_at AS created_at,
+       v.timestamp AS timestamp,
+       coalesce(creator.display_name, v.creator_user_id, '') AS creator_display,
+       coalesce(approver.display_name, v.approver_user_id, '') AS approver_display,
+       coalesce(rejector.display_name, v.rejector_user_id, '') AS rejector_display,
+       v.approved_at AS approved_at,
+       v.submitted_at AS submitted_at,
+       v.rejected_at AS rejected_at
+ORDER BY v.version_number ASC
+LIMIT 200""",
+        ),
+    ]
+
+
+def _payment_versions_by_id_queries(payment_id: str) -> list[tuple[str, str]]:
+    safe_id = _escape_cypher_literal(payment_id)
+    return [
+        (
+            "payment_versions",
+            f"""MATCH (pay:Payment {{payment_id: '{safe_id}'}})-[:HAS_VERSION]->(pv:PaymentVersion)
+OPTIONAL MATCH (creator:User)-[:CREATED_PV]->(pv)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PV]->(pv)
+RETURN pv.payment_id AS payment_id,
+       pv.version_number AS version_number,
+       pv.version_key AS version_key,
+       pv.status AS status,
+       pv.action AS action,
+       pv.created_at AS created_at,
+       pv.timestamp AS timestamp,
+       pv.amount AS amount,
+       pv.currency AS currency,
+       coalesce(creator.display_name, creator.user_id, pv.creator_user_id, '') AS creator_display,
+       coalesce(approver.display_name, approver.user_id, pv.approver_user_id, '') AS approver_display,
+       pv.approved_at AS approved_at,
+       pv.submitted_at AS submitted_at,
+       pv.rejected_at AS rejected_at
+ORDER BY pv.version_number ASC
+LIMIT 200""",
         ),
     ]
 
@@ -1459,6 +1630,65 @@ LIMIT 200""",
     ]
 
 
+def _security_event_group_by_lob_queries(
+    *,
+    time_filter: str,
+    domain: str,
+    scope: Literal["alert", "all"],
+) -> list[tuple[str, str]]:
+    domain_filter = ""
+    if domain == "payments":
+        domain_filter = "AND e.payment_id IS NOT NULL"
+    elif domain == "instructions":
+        domain_filter = "AND e.payment_id IS NULL"
+
+    lob_resolution = """
+OPTIONAL MATCH (e)-[:INVOLVES_LOB]->(pc:ProfitCenter)
+OPTIONAL MATCH (e)-[:FOR]->(v:InstructionVersion)
+OPTIONAL MATCH (e)-[:FOR]->(pv:PaymentVersion)
+WITH coalesce(pc.lob, e.owning_lob, v.owning_lob, pv.owning_lob, 'unknown') AS lob, e"""
+
+    if scope == "alert":
+        return [
+            (
+                "security_event_alert_group_by_lob",
+                f"""MATCH (e:SecurityEvent {{severity: 'ALERT'}})
+WHERE true {domain_filter} {time_filter}
+{lob_resolution}
+WITH lob, count(e) AS alert_count
+RETURN lob, alert_count
+ORDER BY alert_count DESC, lob ASC
+LIMIT 50""",
+            ),
+        ]
+
+    return [
+        (
+            "security_event_group_by_lob",
+            f"""MATCH (e:SecurityEvent)
+WHERE true {domain_filter} {time_filter}
+{lob_resolution}
+WITH lob,
+     count(e) AS event_count,
+     sum(CASE WHEN e.severity = 'ALERT' THEN 1 ELSE 0 END) AS alert_count,
+     sum(CASE WHEN e.severity = 'INFO' THEN 1 ELSE 0 END) AS info_count
+RETURN lob, event_count, alert_count, info_count
+ORDER BY event_count DESC, lob ASC
+LIMIT 50""",
+        ),
+    ]
+
+
+def _security_event_alert_group_by_lob_queries(
+    *,
+    time_filter: str,
+    domain: str,
+) -> list[tuple[str, str]]:
+    return _security_event_group_by_lob_queries(
+        time_filter=time_filter, domain=domain, scope="alert"
+    )
+
+
 def plan_graph_queries(question: str, *, mode: str) -> list[tuple[str, str]] | None:
     """Deterministic read-only Cypher for common aggregate questions."""
     from cypher_builder.builder import CypherQueryBuilder
@@ -1469,6 +1699,20 @@ def plan_graph_queries(question: str, *, mode: str) -> list[tuple[str, str]] | N
 
     if mode == "instructions" and _is_subordinate_approver_question(question):
         return builder.instruction_subordinate_approver()
+
+    if mode in ("instructions", "all") and is_instruction_versions_list_question(
+        question, mode=mode
+    ):
+        instruction_id = instruction_id_from_versions_list_question(question)
+        if instruction_id:
+            return builder.instruction_versions(instruction_id)
+
+    if mode in ("payments", "all") and is_payment_versions_list_question(
+        question, mode=mode
+    ):
+        payment_id = payment_id_from_versions_list_question(question)
+        if payment_id:
+            return builder.payment_versions(payment_id)
 
     if is_instruction_approver_via_payment_question(question):
         payment_ids = extract_payment_ids(question)
@@ -1529,6 +1773,22 @@ def plan_graph_queries(question: str, *, mode: str) -> list[tuple[str, str]] | N
                 time_filter=time_filter, domain="instructions"
             )
         return builder.security_event_alert_list(time_filter=time_filter, domain="all")
+
+    if mode in ("events", "all") and is_security_event_group_by_lob_question(
+        question, mode=mode
+    ):
+        scope = security_event_group_by_lob_scope(question)
+        if flags["payments"]:
+            return builder.security_event_group_by_lob(
+                time_filter=time_filter, domain="payments", scope=scope
+            )
+        if flags["instructions"]:
+            return builder.security_event_group_by_lob(
+                time_filter=time_filter, domain="instructions", scope=scope
+            )
+        return builder.security_event_group_by_lob(
+            time_filter=time_filter, domain="all", scope=scope
+        )
 
     if mode in ("payments", "all") and is_payment_total_amount_question(question):
         return builder.payment_aggregate(question, flags, sum_amount=True)

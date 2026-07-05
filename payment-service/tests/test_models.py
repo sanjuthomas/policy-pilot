@@ -75,7 +75,7 @@ def test_payment_create_sets_lifecycle_event(subject: Subject) -> None:
         supervisor_id="boss1",
     )
     assert len(payment.lifecycle_events) == 1
-    assert payment.lifecycle_events[0].action == "CREATE_PAYMENT"
+    assert payment.lifecycle_events[0].action == "CREATE"
     assert payment.lifecycle_events[0].event_id == "evt-99"
 
 
@@ -101,14 +101,14 @@ def test_payment_to_mongo_and_from_mongo_roundtrip(payment: Payment) -> None:
 
 def test_payment_security_event_authorized_action(subject: Subject, payment: Payment) -> None:
     event = PaymentSecurityEvent.authorized_action(
-        PaymentAction.CREATE_PAYMENT,
+        PaymentAction.CREATE,
         subject,
         payment,
         version_number=1,
         details={"authorization": {"summary": "allowed"}},
     )
     assert event.severity == SecurityEventSeverity.INFO
-    assert event.event.action == "CREATE_PAYMENT"
+    assert event.event.action == "CREATE"
     assert event.event.outcome == SecurityEventOutcome.SUCCESS
     assert event.event.type == ["creation"]
     assert event.actor.user_id == "alice"
@@ -121,7 +121,7 @@ def test_payment_security_event_authorized_change_action(
     payment: Payment,
 ) -> None:
     event = PaymentSecurityEvent.authorized_action(
-        PaymentAction.SUBMIT_PAYMENT,
+        PaymentAction.SUBMIT,
         subject,
         payment,
     )
@@ -130,7 +130,7 @@ def test_payment_security_event_authorized_change_action(
 
 def test_payment_security_event_policy_denial(subject: Subject, payment: Payment) -> None:
     event = PaymentSecurityEvent.policy_denial(
-        PaymentAction.APPROVE_PAYMENT,
+        PaymentAction.APPROVE,
         subject,
         payment,
         reason="denied",
@@ -143,6 +143,6 @@ def test_payment_security_event_policy_denial(subject: Subject, payment: Payment
 
 def test_payment_status_enum_values() -> None:
     assert PaymentStatus.DRAFT.value == "DRAFT"
-    assert PaymentAction.CANCEL_PAYMENT.value == "CANCEL_PAYMENT"
-    assert PaymentAction.UPDATE_PAYMENT.value == "UPDATE_PAYMENT"
+    assert PaymentAction.CANCEL.value == "CANCEL"
+    assert PaymentAction.UPDATE.value == "UPDATE"
     assert PaymentStatus.CANCELLED.value == "CANCELLED"

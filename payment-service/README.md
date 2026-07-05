@@ -55,11 +55,11 @@ DRAFT / SUBMITTED  →  CANCELLED (cancel)
 
 | Step | Actor | Policy action (via authz) |
 |------|-------|---------------------------|
-| Create | Middle office with `covering_lobs` | `CREATE_PAYMENT` |
-| Submit | Front-office user whose `lob` matches instruction LOB | `SUBMIT_PAYMENT` |
-| Approve | Funding approver covering the instruction LOB | `APPROVE_PAYMENT` |
-| Reject | Funding approver covering the instruction LOB | `REJECT_PAYMENT` |
-| Cancel | Authorized roles while `DRAFT` or `SUBMITTED` | `CANCEL_PAYMENT` |
+| Create | Middle office with `covering_lobs` | `CREATE` |
+| Submit | Front-office user whose `lob` matches instruction LOB | `SUBMIT` |
+| Approve | Funding approver covering the instruction LOB | `APPROVE` |
+| Reject | Funding approver covering the instruction LOB | `REJECT` |
+| Cancel | Authorized roles while `DRAFT` or `SUBMITTED` | `CANCEL` |
 
 At create time the service validates the linked instruction is `APPROVED` and not expired. At approval time it re-checks instruction version drift, status, and dates — invalid instructions auto-cancel the payment.
 

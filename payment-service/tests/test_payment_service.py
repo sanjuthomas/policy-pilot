@@ -764,7 +764,7 @@ async def test_save_payment_with_security_event_uses_transaction(
     with _patched_txn() as mock_tx:
         result = await service._save_payment_with_security_event(
             payment,
-            PaymentAction.CREATE_PAYMENT,
+            PaymentAction.CREATE,
             subject,
             initial=True,
         )
@@ -798,7 +798,7 @@ async def test_save_payment_skips_security_event_for_excluded_user(
     with _patched_txn(), patch.object(settings, "security_event_excluded_user_ids", "excluded-svc"):
         await service._save_payment_with_security_event(
             payment,
-            PaymentAction.CREATE_PAYMENT,
+            PaymentAction.CREATE,
             excluded,
             initial=True,
         )

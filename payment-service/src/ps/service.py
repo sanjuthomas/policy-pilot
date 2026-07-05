@@ -437,7 +437,7 @@ class PaymentService:
 
         try:
             authorization = await self._authorize(
-                PaymentAction.CREATE_PAYMENT,
+                PaymentAction.CREATE,
                 subject,
                 payment,
                 instruction_end_date=end_date,
@@ -449,10 +449,10 @@ class PaymentService:
             raise
 
         details = details_with_authorization(None, authorization)
-        self._record_event(payment, PaymentAction.CREATE_PAYMENT, subject, details)
+        self._record_event(payment, PaymentAction.CREATE, subject, details)
         saved = await self._save_payment_with_security_event(
             payment,
-            PaymentAction.CREATE_PAYMENT,
+            PaymentAction.CREATE,
             subject,
             details=details,
             initial=True,
@@ -513,7 +513,7 @@ class PaymentService:
 
         saved = await self._persist_new_version(
             payment,
-            PaymentAction.UPDATE_PAYMENT,
+            PaymentAction.UPDATE,
             subject,
             instruction_end_date=end_date,
             instruction_status=instruction_status,
@@ -568,7 +568,7 @@ class PaymentService:
 
         try:
             authorization = await self._authorize(
-                PaymentAction.SUBMIT_PAYMENT,
+                PaymentAction.SUBMIT,
                 subject,
                 payment,
                 instruction_end_date=instruction_end_date,
@@ -591,7 +591,7 @@ class PaymentService:
             except InstructionStateError as exc:
                 if self._should_record_security_event(subject):
                     await self.event_repo.record_policy_denial(
-                        PaymentAction.SUBMIT_PAYMENT,
+                        PaymentAction.SUBMIT,
                         subject,
                         payment,
                         reason=f"Saga step failed — instruction cannot be marked USED: {exc}",
@@ -601,7 +601,7 @@ class PaymentService:
             except Exception as exc:
                 if self._should_record_security_event(subject):
                     await self.event_repo.record_policy_denial(
-                        PaymentAction.SUBMIT_PAYMENT,
+                        PaymentAction.SUBMIT,
                         subject,
                         payment,
                         reason=f"Saga step failed — instruction-service unreachable: {exc}",
@@ -625,7 +625,7 @@ class PaymentService:
         details = details_with_authorization(None, authorization)
         saved = await self._persist_new_version(
             payment,
-            PaymentAction.SUBMIT_PAYMENT,
+            PaymentAction.SUBMIT,
             subject,
             details=details,
             instruction_end_date=instruction_end_date,
@@ -679,7 +679,7 @@ class PaymentService:
 
         saved = await self._persist_new_version(
             payment,
-            PaymentAction.APPROVE_PAYMENT,
+            PaymentAction.APPROVE,
             subject,
             instruction_end_date=instruction_end_date,
             instruction_status=instruction_status,
@@ -726,7 +726,7 @@ class PaymentService:
 
         saved = await self._persist_new_version(
             payment,
-            PaymentAction.REJECT_PAYMENT,
+            PaymentAction.REJECT,
             subject,
             details={"reason": request.reason},
             instruction_end_date=instruction_end_date,
@@ -784,7 +784,7 @@ class PaymentService:
 
         saved = await self._persist_new_version(
             payment,
-            PaymentAction.CANCEL_PAYMENT,
+            PaymentAction.CANCEL,
             subject,
             details=details,
             instruction_end_date=instruction_end_date,
@@ -864,14 +864,14 @@ class PaymentService:
         payment.updated_at = now
         self._record_event(
             payment,
-            PaymentAction.CANCEL_PAYMENT,
+            PaymentAction.CANCEL,
             subject,
             details={"reason": reason},
         )
 
         saved = await self._save_payment_with_security_event(
             payment,
-            PaymentAction.CANCEL_PAYMENT,
+            PaymentAction.CANCEL,
             subject,
             details={"reason": reason},
         )

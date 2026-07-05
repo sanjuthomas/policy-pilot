@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from cypher_builder import query_engine as qe
 from cypher_builder.models import GraphIntent, GraphQueryPlan
 
@@ -43,6 +45,12 @@ class CypherQueryBuilder:
 
     def instruction_detail(self, instruction_id: str) -> list[tuple[str, str]]:
         return qe._instruction_detail_by_id_queries(instruction_id)
+
+    def instruction_versions(self, instruction_id: str) -> list[tuple[str, str]]:
+        return qe._instruction_versions_by_id_queries(instruction_id)
+
+    def payment_versions(self, payment_id: str) -> list[tuple[str, str]]:
+        return qe._payment_versions_by_id_queries(payment_id)
 
     def instruction_duplicate_routes(self, *, lob: str | None = None) -> list[tuple[str, str]]:
         return qe._instruction_duplicate_routes_queries(lob=lob)
@@ -130,6 +138,27 @@ class CypherQueryBuilder:
         domain: str,
     ) -> list[tuple[str, str]]:
         return qe._security_event_alert_list_queries(time_filter=time_filter, domain=domain)
+
+    def security_event_alert_group_by_lob(
+        self,
+        *,
+        time_filter: str,
+        domain: str,
+    ) -> list[tuple[str, str]]:
+        return qe._security_event_alert_group_by_lob_queries(
+            time_filter=time_filter, domain=domain
+        )
+
+    def security_event_group_by_lob(
+        self,
+        *,
+        time_filter: str,
+        domain: str,
+        scope: Literal["alert", "all"],
+    ) -> list[tuple[str, str]]:
+        return qe._security_event_group_by_lob_queries(
+            time_filter=time_filter, domain=domain, scope=scope
+        )
 
 
 def flags_from_plan(plan: GraphQueryPlan) -> dict[str, bool]:

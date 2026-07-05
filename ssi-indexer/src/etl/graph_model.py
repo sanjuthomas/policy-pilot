@@ -19,6 +19,12 @@ INSTRUCTION_ACTION_TO_EDGE: dict[str, str] = {
 }
 
 PAYMENT_ACTION_TO_EDGE: dict[str, str] = {
+    "CREATE": "CREATED_PV",
+    "SUBMIT": "SUBMITTED_PV",
+    "APPROVE": "APPROVED_PV",
+    "REJECT": "REJECTED_PV",
+    "CANCEL": "CANCELLED_PV",
+    # Legacy action names (pre-migration Mongo/Kafka facts)
     "CREATE_PAYMENT": "CREATED_PV",
     "SUBMIT_PAYMENT": "SUBMITTED_PV",
     "APPROVE_PAYMENT": "APPROVED_PV",
@@ -86,15 +92,15 @@ def instruction_lifecycle_actor(
 def payment_lifecycle_actor(fact: dict[str, Any]) -> str | None:
     """Resolve user_id for a payment fact lifecycle edge."""
     action = fact.get("action", "")
-    if action == "CREATE_PAYMENT":
+    if action in ("CREATE", "CREATE_PAYMENT"):
         return (fact.get("created_by") or {}).get("user_id")
-    if action == "SUBMIT_PAYMENT":
+    if action in ("SUBMIT", "SUBMIT_PAYMENT"):
         return (fact.get("submitted_by") or {}).get("user_id") or fact.get("actor_user_id")
-    if action == "APPROVE_PAYMENT":
+    if action in ("APPROVE", "APPROVE_PAYMENT"):
         return (fact.get("approved_by") or {}).get("user_id") or fact.get("actor_user_id")
-    if action == "REJECT_PAYMENT":
+    if action in ("REJECT", "REJECT_PAYMENT"):
         return (fact.get("rejected_by") or {}).get("user_id") or fact.get("actor_user_id")
-    if action == "CANCEL_PAYMENT":
+    if action in ("CANCEL", "CANCEL_PAYMENT"):
         return (fact.get("cancelled_by") or {}).get("user_id") or fact.get("actor_user_id")
     return fact.get("actor_user_id")
 

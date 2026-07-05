@@ -79,6 +79,24 @@ intents:
     query: payment_detail_by_id
     formatter: payment_creator_and_approver_by_id
 
+  - id: instruction.versions_by_id
+    priority: 105
+    modes: [instructions, all]
+    match: '\b(list|show|get|display|enumerate|all)\b.*\b(?:all\s+)?versions?\b|\bversions?\b.*\b(list|show|history)\b|\bversion\s+history\b'
+    requires:
+      instruction_id: true
+    query: instruction_versions_by_id
+    formatter: instruction_versions_table
+
+  - id: payment.versions_by_id
+    priority: 105
+    modes: [payments, all]
+    match: '\b(list|show|get|display|enumerate|all)\b.*\b(?:all\s+)?versions?\b|\bversions?\b.*\b(list|show|history)\b|\bversion\s+history\b'
+    requires:
+      payment_id: true
+    query: payment_versions_by_id
+    formatter: payment_versions_table
+
   # ── Instruction inventory / compliance ─────────────────────────────────────
   - id: instruction.list_single_use
     priority: 80

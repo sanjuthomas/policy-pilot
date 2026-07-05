@@ -22,7 +22,7 @@ package payment.lifecycle
 # Severity: ALERT — represents a controls bypass or rogue large-value transfer.
 
 violations["ALERT_AMOUNT_EXCEEDS_100B_LIMIT"] if {
-    input.action in {"CREATE_PAYMENT", "UPDATE_PAYMENT", "APPROVE_PAYMENT"}
+    input.action in {"CREATE", "UPDATE", "APPROVE"}
     exceeds_absolute_limit
 }
 
@@ -33,7 +33,7 @@ violations["ALERT_AMOUNT_EXCEEDS_100B_LIMIT"] if {
 # Severity: ALERT — subject is acting beyond their delegated authority.
 
 violations["ALERT_AMOUNT_EXCEEDS_SUBJECT_LIMIT"] if {
-    input.action in {"CREATE_PAYMENT", "UPDATE_PAYMENT", "APPROVE_PAYMENT"}
+    input.action in {"CREATE", "UPDATE", "APPROVE"}
     exceeds_subject_limit
 }
 
@@ -43,7 +43,7 @@ violations["ALERT_AMOUNT_EXCEEDS_SUBJECT_LIMIT"] if {
 # Denial → ALERT security event — block the action; no amount limit can be validated.
 
 violations["NO_LIMIT_GROUP_ASSIGNED"] if {
-    input.action in {"CREATE_PAYMENT", "UPDATE_PAYMENT", "APPROVE_PAYMENT"}
+    input.action in {"CREATE", "UPDATE", "APPROVE"}
     not has_any_limit_group
 }
 
@@ -54,17 +54,17 @@ violations["NO_LIMIT_GROUP_ASSIGNED"] if {
 # Severity: ALERT when the action bypasses required controls.
 
 violations["ALERT_UNAPPROVED_INSTRUCTION"] if {
-    input.action in {"CREATE_PAYMENT", "UPDATE_PAYMENT"}
+    input.action in {"CREATE", "UPDATE"}
     not instruction_usable_for_draft_payment
 }
 
 violations["ALERT_UNAPPROVED_INSTRUCTION"] if {
-    input.action == "SUBMIT_PAYMENT"
+    input.action == "SUBMIT"
     not instruction_is_approved
 }
 
 violations["ALERT_UNAPPROVED_INSTRUCTION"] if {
-    input.action == "APPROVE_PAYMENT"
+    input.action == "APPROVE"
     not instruction_backing_valid_for_approval
 }
 
@@ -74,7 +74,7 @@ violations["ALERT_UNAPPROVED_INSTRUCTION"] if {
 # Severity: ALERT — compliance breach.
 
 violations["ALERT_EXPIRED_INSTRUCTION"] if {
-    input.action in {"CREATE_PAYMENT", "UPDATE_PAYMENT", "APPROVE_PAYMENT"}
+    input.action in {"CREATE", "UPDATE", "APPROVE"}
     input.payment.instruction_end_date != ""
     time.now_ns() >= time.parse_rfc3339_ns(input.payment.instruction_end_date)
 }
@@ -87,7 +87,7 @@ violations["ALERT_EXPIRED_INSTRUCTION"] if {
 #           misconfiguration or privilege escalation attempt.
 
 violations["ALERT_NOT_MIDDLE_OFFICE_GROUP"] if {
-    input.action == "APPROVE_PAYMENT"
+    input.action == "APPROVE"
     has_role("FUNDING_APPROVER")
     not in_group("MIDDLE_OFFICE")
 }
@@ -100,7 +100,7 @@ violations["ALERT_NOT_MIDDLE_OFFICE_GROUP"] if {
 # Severity: ALERT — potential cross-desk interference or collusion attempt.
 
 violations["ALERT_LOB_COVERAGE_VIOLATION"] if {
-    input.action == "APPROVE_PAYMENT"
+    input.action == "APPROVE"
     has_role("FUNDING_APPROVER")
     in_group("MIDDLE_OFFICE")
     not covers_lob(input.payment.instruction_owning_lob)
@@ -113,7 +113,7 @@ violations["ALERT_LOB_COVERAGE_VIOLATION"] if {
 # Denial → ALERT security event — four-eyes principle violation.
 
 violations["SELF_APPROVAL"] if {
-    input.action == "APPROVE_PAYMENT"
+    input.action == "APPROVE"
     not payment_creator_is_not_approver
 }
 
@@ -126,7 +126,7 @@ violations["SELF_APPROVAL"] if {
 # Severity: ALERT — chain-of-command conflict; potential coercion or collusion.
 
 violations["ALERT_SUBORDINATE_APPROVING_CREATOR"] if {
-    input.action == "APPROVE_PAYMENT"
+    input.action == "APPROVE"
     has_role("FUNDING_APPROVER")
     not payment_approver_not_subordinate_of_creator
 }

@@ -19,7 +19,7 @@ def payment_approval_blocked_reason(
     instruction_type: str | None = None,
     payment_instruction_type: str | None = None,
 ) -> str | None:
-    """Explain why APPROVE_PAYMENT is not permitted in the current lifecycle state."""
+    """Explain why APPROVE is not permitted in the current lifecycle state."""
     payment_status = str(payment_status or "")
     instruction_status = str(instruction_status or "")
     instruction_type = str(instruction_type or "")

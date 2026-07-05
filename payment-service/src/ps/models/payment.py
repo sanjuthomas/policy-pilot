@@ -82,7 +82,7 @@ class Payment(BaseModel):
         p.lifecycle_events.append(
             LifecycleEvent(
                 event_id=event_id,
-                action="CREATE_PAYMENT",
+                action="CREATE",
                 actor_user_id=subject.user_id,
                 timestamp=now.isoformat(),
             )
