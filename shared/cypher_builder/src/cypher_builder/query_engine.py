@@ -169,18 +169,18 @@ _MAX_CYPHER_LEN = 4096
 # ── Fixed parametric queries ───────────────────────────────────────────────
 
 LOOKUP_INSTRUCTION_BY_EVENT_CYPHER = """MATCH (e:SecurityEvent {event_id: $event_id})
-OPTIONAL MATCH (e)-[:TARGETS]->(i:Instruction)
-OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+OPTIONAL MATCH (e)-[:FOR]->(v:InstructionVersion)
+OPTIONAL MATCH (i:Instruction {instruction_id: v.instruction_id})
 RETURN e.event_id AS event_id,
        coalesce(i.instruction_id, v.instruction_id) AS instruction_id
 LIMIT 1"""
 
 _SECURITY_EVENT_GRAPH_OPTIONAL_MATCHES = """
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
-OPTIONAL MATCH (e)-[:TARGETS]->(i:Instruction)
-OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
-OPTIONAL MATCH (e)-[:TARGETS_PAYMENT]->(pay:Payment)
-OPTIONAL MATCH (e)-[:TARGETS_PAYMENT_VERSION]->(pv:PaymentVersion)"""
+OPTIONAL MATCH (e)-[:FOR]->(v:InstructionVersion)
+OPTIONAL MATCH (i:Instruction {instruction_id: v.instruction_id})
+OPTIONAL MATCH (e)-[:FOR]->(pv:PaymentVersion)
+OPTIONAL MATCH (pay:Payment {payment_id: pv.payment_id})"""
 
 _INSTRUCTION_ID_COALESCE = (
     "coalesce(v.instruction_id, i.instruction_id, pv.instruction_id, pay.instruction_id, '')"
@@ -713,8 +713,8 @@ def _payments_above_amount_queries(
             "payments_above_amount",
             f"""{_payment_latest_status_match_prefix()}
 AND p.amount > {min_amount} {status_filter} {lob_filter} {time_filter}
-OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
-OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+OPTIONAL MATCH (creator:User)-[:CREATED_PV]->(p)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PV]->(p)
 RETURN pay.payment_id AS payment_id,
        p.instruction_id AS instruction_id,
        p.status AS status,
@@ -746,8 +746,8 @@ def _largest_payment_queries(
             "largest_payment",
             f"""{_payment_latest_status_match_prefix()}
 AND true {status_filter} {lob_filter} {time_filter}
-OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
-OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+OPTIONAL MATCH (creator:User)-[:CREATED_PV]->(p)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PV]->(p)
 RETURN pay.payment_id AS payment_id,
        p.instruction_id AS instruction_id,
        p.status AS status,
@@ -893,7 +893,7 @@ def _is_payment_approval_lookup(question: str, *, mode: str) -> bool:
 
 
 _APPROVAL_LOOKUP_EVENT_AUTH = """
-OPTIONAL MATCH (approveEvent:SecurityEvent)-[:TARGETS]->(i)
+OPTIONAL MATCH (approveEvent:SecurityEvent)-[:FOR]->(v:InstructionVersion)<-[:HAS_VERSION]-(i)
 WHERE approveEvent.action = 'APPROVE' AND approveEvent.outcome = 'success'
 WITH v, approverUser, approveEvent
 ORDER BY approveEvent.timestamp DESC
@@ -968,8 +968,8 @@ WHERE p.version_number = max_ver AND p.status IS NOT NULL {status_filter}
 WITH collect(DISTINCT {{pay: pay, p: p}}) AS payment_rows
 UNWIND payment_rows AS row
 WITH row.pay AS pay, row.p AS p
-OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
-OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+OPTIONAL MATCH (creator:User)-[:CREATED_PV]->(p)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PV]->(p)
 WITH pay, p,
      head(collect(DISTINCT creator)) AS creator,
      head(collect(DISTINCT approver)) AS approver
@@ -1006,8 +1006,8 @@ ORDER BY p.created_at ASC
 WITH instruction_id, payment_count, collect(DISTINCT pay) AS payments
 UNWIND payments AS pay
 MATCH (pay)-[:CURRENT]->(p:PaymentVersion)
-OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
-OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+OPTIONAL MATCH (creator:User)-[:CREATED_PV]->(p)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PV]->(p)
 WITH instruction_id,
      payment_count,
      p,
@@ -1051,8 +1051,8 @@ def _payment_detail_by_id_queries(payment_id: str) -> list[tuple[str, str]]:
         (
             "payment_detail",
             f"""MATCH (pay:Payment {{payment_id: '{safe_id}'}})-[:CURRENT]->(p:PaymentVersion)
-OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
-OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+OPTIONAL MATCH (creator:User)-[:CREATED_PV]->(p)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PV]->(p)
 RETURN p.payment_id AS payment_id,
        p.instruction_id AS instruction_id,
        p.status AS status,
@@ -1226,7 +1226,7 @@ def _instructions_created_by_user_queries(user_id: str) -> list[tuple[str, str]]
     return [
         (
             "instructions_by_creator",
-            f"""MATCH (u:User {{user_id: '{safe_user}'}})-[:CREATED]->(v:InstructionVersion)<-[:CURRENT]-(i:Instruction)
+            f"""MATCH (u:User {{user_id: '{safe_user}'}})-[:CREATED_IV]->(v:InstructionVersion)<-[:CURRENT]-(i:Instruction)
 OPTIONAL MATCH (approver:User {{user_id: v.approver_user_id}})
 RETURN v.instruction_id AS instruction_id,
        v.status AS status,
@@ -1245,8 +1245,8 @@ def _instruction_mutual_approval_queries() -> list[tuple[str, str]]:
     return [
         (
             "mutual_approval",
-            """MATCH (a:User)-[:APPROVED]->(va:InstructionVersion)<-[:CREATED]-(b:User)
-MATCH (b)-[:APPROVED]->(vb:InstructionVersion)<-[:CREATED]-(a)
+            """MATCH (a:User)-[:APPROVED_IV]->(va:InstructionVersion)<-[:CREATED_IV]-(b:User)
+MATCH (b)-[:APPROVED_IV]->(vb:InstructionVersion)<-[:CREATED_IV]-(a)
 WHERE a.user_id < b.user_id
 RETURN coalesce(a.display_name, a.user_id, '') AS user_a_display,
        a.user_id AS user_a_id,
@@ -1324,14 +1324,8 @@ LIMIT 200"""
     return [
         (
             "instruction_timeline_targets",
-            f"""MATCH (i:Instruction {{instruction_id: '{safe_id}'}})
-MATCH (event:SecurityEvent)-[:TARGETS]->(i)
-{event_return}""",
-        ),
-        (
-            "instruction_timeline_versions",
             f"""MATCH (i:Instruction {{instruction_id: '{safe_id}'}})-[:HAS_VERSION]->(v:InstructionVersion)
-MATCH (event:SecurityEvent)-[:TARGETS_VERSION]->(v)
+MATCH (event:SecurityEvent)-[:FOR]->(v)
 {event_return}""",
         ),
     ]
@@ -1386,8 +1380,8 @@ def _security_event_alert_count_queries(
         count_where = f"e.payment_id IS NOT NULL AND e.severity = 'ALERT' {time_filter}"
         detail_optional = """
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
-OPTIONAL MATCH (e)-[:TARGETS_PAYMENT]->(pay:Payment)
-OPTIONAL MATCH (e)-[:TARGETS_PAYMENT_VERSION]->(pv:PaymentVersion)"""
+OPTIONAL MATCH (e)-[:FOR]->(pv:PaymentVersion)
+OPTIONAL MATCH (pay:Payment {payment_id: pv.payment_id})"""
         detail_return = """RETURN e.event_id, e.timestamp, e.action, e.message, e.severity,
        e.payment_id AS payment_id,
        coalesce(pv.instruction_id, pay.instruction_id, '') AS instruction_id,
@@ -1398,8 +1392,8 @@ OPTIONAL MATCH (e)-[:TARGETS_PAYMENT_VERSION]->(pv:PaymentVersion)"""
     elif domain == "instructions":
         count_where = f"e.payment_id IS NULL AND e.severity = 'ALERT' {time_filter}"
         detail_optional = """
-OPTIONAL MATCH (e)-[:TARGETS]->(i:Instruction)
-OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+OPTIONAL MATCH (e)-[:FOR]->(v:InstructionVersion)
+OPTIONAL MATCH (i:Instruction {instruction_id: v.instruction_id})
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)"""
         detail_return = """RETURN e.event_id, e.timestamp, e.action, e.message, e.severity,
        coalesce(v.instruction_id, i.instruction_id, '') AS instruction_id,

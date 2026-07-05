@@ -68,7 +68,7 @@ violations["INVALID_PROFIT_CENTER"] if {
     input.action in {
         "CREATE", "UPDATE", "CANCEL", "SUBMIT",
         "APPROVE", "REJECT", "SUSPEND", "REACTIVATE",
-        "USE", "VIEW",
+        "USE", "RELEASE_USE", "VIEW",
     }
     not is_valid_profit_center
 }

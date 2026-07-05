@@ -20,7 +20,8 @@ PolicyPilot still runs dense vector search **in parallel** for every case except
 - Full stack running (`docker compose up -d`), including **Kafka Connect** and **ssi-indexer**
 - **GCP Vertex AI** credentials mounted into ssi-indexer and ssi-chat (embeddings + Gemini)
 - Harness reachable at http://localhost:8091 (for `--seed`)
-- Neo4j populated by the indexer (run harness seed or `./ssi-demo-harness/seed-demo-data.sh` before `--seed`)
+- Neo4j populated by the indexer (run `./ssi-demo-harness/seed-demo-data.sh` or harness seed before `--seed`)
+- Graph uses `CREATED_IV`, `APPROVED_IV`, `FOR`, … — see [neo4j-graph-model/PHASE-0.md](../../neo4j-graph-model/PHASE-0.md)
 
 ## Quick run
 

@@ -78,6 +78,7 @@ class LifecycleAction(StrEnum):
     SUSPEND = "SUSPEND"
     REACTIVATE = "REACTIVATE"
     USE = "USE"
+    RELEASE_USE = "RELEASE_USE"
     VIEW = "VIEW"
 
 
@@ -92,6 +93,7 @@ MUTATING_ACTIONS = frozenset(
         LifecycleAction.SUSPEND,
         LifecycleAction.REACTIVATE,
         LifecycleAction.USE,
+        LifecycleAction.RELEASE_USE,
     }
 )
 

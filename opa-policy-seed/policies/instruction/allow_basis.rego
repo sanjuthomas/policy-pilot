@@ -32,7 +32,7 @@ allow_basis contains msg if {
 }
 
 allow_basis contains msg if {
-    input.action in {"CREATE", "UPDATE", "CANCEL", "SUBMIT", "APPROVE", "REJECT", "SUSPEND", "REACTIVATE", "VIEW", "USE"}
+    input.action in {"CREATE", "UPDATE", "CANCEL", "SUBMIT", "APPROVE", "REJECT", "SUSPEND", "REACTIVATE", "VIEW", "USE", "RELEASE_USE"}
     is_valid_profit_center
     msg := sprintf("valid profit center LOB %v", [input.instruction.owning_lob])
 }
@@ -155,6 +155,24 @@ allow_basis contains "instruction not expired" if {
 allow_basis contains "instruction status APPROVED" if {
     input.action == "USE"
     input.instruction.status == "APPROVED"
+}
+
+# ── RELEASE_USE (OBO service) ───────────────────────────────────────────────────
+
+allow_basis contains "delegating service has INSTRUCTION_MARKER role" if {
+    input.action == "RELEASE_USE"
+    "INSTRUCTION_MARKER" in input.subject.delegated_by_roles
+}
+
+allow_basis contains "OBO user has instruction viewer access" if {
+    input.action == "RELEASE_USE"
+    has_viewer_access
+}
+
+allow_basis contains "instruction status USED and type SINGLE_USE" if {
+    input.action == "RELEASE_USE"
+    input.instruction.status == "USED"
+    input.instruction.type == "SINGLE_USE"
 }
 
 # ── VIEW ──────────────────────────────────────────────────────────────────────

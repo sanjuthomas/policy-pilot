@@ -384,6 +384,66 @@ async def test_use_single_use_marks_used(
 
     assert response.status == "USED"
     assert response.usage_count == 1
+    assert response.used_by == "pay-123"
+
+
+@pytest.mark.asyncio
+async def test_release_use_single_use_reverts_to_approved(
+    service: InstructionService,
+    mock_repo: MagicMock,
+    sample_subject: Subject,
+    sample_instruction: CashSettlementInstruction,
+) -> None:
+    used = sample_instruction.model_copy(
+        update={
+            "status": InstructionStatus.USED,
+            "used_by": "pay-123",
+            "usage_count": 1,
+        }
+    )
+    mock_repo.get_current = AsyncMock(return_value=_versioned(used))
+    _configure_repo_persist_mocks(mock_repo)
+
+    with patch("inst.service.mongo_transaction") as mock_tx:
+        mock_tx.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
+        mock_tx.return_value.__aexit__ = AsyncMock(return_value=False)
+        from inst.models.api import ReleaseUseInstructionRequest
+
+        response = await service.release_use(
+            "instr-001",
+            sample_subject,
+            ReleaseUseInstructionRequest(payment_reference="pay-123"),
+        )
+
+    assert response.status == "APPROVED"
+    assert response.used_by is None
+    assert response.usage_count == 0
+
+
+@pytest.mark.asyncio
+async def test_release_use_rejects_payment_mismatch(
+    service: InstructionService,
+    mock_repo: MagicMock,
+    sample_subject: Subject,
+    sample_instruction: CashSettlementInstruction,
+) -> None:
+    used = sample_instruction.model_copy(
+        update={
+            "status": InstructionStatus.USED,
+            "used_by": "pay-other",
+            "usage_count": 1,
+        }
+    )
+    mock_repo.get_current = AsyncMock(return_value=_versioned(used))
+
+    from inst.models.api import ReleaseUseInstructionRequest
+
+    with pytest.raises(InvalidStateTransitionError, match="used_by does not match"):
+        await service.release_use(
+            "instr-001",
+            sample_subject,
+            ReleaseUseInstructionRequest(payment_reference="pay-123"),
+        )
 
 
 @pytest.mark.asyncio

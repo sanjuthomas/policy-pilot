@@ -24,7 +24,7 @@ Rules:
   To populate actor always add:
     OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
   To populate instruction_id, lob, creator, approver always add:
-    OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+    OPTIONAL MATCH (e)-[:FOR]->(v:InstructionVersion)
     OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
     OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
 - User display_name format is "FamilyName, GivenName (user_id)" — use it when available.
@@ -36,11 +36,11 @@ Rules:
 - action values: CREATE, SUBMIT, APPROVE, REJECT, SUSPEND, REACTIVATE, USE, UPDATE, CANCEL, VIEW.
 - Relationship direction matters: (i:Instruction)-[:HAS_VERSION]->(v:InstructionVersion). \
 Never traverse HAS_VERSION from InstructionVersion to Instruction.
-- SecurityEvent links to Instruction via TARGETS, or to InstructionVersion via TARGETS_VERSION. \
+- SecurityEvent links to InstructionVersion or PaymentVersion via FOR. \
 InstructionVersion has instruction_id as a property.
 - When the question names a specific event_id UUID, match that SecurityEvent directly. \
-Prefer TARGETS_VERSION and return v.instruction_id, or TARGETS and return i.instruction_id. \
-Do not chain HAS_VERSION after TARGETS_VERSION.
+Prefer FOR and return v.instruction_id from the linked version. \
+Do not chain HAS_VERSION after FOR.
 - User nodes have a supervisor_id property (the user_id of their direct manager) and a \
 [:REPORTS_TO] relationship: (subordinate:User)-[:REPORTS_TO]->(manager:User). \
 ALWAYS use (subordinate)-[:REPORTS_TO]->(manager) — never reverse this direction. \
@@ -51,7 +51,7 @@ Never confuse "A is in B's reporting chain" (indirect) with "A directly reports 
 Example — ALERT events today (always return rows, not just a count):
 MATCH (e:SecurityEvent {severity: 'ALERT'})
 WHERE date(datetime(e.timestamp)) = date()
-OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+OPTIONAL MATCH (e)-[:FOR]->(v:InstructionVersion)
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
 OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
 OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
@@ -69,7 +69,7 @@ LIMIT 50
 Example — instructions created today:
 MATCH (e:SecurityEvent {action: 'CREATE', outcome: 'success'})
 WHERE date(datetime(e.timestamp)) = date()
-OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+OPTIONAL MATCH (e)-[:FOR]->(v:InstructionVersion)
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
 OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
 OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
@@ -86,7 +86,7 @@ LIMIT 50
 
 Example — instruction for a specific security event:
 MATCH (e:SecurityEvent {event_id: '00000000-0000-0000-0000-000000000001'})
-OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+OPTIONAL MATCH (e)-[:FOR]->(v:InstructionVersion)
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
 OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
 OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
@@ -102,7 +102,7 @@ LIMIT 1
 
 Example — who created instructions rejected by a user:
 MATCH (u:User {user_id: 'ficc-201'})-[:ACTED_AS]->(e:SecurityEvent {action: 'REJECT'})
-OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+OPTIONAL MATCH (e)-[:FOR]->(v:InstructionVersion)
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
 OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
 OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
@@ -119,7 +119,7 @@ LIMIT 20
 
 Example — self-approval attempt: user approved an instruction they created (segregation of duties violation):
 MATCH (actor:User)-[:ACTED_AS]->(e:SecurityEvent {action: 'APPROVE'})
-MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+MATCH (e)-[:FOR]->(v:InstructionVersion)
 WHERE actor.user_id = v.creator_user_id
 OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
 OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
@@ -135,7 +135,7 @@ ORDER BY e.timestamp DESC
 LIMIT 20
 
 Example — who approved a specific instruction (successful APPROVE security event):
-MATCH (e:SecurityEvent {action: 'APPROVE', outcome: 'success'})-[:TARGETS_VERSION]->(v:InstructionVersion {instruction_id: '00000000-0000-0000-0000-000000000001'})
+MATCH (e:SecurityEvent {action: 'APPROVE', outcome: 'success'})-[:FOR]->(v:InstructionVersion {instruction_id: '00000000-0000-0000-0000-000000000001'})
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
 OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
 RETURN e.event_id, e.timestamp, e.action, e.outcome, e.reason, e.authorization_summary,
@@ -147,7 +147,7 @@ LIMIT 1
 
 Example — all APPROVE events (successful and denied) to check for policy violations:
 MATCH (actor:User)-[:ACTED_AS]->(e:SecurityEvent {action: 'APPROVE'})
-OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+OPTIONAL MATCH (e)-[:FOR]->(v:InstructionVersion)
 OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
 OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
 RETURN e.event_id, e.timestamp, e.action, e.outcome, e.message,
@@ -163,7 +163,7 @@ LIMIT 50
 
 Example — subordinate approved creator's instruction (approver directly reports to the creator):
 MATCH (actor:User)-[:ACTED_AS]->(e:SecurityEvent {action: 'APPROVE'})
-MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+MATCH (e)-[:FOR]->(v:InstructionVersion)
 MATCH (actor)-[:REPORTS_TO]->(creatorUser:User {user_id: v.creator_user_id})
 OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
 RETURN e.event_id, e.timestamp, e.action, e.outcome, e.message,
@@ -178,11 +178,11 @@ ORDER BY e.timestamp DESC
 LIMIT 20
 
 Example — cross-approval conflict (users who approved each other's instructions):
-MATCH (approver:User)-[:APPROVED]->(v1:InstructionVersion)<-[:CREATED]-(creator:User)
-MATCH (creator)-[:APPROVED]->(v2:InstructionVersion)<-[:CREATED]-(approver)
+MATCH (approver:User)-[:APPROVED_IV]->(v1:InstructionVersion)<-[:CREATED_IV]-(creator:User)
+MATCH (creator)-[:APPROVED_IV]->(v2:InstructionVersion)<-[:CREATED_IV]-(approver)
 WHERE approver.user_id < creator.user_id
-OPTIONAL MATCH (e1:SecurityEvent)-[:TARGETS_VERSION]->(v1) WHERE e1.action = 'APPROVE'
-OPTIONAL MATCH (e2:SecurityEvent)-[:TARGETS_VERSION]->(v2) WHERE e2.action = 'APPROVE'
+OPTIONAL MATCH (e1:SecurityEvent)-[:FOR]->(v1) WHERE e1.action = 'APPROVE'
+OPTIONAL MATCH (e2:SecurityEvent)-[:FOR]->(v2) WHERE e2.action = 'APPROVE'
 RETURN coalesce(approver.display_name, approver.user_id) AS approver_display,
        coalesce(creator.display_name, creator.user_id) AS creator_display,
        v1.instruction_id AS instruction_approved, v1.owning_lob AS lob,
@@ -194,7 +194,7 @@ LIMIT 20
 Example — instructions sharing the same creditor account (potential duplicate routes / CONFLICTS_WITH):
 MATCH (v1:InstructionVersion)-[:CONFLICTS_WITH]->(v2:InstructionVersion)
 WHERE v1.version_key < v2.version_key
-OPTIONAL MATCH (e:SecurityEvent)-[:TARGETS_VERSION]->(v1)
+OPTIONAL MATCH (e:SecurityEvent)-[:FOR]->(v1)
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
 OPTIONAL MATCH (creatorUser:User {user_id: v1.creator_user_id})
 OPTIONAL MATCH (approverUser:User {user_id: v1.approver_user_id})
@@ -212,8 +212,7 @@ ORDER BY e.timestamp DESC
 LIMIT 20
 
 Example — full lifecycle timeline of a specific instruction (replace UUID):
-MATCH (e:SecurityEvent)-[:TARGETS]->(i:Instruction {instruction_id: '00000000-0000-0000-0000-000000000001'})
-OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+MATCH (e:SecurityEvent)-[:FOR]->(v:InstructionVersion)<-[:HAS_VERSION]-(i:Instruction {instruction_id: '00000000-0000-0000-0000-000000000001'})
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
 OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
 OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
@@ -231,7 +230,7 @@ LIMIT 50
 Example — all actions by a specific user this week:
 MATCH (u:User {user_id: 'fx-201'})-[:ACTED_AS]->(e:SecurityEvent)
 WHERE datetime(e.timestamp) > datetime() - duration({days: 7})
-OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+OPTIONAL MATCH (e)-[:FOR]->(v:InstructionVersion)
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
 OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
 OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
@@ -248,7 +247,7 @@ LIMIT 50
 
 Example — SUBMITTED instructions by LOB / profit center:
 MATCH (v:InstructionVersion {status: 'SUBMITTED'})
-OPTIONAL MATCH (e:SecurityEvent)-[:TARGETS_VERSION]->(v) WHERE e.action = 'SUBMIT'
+OPTIONAL MATCH (e:SecurityEvent)-[:FOR]->(v) WHERE e.action = 'SUBMIT'
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
 OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
 OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
@@ -266,7 +265,7 @@ LIMIT 50
 Example — expired instructions (end_date in the past):
 MATCH (v:InstructionVersion {is_expired: true})
 WHERE v.status NOT IN ['CANCELLED', 'REJECTED', 'USED']
-OPTIONAL MATCH (e:SecurityEvent)-[:TARGETS_VERSION]->(v)
+OPTIONAL MATCH (e:SecurityEvent)-[:FOR]->(v)
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
 OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
 OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
@@ -286,9 +285,9 @@ SECURITY_EVENTS_CYPHER_SYSTEM_PROMPT = """You translate natural-language questio
 for BOTH instruction lifecycle AND payment lifecycle into read-only Neo4j Cypher.
 
 The graph uses one :SecurityEvent label for both domains:
-- Instruction events (e.payment_id IS NULL): TARGETS / TARGETS_VERSION → Instruction / InstructionVersion.
+- Instruction events (e.payment_id IS NULL): FOR → InstructionVersion.
   Actions: CREATE, SUBMIT, APPROVE, REJECT, SUSPEND, REACTIVATE, USE, UPDATE, CANCEL, VIEW.
-- Payment events (e.payment_id IS NOT NULL): TARGETS_PAYMENT → Payment.
+- Payment events (e.payment_id IS NOT NULL): FOR → PaymentVersion.
   Actions: CREATE_PAYMENT, SUBMIT_PAYMENT, APPROVE_PAYMENT, REJECT_PAYMENT, CANCEL_PAYMENT.
 
 Rules:
@@ -301,14 +300,14 @@ Rules:
 - Otherwise return individual rows — not only an aggregate scalar.
 - For instruction security events, RETURN must include: e.event_id, e.timestamp, e.action, e.message,
   coalesce(v.instruction_id, i.instruction_id, '') AS instruction_id, lob, actor_display, creator_display, approver_display.
-  Use OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v), OPTIONAL MATCH (e)-[:TARGETS]->(i:Instruction),
+  Use OPTIONAL MATCH (e)-[:FOR]->(v), OPTIONAL MATCH (i:Instruction {instruction_id: v.instruction_id}),
   OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e), and creator/approver users from v.
 - For payment security events, RETURN must include: e.event_id, e.timestamp, e.action, e.message, e.severity,
   e.payment_id AS payment_id, coalesce(p.instruction_id, '') AS instruction_id,
   coalesce(p.amount, 0) AS amount, coalesce(p.currency, '') AS currency,
   coalesce(p.owning_lob, e.owning_lob, '') AS owning_lob,
   coalesce(actor.display_name, actor.user_id, '') AS actor_display.
-  Use OPTIONAL MATCH (e)-[:TARGETS_PAYMENT]->(p:Payment) and OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e).
+  Use OPTIONAL MATCH (e)-[:FOR]->(pv:PaymentVersion) and OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e).
 - severity ALERT means policy denial. "Today" means date(datetime(e.timestamp)) = date().
   "This week" / "past 7 days" means date(datetime(e.timestamp)) >= date() - duration('P7D').
   Never write date() - 7 — that is invalid Cypher.
@@ -322,7 +321,7 @@ Rules:
 Example — instruction ALERT events today:
 MATCH (e:SecurityEvent {severity: 'ALERT'})
 WHERE e.payment_id IS NULL AND date(datetime(e.timestamp)) = date()
-OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+OPTIONAL MATCH (e)-[:FOR]->(v:InstructionVersion)
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
 OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
 OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
@@ -340,7 +339,7 @@ MATCH (e:SecurityEvent)
 WHERE e.payment_id IS NOT NULL AND e.severity = 'ALERT'
   AND date(datetime(e.timestamp)) = date()
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
-OPTIONAL MATCH (e)-[:TARGETS_PAYMENT]->(p:Payment)
+OPTIONAL MATCH (e)-[:FOR]->(pv:PaymentVersion)
 RETURN e.event_id, e.timestamp, e.action, e.message, e.severity,
        e.payment_id AS payment_id,
        coalesce(p.instruction_id, '') AS instruction_id,
@@ -419,8 +418,8 @@ RETURN v1.instruction_id AS instruction_1, v1.creditor_account, v1.currency,
 LIMIT 50
 
 Example — mutual approval (A approved B's instruction AND B approved A's instruction):
-MATCH (a:User)-[:APPROVED]->(va:InstructionVersion)<-[:CREATED]-(b:User)
-MATCH (b)-[:APPROVED]->(vb:InstructionVersion)<-[:CREATED]-(a)
+MATCH (a:User)-[:APPROVED_IV]->(va:InstructionVersion)<-[:CREATED_IV]-(b:User)
+MATCH (b)-[:APPROVED_IV]->(vb:InstructionVersion)<-[:CREATED_IV]-(a)
 WHERE a.user_id < b.user_id
 RETURN a.display_name AS user_a, b.display_name AS user_b,
        va.instruction_id AS instruction_approved_by_a,
@@ -499,10 +498,10 @@ The Payment graph:
     owning_lob, instruction_type (STANDING|SINGLE_USE),
     creator_user_id, approver_user_id, rejector_user_id, created_at, updated_at.
 - (:Instruction)-[:HAS_PAYMENT]->(:Payment)
-- (:User)-[:CREATED_PAYMENT]->(:Payment)
-- (:User)-[:APPROVED_PAYMENT]->(:Payment)
+- (:User)-[:CREATED_PV]->(:Payment)
+- (:User)-[:APPROVED_PV]->(:Payment)
 - (:User)-[:REJECTED_PAYMENT]->(:Payment)
-- (:SecurityEvent)-[:TARGETS_PAYMENT]->(:Payment)   action values: CREATE_PAYMENT, APPROVE_PAYMENT, REJECT_PAYMENT
+- (:SecurityEvent)-[:FOR]->(:PaymentVersion)   action values: CREATE_PAYMENT, APPROVE_PAYMENT, REJECT_PAYMENT
 - (:User)-[:ACTS_AS]->(:SecurityEvent)
 - (:User)-[:REPORTS_TO]->(:User)   — (subordinate)-[:REPORTS_TO]->(manager); never reverse.
 - User.supervisor_id is the user_id of the direct manager.
@@ -524,15 +523,15 @@ Rules:
     coalesce(creator.display_name, creator.user_id, p.creator_user_id, '') AS creator_display
     coalesce(approver.display_name, approver.user_id, p.approver_user_id, '') AS approver_display
   Always add:
-    OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
-    OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+    OPTIONAL MATCH (creator:User)-[:CREATED_PV]->(p)
+    OPTIONAL MATCH (approver:User)-[:APPROVED_PV]->(p)
 - "Today" on lifecycle timestamps means date(datetime(p.created_at)) = date().
 - "This week" on lifecycle timestamps means datetime(p.created_at) > datetime() - duration({days: 7}).
 - "Today's value date" / "value date today" means settlement date, NOT when the payment was created:
   WHERE p.value_date STARTS WITH toString(date())
   Never use {value_date: date()} or compare value_date to date() — value_date is a string.
 - For amount aggregations (total value approved by a user today/this week):
-  MATCH (u:User)-[:APPROVED_PAYMENT]->(p:Payment {status: 'APPROVED'})
+  MATCH (u:User)-[:APPROVED_PV]->(p:Payment {status: 'APPROVED'})
   WHERE u.display_name CONTAINS 'John' AND date(datetime(p.created_at)) = date()
   RETURN p.payment_id, p.amount, p.currency, p.value_date, p.owning_lob,
          coalesce(u.display_name, u.user_id, '') AS approver_display, sum(p.amount) AS total_amount
@@ -540,8 +539,8 @@ Rules:
 
 Example — all payments for a specific instruction:
 MATCH (p:Payment {instruction_id: '00000000-0000-0000-0000-000000000001'})
-OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
-OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+OPTIONAL MATCH (creator:User)-[:CREATED_PV]->(p)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PV]->(p)
 RETURN p.payment_id, p.instruction_id, p.status, p.amount, p.currency,
        p.value_date, p.owning_lob,
        coalesce(creator.display_name, creator.user_id, p.creator_user_id, '') AS creator_display,
@@ -553,7 +552,7 @@ Example — who approved payment with a specific payment_id (use the APPROVE_PAY
 MATCH (e:SecurityEvent {payment_id: '00000000-0000-0000-0000-000000000002', action: 'APPROVE_PAYMENT', outcome: 'success'})
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
 OPTIONAL MATCH (p:Payment {payment_id: e.payment_id})
-OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
+OPTIONAL MATCH (creator:User)-[:CREATED_PV]->(p)
 RETURN e.event_id, e.timestamp, e.action, e.outcome, e.reason, e.authorization_summary,
        e.payment_id AS payment_id,
        coalesce(p.instruction_id, '') AS instruction_id,
@@ -567,8 +566,8 @@ LIMIT 1
 
 Example — who approved payment with a specific payment_id (payment state fallback only):
 MATCH (p:Payment {payment_id: '00000000-0000-0000-0000-000000000002'})
-OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
-OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+OPTIONAL MATCH (creator:User)-[:CREATED_PV]->(p)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PV]->(p)
 RETURN p.payment_id, p.instruction_id, p.status, p.amount, p.currency,
        p.value_date, p.owning_lob,
        coalesce(creator.display_name, creator.user_id, p.creator_user_id, '') AS creator_display,
@@ -576,9 +575,9 @@ RETURN p.payment_id, p.instruction_id, p.status, p.amount, p.currency,
 LIMIT 1
 
 Example — total value approved by a user this week (show rows + sum):
-MATCH (u:User)-[:APPROVED_PAYMENT]->(p:Payment {status: 'APPROVED'})
+MATCH (u:User)-[:APPROVED_PV]->(p:Payment {status: 'APPROVED'})
 WHERE u.display_name CONTAINS 'Hassan' AND datetime(p.created_at) > datetime() - duration({days: 7})
-OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
+OPTIONAL MATCH (creator:User)-[:CREATED_PV]->(p)
 RETURN p.payment_id, p.instruction_id, p.status, p.amount, p.currency,
        p.value_date, p.owning_lob,
        coalesce(creator.display_name, creator.user_id, p.creator_user_id, '') AS creator_display,
@@ -590,8 +589,8 @@ LIMIT 50
 Example — APPROVED payments today across all LOBs:
 MATCH (p:Payment {status: 'APPROVED'})
 WHERE date(datetime(p.created_at)) = date()
-OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
-OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+OPTIONAL MATCH (creator:User)-[:CREATED_PV]->(p)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PV]->(p)
 RETURN p.payment_id, p.instruction_id, p.status, p.amount, p.currency,
        p.value_date, p.owning_lob,
        coalesce(creator.display_name, creator.user_id, p.creator_user_id, '') AS creator_display,
@@ -602,8 +601,8 @@ LIMIT 50
 Example — how many payments with today's value date (settlement date string match):
 MATCH (p:Payment)
 WHERE p.value_date STARTS WITH toString(date())
-OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
-OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+OPTIONAL MATCH (creator:User)-[:CREATED_PV]->(p)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PV]->(p)
 RETURN p.payment_id, p.instruction_id, p.status, p.amount, p.currency,
        p.value_date, p.owning_lob,
        coalesce(creator.display_name, creator.user_id, p.creator_user_id, '') AS creator_display,
@@ -617,8 +616,8 @@ WHERE e.payment_id IS NOT NULL AND e.severity = 'ALERT'
   AND date(datetime(e.timestamp)) = date()
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
 OPTIONAL MATCH (p:Payment {payment_id: e.payment_id})
-OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
-OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+OPTIONAL MATCH (creator:User)-[:CREATED_PV]->(p)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PV]->(p)
 RETURN e.event_id, e.timestamp, e.action, e.message, e.severity,
        e.payment_id AS payment_id,
        coalesce(p.instruction_id, '') AS instruction_id,
@@ -632,8 +631,8 @@ ORDER BY e.timestamp DESC
 LIMIT 50
 
 Example — self-approval fraud: payment creator also approved it:
-MATCH (creator:User)-[:CREATED_PAYMENT]->(p:Payment {status: 'APPROVED'})
-MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+MATCH (creator:User)-[:CREATED_PV]->(p:Payment {status: 'APPROVED'})
+MATCH (approver:User)-[:APPROVED_PV]->(p)
 WHERE creator.user_id = approver.user_id
 RETURN p.payment_id, p.instruction_id, p.status, p.amount, p.currency,
        p.value_date, p.owning_lob,
@@ -643,8 +642,8 @@ ORDER BY p.created_at DESC
 LIMIT 50
 
 Example — payments where approver directly reports to the creator (inversion of control):
-MATCH (creator:User)-[:CREATED_PAYMENT]->(p:Payment)
-MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+MATCH (creator:User)-[:CREATED_PV]->(p:Payment)
+MATCH (approver:User)-[:APPROVED_PV]->(p)
 MATCH (approver)-[:REPORTS_TO]->(creator)
 RETURN p.payment_id, p.instruction_id, p.status, p.amount, p.currency,
        p.value_date, p.owning_lob,
@@ -656,8 +655,8 @@ LIMIT 50
 Example — largest payments this week by LOB:
 MATCH (p:Payment {status: 'APPROVED'})
 WHERE datetime(p.created_at) > datetime() - duration({days: 7})
-OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
-OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+OPTIONAL MATCH (creator:User)-[:CREATED_PV]->(p)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PV]->(p)
 RETURN p.payment_id, p.instruction_id, p.status, p.amount, p.currency,
        p.value_date, p.owning_lob,
        coalesce(creator.display_name, creator.user_id, p.creator_user_id, '') AS creator_display,
@@ -668,8 +667,8 @@ LIMIT 50
 Example — payments exceeding 1 billion USD (potential amount-limit violation):
 MATCH (p:Payment)
 WHERE p.amount > 1000000000
-OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
-OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+OPTIONAL MATCH (creator:User)-[:CREATED_PV]->(p)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PV]->(p)
 RETURN p.payment_id, p.instruction_id, p.status, p.amount, p.currency,
        p.value_date, p.owning_lob,
        coalesce(creator.display_name, creator.user_id, p.creator_user_id, '') AS creator_display,

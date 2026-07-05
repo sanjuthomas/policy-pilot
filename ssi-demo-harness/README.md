@@ -2,7 +2,29 @@
 
 Web UI and CLI helpers for driving **instruction** and **payment** lifecycles with **ZITADEL OIDC** authentication.
 
-Use it to generate realistic traffic that flows **MongoDB → Kafka Connect → Kafka → ssi-indexer → Neo4j**, including OPA policy demo scenarios that verify `ALERT` and `INFO` security event counts.
+Use it to generate realistic traffic that flows **MongoDB → Kafka Connect → Kafka → ssi-indexer → Neo4j**, including OPA policy demo scenarios that produce `ALERT` and `INFO` security events (indexed in Neo4j via `FOR` audit links).
+
+After seeding, allow the indexer to catch up before querying ALERT counts in PolicyPilot. A full seed targets dozens of instruction and payment ALERTs; partial seeds or instruction-service list timeouts may yield fewer events — re-run `./ssi-demo-harness/seed-demo-data.sh --seed-only` when the stack is idle if counts look low.
+
+### Verify ALERT counts
+
+```bash
+# Mongo (source of truth for security events)
+docker exec mongodb mongosh security_events --quiet --eval '
+printjson({
+  instruction_ALERT: db.instruction_service.countDocuments({severity:"ALERT"}),
+  payment_ALERT: db.payment_service.countDocuments({severity:"ALERT"}),
+});
+'
+
+# Neo4j (after indexer catch-up)
+docker exec neo4j cypher-shell -u neo4j -p devpassword \
+  "MATCH (e:SecurityEvent {severity:'ALERT'}) RETURN count(e) AS total"
+```
+
+### Known issue: instruction list timeout
+
+Harness actions and `seed_extra_alerts` call `GET /api/v1/instructions?limit=500`. Instruction-service runs a **VIEW** authorization check per row (~1 s each), so large lists can exceed the harness 30 s httpx timeout. Use `--seed-only` when the stack is idle, or run harness actions in smaller batches from the UI.
 
 ## URL
 

@@ -131,6 +131,10 @@ class UseInstructionRequest(BaseModel):
     end_to_end_identification: str | None = Field(default=None, max_length=35)
 
 
+class ReleaseUseInstructionRequest(BaseModel):
+    payment_reference: str = Field(min_length=1, max_length=128)
+
+
 UpdateInstructionRequest = CreateInstructionRequest
 
 
@@ -185,6 +189,7 @@ class InstructionResponse(BaseModel):
     suspended_at: str | None = None
     last_used_at: str | None = None
     usage_count: int
+    used_by: str | None = None
 
 
 class EligibleApproverResponse(BaseModel):

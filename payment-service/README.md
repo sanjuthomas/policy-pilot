@@ -65,6 +65,12 @@ At create time the service validates the linked instruction is `APPROVED` and no
 
 Terminal states (`APPROVED`, `REJECTED`, `CANCELLED`) block further mutations.
 
+## SINGLE_USE instructions
+
+When the linked instruction is `SINGLE_USE`, **submit payment** runs a saga: payment moves to `SUBMITTED`, instruction moves to `USED` with `used_by` set, and OPA evaluates both sides. Reject, cancel, or system-cancel on approve triggers instruction `RELEASE_USE`, reverting the instruction and releasing consumption.
+
+In Neo4j, submit creates `USED_IV`, `CONSUMED`, and `CONSUMED_BY`; release deletes consumption edges. See [neo4j-graph-model/PHASE-0.md](../neo4j-graph-model/PHASE-0.md).
+
 ## Storage (append-only versions)
 
 Payments use the same **versioned append-only** pattern as instruction-service.
@@ -73,7 +79,7 @@ Payments use the same **versioned append-only** pattern as instruction-service.
 |---------|-------|
 | Document `_id` | `{payment_id}\|{version_number}` |
 | Current row marker | `out` = `9999-12-31T23:59:59Z` (`PAYMENT_CURRENT_OUT`) |
-| Payment IDs | Allocated by **sequence-service** (`next_payment_id`) |
+| Payment IDs | Allocated by **[sequence-service](../sequence-service/README.md)** (`next_payment_id`) |
 | Concurrency | Optimistic locking on append — concurrent writes return HTTP 409 |
 
 | Store | Location |
@@ -107,7 +113,16 @@ Authorized actions store `details.authorization` (`allow_basis`, `summary`, subj
 
 Optional `SECURITY_EVENT_EXCLUDED_USER_IDS` (comma-separated) suppresses **all** security events for listed user ids (empty by default).
 
-Downstream indexing is **Mongo → Kafka Connect → Kafka → ssi-indexer**; this service does not publish to Kafka.
+Downstream indexing is **Mongo → Kafka Connect → Kafka → ssi-indexer**, which writes payment graph edges (`CREATED_PV`, `APPROVED_PV`, `FOR` on security events). This service does not publish to Kafka.
+
+## Downstream Neo4j graph
+
+| Mongo stream | Kafka topic | Graph writer | Key edges |
+|--------------|-------------|--------------|-----------|
+| `ssi_cash_activities.payments` | `payments` | `PaymentFactPipeline` | `CURRENT`, `_*PV`, `HAS_PAYMENT`, `FOR_INSTRUCTION`, `CONSUMED` |
+| `security_events.payment_service` | `payment_security_events` | `PaymentSecurityEventPipeline` | `ACTED_AS`, `FOR` → `PaymentVersion` |
+
+SINGLE_USE submit/reject flows produce instruction `USED_IV` / `RELEASED_IV` via instruction-service facts. See [neo4j-graph-model/PHASE-0.md](../neo4j-graph-model/PHASE-0.md).
 
 ## Example: create payment
 
@@ -136,7 +151,7 @@ pip install -e .
 payment-service   # :8093
 ```
 
-Requires MongoDB (replica set), **authorization-service**, **instruction-service** (instruction reads), **sequence-service**, and ZITADEL — see root `docker-compose.yml`.
+Requires MongoDB (replica set), **[authorization-service](../authorization-service/README.md)**, **[instruction-service](../instruction-service/README.md)** (instruction reads), **[sequence-service](../sequence-service/README.md)**, and ZITADEL — see root `docker-compose.yml`.
 
 | Variable | Default |
 |----------|---------|

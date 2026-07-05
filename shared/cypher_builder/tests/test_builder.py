@@ -111,7 +111,7 @@ def test_plan_graph_queries_alert_list() -> None:
     assert planned[0][0] == "security_event_alert_list"
     assert "severity: 'ALERT'" in planned[0][1]
     assert "entity_type" in planned[0][1]
-    assert "TARGETS]->(i:Instruction)" in planned[0][1]
+    assert "[:FOR]->(v:InstructionVersion)" in planned[0][1]
     assert "actor_display" in planned[0][1]
 
 
@@ -127,8 +127,8 @@ def test_payment_detail_query_includes_creator_and_approver() -> None:
     assert planned[0][0] == "payment_detail"
     query = planned[0][1]
     assert "payment_id: '20260704-FICC-P-1'" in query
-    assert "CREATED_PAYMENT" in query
-    assert "APPROVED_PAYMENT" in query
+    assert "CREATED_PV" in query
+    assert "APPROVED_PV" in query
     assert "creator_display" in query
 
 

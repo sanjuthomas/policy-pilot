@@ -7,6 +7,7 @@ from inst.models.api import (
     InstructionEligibleApproversResponse,
     InstructionResponse,
     RejectInstructionRequest,
+    ReleaseUseInstructionRequest,
     Subject,
     UpdateInstructionRequest,
     UseInstructionRequest,
@@ -269,6 +270,25 @@ async def use_instruction(
 ) -> InstructionResponse:
     return await _lifecycle_action(
         service.use,
+        instruction_id,
+        subject,
+        request,
+        bearer_token=_bearer_token(authorization),
+        session_id=x_session_id,
+    )
+
+
+@router.post("/{instruction_id}/release-use", response_model=InstructionResponse)
+async def release_use_instruction(
+    instruction_id: str,
+    request: ReleaseUseInstructionRequest,
+    subject: Subject = Depends(get_subject),
+    service: InstructionService = Depends(get_service),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+) -> InstructionResponse:
+    return await _lifecycle_action(
+        service.release_use,
         instruction_id,
         subject,
         request,

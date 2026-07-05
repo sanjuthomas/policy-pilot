@@ -20,7 +20,9 @@ Domain services (instruction-service, payment-service) call authz for lifecycle 
 | **payment-service** | `POST …/payments/evaluate`, `POST …/payments/eligible-approvers` | `svc-payment` bearer token; user JWT in `X-On-Behalf-Of` for lifecycle evaluate |
 | **Platform admin** | `/ui/*`, `/api/ui/users` | `admin-001` (ZITADEL JWT) |
 
-**Not callers:** ssi-chat (uses domain eligible-approvers APIs), ssi-indexer (Kafka consumer only), demo harness, Kafka Connect.
+**Not callers:** ssi-chat (uses domain eligible-approvers APIs), ssi-indexer (Kafka consumer only; projects graph from streamed events), demo harness, Kafka Connect, sequence-service.
+
+Policy denials evaluated here surface as `ALERT` security events in Mongo and, after Kafka Connect + ssi-indexer, as `SecurityEvent` nodes linked via `FOR` → version in Neo4j. See [neo4j-graph-model/PHASE-0.md](../neo4j-graph-model/PHASE-0.md).
 
 ## Service API (programmatic)
 

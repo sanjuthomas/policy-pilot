@@ -19,6 +19,8 @@ listed under `includes` (and shared `profiles`) feed the embedding string.
 Paths use dot notation from the profile's `context_root` document (usually `merged`
 for instruction security events, or the normalized Kafka fact/event dict for others).
 
+Indexed graph edges (`CREATED_IV`, `APPROVED_IV`, `FOR`, …) are separate from `search_text` — see [neo4j-graph-model/PHASE-0.md](../../neo4j-graph-model/PHASE-0.md). ETL maps Mongo actions to edges in `ssi-indexer/src/etl/graph_model.py`.
+
 ## Versioned Mongo `_id` conventions
 
 Kafka Connect publishes full Mongo documents. The ETL normalizes them in

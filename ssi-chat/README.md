@@ -6,9 +6,9 @@ who need a truthful, cross-system view of cash SSI and cash payment activity wit
 tickets across half the bank.
 
 Modeled after
-[sec-edgar-filings-chat](https://github.com/sanjuthomas/sec-edgar-filings-chat), retrieval always runs **vector + BM25 + Neo4j** with **query-adaptive routing** (planned Cypher, exact lookups, live eligibility, or full synthesis) — no store picker in the UI.
+[sec-edgar-filings-chat](https://github.com/sanjuthomas/sec-edgar-filings-chat). Each question runs **Route → Retrieve → Synthesize**: Gemini returns a `RouterDecision` (eligibility, graph, vector, or hybrid), then only the required backends run — no store picker in the UI.
 
-See the root [README.md](../README.md#why-this-exists) for the problem narrative and stakeholder context.
+See the root [README.md](../README.md#why-this-exists) for the problem narrative. Full pipeline detail: [docs/intent-determination.md](../docs/intent-determination.md).
 
 ## URL
 
@@ -18,12 +18,13 @@ http://localhost:8092
 
 | Role | Provider | Model |
 |------|----------|-------|
+| Semantic routing | **Vertex AI** | `gemini-2.5-flash` → `RouterDecision` JSON |
 | Query embedding (vector search) | **Vertex AI** | `text-embedding-004` (768-dim) |
 | Answer synthesis | **Vertex AI** | `gemini-2.5-flash` |
 | Authorization WHY rewrite | **Vertex AI** | `gemini-2.5-flash` |
 | Graph plan extraction (fallback) | **Vertex AI** | `gemini-2.5-flash` → `cypher_builder` |
 
-Planned Cypher for counts, rankings, hierarchy, and known audit shapes comes from **`shared/cypher_builder`** with no LLM call.
+Planned Cypher for counts, rankings, hierarchy, and known audit shapes comes from **[`shared/cypher_builder`](../shared/cypher_builder/README.md)** with no LLM call. Graph queries use `CREATED_IV`, `APPROVED_IV`, `CREATED_PV`, `FOR`, … — see [neo4j-graph-model/PHASE-0.md](../neo4j-graph-model/PHASE-0.md).
 
 `PolicyPilotMlClient` (`ml_client.py`) orchestrates Vertex embeddings and Gemini generation; retrieval and context assembly run locally.
 
@@ -42,31 +43,14 @@ Pass `"mode"` in the API request body (default `"events"`).
 
 ## RAG pipeline
 
-```mermaid
-flowchart LR
-    Q[User question] --> P{Planned Cypher?}
-    P -->|count / ranking / hierarchy| N[Neo4j deterministic query]
-    P -->|else| V[Vector / Neo4j multimodal]
-    Q --> B[BM25 / Neo4j fulltext]
-    Q --> G[Gemini graph plan → Cypher]
-    G --> N
-    V --> VE[Vertex embed query]
-    VE --> V
-    V --> R[RRF merge + dedupe]
-    B --> R
-    N --> R
-    R --> A{Approval audit?}
-    A -->|yes| W[Who/When deterministic + Gemini WHY]
-    A -->|no| S[Vertex Gemini full answer]
-```
+See **[Intent Determination in Policy Pilot](../docs/intent-determination.md)** for the full flow, strategy table, and code map.
 
-1. **Planned Cypher** — count, ranking, hierarchy, and instruction approval-by-ID questions bypass LLM graph extraction (`cypher_builder`; Neo4j is authoritative)
-2. **Exact lookup** — UUID in question triggers multimodal fetch by ID; Instructions mode also fetches APPROVE security events for approval questions
-3. **Vector** — Vertex `text-embedding-004` embed → Neo4j vector index search (mode-filtered)
-4. **BM25** — Neo4j fulltext lexical search (mode-filtered)
-5. **Neo4j graph fallback** — Gemini extracts a structured graph query plan; `cypher_builder` turns it into validated read-only Cypher
-6. **Merge** — reciprocal rank fusion (k=60), dedupe by `event_id` / `instruction_id`
-7. **Answer** — Vertex Gemini synthesis over merged context, **or** structured Who/When/Why for instruction and payment approval audit questions
+Summary:
+
+1. **Route** — Gemini structured `RouterDecision` (eligibility / graph / vector / hybrid)
+2. **Fast paths** — live OPA eligibility API; Neo4j direct YAML intents (planned Cypher + formatters)
+3. **Selective retrieve** — graph only, vector+BM25 only, or hybrid (RRF when both run)
+4. **Synthesize** — deterministic formatters, Who/When/Why audit, or Gemini over context
 
 ## Who / When / Why (approval audit)
 
@@ -162,6 +146,8 @@ Copy `.env.example` to `.env` at the repo root to override defaults. Docker Comp
 | `OIDC_ISSUER_URL` | `http://localhost:8080` |
 
 Requires Neo4j multimodal documents populated by **ssi-indexer** and **GCP Vertex AI** credentials.
+
+For a populated graph with ALERT demo data, run `./ssi-demo-harness/seed-demo-data.sh` from the repo root (see [ssi-demo-harness/README.md](../ssi-demo-harness/README.md)).
 
 ## Run locally
 

@@ -11,7 +11,9 @@ from ps.service import (
     _validate_instruction_at_create,
     _validate_instruction_approved_for_submit,
     _validate_instruction_for_draft_payment,
+    _validate_single_use_submit_exclusivity,
 )
+from ps.storage import VersionedPayment
 
 
 def test_approved_statuses_constant() -> None:
@@ -107,6 +109,45 @@ def test_validate_instruction_approved_for_submit_rejects_draft(
     standing_instruction["status"] = "DRAFT"
     with pytest.raises(ValueError, match="must be APPROVED"):
         _validate_instruction_approved_for_submit(standing_instruction)
+
+
+def test_validate_single_use_submit_exclusivity_allows_one_draft(
+    payment: Payment,
+) -> None:
+    payment.instruction_type = "SINGLE_USE"
+    records = [_versioned(payment)]
+    _validate_single_use_submit_exclusivity(payment, records)
+
+
+def test_validate_single_use_submit_exclusivity_rejects_multiple_drafts(
+    payment: Payment,
+    subject,
+) -> None:
+    payment.instruction_type = "SINGLE_USE"
+    other = Payment.create(
+        payment_id="20260701-CORP-P-2",
+        instruction_id=payment.instruction_id,
+        instruction_version=1,
+        amount=500_000.0,
+        currency="USD",
+        value_date="2026-07-01",
+        owning_lob="CORP",
+        instruction_type="SINGLE_USE",
+        subject=subject,
+        event_id="evt-create-002",
+    )
+    records = [_versioned(payment), _versioned(other)]
+    with pytest.raises(ValueError, match="SINGLE_USE"):
+        _validate_single_use_submit_exclusivity(payment, records)
+
+
+def _versioned(payment: Payment) -> VersionedPayment:
+    return VersionedPayment(
+        payment=payment,
+        version_number=1,
+        valid_in=payment.created_at.replace(tzinfo=None),
+        valid_out=None,
+    )
 
 
 def test_validate_instruction_for_draft_payment_rejects_used(

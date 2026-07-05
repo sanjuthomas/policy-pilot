@@ -198,6 +198,26 @@ allow if {
 }
 
 #
+# RELEASE_USE — revert a SINGLE_USE instruction from USED back to APPROVED
+#
+# Reserved for authorised service accounts (payment cancel/reject saga).
+# The instruction must still be USED and used_by must match the releasing payment.
+#
+
+allow if {
+    input.action == "RELEASE_USE"
+
+    "INSTRUCTION_MARKER" in input.subject.delegated_by_roles
+
+    has_viewer_access
+
+    is_valid_profit_center
+
+    input.instruction.status == "USED"
+    input.instruction.type == "SINGLE_USE"
+}
+
+#
 # VIEW — any holder of INSTRUCTION_VIEWER, INSTRUCTION_CREATOR,
 #         INSTRUCTION_APPROVER, or PAYMENT_CREATOR
 #

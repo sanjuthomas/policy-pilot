@@ -89,8 +89,11 @@
 //   Version-aware: only advances forward — never overwritten by older events.
 //
 // (:InstructionVersion)-[:SUPERSEDES]->(:InstructionVersion)
+// (:PaymentVersion)-[:SUPERSEDES]->(:PaymentVersion)
 //   Newer version (N) links to previous version (N-1) when both exist.
-//   [planned — not yet written by ETL]
+//   Enables ordered history traversal and adjacent-version diff (what changed).
+//   Target writer: InstructionPipeline, PaymentFactPipeline (state/fact only).
+//   Alpha: InstructionSecurityEventPipeline writes InstructionVersion SUPERSEDES only.
 //
 // ── Instruction ownership ────────────────────────────────────────────────────
 //
@@ -116,15 +119,9 @@
 // (:User)-[:REJECTED]->(:InstructionVersion)
 //   From instruction.rejected_by when present.
 //
-// (:User)-[:MUTATED {action, timestamp}]->(:InstructionVersion)
-//   The actor who triggered the specific mutation (create / submit / approve /
-//   reject / etc.). Carries action and timestamp as relationship properties.
-//   Written by: InstructionPipeline
-//
-// (:User)-[:APPROVED_FOR]->(:Instruction)
-//   Cross-instruction: user has approved at least one version of this instruction.
-//   Enables "who has approved for this instruction root?" queries.
-//   Written by: InstructionPipeline
+// Lifecycle timelines use named edges (CREATED, SUBMITTED, APPROVED, …) plus
+// version properties (action, timestamp, actor ids on the version node).
+// There is no generic MUTATED edge.
 //
 // ── Cross-instruction analytics ─────────────────────────────────────────────
 //

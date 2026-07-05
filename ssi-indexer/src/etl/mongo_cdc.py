@@ -93,6 +93,7 @@ def versioned_instruction_to_fact(document: dict[str, Any]) -> dict[str, Any] | 
         "status": document.get("status") or payload.get("status"),
         "owning_lob": document.get("owning_lob") or payload.get("owning_lob"),
         "wire_scope": document.get("wire_scope") or payload.get("wire_scope"),
+        "used_by": payload.get("used_by"),
     }
     actor_fields = _actor_fields_from_snapshot(snapshot)
 
@@ -101,6 +102,8 @@ def versioned_instruction_to_fact(document: dict[str, Any]) -> dict[str, Any] | 
         "version_number": document.get("version_number"),
         "action": _action_from_snapshot(snapshot),
         "timestamp": document.get("in"),
+        "valid_in": document.get("in"),
+        "valid_out": document.get("out"),
         **actor_fields,
         "instruction_snapshot": snapshot,
         "authorization": None,
@@ -115,9 +118,19 @@ def versioned_payment_to_fact(document: dict[str, Any]) -> dict[str, Any] | None
 
     payment_id = _entity_id_from_version_key(document_id)
     payload = dict(document.get("payload") or {})
+    snapshot = {
+        **payload,
+        "payment_id": payment_id,
+        "status": document.get("status") or payload.get("status"),
+        "owning_lob": document.get("owning_lob") or payload.get("owning_lob"),
+        "instruction_id": document.get("instruction_id") or payload.get("instruction_id"),
+    }
+    action = _action_from_snapshot(snapshot)
     fact = {
         **payload,
         "payment_id": payment_id,
+        "action": action,
+        **_payment_actor_fields(snapshot, action),
     }
     if document.get("version_number") is not None:
         fact["version_number"] = document["version_number"]
@@ -129,7 +142,35 @@ def versioned_payment_to_fact(document: dict[str, Any]) -> dict[str, Any] | None
         fact["instruction_id"] = document["instruction_id"]
     if document.get("in"):
         fact["timestamp"] = document["in"]
+        fact["valid_in"] = document["in"]
+    if document.get("out"):
+        fact["valid_out"] = document["out"]
     return fact
+
+
+def _payment_actor_fields(snapshot: dict[str, Any], action: str) -> dict[str, Any]:
+    """Map payment lifecycle action to the acting user ref on the snapshot."""
+    action_to_field = {
+        "CREATE_PAYMENT": "created_by",
+        "SUBMIT_PAYMENT": "submitted_by",
+        "APPROVE_PAYMENT": "approved_by",
+        "REJECT_PAYMENT": "rejected_by",
+        "CANCEL_PAYMENT": "cancelled_by",
+    }
+    field = action_to_field.get(action)
+    if field:
+        user = snapshot.get(field)
+        if isinstance(user, dict) and user.get("user_id"):
+            return {
+                "actor_user_id": user["user_id"],
+                "actor_given_name": user.get("given_name"),
+                "actor_family_name": user.get("family_name"),
+                "actor_title": user.get("title", ""),
+                "actor_lob": user.get("lob"),
+                "actor_roles": user.get("roles") or [],
+                "actor_supervisor_id": user.get("supervisor_id"),
+            }
+    return _actor_fields_from_snapshot(snapshot)
 
 
 def normalize_instruction_message(payload: dict[str, Any]) -> dict[str, Any] | None:

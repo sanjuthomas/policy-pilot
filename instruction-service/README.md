@@ -112,7 +112,7 @@ Instructions are stored as **versioned rows** in MongoDB. Each mutation closes t
 |---------|-------|
 | Document `_id` | `{instruction_id}\|{version_number}` |
 | Current row marker | `out` = `9999-12-31T23:59:59Z` (`INSTRUCTION_CURRENT_OUT`) |
-| Instruction IDs | Allocated by **sequence-service** (`next_instruction_id`) |
+| Instruction IDs | Allocated by **[sequence-service](../sequence-service/README.md)** (`next_instruction_id`) |
 | Concurrency | Optimistic locking on append — concurrent writes return HTTP 409 |
 
 | Store | Location |
@@ -164,7 +164,16 @@ On successful actions, `event.reason` is set to `authorization.summary`.
 
 Optional `SECURITY_EVENT_EXCLUDED_USER_IDS` (comma-separated) suppresses **all** security events for listed user ids (empty by default).
 
-The instruction browser UI (`GET /api/ui/instructions`) reads Mongo directly and does not record VIEW events. Downstream indexing is **Mongo → Kafka Connect → Kafka → ssi-indexer**; this service does not publish to Kafka.
+The instruction browser UI (`GET /api/ui/instructions`) reads Mongo directly and does not record VIEW events. Downstream indexing is **Mongo → Kafka Connect → Kafka → ssi-indexer**, which writes graph edges (`CREATED_IV`, `APPROVED_IV`, … on fact rows; `FOR` on security events). This service does not publish to Kafka.
+
+## Downstream Neo4j graph
+
+| Mongo stream | Kafka topic | Graph writer | Key edges |
+|--------------|-------------|--------------|-----------|
+| `ssi_cash_instructions.instructions` | `instructions` | `InstructionPipeline` | `CURRENT`, `_*IV`, `SUPERSEDES`, `CONFLICTS_WITH` |
+| `security_events.instruction_service` | `instruction_security_events` | `InstructionSecurityEventPipeline` | `ACTED_AS`, `FOR` → `InstructionVersion` |
+
+SINGLE_USE payment submit (via payment-service) produces instruction `USE` / `RELEASE_USE` facts indexed as `USED_IV` / `RELEASED_IV` with optional `CONSUMED` edges. See [neo4j-graph-model/PHASE-0.md](../neo4j-graph-model/PHASE-0.md).
 
 ## Example: create instruction
 
@@ -225,7 +234,7 @@ pip install -e .
 uvicorn inst.main:app --reload --port 8000
 ```
 
-Requires MongoDB (replica set), **authorization-service**, **sequence-service**, and (for JWT mode) ZITADEL — see root `docker-compose.yml`.
+Requires MongoDB (replica set), **[authorization-service](../authorization-service/README.md)**, **[sequence-service](../sequence-service/README.md)**, and (for JWT mode) ZITADEL — see root `docker-compose.yml`.
 
 | Variable | Default |
 |----------|---------|

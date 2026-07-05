@@ -23,7 +23,9 @@ All connectors set:
 instruction rows use composite `_id` (`{instruction_id}|{version_number}`) and do **not**
 include a top-level `instruction_id` field. The **ssi-indexer** consumer maps that shape
 to pipeline payloads in `ssi-indexer/src/etl/mongo_cdc.py` at consume time (see also
-`etl/kafka_deserialize.py` for legacy double-encoded records).
+`etl/kafka_deserialize.py` for legacy double-encoded records). The indexer graph projection is documented in [neo4j-graph-model/PHASE-0.md](../neo4j-graph-model/PHASE-0.md) (lifecycle on fact topics; audit via `FOR` on security-event topics).
+
+Downstream consumers: [ssi-indexer/README.md](../ssi-indexer/README.md).
 
 Connector configs live in `connectors/`. `register-connectors.sh` registers them via the Connect REST API (`POST /connectors`) after the worker is healthy.
 

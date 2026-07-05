@@ -139,3 +139,30 @@ class InstructionServiceClient:
             )
         resp.raise_for_status()
         return resp.json()
+
+    async def release_use(
+        self,
+        instruction_id: str,
+        payment_id: str,
+        *,
+        bearer_token: str | None = None,
+        session_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Revert a SINGLE_USE instruction from USED to APPROVED after payment cancel/reject."""
+        url = f"{self._base}/api/v1/instructions/{instruction_id}/release-use"
+        body = {"payment_reference": payment_id}
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                url,
+                json=body,
+                headers=await self._auth_headers(bearer_token, session_id),
+            )
+
+        if resp.status_code == 404:
+            raise InstructionNotFoundError(f"instruction {instruction_id} not found")
+        if resp.status_code == 409:
+            raise InstructionStateError(
+                f"instruction {instruction_id} cannot be released: {resp.text}"
+            )
+        resp.raise_for_status()
+        return resp.json()

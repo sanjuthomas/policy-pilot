@@ -18,7 +18,7 @@ from ps.instruction_client import InstructionNotFoundError, InstructionStateErro
 from ps.models.api import CancelPaymentRequest, Subject
 from ps.models.enums import PaymentStatus
 from ps.repository import PaymentNotFoundError
-from ps.service import PaymentService
+from ps.service import InvalidStateTransitionError, PaymentService
 from ps.storage import VersionedPayment
 
 
@@ -51,6 +51,7 @@ class InstructionState:
         self.owning_lob = owning_lob
         self.end_date = future.isoformat()
         self.effective_date = past.isoformat()
+        self.used_by: str | None = None
 
     def as_dict(self) -> dict:
         return {
@@ -62,6 +63,7 @@ class InstructionState:
             "owning_lob": self.owning_lob,
             "end_date": self.end_date,
             "effective_date": self.effective_date,
+            "used_by": self.used_by,
         }
 
     def submit_for_approval(self) -> None:
@@ -80,7 +82,7 @@ class InstructionState:
         self.status = "APPROVED"
         self.version_number += 1
 
-    def mark_used_for_payment(self) -> None:
+    def mark_used_for_payment(self, payment_id: str) -> None:
         if self.status != "APPROVED":
             raise InstructionStateError(
                 f"instruction {self.instruction_id} cannot be marked USED: "
@@ -88,7 +90,19 @@ class InstructionState:
             )
         if self.instruction_type == "SINGLE_USE":
             self.status = "USED"
+            self.used_by = payment_id
             self.version_number += 1
+
+    def release_use_for_payment(self, payment_id: str) -> None:
+        if self.status != "USED":
+            raise InstructionStateError(
+                f"instruction {self.instruction_id} cannot be released: status is {self.status}"
+            )
+        if self.used_by != payment_id:
+            raise InstructionStateError("instruction used_by does not match the releasing payment")
+        self.status = "APPROVED"
+        self.used_by = None
+        self.version_number += 1
 
 
 class InvalidInstructionTransition(Exception):
@@ -125,6 +139,34 @@ class InMemoryPaymentRepo:
             return deepcopy(self._records[payment_id])
         except KeyError as exc:
             raise PaymentNotFoundError(payment_id) from exc
+
+    async def list_current(
+        self,
+        *,
+        instruction_id: str | None = None,
+        status: str | None = None,
+        limit: int = 100,
+        include_cancelled: bool = False,
+    ) -> list[VersionedPayment]:
+        records = list(self._records.values())
+        if instruction_id:
+            records = [
+                record
+                for record in records
+                if record.payment.instruction_id == instruction_id
+            ]
+        if status:
+            records = [
+                record for record in records if record.payment.status.value == status
+            ]
+        if not include_cancelled:
+            records = [
+                record
+                for record in records
+                if record.payment.status != PaymentStatus.CANCELLED
+            ]
+        records = records[:limit]
+        return [deepcopy(record) for record in records]
 
     def payment_status(self, payment_id: str) -> PaymentStatus:
         return self._records[payment_id].payment.status
@@ -200,12 +242,19 @@ def _build_scenario_service(instruction: InstructionState) -> PaymentService:
     async def mark_used(instruction_id: str, payment_id: str, **_) -> dict:
         if instruction_id != instruction.instruction_id:
             raise InstructionNotFoundError(f"instruction {instruction_id} not found")
-        instruction.mark_used_for_payment()
+        instruction.mark_used_for_payment(payment_id)
+        return instruction.as_dict()
+
+    async def release_use(instruction_id: str, payment_id: str, **_) -> dict:
+        if instruction_id != instruction.instruction_id:
+            raise InstructionNotFoundError(f"instruction {instruction_id} not found")
+        instruction.release_use_for_payment(payment_id)
         return instruction.as_dict()
 
     service.instruction_service = AsyncMock()
     service.instruction_service.get_instruction = AsyncMock(side_effect=get_instruction)
     service.instruction_service.mark_used = AsyncMock(side_effect=mark_used)
+    service.instruction_service.release_use = AsyncMock(side_effect=release_use)
 
     service._repo = repo  # expose for assertions
     service._instruction = instruction
@@ -293,22 +342,27 @@ async def test_single_use_instruction_payment_lifecycle(
     instruction.approve()
     assert instruction.status == "APPROVED"
 
+    with _patched_txn(), pytest.raises(ValueError, match="SINGLE_USE"):
+        await service.submit(payment_one_id, submit_subject)
+    with _patched_txn(), pytest.raises(ValueError, match="SINGLE_USE"):
+        await service.submit(payment_two_id, submit_subject)
+
+    with _patched_txn():
+        await service.cancel(
+            payment_two_id,
+            creator_subject,
+            CancelPaymentRequest(reason="withdraw duplicate draft"),
+        )
+    assert repo.payment_status(payment_two_id) == PaymentStatus.CANCELLED
+
     await _submit_payment(service, submit_subject, payment_one_id)
     assert repo.payment_status(payment_one_id) == PaymentStatus.SUBMITTED
     assert instruction.status == "USED"
+    assert instruction.used_by == payment_one_id
     service.instruction_service.mark_used.assert_awaited_once()
 
-    await _expect_submit_rejected(service, submit_subject, payment_two_id)
-    assert repo.payment_status(payment_two_id) == PaymentStatus.DRAFT
-
-    with _patched_txn():
-        cancelled = await service.cancel(
-            payment_two_id,
-            creator_subject,
-            CancelPaymentRequest(reason="second payment no longer needed"),
-        )
-    # Cancel via CANCEL_PAYMENT moves the payment to CANCELLED (terminal state).
-    assert cancelled.payment.status == PaymentStatus.CANCELLED
+    with _patched_txn(), pytest.raises(InvalidStateTransitionError, match="only DRAFT"):
+        await service.submit(payment_two_id, submit_subject)
 
     with _patched_txn():
         approved = await service.approve(payment_one_id, approver_subject)

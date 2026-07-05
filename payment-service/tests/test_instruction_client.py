@@ -138,6 +138,28 @@ async def test_mark_used_conflict(
 
 
 @pytest.mark.asyncio
+async def test_release_use_success(
+    instruction_service_client: InstructionServiceClient,
+) -> None:
+    payload = {"status": "APPROVED", "used_by": None}
+    request = httpx.Request(
+        "POST",
+        "http://instruction-service.test/api/v1/instructions/i1/release-use",
+    )
+    mock_response = httpx.Response(200, json=payload, request=request)
+
+    with patch("ps.instruction_client.httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client_cls.return_value = mock_client
+
+        result = await instruction_service_client.release_use("i1", "pay-1")
+
+    assert result == payload
+
+
+@pytest.mark.asyncio
 async def test_get_instruction_as_service_success(
     instruction_service_client: InstructionServiceClient,
 ) -> None:

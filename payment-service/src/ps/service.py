@@ -115,6 +115,28 @@ def _validate_instruction_approved_for_submit(instruction: dict) -> None:
     _validate_instruction_not_expired(instruction)
 
 
+def _validate_single_use_submit_exclusivity(
+    payment: Payment,
+    associated_payments: list[VersionedPayment],
+) -> None:
+    """Only one DRAFT or SUBMITTED payment may exist per SINGLE_USE instruction."""
+    if payment.instruction_type != "SINGLE_USE":
+        return
+    active = [
+        record
+        for record in associated_payments
+        if record.payment.status in {PaymentStatus.DRAFT, PaymentStatus.SUBMITTED}
+    ]
+    if len(active) > 1:
+        payment_ids = sorted(record.payment.payment_id for record in active)
+        raise ValueError(
+            "cannot submit payment for SINGLE_USE instruction "
+            f"{payment.instruction_id}: {len(active)} payments are in DRAFT or SUBMITTED "
+            f"({', '.join(payment_ids)}); coordinate with the other drafter to cancel "
+            "or withdraw conflicting payments before submitting"
+        )
+
+
 def _validate_instruction_not_expired(instruction: dict) -> None:
     end_date_raw = instruction.get("end_date") or ""
     if end_date_raw:
@@ -532,6 +554,14 @@ class PaymentService:
 
         _validate_instruction_approved_for_submit(instruction)
 
+        if payment.instruction_type == "SINGLE_USE":
+            associated_payments = await self.repo.list_current(
+                instruction_id=payment.instruction_id,
+                limit=100,
+                include_cancelled=False,
+            )
+            _validate_single_use_submit_exclusivity(payment, associated_payments)
+
         instruction_end_date = instruction.get("end_date") or ""
         instruction_status = instruction.get("status", "")
         payment.instruction_version = int(instruction.get("version_number") or 1)
@@ -705,6 +735,12 @@ class PaymentService:
             session_id=session_id,
         )
 
+        await self._try_release_single_use_instruction(
+            saved.payment,
+            bearer_token=bearer_token,
+            session_id=session_id,
+        )
+
         logger.info("payment rejected payment_id=%s by=%s", payment_id, subject.user_id)
         return saved
 
@@ -753,6 +789,12 @@ class PaymentService:
             details=details,
             instruction_end_date=instruction_end_date,
             instruction_status=instruction_status,
+            bearer_token=bearer_token,
+            session_id=session_id,
+        )
+
+        await self._try_release_single_use_instruction(
+            saved.payment,
             bearer_token=bearer_token,
             session_id=session_id,
         )
@@ -834,11 +876,44 @@ class PaymentService:
             details={"reason": reason},
         )
 
+        await self._try_release_single_use_instruction(saved.payment)
+
         logger.warning(
             "payment cancelled payment_id=%s by=%s reason=%s",
             payment.payment_id, subject.user_id, reason,
         )
         return saved
+
+    async def _try_release_single_use_instruction(
+        self,
+        payment: Payment,
+        *,
+        bearer_token: str | None = None,
+        session_id: str | None = None,
+    ) -> None:
+        """Best-effort revert of SINGLE_USE instruction after payment reject/cancel."""
+        if payment.instruction_type != "SINGLE_USE":
+            return
+        if payment.submitted_at is None:
+            return
+        if payment.status not in {PaymentStatus.REJECTED, PaymentStatus.CANCELLED}:
+            return
+        try:
+            await self.instruction_service.release_use(
+                payment.instruction_id,
+                payment.payment_id,
+                bearer_token=bearer_token,
+                session_id=session_id,
+            )
+        except Exception as exc:
+            logger.error(
+                "failed to release SINGLE_USE instruction after payment terminal state "
+                "payment_id=%s instruction_id=%s error=%s",
+                payment.payment_id,
+                payment.instruction_id,
+                exc,
+                exc_info=True,
+            )
 
     async def _get_current_or_404(self, payment_id: str) -> VersionedPayment:
         try:

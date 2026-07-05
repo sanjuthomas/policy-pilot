@@ -13,6 +13,14 @@ from etl.authorization_context import (
 )
 from etl.config import settings
 from etl.enrichment import EnrichedSecurityEventDocument
+from etl.graph_model import (
+    INSTRUCTION_ACTION_TO_EDGE,
+    PAYMENT_ACTION_TO_EDGE,
+    instruction_lifecycle_actor,
+    is_version_open,
+    payment_lifecycle_actor,
+    release_use_payment_id,
+)
 from etl.multimodal_write import MultimodalWrite, upsert_multimodal_writes_in_tx
 
 logger = logging.getLogger(__name__)
@@ -42,6 +50,17 @@ def _payment_version_number(payload: dict[str, Any]) -> int:
     if lifecycle:
         return len(lifecycle)
     return 1
+
+
+def _user_merge_params(prefix: str, user: dict[str, Any]) -> dict[str, Any]:
+    return {
+        f"{prefix}_given_name": user.get("given_name"),
+        f"{prefix}_family_name": user.get("family_name"),
+        f"{prefix}_title": user.get("title"),
+        f"{prefix}_lob": user.get("lob"),
+        f"{prefix}_roles": _roles_json(user.get("roles")),
+        f"{prefix}_supervisor_id": user.get("supervisor_id"),
+    }
 
 
 class Neo4jGraphWriter:
@@ -103,19 +122,12 @@ class Neo4jGraphWriter:
         source = event.get("source") or {}
         merged = document.merged or {}
         instruction = document.instruction or {}
-        created_by = instruction.get("created_by") or {}
         approved_by = instruction.get("approved_by") or {}
-        rejected_by = instruction.get("rejected_by") or {}
 
         version_number = document.version_number or instruction.get("version_number")
         version_key = (
             _instruction_version_key(document.instruction_id, version_number)
             if document.instruction_id and version_number is not None
-            else None
-        )
-        prev_version_key = (
-            _instruction_version_key(document.instruction_id, version_number - 1)
-            if document.instruction_id and version_number and version_number > 1
             else None
         )
 
@@ -215,20 +227,7 @@ class Neo4jGraphWriter:
                             supervisor_id=actor["supervisor_id"],
                         )
 
-                # --- Instruction node + TARGETS ---
-                if document.instruction_id:
-                    await tx.run(
-                        """
-                        MERGE (i:Instruction {instruction_id: $instruction_id})
-                        WITH i
-                        MATCH (e:SecurityEvent {event_id: $event_id})
-                        MERGE (e)-[:TARGETS]->(i)
-                        """,
-                        instruction_id=document.instruction_id,
-                        event_id=document.event_id,
-                    )
-
-                # --- InstructionVersion node + relationships ---
+                # --- InstructionVersion (sparse merge for search) + FOR ---
                 if version_key and document.instruction_id:
                     end_date = merged.get("end_date")
                     await tx.run(
@@ -279,12 +278,11 @@ class Neo4jGraphWriter:
                         creditor_agent_bic=merged.get("creditor_agent_bic"),
                     )
 
-                    # TARGETS_VERSION (instruction facts own CURRENT lifecycle pointer)
                     await tx.run(
                         """
                         MATCH (e:SecurityEvent {event_id: $event_id})
                         MATCH (v:InstructionVersion {version_key: $version_key})
-                        MERGE (e)-[:TARGETS_VERSION]->(v)
+                        MERGE (e)-[:FOR]->(v)
                         """,
                         event_id=document.event_id,
                         version_key=version_key,
@@ -308,198 +306,6 @@ class Neo4jGraphWriter:
                             approver_user_id=approved_by.get("user_id") or actor.get("user_id"),
                             authorization_summary=auth_params.get("authorization_summary"),
                             authorization_basis=auth_params.get("authorization_basis"),
-                        )
-
-                    # SUPERSEDES — link to previous version if it exists
-                    if prev_version_key:
-                        await tx.run(
-                            """
-                            MATCH (v:InstructionVersion {version_key: $version_key})
-                            MATCH (prev:InstructionVersion {version_key: $prev_version_key})
-                            MERGE (v)-[:SUPERSEDES]->(prev)
-                            """,
-                            version_key=version_key,
-                            prev_version_key=prev_version_key,
-                        )
-
-                    # OWNED_BY — InstructionVersion → ProfitCenter
-                    if owning_lob:
-                        await tx.run(
-                            """
-                            MATCH (v:InstructionVersion {version_key: $version_key})
-                            MERGE (p:ProfitCenter {lob: $owning_lob})
-                            MERGE (v)-[:OWNED_BY]->(p)
-                            """,
-                            version_key=version_key,
-                            owning_lob=owning_lob,
-                        )
-
-                    # CONFLICTS_WITH — versions sharing same creditor account + currency
-                    if merged.get("creditor_account_id") and currency:
-                        await tx.run(
-                            """
-                            MATCH (v:InstructionVersion {version_key: $version_key})
-                            MATCH (other:InstructionVersion)
-                            WHERE other.creditor_account_id = $creditor_account_id
-                              AND other.currency = $currency
-                              AND other.instruction_id <> $instruction_id
-                              AND other.status IN ['APPROVED', 'SUBMITTED']
-                            MERGE (v)-[:CONFLICTS_WITH]->(other)
-                            MERGE (other)-[:CONFLICTS_WITH]->(v)
-                            """,
-                            version_key=version_key,
-                            creditor_account_id=merged["creditor_account_id"],
-                            currency=currency,
-                            instruction_id=document.instruction_id,
-                        )
-
-                    # Creator User + CREATED + BELONGS_TO
-                    if created_by.get("user_id"):
-                        await tx.run(
-                            """
-                            MERGE (u:User {user_id: $user_id})
-                            SET u.given_name    = coalesce($given_name, u.given_name),
-                                u.family_name   = coalesce($family_name, u.family_name),
-                                u.display_name  = coalesce(
-                                    CASE WHEN $family_name IS NOT NULL AND $given_name IS NOT NULL
-                                         THEN $family_name + ', ' + $given_name + ' (' + $user_id + ')'
-                                         ELSE null END,
-                                    u.display_name),
-                                u.title         = coalesce($title, u.title),
-                                u.lob           = coalesce($lob, u.lob),
-                                u.supervisor_id = coalesce($supervisor_id, u.supervisor_id)
-                            WITH u
-                            MATCH (v:InstructionVersion {version_key: $version_key})
-                            MERGE (u)-[:CREATED]->(v)
-                            WITH u
-                            WHERE u.lob IS NOT NULL
-                            MERGE (p:ProfitCenter {lob: u.lob})
-                            MERGE (u)-[:BELONGS_TO]->(p)
-                            """,
-                            user_id=created_by["user_id"],
-                            given_name=created_by.get("given_name"),
-                            family_name=created_by.get("family_name"),
-                            title=created_by.get("title"),
-                            lob=created_by.get("lob"),
-                            supervisor_id=created_by.get("supervisor_id"),
-                            version_key=version_key,
-                        )
-                        if created_by.get("supervisor_id"):
-                            await tx.run(
-                                """
-                                MERGE (u:User {user_id: $user_id})
-                                MERGE (s:User {user_id: $supervisor_id})
-                                MERGE (u)-[:REPORTS_TO]->(s)
-                                """,
-                                user_id=created_by["user_id"],
-                                supervisor_id=created_by["supervisor_id"],
-                            )
-
-                    # Approver User + APPROVED + APPROVED_FOR + BELONGS_TO
-                    if approved_by.get("user_id"):
-                        await tx.run(
-                            """
-                            MERGE (u:User {user_id: $user_id})
-                            SET u.given_name    = coalesce($given_name, u.given_name),
-                                u.family_name   = coalesce($family_name, u.family_name),
-                                u.display_name  = coalesce(
-                                    CASE WHEN $family_name IS NOT NULL AND $given_name IS NOT NULL
-                                         THEN $family_name + ', ' + $given_name + ' (' + $user_id + ')'
-                                         ELSE null END,
-                                    u.display_name),
-                                u.title         = coalesce($title, u.title),
-                                u.lob           = coalesce($lob, u.lob),
-                                u.supervisor_id = coalesce($supervisor_id, u.supervisor_id)
-                            WITH u
-                            MATCH (v:InstructionVersion {version_key: $version_key})
-                            MERGE (u)-[:APPROVED]->(v)
-                            WITH u
-                            WHERE u.lob IS NOT NULL
-                            MERGE (p:ProfitCenter {lob: u.lob})
-                            MERGE (u)-[:BELONGS_TO]->(p)
-                            """,
-                            user_id=approved_by["user_id"],
-                            given_name=approved_by.get("given_name"),
-                            family_name=approved_by.get("family_name"),
-                            title=approved_by.get("title"),
-                            lob=approved_by.get("lob"),
-                            supervisor_id=approved_by.get("supervisor_id"),
-                            version_key=version_key,
-                        )
-                        if approved_by.get("supervisor_id"):
-                            await tx.run(
-                                """
-                                MERGE (u:User {user_id: $user_id})
-                                MERGE (s:User {user_id: $supervisor_id})
-                                MERGE (u)-[:REPORTS_TO]->(s)
-                                """,
-                                user_id=approved_by["user_id"],
-                                supervisor_id=approved_by["supervisor_id"],
-                            )
-                        # APPROVED_FOR — approver → creator (cross-approval detection)
-                        if created_by.get("user_id") and approved_by["user_id"] != created_by["user_id"]:
-                            await tx.run(
-                                """
-                                MATCH (approver:User {user_id: $approver_id})
-                                MATCH (creator:User {user_id: $creator_id})
-                                MERGE (approver)-[:APPROVED_FOR]->(creator)
-                                """,
-                                approver_id=approved_by["user_id"],
-                                creator_id=created_by["user_id"],
-                            )
-
-                    # Rejector User + REJECTED + BELONGS_TO
-                    if rejected_by.get("user_id"):
-                        await tx.run(
-                            """
-                            MERGE (u:User {user_id: $user_id})
-                            SET u.given_name    = coalesce($given_name, u.given_name),
-                                u.family_name   = coalesce($family_name, u.family_name),
-                                u.display_name  = coalesce(
-                                    CASE WHEN $family_name IS NOT NULL AND $given_name IS NOT NULL
-                                         THEN $family_name + ', ' + $given_name + ' (' + $user_id + ')'
-                                         ELSE null END,
-                                    u.display_name),
-                                u.title         = coalesce($title, u.title),
-                                u.lob           = coalesce($lob, u.lob),
-                                u.supervisor_id = coalesce($supervisor_id, u.supervisor_id)
-                            WITH u
-                            MATCH (v:InstructionVersion {version_key: $version_key})
-                            MERGE (u)-[:REJECTED]->(v)
-                            WITH u
-                            WHERE u.lob IS NOT NULL
-                            MERGE (p:ProfitCenter {lob: u.lob})
-                            MERGE (u)-[:BELONGS_TO]->(p)
-                            """,
-                            user_id=rejected_by["user_id"],
-                            given_name=rejected_by.get("given_name"),
-                            family_name=rejected_by.get("family_name"),
-                            title=rejected_by.get("title"),
-                            lob=rejected_by.get("lob"),
-                            supervisor_id=rejected_by.get("supervisor_id"),
-                            version_key=version_key,
-                        )
-                        if rejected_by.get("supervisor_id"):
-                            await tx.run(
-                                """
-                                MERGE (u:User {user_id: $user_id})
-                                MERGE (s:User {user_id: $supervisor_id})
-                                MERGE (u)-[:REPORTS_TO]->(s)
-                                """,
-                                user_id=rejected_by["user_id"],
-                                supervisor_id=rejected_by["supervisor_id"],
-                            )
-
-                    # Submitter — SUBMITTED
-                    if actor.get("user_id") and action == "SUBMIT" and outcome == "success":
-                        await tx.run(
-                            """
-                            MATCH (u:User {user_id: $user_id})
-                            MATCH (v:InstructionVersion {version_key: $version_key})
-                            MERGE (u)-[:SUBMITTED]->(v)
-                            """,
-                            user_id=actor["user_id"],
-                            version_key=version_key,
                         )
 
                 # --- SecurityEvent → ProfitCenter (INVOLVES_LOB) ---
@@ -571,22 +377,14 @@ class Neo4jGraphWriter:
         query = """
         MATCH (e:SecurityEvent {event_id: $event_id})
         OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
-        OPTIONAL MATCH (e)-[:TARGETS]->(i:Instruction)
-        OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
+        OPTIONAL MATCH (e)-[:FOR]->(v:InstructionVersion)
+        OPTIONAL MATCH (i:Instruction {instruction_id: v.instruction_id})
         OPTIONAL MATCH (e)-[:INVOLVES_LOB]->(p:ProfitCenter)
-        OPTIONAL MATCH (creator:User)-[:CREATED]->(v)
-        OPTIONAL MATCH (approver:User)-[:APPROVED]->(v)
-        OPTIONAL MATCH (rejector:User)-[:REJECTED]->(v)
-        OPTIONAL MATCH (submitter:User)-[:SUBMITTED]->(v)
         RETURN e,
                collect(DISTINCT actor)    AS actors,
                i,
                v,
-               p,
-               collect(DISTINCT creator)   AS creators,
-               collect(DISTINCT approver)  AS approvers,
-               collect(DISTINCT rejector)  AS rejectors,
-               collect(DISTINCT submitter) AS submitters
+               p
         """
         async with self._driver.session() as session:
             result = await session.run(query, event_id=event_id)
@@ -600,10 +398,6 @@ class Neo4jGraphWriter:
                 "instruction": dict(record["i"]) if record["i"]     else None,
                 "version":    dict(record["v"]) if record["v"]      else None,
                 "profit_center": dict(record["p"]) if record["p"]   else None,
-                "creators":   [dict(n) for n in record["creators"]  if n],
-                "approvers":  [dict(n) for n in record["approvers"] if n],
-                "rejectors":  [dict(n) for n in record["rejectors"] if n],
-                "submitters": [dict(n) for n in record["submitters"] if n],
             }
 
     async def get_instruction_subgraph(self, instruction_id: str) -> dict[str, Any] | None:
@@ -613,15 +407,9 @@ class Neo4jGraphWriter:
         query = """
         MATCH (i:Instruction {instruction_id: $instruction_id})
         OPTIONAL MATCH (i)-[:HAS_VERSION]->(v:InstructionVersion)
-        OPTIONAL MATCH (creator:User)-[:CREATED]->(v)
-        OPTIONAL MATCH (approver:User)-[:APPROVED]->(v)
-        OPTIONAL MATCH (rejector:User)-[:REJECTED]->(v)
-        OPTIONAL MATCH (e:SecurityEvent)-[:TARGETS]->(i)
+        OPTIONAL MATCH (e:SecurityEvent)-[:FOR]->(v)
         RETURN i,
                collect(DISTINCT v)        AS versions,
-               collect(DISTINCT creator)  AS creators,
-               collect(DISTINCT approver) AS approvers,
-               collect(DISTINCT rejector) AS rejectors,
                collect(DISTINCT e)        AS events
         """
         async with self._driver.session() as session:
@@ -633,11 +421,160 @@ class Neo4jGraphWriter:
             return {
                 "instruction": dict(record["i"]),
                 "versions":  [dict(n) for n in record["versions"]  if n],
-                "creators":  [dict(n) for n in record["creators"]  if n],
-                "approvers": [dict(n) for n in record["approvers"] if n],
-                "rejectors": [dict(n) for n in record["rejectors"] if n],
                 "events":    [dict(n) for n in record["events"]    if n],
             }
+
+    async def _write_lifecycle_edge(
+        self,
+        tx: Any,
+        *,
+        edge_type: str,
+        user_id: str,
+        version_key: str,
+        at: str | None,
+        extra_props: dict[str, Any] | None = None,
+        user_params: dict[str, Any] | None = None,
+    ) -> None:
+        props = {"at": at, **(extra_props or {})}
+        user_params = user_params or {}
+        set_clause = ", ".join(f"r.{key} = ${key}" for key in props) or "r.at = coalesce(r.at, $at)"
+        await tx.run(
+            f"""
+            MERGE (u:User {{user_id: $user_id}})
+            SET   u.given_name    = coalesce($given_name, u.given_name),
+                  u.family_name   = coalesce($family_name, u.family_name),
+                  u.display_name  = coalesce(
+                      CASE WHEN $family_name IS NOT NULL AND $given_name IS NOT NULL
+                           THEN $family_name + ', ' + $given_name + ' (' + $user_id + ')'
+                           ELSE null END,
+                      u.display_name),
+                  u.title         = coalesce($title, u.title),
+                  u.lob           = coalesce($lob, u.lob),
+                  u.roles         = coalesce($roles, u.roles),
+                  u.supervisor_id = coalesce($supervisor_id, u.supervisor_id)
+            WITH u
+            MATCH (v:InstructionVersion {{version_key: $version_key}})
+            MERGE (u)-[r:{edge_type}]->(v)
+            SET {set_clause}
+            """,
+            user_id=user_id,
+            version_key=version_key,
+            given_name=user_params.get("given_name"),
+            family_name=user_params.get("family_name"),
+            title=user_params.get("title"),
+            lob=user_params.get("lob"),
+            roles=user_params.get("roles"),
+            supervisor_id=user_params.get("supervisor_id"),
+            **props,
+        )
+
+    def _instruction_lifecycle_user_params(
+        self,
+        fact: dict[str, Any],
+        user_id: str,
+    ) -> dict[str, Any]:
+        if fact.get("actor_user_id") == user_id:
+            return {
+                "given_name": fact.get("actor_given_name"),
+                "family_name": fact.get("actor_family_name"),
+                "title": fact.get("actor_title"),
+                "lob": fact.get("actor_lob"),
+                "roles": _roles_json(fact.get("actor_roles")),
+                "supervisor_id": fact.get("actor_supervisor_id"),
+            }
+        snap = fact.get("instruction_snapshot") or {}
+        for key, prefix in (
+            ("created_by", "creator"),
+            ("approved_by", "approver"),
+            ("rejected_by", "rejector"),
+        ):
+            user = snap.get(key) or {}
+            if user.get("user_id") == user_id:
+                params = _user_merge_params(prefix, user)
+                return {
+                    "given_name": params[f"{prefix}_given_name"],
+                    "family_name": params[f"{prefix}_family_name"],
+                    "title": params[f"{prefix}_title"],
+                    "lob": params[f"{prefix}_lob"],
+                    "roles": params[f"{prefix}_roles"],
+                    "supervisor_id": params[f"{prefix}_supervisor_id"],
+                }
+        return {}
+
+    def _payment_lifecycle_user_params(
+        self,
+        fact: dict[str, Any],
+        user_id: str,
+    ) -> dict[str, Any]:
+        if fact.get("actor_user_id") == user_id:
+            return {
+                "given_name": fact.get("actor_given_name"),
+                "family_name": fact.get("actor_family_name"),
+                "title": fact.get("actor_title"),
+                "lob": fact.get("actor_lob"),
+                "roles": _roles_json(fact.get("actor_roles")),
+                "supervisor_id": fact.get("actor_supervisor_id"),
+            }
+        for key, prefix in (
+            ("created_by", "creator"),
+            ("submitted_by", "submitter"),
+            ("approved_by", "approver"),
+            ("rejected_by", "rejector"),
+            ("cancelled_by", "canceller"),
+        ):
+            user = fact.get(key) or {}
+            if user.get("user_id") == user_id:
+                params = _user_merge_params(prefix, user)
+                return {
+                    "given_name": params[f"{prefix}_given_name"],
+                    "family_name": params[f"{prefix}_family_name"],
+                    "title": params[f"{prefix}_title"],
+                    "lob": params[f"{prefix}_lob"],
+                    "roles": params[f"{prefix}_roles"],
+                    "supervisor_id": params[f"{prefix}_supervisor_id"],
+                }
+        return {}
+
+    async def _write_payment_lifecycle_edge(
+        self,
+        tx: Any,
+        *,
+        edge_type: str,
+        user_id: str,
+        version_key: str,
+        at: str | None,
+        user_params: dict[str, Any] | None = None,
+    ) -> None:
+        user_params = user_params or {}
+        await tx.run(
+            f"""
+            MERGE (u:User {{user_id: $user_id}})
+            SET   u.given_name    = coalesce($given_name, u.given_name),
+                  u.family_name   = coalesce($family_name, u.family_name),
+                  u.display_name  = coalesce(
+                      CASE WHEN $family_name IS NOT NULL AND $given_name IS NOT NULL
+                           THEN $family_name + ', ' + $given_name + ' (' + $user_id + ')'
+                           ELSE null END,
+                      u.display_name),
+                  u.title         = coalesce($title, u.title),
+                  u.lob           = coalesce($lob, u.lob),
+                  u.roles         = coalesce($roles, u.roles),
+                  u.supervisor_id = coalesce($supervisor_id, u.supervisor_id)
+            WITH u
+            MATCH (v:PaymentVersion {{version_key: $version_key}})
+            MERGE (u)-[r:{edge_type}]->(v)
+            SET r.at = $at
+            """,
+            user_id=user_id,
+            version_key=version_key,
+            at=at,
+            given_name=user_params.get("given_name"),
+            family_name=user_params.get("family_name"),
+            title=user_params.get("title"),
+            lob=user_params.get("lob"),
+            roles=user_params.get("roles"),
+            supervisor_id=user_params.get("supervisor_id"),
+        )
 
     async def upsert_instruction_fact(
         self,
@@ -653,8 +590,7 @@ class Neo4jGraphWriter:
           • CURRENT relationship on the latest version
           • Creator, approver, rejector User nodes + CREATED/APPROVED/REJECTED rels
           • LOB / ProfitCenter node + OWNED_BY, BELONGS_TO rels
-          • Actor User node + mutation relationship
-          • CONFLICTS_WITH and APPROVED_FOR cross-instruction rels
+          • CONFLICTS_WITH cross-instruction rels
         """
         if self._driver is None:
             raise RuntimeError("Neo4j writer not connected")
@@ -695,6 +631,19 @@ class Neo4jGraphWriter:
         actor_user_id = fact.get("actor_user_id")
         auth_params = authorization_fact_neo4j_params(fact)
 
+        valid_in = fact.get("valid_in") or timestamp
+        valid_out = fact.get("valid_out")
+        used_by = snap.get("used_by")
+        is_current = is_version_open(valid_out)
+        prev_version_key = (
+            _instruction_version_key(instruction_id, version_number - 1)
+            if version_number > 1
+            else None
+        )
+
+        lifecycle_edge = INSTRUCTION_ACTION_TO_EDGE.get(action)
+        lifecycle_user_id, lifecycle_extra = instruction_lifecycle_actor(fact)
+
         query = """
         // ── Instruction root node ────────────────────────────────────────────────
         MERGE (i:Instruction {instruction_id: $instruction_id})
@@ -703,13 +652,16 @@ class Neo4jGraphWriter:
               i.wire_scope       = $wire_scope,
               i.currency         = $currency
 
-        // ── InstructionVersion node (canonical key matches security-event ETL) ───
+        // ── InstructionVersion node ──────────────────────────────────────────────
         MERGE (v:InstructionVersion {version_key: $version_key})
         SET   v.instruction_id     = $instruction_id,
               v.version_number     = $version_number,
               v.status             = $status,
               v.action             = $action,
               v.timestamp          = $timestamp,
+              v.valid_in           = $valid_in,
+              v.valid_out          = $valid_out,
+              v.used_by            = $used_by,
               v.owning_lob         = $owning_lob,
               v.instruction_type   = $instruction_type,
               v.wire_scope         = $wire_scope,
@@ -738,100 +690,40 @@ class Neo4jGraphWriter:
               )
         MERGE (i)-[:HAS_VERSION]->(v)
 
-        // ── Mark CURRENT version (instruction facts own lifecycle status) ───────
+        // ── SUPERSEDES chain ─────────────────────────────────────────────────────
+        WITH i, v
+        FOREACH (_ IN CASE WHEN $prev_version_key IS NOT NULL THEN [1] ELSE [] END |
+            MERGE (prev:InstructionVersion {version_key: $prev_version_key})
+            MERGE (v)-[:SUPERSEDES]->(prev)
+        )
+
+        // ── Mark CURRENT version (open out only; never regress) ──────────────────
         WITH i, v
         OPTIONAL MATCH (i)-[:CURRENT]->(existing:InstructionVersion)
         WITH i, v, existing
-        WHERE existing IS NULL
-           OR (
-                $status IS NOT NULL AND $status <> ''
-                AND (
-                    v.version_number >= existing.version_number
-                    OR existing.status IS NULL OR existing.status = ''
+        WHERE $is_current
+          AND (
+                existing IS NULL
+             OR (
+                    $status IS NOT NULL AND $status <> ''
+                    AND (
+                        v.version_number >= existing.version_number
+                        OR existing.status IS NULL OR existing.status = ''
+                    )
                 )
-           )
+          )
         OPTIONAL MATCH (i)-[old:CURRENT]->(:InstructionVersion)
         DELETE old
         MERGE  (i)-[:CURRENT]->(v)
+        SET    i.current_status = $status,
+               i.current_version_number = $version_number,
+               i.current_used_by = CASE WHEN $status = 'USED' THEN $used_by ELSE null END
 
         // ── LOB / ProfitCenter ──────────────────────────────────────────────────
         WITH i, v
         MERGE (lob:ProfitCenter {name: $owning_lob})
         MERGE (i)-[:OWNED_BY]->(lob)
         MERGE (v)-[:BELONGS_TO]->(lob)
-
-        // ── Creator user ─────────────────────────────────────────────────────────
-        WITH i, v, lob
-        FOREACH (_ IN CASE WHEN $creator_user_id IS NOT NULL THEN [1] ELSE [] END |
-            MERGE (cu:User {user_id: $creator_user_id})
-            SET   cu.given_name    = coalesce($creator_given_name,    cu.given_name),
-                  cu.family_name   = coalesce($creator_family_name,   cu.family_name),
-                  cu.display_name  = coalesce(
-                      CASE WHEN $creator_family_name IS NOT NULL AND $creator_given_name IS NOT NULL
-                           THEN $creator_family_name + ', ' + $creator_given_name + ' (' + $creator_user_id + ')'
-                           ELSE null END,
-                      cu.display_name),
-                  cu.title         = coalesce($creator_title,   cu.title),
-                  cu.lob           = coalesce($creator_lob,     cu.lob),
-                  cu.roles         = coalesce($creator_roles,   cu.roles),
-                  cu.supervisor_id = coalesce($creator_supervisor_id, cu.supervisor_id)
-            MERGE (cu)-[:CREATED]->(v)
-        )
-
-        // ── Approver user ────────────────────────────────────────────────────────
-        WITH i, v, lob
-        FOREACH (_ IN CASE WHEN $approver_user_id IS NOT NULL THEN [1] ELSE [] END |
-            MERGE (au:User {user_id: $approver_user_id})
-            SET   au.given_name    = coalesce($approver_given_name,    au.given_name),
-                  au.family_name   = coalesce($approver_family_name,   au.family_name),
-                  au.display_name  = coalesce(
-                      CASE WHEN $approver_family_name IS NOT NULL AND $approver_given_name IS NOT NULL
-                           THEN $approver_family_name + ', ' + $approver_given_name + ' (' + $approver_user_id + ')'
-                           ELSE null END,
-                      au.display_name),
-                  au.title         = coalesce($approver_title,   au.title),
-                  au.lob           = coalesce($approver_lob,     au.lob),
-                  au.roles         = coalesce($approver_roles,   au.roles),
-                  au.supervisor_id = coalesce($approver_supervisor_id, au.supervisor_id)
-            MERGE (au)-[:APPROVED]->(v)
-            MERGE (au)-[:APPROVED_FOR]->(i)
-        )
-
-        // ── Rejector user ────────────────────────────────────────────────────────
-        WITH i, v, lob
-        FOREACH (_ IN CASE WHEN $rejector_user_id IS NOT NULL THEN [1] ELSE [] END |
-            MERGE (ru:User {user_id: $rejector_user_id})
-            SET   ru.given_name    = coalesce($rejector_given_name,    ru.given_name),
-                  ru.family_name   = coalesce($rejector_family_name,   ru.family_name),
-                  ru.display_name  = coalesce(
-                      CASE WHEN $rejector_family_name IS NOT NULL AND $rejector_given_name IS NOT NULL
-                           THEN $rejector_family_name + ', ' + $rejector_given_name + ' (' + $rejector_user_id + ')'
-                           ELSE null END,
-                      ru.display_name),
-                  ru.title         = coalesce($rejector_title,   ru.title),
-                  ru.lob           = coalesce($rejector_lob,     ru.lob),
-                  ru.roles         = coalesce($rejector_roles,   ru.roles),
-                  ru.supervisor_id = coalesce($rejector_supervisor_id, ru.supervisor_id)
-            MERGE (ru)-[:REJECTED]->(v)
-        )
-
-        // ── Actor (the user who performed this mutation) ─────────────────────────
-        WITH i, v, lob
-        FOREACH (_ IN CASE WHEN $actor_user_id IS NOT NULL THEN [1] ELSE [] END |
-            MERGE (actor:User {user_id: $actor_user_id})
-            SET   actor.given_name    = coalesce($actor_given_name,    actor.given_name),
-                  actor.family_name   = coalesce($actor_family_name,   actor.family_name),
-                  actor.display_name  = coalesce(
-                      CASE WHEN $actor_family_name IS NOT NULL AND $actor_given_name IS NOT NULL
-                           THEN $actor_family_name + ', ' + $actor_given_name + ' (' + $actor_user_id + ')'
-                           ELSE null END,
-                      actor.display_name),
-                  actor.title         = coalesce($actor_title,   actor.title),
-                  actor.lob           = coalesce($actor_lob,     actor.lob),
-                  actor.roles         = coalesce($actor_roles,   actor.roles),
-                  actor.supervisor_id = coalesce($actor_supervisor_id, actor.supervisor_id)
-            MERGE (actor)-[:MUTATED {action: $action, timestamp: $timestamp}]->(v)
-        )
         """
 
         params: dict[str, Any] = {
@@ -840,6 +732,11 @@ class Neo4jGraphWriter:
             "version_number": version_number,
             "action": action,
             "timestamp": timestamp,
+            "valid_in": valid_in,
+            "valid_out": valid_out,
+            "used_by": used_by,
+            "is_current": is_current,
+            "prev_version_key": prev_version_key,
             "owning_lob": owning_lob,
             "status": status,
             "instruction_type": instruction_type,
@@ -911,6 +808,32 @@ class Neo4jGraphWriter:
                         currency=currency,
                         instruction_id=instruction_id,
                     )
+                if lifecycle_edge and lifecycle_user_id:
+                    await self._write_lifecycle_edge(
+                        tx,
+                        edge_type=lifecycle_edge,
+                        user_id=lifecycle_user_id,
+                        version_key=version_key,
+                        at=timestamp,
+                        extra_props=lifecycle_extra,
+                        user_params=self._instruction_lifecycle_user_params(fact, lifecycle_user_id),
+                    )
+                if action == "RELEASE_USE":
+                    payment_id = release_use_payment_id(fact)
+                    if payment_id:
+                        await tx.run(
+                            """
+                            MATCH (i:Instruction {instruction_id: $instruction_id})
+                            MATCH (p:Payment {payment_id: $payment_id})
+                            OPTIONAL MATCH (p)-[c:CONSUMED]->(i)
+                            DELETE c
+                            WITH i, p
+                            OPTIONAL MATCH (i)-[cb:CONSUMED_BY]->(p)
+                            DELETE cb
+                            """,
+                            instruction_id=instruction_id,
+                            payment_id=payment_id,
+                        )
                 await upsert_multimodal_writes_in_tx(tx, multimodal)
                 await tx.commit()
             except Exception:
@@ -1032,7 +955,7 @@ class Neo4jGraphWriter:
                             supervisor_id=actor["supervisor_id"],
                         )
 
-                # Payment root + version + TARGETS_PAYMENT / TARGETS_PAYMENT_VERSION
+                # Payment root + sparse version + FOR (audit only)
                 if payment_id:
                     await tx.run(
                         """
@@ -1045,8 +968,7 @@ class Neo4jGraphWriter:
                         MERGE (pay)-[:HAS_VERSION]->(v)
                         WITH pay, v
                         MATCH (e:SecurityEvent {event_id: $event_id})
-                        MERGE (e)-[:TARGETS_PAYMENT]->(pay)
-                        MERGE (e)-[:TARGETS_PAYMENT_VERSION]->(v)
+                        MERGE (e)-[:FOR]->(v)
                         """,
                         payment_id=payment_id,
                         instruction_id=instruction_id,
@@ -1104,29 +1026,42 @@ class Neo4jGraphWriter:
         payment_version = _payment_version_number(fact)
         payment_version_key = _payment_version_key(payment_id, payment_version)
         timestamp = fact.get("timestamp") or fact.get("updated_at")
-
-        creator_user_id = created_by.get("user_id")
-        submitter_user_id = submitted_by.get("user_id")
-        approver_user_id = approved_by.get("user_id")
-        rejector_user_id = rejected_by.get("user_id")
+        valid_in = fact.get("valid_in") or timestamp
+        valid_out = fact.get("valid_out")
+        is_current = is_version_open(valid_out)
+        action = fact.get("action", "")
+        instruction_type = fact.get("instruction_type") or ""
+        prev_version_key = (
+            _payment_version_key(payment_id, payment_version - 1)
+            if payment_version > 1
+            else None
+        )
+        lifecycle_edge = PAYMENT_ACTION_TO_EDGE.get(action)
+        lifecycle_user_id = payment_lifecycle_actor(fact)
 
         query = """
         // ── Payment root node ────────────────────────────────────────────────────
         MERGE (pay:Payment {payment_id: $payment_id})
         SET   pay.instruction_id = $instruction_id
 
-        // ── PaymentVersion node (canonical key matches security-event ETL) ───────
+        // ── PaymentVersion node ──────────────────────────────────────────────────
         MERGE (v:PaymentVersion {version_key: $version_key})
         SET   v.payment_id         = $payment_id,
               v.version_number     = $version_number,
               v.status             = $status,
+              v.action             = $action,
               v.timestamp          = $timestamp,
+              v.valid_in           = $valid_in,
+              v.valid_out          = $valid_out,
               v.instruction_id     = $instruction_id,
               v.amount             = $amount,
               v.currency           = $currency,
               v.value_date         = $value_date,
               v.owning_lob         = $owning_lob,
               v.instruction_type   = $instruction_type,
+              v.instruction_version = $instruction_version,
+              v.cancellation_reason = coalesce($cancellation_reason, v.cancellation_reason),
+              v.cancelled_by_system = coalesce($cancelled_by_system, v.cancelled_by_system),
               v.creator_user_id    = $creator_user_id,
               v.submitter_user_id  = $submitter_user_id,
               v.approver_user_id   = $approver_user_id,
@@ -1139,110 +1074,82 @@ class Neo4jGraphWriter:
               v.cancelled_at       = coalesce($cancelled_at, v.cancelled_at)
         MERGE (pay)-[:HAS_VERSION]->(v)
 
-        // ── Mark CURRENT version (payment facts own lifecycle status) ───────────
+        // ── SUPERSEDES chain ─────────────────────────────────────────────────────
+        WITH pay, v
+        FOREACH (_ IN CASE WHEN $prev_version_key IS NOT NULL THEN [1] ELSE [] END |
+            MERGE (prev:PaymentVersion {version_key: $prev_version_key})
+            MERGE (v)-[:SUPERSEDES]->(prev)
+        )
+
+        // ── Mark CURRENT version (open out only; never regress) ───────────────────
         WITH pay, v
         OPTIONAL MATCH (pay)-[:CURRENT]->(existing:PaymentVersion)
         WITH pay, v, existing
-        WHERE existing IS NULL
-           OR (
-                $status IS NOT NULL
-                AND (
-                    v.version_number >= existing.version_number
-                    OR existing.status IS NULL
+        WHERE $is_current
+          AND (
+                existing IS NULL
+             OR (
+                    $status IS NOT NULL
+                    AND (
+                        v.version_number >= existing.version_number
+                        OR existing.status IS NULL
+                    )
                 )
-           )
+          )
         OPTIONAL MATCH (pay)-[old:CURRENT]->(:PaymentVersion)
         DELETE old
         MERGE  (pay)-[:CURRENT]->(v)
+        SET    pay.current_status = $status,
+               pay.current_version_number = $version_number,
+               pay.current_amount = $amount,
+               pay.current_currency = $currency
 
-        // ── Instruction link ─────────────────────────────────────────────────────
+        // ── Instruction structural links ─────────────────────────────────────────
         WITH pay, v
         FOREACH (_ IN CASE WHEN $instruction_id IS NOT NULL AND $instruction_id <> '' THEN [1] ELSE [] END |
             MERGE (i:Instruction {instruction_id: $instruction_id})
             MERGE (i)-[:HAS_PAYMENT]->(pay)
+            MERGE (pay)-[:FOR_INSTRUCTION]->(i)
         )
 
-        // ── Creator user ─────────────────────────────────────────────────────────
+        // ── SINGLE_USE consumption on submit ────────────────────────────────────
         WITH pay, v
-        FOREACH (_ IN CASE WHEN $creator_user_id IS NOT NULL THEN [1] ELSE [] END |
-            MERGE (cu:User {user_id: $creator_user_id})
-            SET   cu.given_name    = coalesce($creator_given_name,    cu.given_name),
-                  cu.family_name   = coalesce($creator_family_name,   cu.family_name),
-                  cu.display_name  = coalesce(
-                      CASE WHEN $creator_family_name IS NOT NULL AND $creator_given_name IS NOT NULL
-                           THEN $creator_family_name + ', ' + $creator_given_name + ' (' + $creator_user_id + ')'
-                           ELSE null END,
-                      cu.display_name),
-                  cu.title         = coalesce($creator_title,   cu.title),
-                  cu.lob           = coalesce($creator_lob,     cu.lob),
-                  cu.supervisor_id = coalesce($creator_supervisor_id, cu.supervisor_id)
-            MERGE (cu)-[:CREATED_PAYMENT]->(v)
-        )
-
-        // ── Submitter user ───────────────────────────────────────────────────────
-        WITH pay, v
-        FOREACH (_ IN CASE WHEN $submitter_user_id IS NOT NULL THEN [1] ELSE [] END |
-            MERGE (su:User {user_id: $submitter_user_id})
-            SET   su.given_name    = coalesce($submitter_given_name,    su.given_name),
-                  su.family_name   = coalesce($submitter_family_name,   su.family_name),
-                  su.display_name  = coalesce(
-                      CASE WHEN $submitter_family_name IS NOT NULL AND $submitter_given_name IS NOT NULL
-                           THEN $submitter_family_name + ', ' + $submitter_given_name + ' (' + $submitter_user_id + ')'
-                           ELSE null END,
-                      su.display_name),
-                  su.title         = coalesce($submitter_title,   su.title),
-                  su.lob           = coalesce($submitter_lob,     su.lob),
-                  su.supervisor_id = coalesce($submitter_supervisor_id, su.supervisor_id)
-            MERGE (su)-[:SUBMITTED_PAYMENT]->(v)
-        )
-
-        // ── Approver user ────────────────────────────────────────────────────────
-        WITH pay, v
-        FOREACH (_ IN CASE WHEN $approver_user_id IS NOT NULL THEN [1] ELSE [] END |
-            MERGE (au:User {user_id: $approver_user_id})
-            SET   au.given_name    = coalesce($approver_given_name,    au.given_name),
-                  au.family_name   = coalesce($approver_family_name,   au.family_name),
-                  au.display_name  = coalesce(
-                      CASE WHEN $approver_family_name IS NOT NULL AND $approver_given_name IS NOT NULL
-                           THEN $approver_family_name + ', ' + $approver_given_name + ' (' + $approver_user_id + ')'
-                           ELSE null END,
-                      au.display_name),
-                  au.title         = coalesce($approver_title,   au.title),
-                  au.lob           = coalesce($approver_lob,     au.lob),
-                  au.supervisor_id = coalesce($approver_supervisor_id, au.supervisor_id)
-            MERGE (au)-[:APPROVED_PAYMENT]->(v)
-        )
-
-        // ── Rejector user ────────────────────────────────────────────────────────
-        WITH pay, v
-        FOREACH (_ IN CASE WHEN $rejector_user_id IS NOT NULL THEN [1] ELSE [] END |
-            MERGE (ru:User {user_id: $rejector_user_id})
-            SET   ru.given_name    = coalesce($rejector_given_name,    ru.given_name),
-                  ru.family_name   = coalesce($rejector_family_name,   ru.family_name),
-                  ru.display_name  = coalesce(
-                      CASE WHEN $rejector_family_name IS NOT NULL AND $rejector_given_name IS NOT NULL
-                           THEN $rejector_family_name + ', ' + $rejector_given_name + ' (' + $rejector_user_id + ')'
-                           ELSE null END,
-                      ru.display_name),
-                  ru.title         = coalesce($rejector_title,   ru.title),
-                  ru.lob           = coalesce($rejector_lob,     ru.lob),
-                  ru.supervisor_id = coalesce($rejector_supervisor_id, ru.supervisor_id)
-            MERGE (ru)-[:REJECTED_PAYMENT]->(v)
+        FOREACH (_ IN CASE
+            WHEN $action = 'SUBMIT_PAYMENT'
+             AND $instruction_type = 'SINGLE_USE'
+             AND $instruction_id IS NOT NULL AND $instruction_id <> ''
+            THEN [1] ELSE [] END |
+            MERGE (i:Instruction {instruction_id: $instruction_id})
+            MERGE (pay)-[:CONSUMED]->(i)
+            MERGE (i)-[:CONSUMED_BY]->(pay)
         )
         """
+
+        creator_user_id = created_by.get("user_id")
+        submitter_user_id = submitted_by.get("user_id")
+        approver_user_id = approved_by.get("user_id")
+        rejector_user_id = rejected_by.get("user_id")
 
         params: dict[str, Any] = {
             "payment_id": payment_id,
             "instruction_id": instruction_id,
             "version_key": payment_version_key,
             "version_number": payment_version,
+            "action": action,
             "status": fact.get("status"),
             "timestamp": timestamp,
+            "valid_in": valid_in,
+            "valid_out": valid_out,
+            "is_current": is_current,
+            "prev_version_key": prev_version_key,
             "amount": fact.get("amount"),
             "currency": fact.get("currency"),
             "value_date": fact.get("value_date"),
             "owning_lob": fact.get("owning_lob"),
-            "instruction_type": fact.get("instruction_type"),
+            "instruction_type": instruction_type,
+            "instruction_version": fact.get("instruction_version"),
+            "cancellation_reason": fact.get("cancellation_reason"),
+            "cancelled_by_system": fact.get("cancelled_by_system"),
             "creator_user_id": creator_user_id,
             "submitter_user_id": submitter_user_id,
             "approver_user_id": approver_user_id,
@@ -1279,6 +1186,16 @@ class Neo4jGraphWriter:
             tx = await session.begin_transaction()
             try:
                 await tx.run(query, **params)
+
+                if lifecycle_edge and lifecycle_user_id:
+                    await self._write_payment_lifecycle_edge(
+                        tx,
+                        edge_type=lifecycle_edge,
+                        user_id=lifecycle_user_id,
+                        version_key=payment_version_key,
+                        at=timestamp,
+                        user_params=self._payment_lifecycle_user_params(fact, lifecycle_user_id),
+                    )
 
                 for user in (created_by, submitted_by, approved_by, rejected_by):
                     if user.get("user_id") and user.get("supervisor_id"):

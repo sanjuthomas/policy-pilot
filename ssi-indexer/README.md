@@ -46,6 +46,15 @@ flowchart TB
 | `PaymentSecurityEventPipeline` | `payment_security_events` | `payment-security-event-etl` | `payment_security_event` |
 | `PaymentFactPipeline` | `payments` | `payment-fact-etl` | `payment_fact` |
 
+### Graph writers
+
+| Role | Pipelines | Neo4j writes |
+|------|-----------|--------------|
+| **Fact (state)** | `InstructionPipeline`, `PaymentFactPipeline` | Versions, `CURRENT`, `SUPERSEDES`, `_*IV` / `_*PV` lifecycle, `CONFLICTS_WITH`, `HAS_PAYMENT`, `CONSUMED`, root denorm |
+| **Audit (events)** | `InstructionSecurityEventPipeline`, `PaymentSecurityEventPipeline` | `SecurityEvent`, `ACTED_AS`, `FOR` → version, `INVOLVES_LOB` only |
+
+Edge/action constants: `src/etl/graph_model.py`. Full spec: [neo4j-graph-model/PHASE-0.md](../neo4j-graph-model/PHASE-0.md).
+
 For each message:
 
 1. Parse the fact event (security event or state snapshot).

@@ -98,5 +98,23 @@ FOR (d:MultimodalDocument) ON (d.instruction_id);
 CREATE INDEX multimodal_payment_id IF NOT EXISTS
 FOR (d:MultimodalDocument) ON (d.payment_id);
 
+CREATE INDEX instruction_current_status IF NOT EXISTS
+FOR (i:Instruction) ON (i.current_status);
+
+CREATE INDEX instruction_current_used_by IF NOT EXISTS
+FOR (i:Instruction) ON (i.current_used_by);
+
+CREATE INDEX instruction_version_valid_in IF NOT EXISTS
+FOR (v:InstructionVersion) ON (v.valid_in);
+
+CREATE INDEX instruction_version_used_by IF NOT EXISTS
+FOR (v:InstructionVersion) ON (v.used_by);
+
+CREATE INDEX payment_current_status IF NOT EXISTS
+FOR (p:Payment) ON (p.current_status);
+
+CREATE INDEX payment_version_valid_in IF NOT EXISTS
+FOR (v:PaymentVersion) ON (v.valid_in);
+
 CREATE FULLTEXT INDEX multimodal_search_text IF NOT EXISTS
 FOR (d:MultimodalDocument) ON EACH [d.search_text];

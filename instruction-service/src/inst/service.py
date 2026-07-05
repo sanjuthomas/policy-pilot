@@ -18,6 +18,7 @@ from inst.models.api import (
     CreateInstructionRequest,
     InstructionResponse,
     RejectInstructionRequest,
+    ReleaseUseInstructionRequest,
     Subject,
     UpdateInstructionRequest,
     UseInstructionRequest,
@@ -107,6 +108,7 @@ def _to_response(record: VersionedInstruction) -> InstructionResponse:
         suspended_at=_fmt_datetime(instruction.suspended_at),
         last_used_at=_fmt_datetime(instruction.last_used_at),
         usage_count=instruction.usage_count,
+        used_by=instruction.used_by,
     )
 
 
@@ -426,6 +428,7 @@ class InstructionService:
         updated.suspended_at = instruction.suspended_at
         updated.last_used_at = instruction.last_used_at
         updated.usage_count = instruction.usage_count
+        updated.used_by = instruction.used_by
 
         saved = await self._persist_new_version(
             updated,
@@ -818,11 +821,64 @@ class InstructionService:
 
         if instruction.instruction_type == InstructionType.SINGLE_USE:
             instruction.status = InstructionStatus.USED
+            instruction.used_by = request.payment_reference
 
         details = details_with_authorization(use_details, authorization)
         saved = await self._persist_new_version(
             instruction,
             LifecycleAction.USE,
+            subject,
+            details=details,
+            skip_authorize=True,
+        )
+        return _to_response(saved)
+
+    async def release_use(
+        self,
+        instruction_id: str,
+        subject: Subject,
+        request: ReleaseUseInstructionRequest,
+        *,
+        bearer_token: str | None = None,
+        session_id: str | None = None,
+    ) -> InstructionResponse:
+        current = await self.repository.get_current(instruction_id)
+        instruction = current.instruction.model_copy(deep=True)
+        if instruction.instruction_type != InstructionType.SINGLE_USE:
+            raise InvalidStateTransitionError(
+                "only SINGLE_USE instructions support release"
+            )
+        if instruction.status != InstructionStatus.USED:
+            raise InvalidStateTransitionError(
+                "only USED instructions can be released"
+            )
+        if instruction.used_by != request.payment_reference:
+            raise InvalidStateTransitionError(
+                "instruction used_by does not match the releasing payment"
+            )
+
+        release_details = {
+            "payment_reference": request.payment_reference,
+        }
+        authorization = await self._authorize(
+            LifecycleAction.RELEASE_USE,
+            subject,
+            instruction,
+            bearer_token=bearer_token,
+            session_id=session_id,
+            record_security_event=True,
+            security_event_details=release_details,
+        )
+
+        instruction.status = InstructionStatus.APPROVED
+        instruction.used_by = None
+        if instruction.usage_count > 0:
+            instruction.usage_count -= 1
+
+        details = details_with_authorization(release_details, authorization)
+        saved = await self._persist_new_version(
+            instruction,
+            LifecycleAction.RELEASE_USE,
             subject,
             details=details,
             skip_authorize=True,

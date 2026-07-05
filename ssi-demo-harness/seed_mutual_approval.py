@@ -36,8 +36,8 @@ DEFAULT_INSTRUCTION_A = "20260704-FICC-I-53"
 DEFAULT_INSTRUCTION_B = "20260704-FICC-I-54"
 
 MUTUAL_APPROVAL_CHECK = """
-MATCH (a:User)-[:APPROVED]->(va:InstructionVersion)<-[:CREATED]-(b:User)
-MATCH (b)-[:APPROVED]->(vb:InstructionVersion)<-[:CREATED]-(a)
+MATCH (a:User)-[:APPROVED_IV]->(va:InstructionVersion)<-[:CREATED_IV]-(b:User)
+MATCH (b)-[:APPROVED_IV]->(vb:InstructionVersion)<-[:CREATED_IV]-(a)
 WHERE a.user_id < b.user_id
 RETURN coalesce(a.display_name, a.user_id) AS user_a,
        coalesce(b.display_name, b.user_id) AS user_b,
@@ -49,14 +49,14 @@ LIMIT 20
 
 REWIRE_PAIR = """
 MATCH (v:InstructionVersion {instruction_id: $instruction_id, status: 'APPROVED'})
-OPTIONAL MATCH (old_creator:User)-[rc:CREATED]->(v)
-OPTIONAL MATCH (old_approver:User)-[ra:APPROVED]->(v)
+OPTIONAL MATCH (old_creator:User)-[rc:CREATED_IV]->(v)
+OPTIONAL MATCH (old_approver:User)-[ra:APPROVED_IV]->(v)
 DELETE rc, ra
 WITH v
 MERGE (creator:User {user_id: $creator_id})
 MERGE (approver:User {user_id: $approver_id})
-MERGE (creator)-[:CREATED]->(v)
-MERGE (approver)-[:APPROVED]->(v)
+MERGE (creator)-[:CREATED_IV]->(v)
+MERGE (approver)-[:APPROVED_IV]->(v)
 SET v.creator_user_id = $creator_id,
     v.approver_user_id = $approver_id
 RETURN v.instruction_id AS instruction_id,

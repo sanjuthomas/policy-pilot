@@ -357,6 +357,7 @@ class CashSettlementInstruction(BaseModel):
     suspended_at: datetime | None = None
     last_used_at: datetime | None = None
     usage_count: int = 0
+    used_by: str | None = None
     lifecycle_events: list[LifecycleEvent] = Field(default_factory=list)
 
     @field_validator("owning_lob")
@@ -439,6 +440,7 @@ class CashSettlementInstruction(BaseModel):
                 "supervisor_id": self.created_by.supervisor_id,
             },
             "suspended_by": self.suspended_by,
+            "used_by": self.used_by,
         }
 
     def to_opa_account(self) -> dict[str, Any]:

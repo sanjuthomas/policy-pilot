@@ -42,6 +42,7 @@ def test_to_opa_instruction(sample_instruction: CashSettlementInstruction) -> No
     assert opa["type"] == "SINGLE_USE"
     assert opa["owning_lob"] == "FICC"
     assert opa["created_by"]["user_id"] == "alice.ficc"
+    assert opa["used_by"] is None
 
 
 def test_funding_account_lob_mismatch_rejected() -> None:

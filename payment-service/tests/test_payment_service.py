@@ -267,6 +267,7 @@ async def test_submit_single_use_runs_saga(
 ) -> None:
     single_use = payment.model_copy(update={"instruction_type": "SINGLE_USE"})
     service.repo.get_current.return_value = _versioned(single_use)
+    service.repo.list_current = AsyncMock(return_value=[_versioned(single_use)])
     service.instruction_service.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _allow_decision()
     service.instruction_service.mark_used.return_value = {"status": "USED"}
@@ -341,6 +342,7 @@ async def test_submit_single_use_mark_used_state_error(
 ) -> None:
     single_use = payment.model_copy(update={"instruction_type": "SINGLE_USE"})
     service.repo.get_current.return_value = _versioned(single_use)
+    service.repo.list_current = AsyncMock(return_value=[_versioned(single_use)])
     service.instruction_service.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _allow_decision()
     service.instruction_service.mark_used.side_effect = InstructionStateError("already used")
@@ -360,6 +362,7 @@ async def test_submit_single_use_mark_used_runtime_error(
 ) -> None:
     single_use = payment.model_copy(update={"instruction_type": "SINGLE_USE"})
     service.repo.get_current.return_value = _versioned(single_use)
+    service.repo.list_current = AsyncMock(return_value=[_versioned(single_use)])
     service.instruction_service.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _allow_decision()
     service.instruction_service.mark_used.side_effect = RuntimeError("network down")
@@ -529,6 +532,115 @@ async def test_reject_success(
     assert result.payment.status == PaymentStatus.REJECTED
     assert result.payment.rejection_reason == "Insufficient documentation"
     assert result.payment.rejected_at is not None
+    service.instruction_service.release_use.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_reject_single_use_releases_instruction(
+    service: PaymentService,
+    approver_subject: Subject,
+    submitted_payment: Payment,
+    standing_instruction: dict,
+) -> None:
+    single_use = submitted_payment.model_copy(update={"instruction_type": "SINGLE_USE"})
+    single_use.submitted_at = single_use.created_at
+    service.repo.get_current.return_value = _versioned(single_use)
+    service.instruction_service.get_instruction.return_value = standing_instruction
+    service.authz.evaluate_payment.return_value = _allow_decision()
+    request = RejectPaymentRequest(reason="Insufficient documentation")
+
+    with _patched_txn():
+        result = await service.reject(single_use.payment_id, approver_subject, request)
+
+    assert result.payment.status == PaymentStatus.REJECTED
+    service.instruction_service.release_use.assert_awaited_once_with(
+        single_use.instruction_id,
+        single_use.payment_id,
+        bearer_token=None,
+        session_id=None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_submit_single_use_rejects_multiple_drafts(
+    service: PaymentService,
+    subject: Subject,
+    payment: Payment,
+    standing_instruction: dict,
+) -> None:
+    single_use = payment.model_copy(update={"instruction_type": "SINGLE_USE"})
+    other = payment.model_copy(
+        update={
+            "payment_id": "20260701-CORP-P-2",
+            "event_id": "evt-create-002",
+        }
+    )
+    service.repo.get_current.return_value = _versioned(single_use)
+    service.repo.list_current = AsyncMock(
+        return_value=[_versioned(single_use), _versioned(other)]
+    )
+    service.instruction_service.get_instruction.return_value = standing_instruction
+    service.authz.evaluate_payment.return_value = _allow_decision()
+
+    with _patched_txn(), pytest.raises(ValueError, match="SINGLE_USE"):
+        await service.submit(single_use.payment_id, subject)
+
+    service.instruction_service.mark_used.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_cancel_submitted_single_use_releases_instruction(
+    service: PaymentService,
+    subject: Subject,
+    submitted_payment: Payment,
+    standing_instruction: dict,
+) -> None:
+    from ps.models.api import CancelPaymentRequest
+
+    single_use = submitted_payment.model_copy(update={"instruction_type": "SINGLE_USE"})
+    single_use.submitted_at = single_use.created_at
+    service.repo.get_current.return_value = _versioned(single_use)
+    service.instruction_service.get_instruction.return_value = standing_instruction
+    service.authz.evaluate_payment.return_value = _allow_decision()
+
+    with _patched_txn():
+        result = await service.cancel(
+            single_use.payment_id,
+            subject,
+            CancelPaymentRequest(reason="withdraw"),
+        )
+
+    assert result.payment.status == PaymentStatus.CANCELLED
+    service.instruction_service.release_use.assert_awaited_once_with(
+        single_use.instruction_id,
+        single_use.payment_id,
+        bearer_token=None,
+        session_id=None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_cancel_draft_single_use_does_not_release_instruction(
+    service: PaymentService,
+    subject: Subject,
+    payment: Payment,
+    standing_instruction: dict,
+) -> None:
+    from ps.models.api import CancelPaymentRequest
+
+    single_use = payment.model_copy(update={"instruction_type": "SINGLE_USE"})
+    service.repo.get_current.return_value = _versioned(single_use)
+    service.instruction_service.get_instruction.return_value = standing_instruction
+    service.authz.evaluate_payment.return_value = _allow_decision()
+
+    with _patched_txn():
+        await service.cancel(
+            single_use.payment_id,
+            subject,
+            CancelPaymentRequest(reason="cleanup"),
+        )
+
+    service.instruction_service.release_use.assert_not_awaited()
 
 
 @pytest.mark.asyncio

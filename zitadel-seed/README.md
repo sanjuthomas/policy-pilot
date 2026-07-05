@@ -49,7 +49,9 @@ python3 seed.py --file users.yaml  # alternate seed file
 | `ZITADEL_URL` | `http://localhost:8080` |
 | `ZITADEL_PAT` | required — Org Owner or login-client PAT |
 
-User metadata (`subject_user_id`, `title`, `roles`, `lob`, `supervisor_id`, `covering_lobs`, `groups`) is stored in ZITADEL and mapped to application `Subject` on JWT login.
+User metadata (`subject_user_id`, `title`, `roles`, `lob`, `supervisor_id`, `covering_lobs`, `groups`) is stored in ZITADEL and mapped to application `Subject` on JWT login. The `supervisor_id` field feeds Neo4j `REPORTS_TO` edges (inversion-of-control queries in PolicyPilot).
+
+After seeding users, run the harness seed script for demo instructions, payments, and ALERT events: [ssi-demo-harness/seed-demo-data.sh](../ssi-demo-harness/seed-demo-data.sh).
 
 ## ZITADEL console
 

@@ -1,7 +1,7 @@
 """Processes InstructionFact events from the instructions Kafka topic.
 
 Maintains the instruction master graph in Neo4j (InstructionVersion nodes,
-CONFLICTS_WITH, APPROVED_FOR, BELONGS_TO) and one instruction-state multimodal
+CONFLICTS_WITH, BELONGS_TO) and one instruction-state multimodal
 point per instruction — updated in place on every mutation.
 """
 
