@@ -51,6 +51,46 @@ Policy Pilot sits at the end of an event-driven pipeline: domain services enforc
 
 ---
 
+## Intent Determination
+
+Policy Pilot's chat layer (**ssi-chat**) decides what to do with a natural-language question before retrieval and answer synthesis. The design replaces brittle regex phrase lists with **LLM semantic routing**, then executes a **deterministic pipeline** (route → retrieve → synthesize).
+
+### Summary
+
+| Layer | Mechanism | Purpose |
+|-------|-----------|---------|
+| **Route** | Gemini Flash + structured `RouterDecision` JSON | Pick retrieval strategy from question intent |
+| **Fast paths** | Neo4j direct YAML intents, live OPA eligibility API | Skip full RAG when a specialized handler applies |
+| **Retrieve** | Selective backends (graph, vector, or both) | Avoid merging unrelated search results |
+| **Synthesize** | Deterministic formatters or Gemini | Produce the final answer from retrieved context |
+
+We do **not** use fuzzy ML text classification for routing. Intent is expressed as a strict Pydantic schema returned by Gemini structured output.
+
+### End-to-end flow
+
+```mermaid
+flowchart TD
+    Q[User question + search mode] --> R[1. Route — LLM RouterDecision]
+    R --> E{strategy = eligibility?}
+    E -->|yes| OPA[CheckEligibilityAPI — live OPA]
+    OPA --> A[Answer]
+    E -->|no| D[2. Neo4j direct fast path]
+    D -->|match| A
+    D -->|no match| RET[3. Selective retrieval]
+    RET --> G{strategy}
+    G -->|graph| N[Neo4j + exact ID lookup]
+    G -->|vector| V[Embeddings + BM25]
+    G -->|hybrid| H[Neo4j + vector/BM25]
+    N --> S[4. Synthesize]
+    V --> S
+    H --> S
+    S --> A
+```
+
+Implementation entry point: `RagService.ask()` delegates to `RagPipelineOrchestrator` in `ssi-chat/src/chat_application/pipeline/orchestrator.py`. Full specification: **[docs/intent-determination.md](docs/intent-determination.md)**.
+
+---
+
 ## Neo4j graph model
 
 Four ETL pipelines write to the **same Neo4j database**, sharing nodes (`Instruction`, `InstructionVersion`, `User`, `ProfitCenter`, `Payment`, `PaymentVersion`, `SecurityEvent`). Writers split into two symmetric roles:
