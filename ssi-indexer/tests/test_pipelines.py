@@ -131,7 +131,9 @@ async def test_instruction_pipeline_merges_existing_payload(mock_neo4j, mock_emb
     assert payload["rejection_reason"] == "old reason"
 
 
-async def test_instruction_pipeline_approve_does_not_preserve_old_auth(mock_neo4j, mock_embedding_client, mock_multimodal):
+async def test_instruction_pipeline_approve_with_auth_overrides_existing(
+    mock_neo4j, mock_embedding_client, mock_multimodal
+):
     mock_multimodal.get_instruction_state_payload.return_value = {
         "authorization_summary": "stale",
         "authorization_basis": ["stale-rule"],
@@ -152,6 +154,45 @@ async def test_instruction_pipeline_approve_does_not_preserve_old_auth(mock_neo4
     payload = mock_neo4j.upsert_instruction_fact.call_args.kwargs["multimodal"].payload
     assert payload["authorization_summary"] == "fresh approval"
     assert payload["authorization_basis"] == ["new-rule"]
+
+
+async def test_instruction_pipeline_approve_cdc_preserves_existing_auth(
+    mock_neo4j, mock_embedding_client, mock_multimodal
+):
+    """CDC APPROVE facts set authorization=None — must not wipe security-event patch."""
+    mock_multimodal.get_instruction_state_payload.return_value = {
+        "authorization_summary": "allowed by OPA",
+        "authorization_basis": ["role FUNDING_APPROVER", "group MIDDLE_OFFICE"],
+        "approved_at": "2026-07-06T12:00:00Z",
+        "approver_display": "Laurent, Sophie (ficc-201)",
+        "approver_user_id": "ficc-201",
+    }
+    pipeline = InstructionPipeline(
+        neo4j_writer=mock_neo4j,
+        embedding_client=mock_embedding_client,
+        multimodal_store=mock_multimodal,
+    )
+    pipeline._multimodal_ready = True
+
+    fact = _instruction_fact(
+        action="APPROVE",
+        authorization=None,
+        instruction_snapshot={
+            "status": "APPROVED",
+            "instruction_type": "STANDING",
+            "owning_lob": "FICC",
+            "approved_at": "2026-07-06T12:00:00Z",
+            "created_by": {"user_id": "mo-100", "given_name": "Sarah", "family_name": "Chen"},
+            "approved_by": {"user_id": "ficc-201", "given_name": "Sophie", "family_name": "Laurent"},
+        },
+    )
+    await pipeline.process_instruction_fact(fact)
+
+    payload = mock_neo4j.upsert_instruction_fact.call_args.kwargs["multimodal"].payload
+    assert payload["authorization_summary"] == "allowed by OPA"
+    assert payload["authorization_basis"] == ["role FUNDING_APPROVER", "group MIDDLE_OFFICE"]
+    assert payload["approved_at"] == "2026-07-06T12:00:00Z"
+    assert payload["approver_display"] == "Laurent, Sophie (ficc-201)"
 
 
 async def test_payment_security_event_pipeline(mock_neo4j, mock_embedding_client, mock_multimodal):

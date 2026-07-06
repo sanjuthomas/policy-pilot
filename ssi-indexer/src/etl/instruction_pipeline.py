@@ -90,15 +90,17 @@ class InstructionPipeline:
 
         existing = await self.multimodal_store.get_instruction_state_payload(instruction_id)
         if existing:
-            if fact.get("action") != "APPROVE":
-                if not payload.get("authorization_summary"):
-                    payload["authorization_summary"] = existing.get("authorization_summary")
-                    payload["authorization_basis"] = existing.get("authorization_basis") or []
-                if not payload.get("approved_at"):
-                    payload["approved_at"] = existing.get("approved_at")
-                if not payload.get("approver_display"):
-                    payload["approver_display"] = existing.get("approver_display")
-                    payload["approver_user_id"] = existing.get("approver_user_id")
+            # CDC APPROVE facts often carry authorization=None; preserve audit fields
+            # written earlier by InstructionSecurityEventPipeline unless this fact
+            # includes fresh authorization context.
+            if not payload.get("authorization_summary"):
+                payload["authorization_summary"] = existing.get("authorization_summary")
+                payload["authorization_basis"] = existing.get("authorization_basis") or []
+            if not payload.get("approved_at"):
+                payload["approved_at"] = existing.get("approved_at")
+            if not payload.get("approver_display"):
+                payload["approver_display"] = existing.get("approver_display")
+                payload["approver_user_id"] = existing.get("approver_user_id")
             if fact.get("action") != "REJECT":
                 if not payload.get("rejector_display"):
                     payload["rejector_display"] = existing.get("rejector_display")
