@@ -53,7 +53,7 @@ def test_group_members_requires_auth(client: TestClient) -> None:
     assert response.status_code == 401
 
 
-def test_group_members_returns_lob_and_covering_lobs(
+def test_group_members_returns_groups_and_covering_lobs(
     client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     users_file = _seed_users(tmp_path)
@@ -78,8 +78,8 @@ def test_group_members_returns_lob_and_covering_lobs(
     assert body["count"] == 1
     member = body["members"][0]
     assert member["user_id"] == "pay-204"
+    assert member["groups"] == ["MIDDLE_OFFICE", "UP_TO_100_BILLION_CLUB"]
     assert member["covering_lobs"] == ["FICC", "FX", "DESK_RATES"]
-    assert member["lob"] is None
 
 
 def test_group_members_covering_lob_filter(

@@ -907,7 +907,8 @@ class RagService:
         from chat_application.policy_directory import (
             covering_lob_filter_from_question,
             is_payment_approval_directory_question,
-            payment_approval_group_from_question,
+            merge_group_member_rows,
+            payment_approval_clubs_from_question,
         )
 
         if not is_payment_approval_directory_question(message):
@@ -920,8 +921,8 @@ class RagService:
                 "panel above, then ask again."
             )
 
-        group, amount = payment_approval_group_from_question(message)
-        if not group:
+        clubs, amount, strict_threshold = payment_approval_clubs_from_question(message)
+        if not clubs:
             return (
                 "I could not determine which payment amount-limit club applies. "
                 "Try including an amount (e.g. $25 billion) or a club name such as "
@@ -929,21 +930,30 @@ class RagService:
             )
 
         covering_lob = covering_lob_filter_from_question(message)
+        merged_members: list[dict] = []
         try:
-            data = await self._eligibility.group_members(
-                group,
-                bearer_token=bearer_token,
-                role="FUNDING_APPROVER",
-                covering_lob=covering_lob,
-                session_id=session_id,
-            )
+            for group in clubs:
+                data = await self._eligibility.group_members(
+                    group,
+                    bearer_token=bearer_token,
+                    role="FUNDING_APPROVER",
+                    covering_lob=covering_lob,
+                    session_id=session_id,
+                )
+                merged_members.extend(data.get("members") or [])
         except EligibilityClientError as exc:
             return str(exc)
 
+        members = merge_group_member_rows(merged_members)
         return format_group_members_answer(
-            data,
+            {
+                "groups": clubs,
+                "members": members,
+                "count": len(members),
+            },
             amount=amount,
             covering_lob=covering_lob,
+            strict_threshold=strict_threshold,
         )
 
     async def _answer_instruction_eligible_approvers(

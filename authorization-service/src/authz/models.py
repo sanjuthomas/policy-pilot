@@ -180,7 +180,7 @@ class GroupMemberRow(BaseModel):
     display_name: str
     title: str
     roles: list[str]
-    lob: str | None = None
+    groups: list[str] = Field(default_factory=list)
     covering_lobs: list[str] = Field(default_factory=list)
 
 

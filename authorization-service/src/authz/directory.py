@@ -49,7 +49,7 @@ def build_group_member_rows(users: list[SeedUser]) -> list[GroupMemberRow]:
             display_name=f"{user.family_name}, {user.given_name}",
             title=user.title,
             roles=list(user.roles),
-            lob=user.lob,
+            groups=list(user.groups),
             covering_lobs=list(user.covering_lobs),
         )
         for user in users

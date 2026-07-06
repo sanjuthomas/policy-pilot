@@ -68,6 +68,18 @@ class TestNeo4jDirectMatching:
         assert match is not None
         assert match.intent_id == "instruction.mutual_approval"
 
+    def test_cross_entity_reciprocal_approval_events_mode(self) -> None:
+        question = (
+            "Are there cases where one user approved another user's instruction, "
+            "and that same other user created a payment on that instruction that "
+            "the first user then approved?"
+        )
+        match = match_neo4j_direct_intent(question, mode="events")
+        assert match is not None
+        assert match.intent_id == "instruction.cross_entity_reciprocal_approval"
+        assert match.planned[0][0] == "cross_entity_reciprocal_approval"
+        assert "instruction_id AS instruction_id" in match.planned[0][1]
+
     def test_alerts_today_yaml_intent(self) -> None:
         question = "How many ALERT events happened today?"
         match = match_neo4j_direct_intent(question, mode="events")

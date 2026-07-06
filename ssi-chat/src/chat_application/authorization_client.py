@@ -142,21 +142,38 @@ def format_group_members_answer(
     *,
     amount: float | None = None,
     covering_lob: str | None = None,
+    strict_threshold: bool = True,
 ) -> str:
     from chat_application.formatting import format_markdown_table, format_usd_compact
 
-    group = data.get("group") or ""
+    groups = data.get("groups") or []
+    if not groups and data.get("group"):
+        groups = [str(data["group"])]
     members = data.get("members") or []
     amount_text = format_usd_compact(amount) if amount is not None else None
     lob_note = f" for desk {covering_lob}" if covering_lob else ""
+    comparison = "exceeding" if strict_threshold else "of at least"
 
     if amount_text:
-        header = (
-            f"Users in {group} who may approve payments above {amount_text}{lob_note} "
-            f"(policy ceiling lookup — not a live payment evaluation):"
-        )
+        ceiling_phrase = "above" if strict_threshold else "at or above"
+        if len(groups) == 1:
+            header = (
+                f"Users in {groups[0]} who may approve payments {comparison} {amount_text}{lob_note} "
+                f"(policy ceiling lookup — not a live payment evaluation):"
+            )
+        else:
+            club_list = ", ".join(groups)
+            header = (
+                f"Users who may approve payments {comparison} {amount_text}{lob_note} "
+                f"(amount-limit clubs with ceiling {ceiling_phrase} {amount_text}: {club_list}; "
+                f"policy ceiling lookup — not a live payment evaluation):"
+            )
+    elif len(groups) == 1:
+        header = f"Members of {groups[0]}{lob_note} (policy directory):"
+    elif groups:
+        header = f"Members of {', '.join(groups)}{lob_note} (policy directory):"
     else:
-        header = f"Members of {group}{lob_note} (policy directory):"
+        header = f"Matching users{lob_note} (policy directory):"
 
     if not members:
         return f"{header}\n\nNo matching users were found."
@@ -166,14 +183,14 @@ def format_group_members_answer(
             row.get("user_id") or "—",
             row.get("display_name") or "—",
             row.get("title") or "—",
-            row.get("lob") or "—",
+            ", ".join(row.get("groups") or []) or "—",
             ", ".join(row.get("covering_lobs") or []) or "—",
         ]
         for row in members
     ]
     return (
         f"{header}\n\n"
-        f"{format_markdown_table(['User ID', 'Name', 'Title', 'LOB', 'Covering LOBs'], table_rows)}"
+        f"{format_markdown_table(['User ID', 'Name', 'Title', 'Groups', 'Covering LOBs'], table_rows)}"
     )
 
 

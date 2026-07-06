@@ -721,8 +721,18 @@ class TestDownvoteRegressionQueries:
         planned = plan_graph_queries(question, mode="instructions")
         assert planned is not None
         assert planned[0][0] == "cross_entity_reciprocal_approval"
-        assert "CREATED_IV" in planned[0][1]
-        assert "APPROVED_PV" in planned[0][1]
+        assert "i.instruction_id AS instruction_id" in planned[0][1]
+        assert "pay.payment_id AS payment_id" in planned[0][1]
+
+    def test_cross_entity_reciprocal_approval_events_mode(self) -> None:
+        question = (
+            "Are there cases where one user approved another user's instruction, "
+            "and that same other user created a payment on that instruction that "
+            "the first user then approved?"
+        )
+        planned = plan_graph_queries(question, mode="events")
+        assert planned is not None
+        assert planned[0][0] == "cross_entity_reciprocal_approval"
 
 
 class TestLoadGraphSchema:

@@ -121,6 +121,13 @@ intents:
     query: instruction_mutual_approval
     formatter: instruction_mutual_approval
 
+  - id: instruction.cross_entity_reciprocal_approval
+    priority: 72
+    modes: [instructions, payments, events, all]
+    match: '\banother\s+user.?s\s+instruction\b.*\bpayment\b|\bcross[- ]entity\b.*\bapprov'
+    query: cross_entity_reciprocal_approval
+    formatter: cross_entity_reciprocal_approval
+
   - id: instruction.self_approval
     priority: 70
     modes: [instructions, all]

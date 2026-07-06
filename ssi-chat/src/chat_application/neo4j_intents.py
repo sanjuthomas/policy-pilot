@@ -106,6 +106,12 @@ def _build_instruction_mutual_approval(context: dict[str, Any], _question: str, 
     return _GRAPH_BUILDER.instruction_mutual_approval()
 
 
+def _build_cross_entity_reciprocal_approval(
+    context: dict[str, Any], _question: str, _mode: SearchMode
+):
+    return _GRAPH_BUILDER.cross_entity_reciprocal_approval()
+
+
 def _build_instruction_self_approval(context: dict[str, Any], _question: str, _mode: SearchMode):
     return _GRAPH_BUILDER.instruction_self_approval()
 
@@ -165,6 +171,7 @@ QUERY_BUILDERS: dict[str, QueryBuilder] = {
     "instruction_list_single_use": _build_instruction_list_single_use,
     "instructions_created_by_user": _build_instructions_created_by_user,
     "instruction_mutual_approval": _build_instruction_mutual_approval,
+    "cross_entity_reciprocal_approval": _build_cross_entity_reciprocal_approval,
     "instruction_self_approval": _build_instruction_self_approval,
     "instruction_duplicate_routes": _build_instruction_duplicate_routes,
     "instruction_subordinate_approver": _build_instruction_subordinate_approver,

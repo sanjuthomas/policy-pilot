@@ -227,16 +227,20 @@ class RagPipelineOrchestrator:
             format_facet_aggregate_answer,
             instruction_id_from_list_payments_question,
             is_alert_ranking_question,
+            is_cross_entity_reciprocal_approval_question,
             is_instruction_versions_list_question,
             is_max_payments_per_instruction_question,
             is_payment_versions_list_question,
             is_payments_for_instruction_question,
+            plan_graph_queries,
         )
         from chat_application.neo4j_formatters import (
+            format_cross_entity_reciprocal_approval,
             format_instruction_versions_table,
             format_payment_versions_table,
             format_security_event_alert_list,
         )
+        from chat_application.neo4j_intents import _format_planned_graph_answer
         from chat_application.rag import (
             _format_alert_ranking_answer,
             _format_instruction_count_aggregate_answer,
@@ -339,6 +343,20 @@ class RagPipelineOrchestrator:
             answer_synthesis = "formatter"
         if answer is None and is_payment_versions_list_question(message, mode=mode):
             answer = format_payment_versions_table(message, graph_result["rows"])
+            answer_synthesis = "formatter"
+        if answer is None and is_cross_entity_reciprocal_approval_question(message):
+            planned = plan_graph_queries(message, mode=mode)
+            if planned:
+                answer = _format_planned_graph_answer(
+                    message,
+                    mode=mode,
+                    planned=planned,
+                    rows=graph_result["rows"],
+                )
+            if answer is None:
+                answer = format_cross_entity_reciprocal_approval(
+                    message, graph_result["rows"]
+                )
             answer_synthesis = "formatter"
         if answer is None:
             answer = await self._service.ml_client.synthesize_answer(

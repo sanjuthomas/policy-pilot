@@ -1575,21 +1575,27 @@ def _cross_entity_reciprocal_approval_queries() -> list[tuple[str, str]]:
     return [
         (
             "cross_entity_reciprocal_approval",
-            """MATCH (instr_creator:User)-[:CREATED_IV]->(iv:InstructionVersion)<-[:APPROVED_IV]-(instr_approver:User)
-MATCH (i:Instruction)-[:CURRENT]->(iv)
+            """MATCH (i:Instruction)-[:CURRENT]->(iv:InstructionVersion)
 MATCH (i)-[:HAS_PAYMENT]->(pay:Payment)-[:CURRENT]->(pv:PaymentVersion)
-MATCH (pay_creator:User)-[:CREATED_PV]->(pv)<-[:APPROVED_PV]-(pay_approver:User)
-WHERE instr_creator.user_id = pay_approver.user_id
-  AND instr_approver.user_id = pay_creator.user_id
-  AND instr_creator.user_id <> instr_approver.user_id
-RETURN coalesce(instr_creator.display_name, instr_creator.user_id, '') AS instruction_creator_display,
-       instr_creator.user_id AS instruction_creator_id,
-       coalesce(instr_approver.display_name, instr_approver.user_id, '') AS instruction_approver_display,
-       instr_approver.user_id AS instruction_approver_id,
-       coalesce(pay_approver.display_name, pay_approver.user_id, '') AS payment_approver_display,
-       pay_approver.user_id AS payment_approver_id,
-       coalesce(pay_creator.display_name, pay_creator.user_id, '') AS payment_creator_display,
-       pay_creator.user_id AS payment_creator_id,
+WHERE iv.creator_user_id IS NOT NULL
+  AND iv.approver_user_id IS NOT NULL
+  AND pv.creator_user_id IS NOT NULL
+  AND pv.approver_user_id IS NOT NULL
+  AND iv.creator_user_id = pv.approver_user_id
+  AND iv.approver_user_id = pv.creator_user_id
+  AND iv.creator_user_id <> iv.approver_user_id
+OPTIONAL MATCH (instr_creator:User {user_id: iv.creator_user_id})
+OPTIONAL MATCH (instr_approver:User {user_id: iv.approver_user_id})
+OPTIONAL MATCH (pay_creator:User {user_id: pv.creator_user_id})
+OPTIONAL MATCH (pay_approver:User {user_id: pv.approver_user_id})
+RETURN coalesce(instr_creator.display_name, iv.creator_user_id, '') AS instruction_creator_display,
+       iv.creator_user_id AS instruction_creator_id,
+       coalesce(instr_approver.display_name, iv.approver_user_id, '') AS instruction_approver_display,
+       iv.approver_user_id AS instruction_approver_id,
+       coalesce(pay_approver.display_name, pv.approver_user_id, '') AS payment_approver_display,
+       pv.approver_user_id AS payment_approver_id,
+       coalesce(pay_creator.display_name, pv.creator_user_id, '') AS payment_creator_display,
+       pv.creator_user_id AS payment_creator_id,
        i.instruction_id AS instruction_id,
        pay.payment_id AS payment_id,
        coalesce(iv.owning_lob, '') AS owning_lob,
@@ -1926,13 +1932,11 @@ def plan_graph_queries(question: str, *, mode: str) -> list[tuple[str, str]] | N
     flags = _question_flags(question)
     time_filter = _time_filter_cypher(flags)
 
+    if is_cross_entity_reciprocal_approval_question(question):
+        return builder.cross_entity_reciprocal_approval()
+
     if mode == "instructions" and _is_subordinate_approver_question(question):
         return builder.instruction_subordinate_approver()
-
-    if mode in ("instructions", "all", "payments") and is_cross_entity_reciprocal_approval_question(
-        question
-    ):
-        return builder.cross_entity_reciprocal_approval()
 
     if mode in ("instructions", "all") and is_instruction_mutual_approval_question(question):
         return builder.instruction_mutual_approval()
