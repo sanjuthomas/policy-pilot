@@ -131,13 +131,27 @@ class CypherQueryBuilder:
     ) -> list[tuple[str, str]]:
         return qe._security_event_count_queries(time_filter=time_filter, domain=domain)
 
+    def instruction_payment_count_list(self) -> list[tuple[str, str]]:
+        return qe._instruction_payment_count_list_queries()
+
+    def instructions_without_payments(self) -> list[tuple[str, str]]:
+        return qe._instructions_without_payments_queries()
+
+    def payment_list(
+        self, question: str, flags: dict[str, bool]
+    ) -> list[tuple[str, str]]:
+        return qe._payment_list_queries(question, flags)
+
     def security_event_alert_list(
         self,
         *,
         time_filter: str,
         domain: str,
+        approval_only: bool = False,
     ) -> list[tuple[str, str]]:
-        return qe._security_event_alert_list_queries(time_filter=time_filter, domain=domain)
+        return qe._security_event_alert_list_queries(
+            time_filter=time_filter, domain=domain, approval_only=approval_only
+        )
 
     def security_event_alert_group_by_lob(
         self,

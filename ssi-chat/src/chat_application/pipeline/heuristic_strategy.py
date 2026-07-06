@@ -7,9 +7,13 @@ from chat_application.cypher import (
     is_analytics_question,
     is_count_question,
     is_instruction_count_aggregate_question,
+    is_instruction_mutual_approval_question,
+    is_instruction_payment_count_list_question,
     is_instruction_versions_list_question,
+    is_instructions_without_payments_question,
     is_max_payments_per_instruction_question,
     is_payment_count_aggregate_question,
+    is_payment_list_by_status_question,
     is_payment_total_amount_question,
     is_payment_versions_list_question,
     is_payments_for_instruction_question,
@@ -85,6 +89,14 @@ def is_graph_structured_question(question: str, *, mode: str) -> bool:
     if is_security_event_alert_list_question(question, mode=mode):
         return True
     if is_security_event_group_by_lob_question(question, mode=mode):
+        return True
+    if is_instruction_mutual_approval_question(question):
+        return True
+    if is_instruction_payment_count_list_question(question, mode=mode):
+        return True
+    if is_instructions_without_payments_question(question, mode=mode):
+        return True
+    if is_payment_list_by_status_question(question, mode=mode):
         return True
     if is_alert_ranking_question(question, mode=mode):
         return True

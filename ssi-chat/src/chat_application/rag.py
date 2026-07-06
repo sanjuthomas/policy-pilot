@@ -34,6 +34,7 @@ from chat_application.cypher import (
     normalize_read_only_cypher,
     payment_aggregate_period_label,
     payment_amount_threshold_from_question,
+    payment_status_filter_from_question,
     plan_graph_queries,
     plans_from_graph_query,
     ranking_period_label,
@@ -137,6 +138,17 @@ def _format_payment_list_table(graph_rows: list[dict[str, Any]]) -> str:
             "Approver",
         ],
         table_rows,
+    )
+
+
+def _format_payment_list_by_status_answer(message: str, graph_rows: list[dict[str, Any]]) -> str:
+    payment_rows = _dedupe_payment_graph_rows(graph_rows)
+    status = payment_status_filter_from_question(message) or "matching"
+    if not payment_rows:
+        return f"No payments in {status} state were found in the graph."
+    return (
+        f"Payments in {status} state ({len(payment_rows)}):\n\n"
+        f"{_format_payment_list_table(payment_rows)}"
     )
 
 

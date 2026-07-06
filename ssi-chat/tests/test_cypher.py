@@ -9,9 +9,14 @@ from chat_application.cypher import (
     instruction_count_filters_from_question,
     instruction_id_from_list_payments_question,
     is_alert_ranking_question,
+    is_approval_denial_alert_list_question,
     is_count_question,
     is_instruction_group_by_status_question,
+    is_instruction_mutual_approval_question,
+    is_instruction_payment_count_list_question,
+    is_instructions_without_payments_question,
     is_payment_group_by_status_question,
+    is_payment_list_by_status_question,
     is_largest_payment_question,
     is_payment_amount_threshold_question,
     is_max_payments_per_instruction_question,
@@ -654,6 +659,45 @@ class TestRowSummary:
         summary = row_summary({"user_id": "fx-201", "alert_count": 5})
         assert "user_id=fx-201" in summary
         assert "alert_count=5" in summary
+
+
+class TestDownvoteRegressionQueries:
+    def test_approval_denial_alert_list_filters_approve_actions(self) -> None:
+        question = "Can you list all approval denial alerts?"
+        assert is_approval_denial_alert_list_question(question)
+        planned = plan_graph_queries(question, mode="events")
+        assert planned is not None
+        assert planned[0][0] == "security_event_alert_list"
+        assert "e.action IN ['APPROVE', 'APPROVE_PAYMENT']" in planned[0][1]
+
+    def test_payment_list_submitted_state(self) -> None:
+        question = "Can you list payments in SUBMITTED state?"
+        assert is_payment_list_by_status_question(question, mode="payments")
+        planned = plan_graph_queries(question, mode="payments")
+        assert planned is not None
+        assert planned[0][0] == "payment_list"
+        assert "SUBMITTED" in planned[0][1]
+
+    def test_instruction_payment_count_list(self) -> None:
+        question = "Can you list instructions and count of payments for each instruction?"
+        assert is_instruction_payment_count_list_question(question, mode="instructions")
+        planned = plan_graph_queries(question, mode="instructions")
+        assert planned is not None
+        assert planned[0][0] == "instruction_payment_counts"
+
+    def test_instructions_without_payments(self) -> None:
+        question = "How many instructions have no payment?"
+        assert is_instructions_without_payments_question(question, mode="instructions")
+        planned = plan_graph_queries(question, mode="instructions")
+        assert planned is not None
+        assert planned[0][0] == "instructions_without_payments"
+
+    def test_mutual_approval_planned_graph(self) -> None:
+        question = "Are there users approving each other's instructions?"
+        assert is_instruction_mutual_approval_question(question)
+        planned = plan_graph_queries(question, mode="instructions")
+        assert planned is not None
+        assert planned[0][0] == "mutual_approval"
 
 
 class TestLoadGraphSchema:

@@ -122,6 +122,24 @@ _LIST_ALERT_QUESTION = re.compile(
     r"\b(all|every)\b.*\balerts?\b",
     re.IGNORECASE,
 )
+_APPROVAL_DENIAL_ALERT = re.compile(
+    r"\bapproval\b.{0,40}\bdenial|\bdenial\b.{0,40}\bapprov",
+    re.IGNORECASE,
+)
+_PAYMENT_LIST_QUESTION = re.compile(
+    r"\b(list|show|enumerate|display)\b.*\bpayments?\b",
+    re.IGNORECASE,
+)
+_INSTRUCTION_PAYMENT_COUNT_LIST = re.compile(
+    r"\b(list|show)\b.*\binstructions?\b.*\b(count|number)\b.*\bpayments?\b|"
+    r"\binstructions?\b.*\bpayments?\b.*\b(count|number)\b.*\b(each|per)\b|"
+    r"\bcount\s+of\s+payments\b.*\binstructions?\b",
+    re.IGNORECASE,
+)
+_INSTRUCTION_MUTUAL_APPROVAL = re.compile(
+    r"\bmutual\s+approv|\bapprov\w*\b.*\beach\s+other",
+    re.IGNORECASE,
+)
 _ALERT_GROUP_BY_LOB = re.compile(
     r"\b(?:group(?:ed)?|break\s*down|split|bucket(?:ed)?|distribut(?:e|ion)|"
     r"count\s+per|number\s+of\s+\w+\s+per|how\s+many\s+\w+\s+per)\b.{0,60}\b(?:by|per)\s+(?:lob|line\s+of\s+business)\b|"
@@ -415,6 +433,11 @@ def is_security_event_count_aggregate_question(question: str, *, mode: str = "ev
     return "security event" in q or mode == "events"
 
 
+def is_approval_denial_alert_list_question(question: str) -> bool:
+    """True when the user wants ALERT events for denied approval attempts."""
+    return bool(_APPROVAL_DENIAL_ALERT.search(question))
+
+
 def is_security_event_alert_list_question(question: str, *, mode: str = "events") -> bool:
     """True when the user wants a tabular list of ALERT events (not rankings or counts)."""
     if mode not in ("events", "all"):
@@ -430,6 +453,58 @@ def is_security_event_alert_list_question(question: str, *, mode: str = "events"
         return True
     q = question.lower()
     return "alert" in q and "actor" in q and "action" in q
+
+
+def is_instruction_mutual_approval_question(question: str) -> bool:
+    return bool(_INSTRUCTION_MUTUAL_APPROVAL.search(question))
+
+
+def is_payment_list_by_status_question(question: str, *, mode: str = "payments") -> bool:
+    """True when the user wants a tabular list of payments filtered by lifecycle status."""
+    if mode not in ("payments", "all"):
+        return False
+    if is_count_question(question):
+        return False
+    if is_payments_for_instruction_question(question):
+        return False
+    if not _PAYMENT_LIST_QUESTION.search(question):
+        return False
+    q = question.lower()
+    if "payment" not in q:
+        return False
+    if payment_status_filter_from_question(question):
+        return True
+    return any(token in q for token in ("draft", "submit", "approv", "reject", "cancel", "pending"))
+
+
+def is_instruction_payment_count_list_question(question: str, *, mode: str = "instructions") -> bool:
+    """True when the user wants each instruction with its payment count."""
+    if mode not in ("instructions", "all"):
+        return False
+    if is_max_payments_per_instruction_question(question):
+        return False
+    if not _INSTRUCTION_PAYMENT_COUNT_LIST.search(question):
+        return False
+    if is_count_question(question) and not re.search(r"\blist\b", question, re.IGNORECASE):
+        return False
+    return True
+
+
+def is_instructions_without_payments_question(question: str, *, mode: str = "instructions") -> bool:
+    if mode not in ("instructions", "all"):
+        return False
+    if not is_count_question(question):
+        return False
+    q = question.lower()
+    if "instruction" not in q:
+        return False
+    return bool(
+        re.search(
+            r"\bno\s+payments?\b|\bwithout\s+payments?\b|\bzero\s+payments?\b|"
+            r"\blacking\s+payments?\b",
+            q,
+        )
+    )
 
 
 def is_instruction_versions_list_question(question: str, *, mode: str = "instructions") -> bool:
@@ -1098,6 +1173,66 @@ LIMIT 200""",
     ]
 
 
+def _payment_list_queries(question: str, flags: dict[str, bool]) -> list[tuple[str, str]]:
+    lob = lob_filter_from_question(question)
+    lob_filter = f"AND p.owning_lob = '{lob}'" if lob else ""
+    status_filter = _payment_status_filter_cypher(question)
+    time_filter = _payment_time_filter_cypher(
+        flags,
+        use_value_date=is_payment_value_date_question(question),
+    )
+    return [
+        (
+            "payment_list",
+            f"""{_payment_latest_status_match_prefix()}
+AND true {status_filter} {lob_filter} {time_filter}
+OPTIONAL MATCH (creator:User)-[:CREATED_PV]->(p)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PV]->(p)
+RETURN pay.payment_id AS payment_id,
+       p.instruction_id AS instruction_id,
+       p.status AS status,
+       p.amount AS amount,
+       p.currency AS currency,
+       p.value_date AS value_date,
+       p.owning_lob AS owning_lob,
+       p.created_at AS created_at,
+       coalesce(creator.display_name, creator.user_id, p.creator_user_id, '') AS creator_display,
+       coalesce(approver.display_name, approver.user_id, p.approver_user_id, '') AS approver_display
+ORDER BY p.created_at ASC
+LIMIT 200""",
+        ),
+    ]
+
+
+def _instruction_payment_count_list_queries() -> list[tuple[str, str]]:
+    return [
+        (
+            "instruction_payment_counts",
+            """MATCH (i:Instruction)
+OPTIONAL MATCH (i)-[:HAS_PAYMENT]->(pay:Payment)
+WITH i, count(DISTINCT pay.payment_id) AS payment_count
+RETURN i.instruction_id AS instruction_id,
+       coalesce(i.current_status, '') AS status,
+       coalesce(i.owning_lob, '') AS owning_lob,
+       payment_count
+ORDER BY payment_count DESC, instruction_id ASC
+LIMIT 200""",
+        ),
+    ]
+
+
+def _instructions_without_payments_queries() -> list[tuple[str, str]]:
+    return [
+        (
+            "instructions_without_payments",
+            """MATCH (i:Instruction)
+WHERE NOT (i)-[:HAS_PAYMENT]->(:Payment)
+RETURN count(i) AS total
+LIMIT 1""",
+        ),
+    ]
+
+
 def _max_payments_per_instruction_queries() -> list[tuple[str, str]]:
     """Instruction with the most payments, plus one row per payment."""
     return [
@@ -1606,6 +1741,7 @@ def _security_event_alert_list_queries(
     *,
     time_filter: str,
     domain: str,
+    approval_only: bool = False,
 ) -> list[tuple[str, str]]:
     domain_filter = ""
     if domain == "payments":
@@ -1613,11 +1749,15 @@ def _security_event_alert_list_queries(
     elif domain == "instructions":
         domain_filter = "AND e.payment_id IS NULL"
 
+    action_filter = ""
+    if approval_only:
+        action_filter = "AND e.action IN ['APPROVE', 'APPROVE_PAYMENT']"
+
     return [
         (
             "security_event_alert_list",
             f"""MATCH (e:SecurityEvent {{severity: 'ALERT'}})
-WHERE true {domain_filter} {time_filter}{_SECURITY_EVENT_GRAPH_OPTIONAL_MATCHES}
+WHERE true {domain_filter} {time_filter} {action_filter}{_SECURITY_EVENT_GRAPH_OPTIONAL_MATCHES}
 RETURN e.event_id AS event_id,
        e.timestamp AS timestamp,
        e.action AS action,
@@ -1700,6 +1840,24 @@ def plan_graph_queries(question: str, *, mode: str) -> list[tuple[str, str]] | N
     if mode == "instructions" and _is_subordinate_approver_question(question):
         return builder.instruction_subordinate_approver()
 
+    if mode in ("instructions", "all") and is_instruction_mutual_approval_question(question):
+        return builder.instruction_mutual_approval()
+
+    if mode in ("instructions", "all") and is_instruction_payment_count_list_question(
+        question, mode=mode
+    ):
+        return builder.instruction_payment_count_list()
+
+    if mode in ("instructions", "all") and is_instructions_without_payments_question(
+        question, mode=mode
+    ):
+        return builder.instructions_without_payments()
+
+    if mode in ("payments", "all") and is_payment_list_by_status_question(
+        question, mode=mode
+    ):
+        return builder.payment_list(question, flags)
+
     if mode in ("instructions", "all") and is_instruction_versions_list_question(
         question, mode=mode
     ):
@@ -1764,15 +1922,18 @@ def plan_graph_queries(question: str, *, mode: str) -> list[tuple[str, str]] | N
     if mode in ("events", "all") and is_security_event_alert_list_question(
         question, mode=mode
     ):
+        approval_only = is_approval_denial_alert_list_question(question)
         if flags["payments"]:
             return builder.security_event_alert_list(
-                time_filter=time_filter, domain="payments"
+                time_filter=time_filter, domain="payments", approval_only=approval_only
             )
         if flags["instructions"]:
             return builder.security_event_alert_list(
-                time_filter=time_filter, domain="instructions"
+                time_filter=time_filter, domain="instructions", approval_only=approval_only
             )
-        return builder.security_event_alert_list(time_filter=time_filter, domain="all")
+        return builder.security_event_alert_list(
+            time_filter=time_filter, domain="all", approval_only=approval_only
+        )
 
     if mode in ("events", "all") and is_security_event_group_by_lob_question(
         question, mode=mode

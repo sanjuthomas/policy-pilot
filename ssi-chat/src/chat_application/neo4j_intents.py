@@ -20,12 +20,17 @@ from chat_application.cypher import (
     instruction_id_from_list_payments_question,
     is_alert_ranking_question,
     is_analytics_question,
+    is_approval_denial_alert_list_question,
     is_count_question,
     is_instruction_count_aggregate_question,
+    is_instruction_mutual_approval_question,
+    is_instruction_payment_count_list_question,
     is_instruction_versions_list_question,
+    is_instructions_without_payments_question,
     is_largest_payment_question,
     is_max_payments_per_instruction_question,
     is_payment_amount_threshold_question,
+    is_payment_list_by_status_question,
     is_payment_total_amount_question,
     is_payment_versions_list_question,
     is_payments_for_instruction_question,
@@ -140,8 +145,13 @@ def _build_payment_versions(context: dict[str, Any], _question: str, _mode: Sear
     return _GRAPH_BUILDER.payment_versions(payment_id)
 
 
-def _build_security_event_alert_list(context: dict[str, Any], _question: str, _mode: SearchMode):
-    return _GRAPH_BUILDER.security_event_alert_list(time_filter="", domain="all")
+def _build_security_event_alert_list(context: dict[str, Any], question: str, _mode: SearchMode):
+    approval_only = is_approval_denial_alert_list_question(question)
+    return _GRAPH_BUILDER.security_event_alert_list(
+        time_filter="",
+        domain="all",
+        approval_only=approval_only,
+    )
 
 
 QUERY_BUILDERS: dict[str, QueryBuilder] = {
@@ -317,6 +327,31 @@ def _format_planned_graph_answer(
         from chat_application.rag import _format_payment_total_amount_answer
 
         return _format_payment_total_amount_answer(question, rows)
+
+    if "payment_list" in labels and is_payment_list_by_status_question(question, mode=mode):
+        from chat_application.rag import _format_payment_list_by_status_answer
+
+        return _format_payment_list_by_status_answer(question, rows)
+
+    if "instruction_payment_counts" in labels and is_instruction_payment_count_list_question(
+        question, mode=mode
+    ):
+        from chat_application.neo4j_formatters import (
+            format_instruction_payment_counts_table,
+        )
+
+        return format_instruction_payment_counts_table(question, rows)
+
+    if "instructions_without_payments" in labels and is_instructions_without_payments_question(
+        question, mode=mode
+    ):
+        total = int(rows[0].get("total") or 0) if rows else 0
+        return f"There are {total} instruction(s) with no payments."
+
+    if "mutual_approval" in labels and is_instruction_mutual_approval_question(question):
+        from chat_application.neo4j_formatters import format_instruction_mutual_approval
+
+        return format_instruction_mutual_approval(question, rows)
 
     if "max_payments_per_instruction" in labels and is_max_payments_per_instruction_question(question):
         from chat_application.rag import _format_max_payments_per_instruction_answer

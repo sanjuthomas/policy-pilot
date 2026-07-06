@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from cypher_builder.query_engine import is_approval_denial_alert_list_question
+
 from chat_application.formatting import (
     format_approval_auth_lines,
     format_markdown_table,
@@ -253,6 +255,8 @@ def format_alert_count_today(question: str, rows: list[dict[str, Any]]) -> str |
 def format_security_event_alert_list(question: str, rows: list[dict[str, Any]]) -> str | None:
     detail_rows = [row for row in rows if row.get("event_id")]
     if not detail_rows:
+        if is_approval_denial_alert_list_question(question):
+            return "No approval-denial ALERT security events were found in the graph."
         return "No ALERT security events were found in the graph."
 
     table_rows = [
@@ -266,9 +270,32 @@ def format_security_event_alert_list(question: str, rows: list[dict[str, Any]]) 
         ]
         for row in detail_rows
     ]
+    title = (
+        "Approval denial ALERT security events"
+        if is_approval_denial_alert_list_question(question)
+        else "ALERT security events"
+    )
     return (
-        f"ALERT security events ({len(table_rows)}):\n\n"
+        f"{title} ({len(table_rows)}):\n\n"
         f"{format_markdown_table(['Event ID', 'Event Time', 'Entity Type', 'Entity ID', 'Actor', 'Action'], table_rows)}"
+    )
+
+
+def format_instruction_payment_counts_table(question: str, rows: list[dict[str, Any]]) -> str | None:
+    if not rows:
+        return "No instructions were found in the graph."
+    table_rows = [
+        [
+            row.get("instruction_id") or "—",
+            row.get("status") or "—",
+            row.get("owning_lob") or "—",
+            row.get("payment_count", 0),
+        ]
+        for row in rows
+    ]
+    return (
+        f"Instruction payment counts ({len(table_rows)}):\n\n"
+        f"{format_markdown_table(['Instruction ID', 'Status', 'LOB', 'Payments'], table_rows)}"
     )
 
 
