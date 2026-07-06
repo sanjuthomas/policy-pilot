@@ -21,17 +21,31 @@ Policy Pilot models that end to end. Every mutation is recorded, streamed throug
 
 Policy Pilot surfaces **fraud patterns, compliance violations, and collusion signals** — not just application status screens.
 
-- _Are there any instances of approving each other's instructions?_ 
-- _Are there cases where one user created an instruction that another user approved, and that approver later created a payment on the same instruction that the original creator then approved?_ 
-- _Who has permission to approve payments worth more than $25 billion, and for which lines of business?_ 
-- _Can you list all instructions without any payments?_ 
-- _Are there instructions approved by someone who reports directly to the creator?_ 
-- _Who approved instruction X, and why was it allowed?_ 
-- _Who can approve payment Y?_ 
-- _Show me all ALERT events for FICC instructions in the last 7 days._ 
-- _Are there active instructions sharing the same creditor account and currency?_ 
+**Demo tags** (see [intent determination](docs/intent-determination.md)): **`graph`** — planned Neo4j Cypher (counts, lists, relationships) · **`tools`** — live OPA / policy directory API (who *can* approve) · **`vector`** — semantic retrieval over security-event audit text · **`multimodal`** — indexed event narratives (dense embeddings + BM25 on the same multimodal store; use **Events** mode)
 
-More examples and demo personas: **[Domain models and demo users](docs/domain-models.md)**.
+**Graph**
+
+- _Are there any instances of approving each other's instructions?_ **`graph`**
+- _Are there cases where one user created an instruction that another user approved, and that approver later created a payment on the same instruction that the original creator then approved?_ **`graph`**
+- _Can you list all instructions without any payments?_ **`graph`**
+- _Are there instructions approved by someone who reports directly to the creator?_ **`graph`**
+- _Are there active instructions sharing the same creditor account and currency?_ **`graph`**
+- _Who approved instruction X, and why was it allowed?_ **`graph`** **`multimodal`**
+
+**Tools** (live policy — log in as compliance analyst `comp-001` for directory lookups)
+
+- _Who has permission to approve payments worth more than $25 billion, and for which lines of business?_ **`tools`**
+- _Who can approve payment Y?_ **`tools`**
+
+**Vector / multimodal** (open-ended audit trail — use **Events** mode)
+
+- _Show payment policy denial ALERT events today with actor and reason._ **`vector`** **`multimodal`**
+- _What explanations appear in the audit trail when a payment approval is blocked because the approver reports directly to the payment creator?_ **`vector`** **`multimodal`**
+- _Show ALERT events for LOB coverage violations on payments._ **`vector`** **`multimodal`**
+- _Show all REJECT events this week with the rejection reason._ **`vector`** **`multimodal`**
+- _Show all ALERT events for FICC instructions in the last 7 days._ **`vector`** **`multimodal`**
+
+More examples and demo personas: **[Domain models and demo users](docs/domain-models.md)**. Full regression bank with retrieval tags: **[ssi-chat/regression/questions.yaml](ssi-chat/regression/questions.yaml)**.
 
 ---
 
