@@ -21,15 +21,15 @@ Policy Pilot models that end to end. Every mutation is recorded, streamed throug
 
 Policy Pilot surfaces **fraud patterns, compliance violations, and collusion signals** — not just application status screens.
 
-- _Are there any instances of approving each other's instructions?_
-- _Are there cases where one user approved another user's instruction, and that same other user created a payment on that instruction that the first user then approved?_ (cross-entity reciprocal approval — graph)
-- _Who has permission to approve payments worth more than $25 billion, and for which lines of business?_ (policy directory — amount-limit club + covering LOBs)
-- _Can you list all instructions without any payments?_ (graph)
-- _Are there instructions approved by someone who reports directly to the creator?_
-- _Who approved instruction X, and why was it allowed?_ (full OPA audit — Who / When / Why)
-- _Who can approve payment Y?_ (live OPA eligibility, not historical guesswork)
-- _Show me all ALERT events for FICC instructions in the last 7 days._
-- _Are there active instructions sharing the same creditor account and currency?_
+- _Are there any instances of approving each other's instructions?_ 
+- _Are there cases where one user created an instruction that another user approved, and that approver later created a payment on the same instruction that the original creator then approved?_ 
+- _Who has permission to approve payments worth more than $25 billion, and for which lines of business?_ 
+- _Can you list all instructions without any payments?_ 
+- _Are there instructions approved by someone who reports directly to the creator?_ 
+- _Who approved instruction X, and why was it allowed?_ 
+- _Who can approve payment Y?_ 
+- _Show me all ALERT events for FICC instructions in the last 7 days._ 
+- _Are there active instructions sharing the same creditor account and currency?_ 
 
 More examples and demo personas: **[Domain models and demo users](docs/domain-models.md)**.
 
@@ -43,6 +43,7 @@ Policy Pilot sits at the end of an event-driven pipeline: domain services enforc
 
 | Topic | Summary |
 |-------|---------|
+| **[OPA policy controls](docs/opa-controls.md)** | Segregation of duties, reporting-line inversion of control, LOB boundaries, amount clubs — the checks and balances enforced on every action. |
 | **[Intent determination](docs/intent-determination.md)** | Gemini returns a strict `RouterDecision` (eligibility, graph, vector, or hybrid). Selective retrieval — no blind merge of graph and vector on every question. |
 | **[Data flow](docs/data-flow.md)** | Mongo transactions → Kafka CDC → four ETL pipelines → Neo4j + multimodal store → chat. |
 | **[Architecture decisions](docs/architecture-decisions.md)** | Why ZITADEL, OPA, MongoDB, Kafka, Neo4j hybrid search, Vertex AI, and `cypher_builder`. |
@@ -158,6 +159,7 @@ Demo logins (password `Password1!`): see **[Domain models and demo users](docs/d
 
 | Document | Contents |
 |----------|----------|
+| [docs/opa-controls.md](docs/opa-controls.md) | OPA checks and balances — four-eyes, reporting lines, LOB scope, amount clubs |
 | [docs/intent-determination.md](docs/intent-determination.md) | Route → Retrieve → Synthesize pipeline, `RouterDecision`, observability |
 | [docs/data-flow.md](docs/data-flow.md) | End-to-end pipeline, transactions, storage and Kafka topics |
 | [docs/architecture-decisions.md](docs/architecture-decisions.md) | ZITADEL, OPA, MongoDB, Kafka, Neo4j, Vertex, models |

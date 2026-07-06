@@ -41,7 +41,7 @@ Valid LOB values: `FICC`, `FX`, or `DESK_<name>`.
 
 `CREATE`, `UPDATE`, `CANCEL`, `SUBMIT`, `APPROVE`, `REJECT`, `SUSPEND`, `REACTIVATE`, `USE`, `VIEW`
 
-Key rules: creator cannot approve own instruction; approver must not report directly to creator (inversion of control); approver LOB must match instruction LOB; approver title must satisfy the approval matrix.
+Key rules: creator cannot approve own instruction; approver must not report directly to creator (inversion of control); manager cannot approve direct report’s instruction; approver LOB must match instruction LOB; approver title must satisfy the approval matrix. Full control catalog: **[docs/opa-controls.md](../docs/opa-controls.md)**.
 
 Policy denials surface as HTTP 403 and `ALERT` security events in Mongo (streamed to Kafka by Connect). Authorization-service queries:
 
@@ -68,7 +68,7 @@ On allow, domain services build `details.authorization.summary` from `allow_basi
 
 `CREATE`, `SUBMIT`, `APPROVE`, `REJECT`, `CANCEL`
 
-Key rules: payment amount within user's club ceiling and absolute $100 B limit; instruction status must be `APPROVED` and not expired; creator cannot approve own payment; approver must not report directly to creator; approver must cover the instruction LOB.
+Key rules: payment amount within user's club ceiling and absolute $100 B limit; instruction status must be `APPROVED` and not expired; creator cannot approve own payment; approver must not report directly to creator; approver must cover the instruction LOB. Full control catalog: **[docs/opa-controls.md](../docs/opa-controls.md)**.
 
 Policy denials surface as HTTP 403 and `ALERT` security events in Mongo (streamed to Kafka by Connect).
 
