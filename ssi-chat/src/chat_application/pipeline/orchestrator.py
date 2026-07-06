@@ -42,6 +42,17 @@ class RagPipelineOrchestrator:
         started = time.perf_counter()
 
         decision = await route_question(self._service.ml_client, message, mode=mode)
+
+        policy_directory_response = await self._try_policy_directory(
+            message,
+            mode=mode,
+            bearer_token=bearer_token,
+            session_id=session_id,
+            started=started,
+        )
+        if policy_directory_response is not None:
+            return policy_directory_response
+
         eligibility_response = await self._try_eligibility(
             message,
             mode=mode,
@@ -117,6 +128,35 @@ class RagPipelineOrchestrator:
             path="full_rag",
             cypher_provenance=graph_provenance,
             answer_synthesis=answer_synthesis,
+        )
+
+    async def _try_policy_directory(
+        self,
+        message: str,
+        *,
+        mode: SearchMode,
+        bearer_token: str | None,
+        session_id: str | None,
+        started: float,
+    ) -> ChatResponse | None:
+        answer = await self._service._answer_payment_approval_directory(
+            message,
+            bearer_token=bearer_token,
+            session_id=session_id,
+        )
+        if answer is None:
+            return None
+
+        elapsed = (time.perf_counter() - started) * 1000
+        return finalize_chat_response(
+            message,
+            mode,
+            answer=answer,
+            retrieval_ms=0.0,
+            generation_ms=elapsed,
+            path="eligibility",
+            cypher_provenance="none",
+            answer_synthesis="eligibility_api",
         )
 
     async def _try_eligibility(

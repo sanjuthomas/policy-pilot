@@ -3,7 +3,8 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 import pytest
-from authz.authorization_routes import _eligibility_service
+from authz.authorization_routes import _eligibility_service, _user_directory
+from authz.dependencies import get_compliance_subject
 from authz.evaluate_dependencies import get_service_caller
 from authz.main import app
 from authz.models import PaymentEligibilityContext, Subject

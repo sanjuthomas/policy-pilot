@@ -144,6 +144,44 @@ def format_instruction_inventory_table(question: str, rows: list[dict[str, Any]]
     )
 
 
+def format_cross_entity_reciprocal_approval(
+    question: str, rows: list[dict[str, Any]]
+) -> str | None:
+    if not rows:
+        return (
+            "No cross-entity reciprocal approval cases were found in the graph "
+            "(instruction approval in one direction and payment approval on the same "
+            "instruction route in the other)."
+        )
+    table_rows = [
+        [
+            row.get("instruction_creator_display"),
+            row.get("instruction_approver_display"),
+            row.get("payment_creator_display"),
+            row.get("payment_approver_display"),
+            row.get("instruction_id"),
+            row.get("payment_id"),
+            row.get("owning_lob") or "—",
+        ]
+        for row in rows
+    ]
+    return (
+        f"Found {len(table_rows)} cross-entity reciprocal approval case(s).\n\n"
+        f"{format_markdown_table(
+            [
+                'Instruction creator',
+                'Instruction approver',
+                'Payment creator',
+                'Payment approver',
+                'Instruction ID',
+                'Payment ID',
+                'LOB',
+            ],
+            table_rows,
+        )}"
+    )
+
+
 def format_instruction_mutual_approval(question: str, rows: list[dict[str, Any]]) -> str | None:
     if not rows:
         return "No mutual approval cases were found in the graph."
@@ -281,6 +319,25 @@ def format_security_event_alert_list(question: str, rows: list[dict[str, Any]]) 
     )
 
 
+def format_instructions_without_payments_table(
+    question: str, rows: list[dict[str, Any]]
+) -> str | None:
+    if not rows:
+        return "No instructions without payments were found in the graph."
+    table_rows = [
+        [
+            row.get("instruction_id") or "—",
+            row.get("status") or "—",
+            row.get("owning_lob") or "—",
+        ]
+        for row in rows
+    ]
+    return (
+        f"Instructions without payments ({len(table_rows)}):\n\n"
+        f"{format_markdown_table(['Instruction ID', 'Status', 'LOB'], table_rows)}"
+    )
+
+
 def format_instruction_payment_counts_table(question: str, rows: list[dict[str, Any]]) -> str | None:
     if not rows:
         return "No instructions were found in the graph."
@@ -353,6 +410,7 @@ FORMATTERS: dict[str, Formatter] = {
     "payment_creator_and_approver_by_id": format_payment_creator_and_approver_by_id,
     "instruction_inventory_table": format_instruction_inventory_table,
     "instruction_mutual_approval": format_instruction_mutual_approval,
+    "cross_entity_reciprocal_approval": format_cross_entity_reciprocal_approval,
     "instruction_compliance_table": format_instruction_compliance_table,
     "instruction_conflict_table": format_instruction_conflict_table,
     "security_event_timeline": format_security_event_timeline,

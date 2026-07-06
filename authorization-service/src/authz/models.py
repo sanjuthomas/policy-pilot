@@ -175,6 +175,21 @@ class UserDirectoryResponse(BaseModel):
     users: list[UserDirectoryRow]
 
 
+class GroupMemberRow(BaseModel):
+    user_id: str
+    display_name: str
+    title: str
+    roles: list[str]
+    lob: str | None = None
+    covering_lobs: list[str] = Field(default_factory=list)
+
+
+class GroupMembersResponse(BaseModel):
+    group: str
+    count: int
+    members: list[GroupMemberRow]
+
+
 class PolicyDecisionResponse(BaseModel):
     allowed: bool
     allow_basis: list[str] = Field(default_factory=list)

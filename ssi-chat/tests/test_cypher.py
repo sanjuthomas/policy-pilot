@@ -13,6 +13,7 @@ from chat_application.cypher import (
     is_count_question,
     is_instruction_group_by_status_question,
     is_instruction_mutual_approval_question,
+    is_cross_entity_reciprocal_approval_question,
     is_instruction_payment_count_list_question,
     is_instructions_without_payments_question,
     is_payment_group_by_status_question,
@@ -685,12 +686,22 @@ class TestDownvoteRegressionQueries:
         assert planned is not None
         assert planned[0][0] == "instruction_payment_counts"
 
-    def test_instructions_without_payments(self) -> None:
+    def test_instructions_without_payments_count(self) -> None:
         question = "How many instructions have no payment?"
         assert is_instructions_without_payments_question(question, mode="instructions")
         planned = plan_graph_queries(question, mode="instructions")
         assert planned is not None
         assert planned[0][0] == "instructions_without_payments"
+        assert "count(i) AS total" in planned[0][1]
+
+    def test_instructions_without_payments_list(self) -> None:
+        question = "Can you list all instructions without any payments?"
+        assert is_instructions_without_payments_question(question, mode="instructions")
+        planned = plan_graph_queries(question, mode="instructions")
+        assert planned is not None
+        assert planned[0][0] == "instructions_without_payments_list"
+        assert "instruction_id AS instruction_id" in planned[0][1]
+        assert "HAS_PAYMENT" in planned[0][1]
 
     def test_mutual_approval_planned_graph(self) -> None:
         question = "Are there users approving each other's instructions?"
@@ -698,6 +709,20 @@ class TestDownvoteRegressionQueries:
         planned = plan_graph_queries(question, mode="instructions")
         assert planned is not None
         assert planned[0][0] == "mutual_approval"
+
+    def test_cross_entity_reciprocal_approval_planned_graph(self) -> None:
+        question = (
+            "Are there cases where one user approved another user's instruction, "
+            "and that same other user created a payment on that instruction that "
+            "the first user then approved?"
+        )
+        assert is_cross_entity_reciprocal_approval_question(question)
+        assert not is_instruction_mutual_approval_question(question)
+        planned = plan_graph_queries(question, mode="instructions")
+        assert planned is not None
+        assert planned[0][0] == "cross_entity_reciprocal_approval"
+        assert "CREATED_IV" in planned[0][1]
+        assert "APPROVED_PV" in planned[0][1]
 
 
 class TestLoadGraphSchema:

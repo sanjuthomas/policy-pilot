@@ -22,6 +22,9 @@ Policy Pilot models that end to end. Every mutation is recorded, streamed throug
 Policy Pilot surfaces **fraud patterns, compliance violations, and collusion signals** — not just application status screens.
 
 - _Are there any instances of approving each other's instructions?_
+- _Are there cases where one user approved another user's instruction, and that same other user created a payment on that instruction that the first user then approved?_ (cross-entity reciprocal approval — graph)
+- _Who has permission to approve payments worth more than $25 billion, and for which lines of business?_ (policy directory — amount-limit club + covering LOBs)
+- _Can you list all instructions without any payments?_ (graph)
 - _Are there instructions approved by someone who reports directly to the creator?_
 - _Who approved instruction X, and why was it allowed?_ (full OPA audit — Who / When / Why)
 - _Who can approve payment Y?_ (live OPA eligibility, not historical guesswork)

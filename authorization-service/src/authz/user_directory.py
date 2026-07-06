@@ -74,3 +74,31 @@ class UserDirectory:
             candidates.append(user.to_subject())
         candidates.sort(key=lambda subject: subject.user_id)
         return candidates
+
+    def members_of_group(
+        self,
+        group: str,
+        *,
+        role: str | None = None,
+        covering_lob: str | None = None,
+    ) -> list[SeedUser]:
+        """Return seed users whose ZITADEL groups include ``group`` (case-insensitive)."""
+        group_upper = group.strip().upper()
+        if not group_upper:
+            return []
+
+        role_upper = role.strip().upper() if role else None
+        lob_upper = covering_lob.strip().upper() if covering_lob else None
+
+        members: list[SeedUser] = []
+        for user in self._seed.users:
+            if group_upper not in {entry.upper() for entry in user.groups}:
+                continue
+            if role_upper and role_upper not in {entry.upper() for entry in user.roles}:
+                continue
+            if lob_upper and lob_upper not in {entry.upper() for entry in user.covering_lobs}:
+                continue
+            members.append(user)
+
+        members.sort(key=lambda entry: entry.user_id)
+        return members

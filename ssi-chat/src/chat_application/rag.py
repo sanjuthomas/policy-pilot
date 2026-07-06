@@ -893,6 +893,59 @@ class RagService:
 
         return format_eligible_approvers_answer(data)
 
+    async def _answer_payment_approval_directory(
+        self,
+        message: str,
+        *,
+        bearer_token: str | None,
+        session_id: str | None,
+    ) -> str | None:
+        from chat_application.authorization_client import (
+            EligibilityClientError,
+            format_group_members_answer,
+        )
+        from chat_application.policy_directory import (
+            covering_lob_filter_from_question,
+            is_payment_approval_directory_question,
+            payment_approval_group_from_question,
+        )
+
+        if not is_payment_approval_directory_question(message):
+            return None
+
+        if not bearer_token:
+            return (
+                "This question requires policy directory access. "
+                "Log in as a compliance analyst (comp-001 or comp-002) using the sign-in "
+                "panel above, then ask again."
+            )
+
+        group, amount = payment_approval_group_from_question(message)
+        if not group:
+            return (
+                "I could not determine which payment amount-limit club applies. "
+                "Try including an amount (e.g. $25 billion) or a club name such as "
+                "UP_TO_100_BILLION_CLUB."
+            )
+
+        covering_lob = covering_lob_filter_from_question(message)
+        try:
+            data = await self._eligibility.group_members(
+                group,
+                bearer_token=bearer_token,
+                role="FUNDING_APPROVER",
+                covering_lob=covering_lob,
+                session_id=session_id,
+            )
+        except EligibilityClientError as exc:
+            return str(exc)
+
+        return format_group_members_answer(
+            data,
+            amount=amount,
+            covering_lob=covering_lob,
+        )
+
     async def _answer_instruction_eligible_approvers(
         self,
         message: str,

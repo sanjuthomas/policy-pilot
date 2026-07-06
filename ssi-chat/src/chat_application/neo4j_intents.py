@@ -22,6 +22,7 @@ from chat_application.cypher import (
     is_analytics_question,
     is_approval_denial_alert_list_question,
     is_count_question,
+    is_cross_entity_reciprocal_approval_question,
     is_instruction_count_aggregate_question,
     is_instruction_mutual_approval_question,
     is_instruction_payment_count_list_question,
@@ -342,11 +343,29 @@ def _format_planned_graph_answer(
 
         return format_instruction_payment_counts_table(question, rows)
 
+    if "instructions_without_payments_list" in labels and is_instructions_without_payments_question(
+        question, mode=mode
+    ):
+        from chat_application.neo4j_formatters import (
+            format_instructions_without_payments_table,
+        )
+
+        return format_instructions_without_payments_table(question, rows)
+
     if "instructions_without_payments" in labels and is_instructions_without_payments_question(
         question, mode=mode
     ):
         total = int(rows[0].get("total") or 0) if rows else 0
         return f"There are {total} instruction(s) with no payments."
+
+    if "cross_entity_reciprocal_approval" in labels and is_cross_entity_reciprocal_approval_question(
+        question
+    ):
+        from chat_application.neo4j_formatters import (
+            format_cross_entity_reciprocal_approval,
+        )
+
+        return format_cross_entity_reciprocal_approval(question, rows)
 
     if "mutual_approval" in labels and is_instruction_mutual_approval_question(question):
         from chat_application.neo4j_formatters import format_instruction_mutual_approval

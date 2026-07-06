@@ -37,3 +37,49 @@ users:
     candidates = directory.funding_approver_candidates("FICC")
 
     assert [subject.user_id for subject in candidates] == ["pay-201"]
+
+
+def test_members_of_group_filters_role_and_covering_lob(tmp_path: Path) -> None:
+    users_yaml = tmp_path / "users.yaml"
+    users_yaml.write_text(
+        """
+users:
+  - user_id: pay-204
+    given_name: Wei
+    family_name: Chen
+    title: Managing Director
+    roles: [FUNDING_APPROVER]
+    groups: [MIDDLE_OFFICE, UP_TO_100_BILLION_CLUB]
+    covering_lobs: [FICC, FX, DESK_RATES]
+  - user_id: pay-201
+    given_name: Sophie
+    family_name: Laurent
+    title: Vice President
+    lob: FICC
+    roles: [FUNDING_APPROVER]
+    groups: [MIDDLE_OFFICE, UP_TO_1_BILLION_CLUB]
+    covering_lobs: [FICC, FX]
+  - user_id: pay-203
+    given_name: Anna
+    family_name: Kowalski
+    title: Associate
+    roles: [PAYMENT_CREATOR, FUNDING_APPROVER]
+    groups: [MIDDLE_OFFICE, UP_TO_100_MILLION_CLUB]
+    covering_lobs: [FX]
+""",
+        encoding="utf-8",
+    )
+
+    directory = UserDirectory(users_yaml)
+    members = directory.members_of_group("UP_TO_100_BILLION_CLUB")
+
+    assert [user.user_id for user in members] == ["pay-204"]
+
+    filtered = directory.members_of_group(
+        "UP_TO_1_BILLION_CLUB",
+        role="FUNDING_APPROVER",
+        covering_lob="FICC",
+    )
+    assert [user.user_id for user in filtered] == ["pay-201"]
+    assert filtered[0].lob == "FICC"
+    assert filtered[0].covering_lobs == ["FICC", "FX"]

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from authz.models import UserDirectoryRow
-from authz.user_directory import _AMOUNT_CLUBS, UserDirectory
+from authz.models import GroupMemberRow, UserDirectoryRow
+from authz.user_directory import _AMOUNT_CLUBS, SeedUser, UserDirectory
 
 
 def _split_groups(groups: list[str]) -> tuple[list[str], list[str]]:
@@ -40,3 +40,17 @@ def build_user_directory_rows(directory: UserDirectory) -> list[UserDirectoryRow
         )
 
     return rows
+
+
+def build_group_member_rows(users: list[SeedUser]) -> list[GroupMemberRow]:
+    return [
+        GroupMemberRow(
+            user_id=user.user_id,
+            display_name=f"{user.family_name}, {user.given_name}",
+            title=user.title,
+            roles=list(user.roles),
+            lob=user.lob,
+            covering_lobs=list(user.covering_lobs),
+        )
+        for user in users
+    ]

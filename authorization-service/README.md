@@ -54,6 +54,9 @@ Batch OPA evaluation over candidates from `users.yaml`. No user OBO — complian
 |--------|------|---------|
 | POST | `/instructions/eligible-approvers` | Who can approve this instruction? |
 | POST | `/payments/eligible-approvers` | Who can approve this payment? |
+| GET | `/groups/{group}/members` | Members of a ZITADEL group (compliance JWT) — includes `lob` and `covering_lobs` |
+
+Query params for group members: `role`, `covering_lob`.
 
 ## OPA
 

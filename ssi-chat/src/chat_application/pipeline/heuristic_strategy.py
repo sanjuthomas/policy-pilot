@@ -6,6 +6,7 @@ from chat_application.cypher import (
     is_alert_ranking_question,
     is_analytics_question,
     is_count_question,
+    is_cross_entity_reciprocal_approval_question,
     is_instruction_count_aggregate_question,
     is_instruction_mutual_approval_question,
     is_instruction_payment_count_list_question,
@@ -91,6 +92,8 @@ def is_graph_structured_question(question: str, *, mode: str) -> bool:
     if is_security_event_group_by_lob_question(question, mode=mode):
         return True
     if is_instruction_mutual_approval_question(question):
+        return True
+    if is_cross_entity_reciprocal_approval_question(question):
         return True
     if is_instruction_payment_count_list_question(question, mode=mode):
         return True

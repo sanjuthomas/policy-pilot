@@ -1,7 +1,10 @@
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
+from authz.dependencies import get_compliance_subject
+from authz.directory import build_group_member_rows
 from authz.evaluate_dependencies import get_service_caller, resolve_evaluate_subject
 from authz.models import (
+    GroupMembersResponse,
     InstructionEligibleApproversEvaluateRequest,
     InstructionEligibleApproversResponse,
     InstructionEvaluateRequest,
@@ -24,6 +27,14 @@ def _eligibility_service():
     return eligibility_service
 
 
+def _user_directory():
+    from authz.main import user_directory
+
+    if user_directory is None:
+        raise HTTPException(status_code=503, detail="user directory not ready")
+    return user_directory
+
+
 def _opa_client() -> OpaClient:
     return OpaClient()
 
@@ -41,6 +52,23 @@ def _to_response(decision) -> PolicyDecisionResponse:
         violations=list(decision.violations),
         is_alert=decision.is_alert,
     )
+
+
+@router.get("/groups/{group}/members", response_model=GroupMembersResponse)
+async def list_group_members(
+    group: str,
+    role: str | None = Query(default=None, description="Optional role filter"),
+    covering_lob: str | None = Query(
+        default=None,
+        description="Optional desk filter — member must list this LOB in covering_lobs",
+    ),
+    _subject: Subject = Depends(get_compliance_subject),
+    directory=Depends(_user_directory),
+) -> GroupMembersResponse:
+    members = build_group_member_rows(
+        directory.members_of_group(group, role=role, covering_lob=covering_lob)
+    )
+    return GroupMembersResponse(group=group.strip(), count=len(members), members=members)
 
 
 @router.post("/instructions/evaluate", response_model=PolicyDecisionResponse)

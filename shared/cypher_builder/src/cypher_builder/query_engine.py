@@ -140,6 +140,15 @@ _INSTRUCTION_MUTUAL_APPROVAL = re.compile(
     r"\bmutual\s+approv|\bapprov\w*\b.*\beach\s+other",
     re.IGNORECASE,
 )
+_CROSS_ENTITY_RECIPROCAL = re.compile(
+    r"\b(cross[- ]entity|across\s+entit(?:y|ies))\b",
+    re.IGNORECASE,
+)
+_WITHOUT_PAYMENTS_SEMANTIC = re.compile(
+    r"\bno\s+payments?\b|\bwithout\s+(?:any\s+)?payments?\b|\bzero\s+payments?\b|"
+    r"\blacking\s+payments?\b|\bhave\s+no\s+payment\b",
+    re.IGNORECASE,
+)
 _ALERT_GROUP_BY_LOB = re.compile(
     r"\b(?:group(?:ed)?|break\s*down|split|bucket(?:ed)?|distribut(?:e|ion)|"
     r"count\s+per|number\s+of\s+\w+\s+per|how\s+many\s+\w+\s+per)\b.{0,60}\b(?:by|per)\s+(?:lob|line\s+of\s+business)\b|"
@@ -456,7 +465,41 @@ def is_security_event_alert_list_question(question: str, *, mode: str = "events"
 
 
 def is_instruction_mutual_approval_question(question: str) -> bool:
+    if is_cross_entity_reciprocal_approval_question(question):
+        return False
     return bool(_INSTRUCTION_MUTUAL_APPROVAL.search(question))
+
+
+def is_cross_entity_reciprocal_approval_question(question: str) -> bool:
+    """Instruction approver on one side, payment approver on the same route on the other."""
+    if is_instruction_approver_via_payment_question(question):
+        return False
+    q = question.lower()
+    if "instruction" not in q or "payment" not in q:
+        return False
+    if not re.search(r"\bapprov", q):
+        return False
+    if _CROSS_ENTITY_RECIPROCAL.search(question):
+        return True
+    if re.search(r"\bsame\s+instruction\b", q) and re.search(r"\bother\b", q):
+        return True
+    if _INSTRUCTION_MUTUAL_APPROVAL.search(question):
+        return True
+    reciprocal_cues = (
+        r"\bother\s+user\b",
+        r"\banother\s+user\b",
+        r"\bsame\s+other\b",
+        r"\breciprocal\b",
+        r"\bone\s+user\b.{0,80}\banother\b",
+    )
+    if not any(re.search(cue, q) for cue in reciprocal_cues):
+        return False
+    return bool(
+        re.search(
+            r"\binstruction\b.{0,120}\bpayment\b|\bpayment\b.{0,120}\binstruction\b",
+            q,
+        )
+    )
 
 
 def is_payment_list_by_status_question(question: str, *, mode: str = "payments") -> bool:
@@ -490,21 +533,24 @@ def is_instruction_payment_count_list_question(question: str, *, mode: str = "in
     return True
 
 
+def instructions_without_payments_wants_list(question: str) -> bool:
+    """True when the user wants instruction rows, not only a count."""
+    if is_count_question(question) and not re.search(
+        r"\b(list|show|enumerate|display)\b", question, re.IGNORECASE
+    ):
+        return False
+    if re.search(r"\b(list|show|enumerate|display|which)\b", question, re.IGNORECASE):
+        return True
+    return not is_count_question(question)
+
+
 def is_instructions_without_payments_question(question: str, *, mode: str = "instructions") -> bool:
     if mode not in ("instructions", "all"):
-        return False
-    if not is_count_question(question):
         return False
     q = question.lower()
     if "instruction" not in q:
         return False
-    return bool(
-        re.search(
-            r"\bno\s+payments?\b|\bwithout\s+payments?\b|\bzero\s+payments?\b|"
-            r"\blacking\s+payments?\b",
-            q,
-        )
-    )
+    return bool(_WITHOUT_PAYMENTS_SEMANTIC.search(question))
 
 
 def is_instruction_versions_list_question(question: str, *, mode: str = "instructions") -> bool:
@@ -1221,7 +1267,20 @@ LIMIT 200""",
     ]
 
 
-def _instructions_without_payments_queries() -> list[tuple[str, str]]:
+def _instructions_without_payments_queries(question: str) -> list[tuple[str, str]]:
+    if instructions_without_payments_wants_list(question):
+        return [
+            (
+                "instructions_without_payments_list",
+                """MATCH (i:Instruction)
+WHERE NOT (i)-[:HAS_PAYMENT]->(:Payment)
+RETURN i.instruction_id AS instruction_id,
+       coalesce(i.current_status, '') AS status,
+       coalesce(i.owning_lob, '') AS owning_lob
+ORDER BY instruction_id ASC
+LIMIT 200""",
+            ),
+        ]
     return [
         (
             "instructions_without_payments",
@@ -1507,6 +1566,36 @@ RETURN coalesce(a.display_name, a.user_id, '') AS user_a_display,
        va.owning_lob AS lob_a,
        vb.owning_lob AS lob_b
 ORDER BY user_a_id, user_b_id
+LIMIT 50""",
+        ),
+    ]
+
+
+def _cross_entity_reciprocal_approval_queries() -> list[tuple[str, str]]:
+    return [
+        (
+            "cross_entity_reciprocal_approval",
+            """MATCH (instr_creator:User)-[:CREATED_IV]->(iv:InstructionVersion)<-[:APPROVED_IV]-(instr_approver:User)
+MATCH (i:Instruction)-[:CURRENT]->(iv)
+MATCH (i)-[:HAS_PAYMENT]->(pay:Payment)-[:CURRENT]->(pv:PaymentVersion)
+MATCH (pay_creator:User)-[:CREATED_PV]->(pv)<-[:APPROVED_PV]-(pay_approver:User)
+WHERE instr_creator.user_id = pay_approver.user_id
+  AND instr_approver.user_id = pay_creator.user_id
+  AND instr_creator.user_id <> instr_approver.user_id
+RETURN coalesce(instr_creator.display_name, instr_creator.user_id, '') AS instruction_creator_display,
+       instr_creator.user_id AS instruction_creator_id,
+       coalesce(instr_approver.display_name, instr_approver.user_id, '') AS instruction_approver_display,
+       instr_approver.user_id AS instruction_approver_id,
+       coalesce(pay_approver.display_name, pay_approver.user_id, '') AS payment_approver_display,
+       pay_approver.user_id AS payment_approver_id,
+       coalesce(pay_creator.display_name, pay_creator.user_id, '') AS payment_creator_display,
+       pay_creator.user_id AS payment_creator_id,
+       i.instruction_id AS instruction_id,
+       pay.payment_id AS payment_id,
+       coalesce(iv.owning_lob, '') AS owning_lob,
+       iv.status AS instruction_status,
+       pv.status AS payment_status
+ORDER BY instruction_id, payment_id
 LIMIT 50""",
         ),
     ]
@@ -1840,6 +1929,11 @@ def plan_graph_queries(question: str, *, mode: str) -> list[tuple[str, str]] | N
     if mode == "instructions" and _is_subordinate_approver_question(question):
         return builder.instruction_subordinate_approver()
 
+    if mode in ("instructions", "all", "payments") and is_cross_entity_reciprocal_approval_question(
+        question
+    ):
+        return builder.cross_entity_reciprocal_approval()
+
     if mode in ("instructions", "all") and is_instruction_mutual_approval_question(question):
         return builder.instruction_mutual_approval()
 
@@ -1851,7 +1945,7 @@ def plan_graph_queries(question: str, *, mode: str) -> list[tuple[str, str]] | N
     if mode in ("instructions", "all") and is_instructions_without_payments_question(
         question, mode=mode
     ):
-        return builder.instructions_without_payments()
+        return builder.instructions_without_payments(question)
 
     if mode in ("payments", "all") and is_payment_list_by_status_question(
         question, mode=mode

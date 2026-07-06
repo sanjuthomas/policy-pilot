@@ -24,10 +24,14 @@ class EligibilityClient:
         *,
         payment_service_url: str | None = None,
         instruction_service_url: str | None = None,
+        authorization_service_url: str | None = None,
     ) -> None:
         self._payment_base = (payment_service_url or settings.payment_service_url).rstrip("/")
         self._instruction_base = (
             instruction_service_url or settings.instruction_service_url
+        ).rstrip("/")
+        self._authorization_base = (
+            authorization_service_url or settings.authorization_service_url
         ).rstrip("/")
 
     async def eligible_approvers_for_payment(
@@ -93,6 +97,84 @@ class EligibilityClient:
             raise EligibilityClientError(f"instruction service error: {detail}")
 
         return response.json()
+
+    async def group_members(
+        self,
+        group: str,
+        *,
+        bearer_token: str,
+        role: str | None = None,
+        covering_lob: str | None = None,
+        session_id: str | None = None,
+    ) -> dict[str, Any]:
+        from urllib.parse import quote
+
+        url = f"{self._authorization_base}/api/v1/authorization/groups/{quote(group, safe='')}/members"
+        headers = {
+            "Authorization": f"Bearer {bearer_token}",
+            "Accept": "application/json",
+        }
+        if session_id:
+            headers["X-Session-Id"] = session_id
+
+        params: dict[str, str] = {}
+        if role:
+            params["role"] = role
+        if covering_lob:
+            params["covering_lob"] = covering_lob
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=headers, params=params or None)
+
+        if response.status_code == 401:
+            raise EligibilityClientError("authentication required — log in as a compliance analyst")
+        if response.status_code == 403:
+            raise EligibilityClientError("COMPLIANCE_ANALYST role required for this question")
+        if not response.is_success:
+            detail = response.json().get("detail", response.text)
+            raise EligibilityClientError(f"authorization service error: {detail}")
+
+        return response.json()
+
+
+def format_group_members_answer(
+    data: dict[str, Any],
+    *,
+    amount: float | None = None,
+    covering_lob: str | None = None,
+) -> str:
+    from chat_application.formatting import format_markdown_table, format_usd_compact
+
+    group = data.get("group") or ""
+    members = data.get("members") or []
+    amount_text = format_usd_compact(amount) if amount is not None else None
+    lob_note = f" for desk {covering_lob}" if covering_lob else ""
+
+    if amount_text:
+        header = (
+            f"Users in {group} who may approve payments above {amount_text}{lob_note} "
+            f"(policy ceiling lookup — not a live payment evaluation):"
+        )
+    else:
+        header = f"Members of {group}{lob_note} (policy directory):"
+
+    if not members:
+        return f"{header}\n\nNo matching users were found."
+
+    table_rows = [
+        [
+            row.get("user_id") or "—",
+            row.get("display_name") or "—",
+            row.get("title") or "—",
+            row.get("lob") or "—",
+            ", ".join(row.get("covering_lobs") or []) or "—",
+        ]
+        for row in members
+    ]
+    return (
+        f"{header}\n\n"
+        f"{format_markdown_table(['User ID', 'Name', 'Title', 'LOB', 'Covering LOBs'], table_rows)}"
+    )
 
 
 def _payment_instruction_summary(

@@ -68,6 +68,9 @@ class CypherQueryBuilder:
     def instruction_mutual_approval(self) -> list[tuple[str, str]]:
         return qe._instruction_mutual_approval_queries()
 
+    def cross_entity_reciprocal_approval(self) -> list[tuple[str, str]]:
+        return qe._cross_entity_reciprocal_approval_queries()
+
     def instruction_security_event_timeline(
         self, instruction_id: str
     ) -> list[tuple[str, str]]:
@@ -134,8 +137,8 @@ class CypherQueryBuilder:
     def instruction_payment_count_list(self) -> list[tuple[str, str]]:
         return qe._instruction_payment_count_list_queries()
 
-    def instructions_without_payments(self) -> list[tuple[str, str]]:
-        return qe._instructions_without_payments_queries()
+    def instructions_without_payments(self, question: str) -> list[tuple[str, str]]:
+        return qe._instructions_without_payments_queries(question)
 
     def payment_list(
         self, question: str, flags: dict[str, bool]
