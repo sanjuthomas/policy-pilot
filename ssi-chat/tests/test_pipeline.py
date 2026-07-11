@@ -29,6 +29,22 @@ class TestHeuristicStrategy:
         assert decision.strategy == "eligibility"
         assert decision.eligibility_target == "payment"
 
+    def test_policies_mode_prefers_eligibility(self) -> None:
+        assert (
+            infer_execution_strategy_heuristic(
+                "Who can approve payment 20260705-FX-P-534?",
+                mode="policies",
+            )
+            == "eligibility"
+        )
+        assert (
+            infer_execution_strategy_heuristic(
+                "What is the funding approval policy?",
+                mode="policies",
+            )
+            == "hybrid"
+        )
+
     def test_is_graph_structured_for_ranking(self) -> None:
         assert is_graph_structured_question(
             "Which user triggered the most policy denial alerts this week?",

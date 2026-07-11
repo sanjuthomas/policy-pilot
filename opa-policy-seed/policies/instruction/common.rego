@@ -4,6 +4,11 @@ has_role(role) if {
     role in input.subject.roles
 }
 
+# True when the acting subject is a member of the named ZITADEL group.
+in_group(group) if {
+    group in input.subject.groups
+}
+
 # ---------------------------------------------------------------------------
 # INSTRUCTION_VIEWER — implicit grant rules
 #

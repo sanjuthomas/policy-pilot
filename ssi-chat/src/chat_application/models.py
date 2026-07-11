@@ -2,7 +2,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-SearchMode = Literal["events", "instructions", "payments", "all"]
+SearchMode = Literal["events", "instructions", "payments", "policies", "all"]
 
 
 class ChatMessage(BaseModel):

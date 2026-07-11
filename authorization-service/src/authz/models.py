@@ -190,6 +190,45 @@ class GroupMembersResponse(BaseModel):
     members: list[GroupMemberRow]
 
 
+class PolicyRequirement(BaseModel):
+    kind: str
+    value: str
+
+
+class PolicySummaryResponse(BaseModel):
+    domain: str
+    action: str
+    title: str
+    narrative: str
+    requires: list[PolicyRequirement] = Field(default_factory=list)
+    source: str = "opa"
+
+
+class PersonCapability(BaseModel):
+    kind: str
+    description: str
+
+
+class PersonPermissionSummary(BaseModel):
+    user_id: str
+    display_name: str
+    title: str
+    lob: str | None = None
+    roles: list[str] = Field(default_factory=list)
+    groups: list[str] = Field(default_factory=list)
+    amount_clubs: list[str] = Field(default_factory=list)
+    covering_lobs: list[str] = Field(default_factory=list)
+    capabilities: list[PersonCapability] = Field(default_factory=list)
+    narrative: str = ""
+
+
+class PersonPermissionSummaryResponse(BaseModel):
+    query: str
+    count: int
+    matches: list[PersonPermissionSummary] = Field(default_factory=list)
+    source: str = "user_directory"
+
+
 class PolicyDecisionResponse(BaseModel):
     allowed: bool
     allow_basis: list[str] = Field(default_factory=list)

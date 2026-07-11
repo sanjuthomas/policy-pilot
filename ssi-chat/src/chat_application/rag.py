@@ -906,9 +906,9 @@ class RagService:
         )
         from chat_application.policy_directory import (
             covering_lob_filter_from_question,
+            directory_groups_for_question,
             is_payment_approval_directory_question,
             merge_group_member_rows,
-            payment_approval_clubs_from_question,
         )
 
         if not is_payment_approval_directory_question(message):
@@ -921,15 +921,15 @@ class RagService:
                 "panel above, then ask again."
             )
 
-        clubs, amount, strict_threshold = payment_approval_clubs_from_question(message)
+        covering_lob = covering_lob_filter_from_question(message)
+        clubs, amount, strict_threshold = directory_groups_for_question(message)
         if not clubs:
             return (
-                "I could not determine which payment amount-limit club applies. "
-                "Try including an amount (e.g. $25 billion) or a club name such as "
-                "UP_TO_100_BILLION_CLUB."
+                "I could not determine which payment amount-limit club or desk LOB applies. "
+                "Try including an amount (e.g. $25 billion), a club name such as "
+                "UP_TO_100_BILLION_CLUB, or a covering LOB such as FICC."
             )
 
-        covering_lob = covering_lob_filter_from_question(message)
         merged_members: list[dict] = []
         try:
             for group in clubs:
@@ -955,6 +955,79 @@ class RagService:
             covering_lob=covering_lob,
             strict_threshold=strict_threshold,
         )
+
+    async def _answer_policy_summary(
+        self,
+        message: str,
+        *,
+        mode: SearchMode = "events",
+        bearer_token: str | None = None,
+        session_id: str | None = None,
+    ) -> str | None:
+        from chat_application.authorization_client import (
+            EligibilityClientError,
+            format_policy_summary_answer,
+        )
+        from chat_application.policy_summary import detect_policy_summary_question
+
+        detected = detect_policy_summary_question(message, mode=mode)
+        if detected is None:
+            return None
+
+        domain, action = detected
+        if not bearer_token:
+            return (
+                "This question requires live OPA policy access. "
+                "Log in as a compliance analyst (comp-001 or comp-002) using the sign-in "
+                "panel above, then ask again."
+            )
+
+        try:
+            data = await self._eligibility.policy_summary(
+                domain=domain,
+                action=action,
+                bearer_token=bearer_token,
+                session_id=session_id,
+            )
+        except EligibilityClientError as exc:
+            return str(exc)
+
+        return format_policy_summary_answer(data)
+
+    async def _answer_person_permission_summary(
+        self,
+        message: str,
+        *,
+        bearer_token: str | None = None,
+        session_id: str | None = None,
+    ) -> str | None:
+        from chat_application.authorization_client import (
+            EligibilityClientError,
+            format_person_permission_summary_answer,
+        )
+        from chat_application.person_permissions import extract_person_permission_query
+
+        query = extract_person_permission_query(message)
+        if query is None:
+            return None
+
+        if not bearer_token:
+            return (
+                "This question requires policy directory access. "
+                "Log in as a compliance analyst (comp-001 or comp-002) using the sign-in "
+                "panel above, then ask again."
+            )
+
+        try:
+            data = await self._eligibility.person_permission_summary(
+                query=query,
+                bearer_token=bearer_token,
+                session_id=session_id,
+            )
+        except EligibilityClientError as exc:
+            return str(exc)
+
+        return format_person_permission_summary_answer(data)
 
     async def _answer_instruction_eligible_approvers(
         self,
@@ -1178,6 +1251,10 @@ class RagService:
             )
         elif mode == "payments":
             sections.append("Search mode: PAYMENTS (payment records only)")
+        elif mode == "policies":
+            sections.append(
+                "Search mode: POLICIES (live OPA policy summary, directory, and eligibility tools)"
+            )
         elif mode == "events":
             sections.append(
                 "Search mode: SECURITY EVENTS (instruction + payment security event log)"

@@ -19,15 +19,20 @@ policies/
 │   ├── lifecycle_rules.rego     # Valid state transitions
 │   ├── violations.rego          # Violation catalog + is_alert helper
 │   ├── allow_basis.rego         # Allow reasons for success audit trail
-│   └── lifecycle.rego           # allow rules per action
+│   ├── policy_catalog.rego      # Single source: role/group + summary + gate_predicates
+│   ├── lifecycle.rego           # allow rules (reads catalog for identity gates)
+│   └── policy_summary.rego      # Derived from action_catalog for chat
 └── payment/
     ├── common.rego              # LOB coverage, creator≠approver, subordinate check
     ├── amount_limits.rego       # Amount-limit clubs from ZITADEL groups
     ├── violations.rego          # Violation catalog + is_alert helper
     ├── allow_basis.rego         # Allow reasons for success audit trail
-    └── lifecycle.rego           # CREATE / SUBMIT / APPROVE / REJECT rules
+    ├── policy_catalog.rego      # Single source: role/group + summary + gate_predicates
+    ├── lifecycle.rego           # allow rules (reads catalog for identity gates)
+    └── policy_summary.rego      # Derived from action_catalog for chat
 ```
 
+`validate_policy_catalog.py` (also run by `opa-policy-seed` and authorization-service tests) fails if a lifecycle allow rule drops a `gate_predicates` entry or stops using `catalog_role_ok` / `catalog_group_ok`.
 ## Instruction authorization
 
 | Actor | Roles | Scope |

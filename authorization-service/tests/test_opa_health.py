@@ -31,11 +31,11 @@ async def test_policy_health_ok() -> None:
 
     with patch.object(client, "list_policy_ids", new_callable=AsyncMock) as list_policies:
         with patch.object(client, "_post_data", new_callable=AsyncMock, return_value=True):
-            list_policies.return_value = ["p"] * 11
+            list_policies.return_value = ["p"] * 15
             status = await client.policy_health()
 
     assert status["ok"] is True
-    assert status["policy_count"] == 11
+    assert status["policy_count"] == 15
 
 
 @pytest.mark.asyncio
@@ -55,7 +55,7 @@ async def test_policy_health_degraded_when_smoke_denied() -> None:
 
     with patch.object(client, "list_policy_ids", new_callable=AsyncMock) as list_policies:
         with patch.object(client, "_post_data", new_callable=AsyncMock, return_value=False):
-            list_policies.return_value = ["p"] * 11
+            list_policies.return_value = ["p"] * 15
             status = await client.policy_health()
 
     assert status["ok"] is False

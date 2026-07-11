@@ -43,6 +43,16 @@ class RagPipelineOrchestrator:
 
         decision = await route_question(self._service.ml_client, message, mode=mode)
 
+        policy_summary_response = await self._try_policy_summary(
+            message,
+            mode=mode,
+            bearer_token=bearer_token,
+            session_id=session_id,
+            started=started,
+        )
+        if policy_summary_response is not None:
+            return policy_summary_response
+
         policy_directory_response = await self._try_policy_directory(
             message,
             mode=mode,
@@ -53,6 +63,16 @@ class RagPipelineOrchestrator:
         if policy_directory_response is not None:
             return policy_directory_response
 
+        person_permission_response = await self._try_person_permissions(
+            message,
+            mode=mode,
+            bearer_token=bearer_token,
+            session_id=session_id,
+            started=started,
+        )
+        if person_permission_response is not None:
+            return person_permission_response
+
         eligibility_response = await self._try_eligibility(
             message,
             mode=mode,
@@ -60,9 +80,25 @@ class RagPipelineOrchestrator:
             bearer_token=bearer_token,
             session_id=session_id,
             started=started,
+            force=mode == "policies",
         )
         if eligibility_response is not None:
             return eligibility_response
+
+        if mode == "policies":
+            from chat_application.policy_summary import policies_mode_guidance
+
+            elapsed = (time.perf_counter() - started) * 1000
+            return finalize_chat_response(
+                message,
+                mode,
+                answer=policies_mode_guidance(),
+                retrieval_ms=0.0,
+                generation_ms=elapsed,
+                path="eligibility",
+                cypher_provenance="none",
+                answer_synthesis="eligibility_api",
+            )
 
         direct = await self._service._try_neo4j_direct_answer(message, mode=mode)
         if direct is not None:
@@ -130,6 +166,36 @@ class RagPipelineOrchestrator:
             answer_synthesis=answer_synthesis,
         )
 
+    async def _try_policy_summary(
+        self,
+        message: str,
+        *,
+        mode: SearchMode,
+        bearer_token: str | None,
+        session_id: str | None,
+        started: float,
+    ) -> ChatResponse | None:
+        answer = await self._service._answer_policy_summary(
+            message,
+            mode=mode,
+            bearer_token=bearer_token,
+            session_id=session_id,
+        )
+        if answer is None:
+            return None
+
+        elapsed = (time.perf_counter() - started) * 1000
+        return finalize_chat_response(
+            message,
+            mode,
+            answer=answer,
+            retrieval_ms=0.0,
+            generation_ms=elapsed,
+            path="eligibility",
+            cypher_provenance="none",
+            answer_synthesis="eligibility_api",
+        )
+
     async def _try_policy_directory(
         self,
         message: str,
@@ -159,6 +225,35 @@ class RagPipelineOrchestrator:
             answer_synthesis="eligibility_api",
         )
 
+    async def _try_person_permissions(
+        self,
+        message: str,
+        *,
+        mode: SearchMode,
+        bearer_token: str | None,
+        session_id: str | None,
+        started: float,
+    ) -> ChatResponse | None:
+        answer = await self._service._answer_person_permission_summary(
+            message,
+            bearer_token=bearer_token,
+            session_id=session_id,
+        )
+        if answer is None:
+            return None
+
+        elapsed = (time.perf_counter() - started) * 1000
+        return finalize_chat_response(
+            message,
+            mode,
+            answer=answer,
+            retrieval_ms=0.0,
+            generation_ms=elapsed,
+            path="eligibility",
+            cypher_provenance="none",
+            answer_synthesis="eligibility_api",
+        )
+
     async def _try_eligibility(
         self,
         message: str,
@@ -168,9 +263,22 @@ class RagPipelineOrchestrator:
         bearer_token: str | None,
         session_id: str | None,
         started: float,
+        force: bool = False,
     ) -> ChatResponse | None:
-        if decision.strategy != "eligibility":
+        from chat_application.cypher import extract_payment_ids
+        from chat_application.pipeline.heuristic_strategy import (
+            is_eligibility_question_heuristic,
+        )
+
+        if decision.strategy != "eligibility" and not force:
             return None
+
+        # Policies mode used to mark every question as eligibility; only run the
+        # live eligible-approvers API for true who-can / entity-id questions.
+        if mode == "policies" or force:
+            if not is_eligibility_question_heuristic(message):
+                if not extract_entity_ids(message) and not extract_payment_ids(message):
+                    return None
 
         target = decision.eligibility_target or resolve_eligibility_target(message, mode=mode)
         if target == "payment":
@@ -211,6 +319,8 @@ class RagPipelineOrchestrator:
             return "instruction_state"
         if mode == "payments":
             return "payment"
+        if mode == "policies":
+            return None
         return None
 
     async def _synthesize(

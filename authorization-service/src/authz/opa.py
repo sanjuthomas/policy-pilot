@@ -34,6 +34,14 @@ class OpaClient:
             body: dict[str, Any] = response.json()
         return body.get("result")
 
+    async def _get_data(self, path: str) -> Any:
+        url = f"{self.base_url}/v1/data/{path}"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            body: dict[str, Any] = response.json()
+        return body.get("result")
+
     async def list_policy_ids(self) -> list[str]:
         url = f"{self.base_url}/v1/policies"
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -53,7 +61,7 @@ class OpaClient:
     async def policy_health(
         self,
         *,
-        minimum_policies: int = 11,
+        minimum_policies: int = 15,
     ) -> dict[str, Any]:
         try:
             policy_ids = await self.list_policy_ids()
@@ -261,3 +269,17 @@ class OpaClient:
             await self._post_data(f"{self._INSTRUCTION_PACKAGE}/allow_basis", payload)
         )
         return True, basis
+
+    async def fetch_policy_summary(self, domain: str) -> dict[str, Any]:
+        normalized = domain.strip().lower()
+        if normalized == "payment":
+            package = self._PAYMENT_PACKAGE
+        elif normalized == "instruction":
+            package = self._INSTRUCTION_PACKAGE
+        else:
+            raise ValueError(f"unsupported policy domain: {domain}")
+
+        result = await self._get_data(f"{package}/policy_summary")
+        if not isinstance(result, dict):
+            raise RuntimeError(f"OPA returned empty policy_summary for {normalized}")
+        return result

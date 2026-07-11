@@ -34,11 +34,14 @@ ABSOLUTE_PAYMENT_LIMIT = 100_000_000_000.0
 
 
 def is_payment_approval_directory_question(message: str) -> bool:
-    """Policy directory lookup — who may approve by amount club (no specific payment id)."""
+    """Policy directory lookup — who may approve by amount club and/or covering LOB."""
     if extract_payment_ids(message):
         return False
     lowered = message.lower()
     if "payment" not in lowered:
+        return False
+    # Past-tense audit ("who approved") belongs to graph, not the live directory.
+    if re.search(r"\bwho\s+approved\b", lowered):
         return False
     if not re.search(r"\b(who|which\s+users?|list|members?)\b", lowered):
         return False
@@ -51,7 +54,23 @@ def is_payment_approval_directory_question(message: str) -> bool:
         return True
     if payment_amount_threshold_from_question(message) is not None:
         return True
+    if covering_lob_filter_from_question(message):
+        return True
     return bool(re.search(r"\bworth\b", lowered) and re.search(r"\b(million|billion|\$)\b", lowered))
+
+
+# Org group used when listing funding approvers by covering LOB (no amount club).
+FUNDING_APPROVER_ORG_GROUP = "MIDDLE_OFFICE"
+
+
+def directory_groups_for_question(message: str) -> tuple[list[str], float | None, bool]:
+    """Resolve directory lookup groups: amount clubs and/or MIDDLE_OFFICE for LOB-only."""
+    clubs, amount, strict = payment_approval_clubs_from_question(message)
+    if clubs:
+        return clubs, amount, strict
+    if covering_lob_filter_from_question(message):
+        return [FUNDING_APPROVER_ORG_GROUP], None, True
+    return [], amount, strict
 
 
 def is_strict_payment_amount_threshold(message: str) -> bool:

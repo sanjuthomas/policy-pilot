@@ -87,3 +87,25 @@ async def test_can_approve_instruction_returns_basis() -> None:
 
     assert allowed is True
     assert basis == ["approval matrix"]
+
+
+@pytest.mark.asyncio
+async def test_fetch_policy_summary_payment() -> None:
+    client = OpaClient(base_url="http://opa.test")
+    catalog = {
+        "domain": "payment",
+        "actions": {"APPROVE": {"title": "Funding approval", "narrative": "…", "requires": []}},
+    }
+
+    with patch.object(client, "_get_data", new_callable=AsyncMock, return_value=catalog) as get_data:
+        result = await client.fetch_policy_summary("payment")
+
+    assert result["domain"] == "payment"
+    get_data.assert_awaited_once_with("payment/lifecycle/policy_summary")
+
+
+@pytest.mark.asyncio
+async def test_fetch_policy_summary_rejects_unknown_domain() -> None:
+    client = OpaClient(base_url="http://opa.test")
+    with pytest.raises(ValueError, match="unsupported policy domain"):
+        await client.fetch_policy_summary("treasury")

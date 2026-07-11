@@ -12,7 +12,7 @@ import urllib.request
 
 OPA_URL = os.environ.get("OPA_URL", "http://opa:8181").rstrip("/")
 OPA_WAIT_TIMEOUT = int(os.environ.get("OPA_WAIT_TIMEOUT", "60"))
-MIN_POLICY_COUNT = int(os.environ.get("MIN_POLICY_COUNT", "11"))
+MIN_POLICY_COUNT = int(os.environ.get("MIN_POLICY_COUNT", "15"))
 
 _CREATE_SMOKE_INPUT = {
     "action": "CREATE",
@@ -88,6 +88,11 @@ def policies_ready() -> tuple[bool, str]:
 
 
 def main() -> None:
+    from validate_policy_catalog import main as validate_catalog
+
+    if validate_catalog() != 0:
+        raise SystemExit("policy catalog drift — fix lifecycle/action_catalog before seed")
+
     deadline = time.monotonic() + OPA_WAIT_TIMEOUT
     last_reason = "OPA not reachable"
 

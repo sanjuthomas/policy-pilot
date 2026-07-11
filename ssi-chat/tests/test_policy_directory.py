@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from chat_application.authorization_client import format_group_members_answer
 from chat_application.policy_directory import (
+    directory_groups_for_question,
     is_payment_approval_directory_question,
     is_strict_payment_amount_threshold,
     merge_group_member_rows,
@@ -21,6 +22,20 @@ def test_payment_approval_directory_question_detects_amount() -> None:
     assert strict is True
     group, _ = payment_approval_group_from_question(question)
     assert group == "UP_TO_100_BILLION_CLUB"
+
+
+def test_payment_approval_directory_detects_covering_lob() -> None:
+    question = "Who has permission to approve payments belong to LOB FICC?"
+    assert is_payment_approval_directory_question(question)
+    groups, amount, _strict = directory_groups_for_question(question)
+    assert groups == ["MIDDLE_OFFICE"]
+    assert amount is None
+
+
+def test_payment_approval_directory_skips_past_tense_audit() -> None:
+    assert not is_payment_approval_directory_question(
+        "Who approved payments for LOB FICC?"
+    )
 
 
 def test_payment_approval_directory_skips_when_payment_id_present() -> None:
@@ -104,6 +119,27 @@ def test_format_group_members_answer_includes_groups_column() -> None:
     assert "Covering LOBs" in text
     assert "LOB" not in text.split("Covering LOBs")[0]
     assert "exceeding $25 billion" in text
+
+
+def test_format_group_members_answer_lob_only_header() -> None:
+    text = format_group_members_answer(
+        {
+            "groups": ["MIDDLE_OFFICE"],
+            "members": [
+                {
+                    "user_id": "pay-201",
+                    "display_name": "Laurent, Sophie",
+                    "title": "Vice President",
+                    "groups": ["MIDDLE_OFFICE", "UP_TO_1_BILLION_CLUB"],
+                    "covering_lobs": ["FICC", "FX"],
+                }
+            ],
+        },
+        covering_lob="FICC",
+    )
+    assert "FUNDING_APPROVER covering desk FICC" in text
+    assert "pay-201" in text
+    assert "policy directory" in text
 
 
 def test_format_group_members_answer_multi_club_header() -> None:

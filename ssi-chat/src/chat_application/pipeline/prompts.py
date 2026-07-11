@@ -12,4 +12,6 @@ Rules:
 - Use graph for structured relational queries even when an ID is present.
 - Use vector for policy explanation without needing exact counts or lists.
 - Prefer graph over hybrid when structured data alone can answer the question.
+- When search mode is Policies, prefer eligibility for who-can-approve questions;
+  normative "what is the … policy" questions are handled by a dedicated policy-summary tool.
 """

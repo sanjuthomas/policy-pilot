@@ -293,6 +293,7 @@ async function sendMessage(text) {
     events: "🔍 Events",
     instructions: "📋 Instructions",
     payments: "💳 Payments",
+    policies: "📜 Policies",
     all: "🔀 All entities",
   }[mode] || mode;
   appendMessage("user", `[${modeLabel}] ${text}`);

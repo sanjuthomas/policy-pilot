@@ -18,9 +18,10 @@ Domain services (instruction-service, payment-service) call authz for lifecycle 
 |--------|-----------|------|
 | **instruction-service** | `POST …/instructions/evaluate`, `POST …/instructions/eligible-approvers` | `svc-instruction` bearer token; user JWT in `X-On-Behalf-Of` for lifecycle evaluate |
 | **payment-service** | `POST …/payments/evaluate`, `POST …/payments/eligible-approvers` | `svc-payment` bearer token; user JWT in `X-On-Behalf-Of` for lifecycle evaluate |
+| **ssi-chat** | `GET …/groups/{group}/members`, `GET …/policy-summary` | Compliance analyst JWT |
 | **Platform admin** | `/ui/*`, `/api/ui/users` | `admin-001` (ZITADEL JWT) |
 
-**Not callers:** ssi-chat (uses domain eligible-approvers APIs), ssi-indexer (Kafka consumer only; projects graph from streamed events), demo harness, Kafka Connect, sequence-service.
+**Not callers:** ssi-indexer (Kafka consumer only; projects graph from streamed events), demo harness, Kafka Connect, sequence-service.
 
 Policy denials evaluated here surface as `ALERT` security events in Mongo and, after Kafka Connect + ssi-indexer, as `SecurityEvent` nodes linked via `FOR` → version in Neo4j. See [neo4j-graph-model/README.md](../neo4j-graph-model/README.md).
 
@@ -55,8 +56,11 @@ Batch OPA evaluation over candidates from `users.yaml`. No user OBO — complian
 | POST | `/instructions/eligible-approvers` | Who can approve this instruction? |
 | POST | `/payments/eligible-approvers` | Who can approve this payment? |
 | GET | `/groups/{group}/members` | Members of a ZITADEL group (compliance JWT) — includes `lob` and `covering_lobs` |
+| GET | `/policy-summary` | Normative OPA policy summary for `payment` or `instruction` (compliance JWT) |
 
 Query params for group members: `role`, `covering_lob`.
+
+Query params for policy summary: `domain` (`payment`|`instruction`), `action` (default `APPROVE`).
 
 ## OPA
 
@@ -93,4 +97,4 @@ Requires OPA (with policies seeded), ZITADEL, and `users.yaml` mounted or on dis
 docker compose up -d authorization-service
 ```
 
-Depends on `opa-policy-seed` completing successfully (OPA policies compiled and smoke-tested). `/health` reports `DEGRADED` when OPA has fewer than 11 policies or the CREATE smoke evaluation fails.
+Depends on `opa-policy-seed` completing successfully (OPA policies compiled and smoke-tested). `/health` reports `DEGRADED` when OPA has fewer than 15 policies or the CREATE smoke evaluation fails.

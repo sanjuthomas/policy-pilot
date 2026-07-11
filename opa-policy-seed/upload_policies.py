@@ -73,12 +73,16 @@ def list_policy_ids() -> list[str]:
 
 PREFERRED_DELETE_ORDER = (
     "instruction/lifecycle.rego",
+    "instruction/policy_summary.rego",
+    "instruction/policy_catalog.rego",
     "instruction/violations.rego",
     "instruction/allow_basis.rego",
     "instruction/lifecycle_rules.rego",
     "instruction/approval_matrix.rego",
     "instruction/common.rego",
     "payment/lifecycle.rego",
+    "payment/policy_summary.rego",
+    "payment/policy_catalog.rego",
     "payment/violations.rego",
     "payment/allow_basis.rego",
     "payment/amount_limits.rego",
@@ -92,12 +96,16 @@ PREFERRED_UPLOAD_ORDER = (
     "instruction/lifecycle_rules.rego",
     "instruction/violations.rego",
     "instruction/allow_basis.rego",
+    "instruction/policy_catalog.rego",
     "instruction/lifecycle.rego",
+    "instruction/policy_summary.rego",
     "payment/common.rego",
     "payment/amount_limits.rego",
     "payment/violations.rego",
     "payment/allow_basis.rego",
+    "payment/policy_catalog.rego",
     "payment/lifecycle.rego",
+    "payment/policy_summary.rego",
 )
 
 
@@ -169,6 +177,12 @@ def upload_all(policies: list[Path], root: Path) -> list[str]:
 
 def main() -> None:
     wait_for_opa()
+
+    # Local import so the seed image can run validation without packaging.
+    from validate_policy_catalog import main as validate_catalog
+
+    if validate_catalog() != 0:
+        raise SystemExit("policy catalog drift — fix lifecycle/action_catalog before upload")
 
     policies = collect_policies(POLICIES_DIR)
     if not policies:

@@ -46,3 +46,39 @@ async def test_eligible_approvers_for_payment_forbidden() -> None:
 
         with pytest.raises(EligibilityClientError, match="COMPLIANCE_ANALYST"):
             await client.eligible_approvers_for_payment("p1", bearer_token="token")
+
+
+@pytest.mark.asyncio
+async def test_policy_summary_success() -> None:
+    response = httpx.Response(
+        200,
+        json={
+            "domain": "payment",
+            "action": "APPROVE",
+            "title": "Funding approval",
+            "narrative": "Someone with FUNDING_APPROVER…",
+            "requires": [{"kind": "role", "value": "FUNDING_APPROVER"}],
+            "source": "opa",
+        },
+        request=httpx.Request(
+            "GET",
+            "http://authz.test/api/v1/authorization/policy-summary",
+        ),
+    )
+
+    with patch("chat_application.authorization_client.httpx.AsyncClient") as mock_client_cls:
+        mock_client = mock_client_cls.return_value.__aenter__.return_value
+        mock_client.get = AsyncMock(return_value=response)
+        client = EligibilityClient(authorization_service_url="http://authz.test")
+        body = await client.policy_summary(
+            domain="payment",
+            action="APPROVE",
+            bearer_token="token",
+            session_id="sess-1",
+        )
+
+    assert body["title"] == "Funding approval"
+    mock_client.get.assert_awaited_once()
+    call_kwargs = mock_client.get.await_args.kwargs
+    assert call_kwargs["params"] == {"domain": "payment", "action": "APPROVE"}
+    assert call_kwargs["headers"]["X-Session-Id"] == "sess-1"

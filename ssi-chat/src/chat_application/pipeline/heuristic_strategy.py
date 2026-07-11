@@ -59,6 +59,9 @@ def resolve_eligibility_target(message: str, *, mode: str) -> EligibilityTarget 
         return "payment"
     if mentions_instruction:
         return "instruction"
+    if mode == "policies":
+        # Prefer payment funding checks when the question is ambiguous in Policies mode.
+        return "payment"
     return None
 
 
@@ -125,6 +128,11 @@ def is_vector_semantic_question(question: str, *, mode: str) -> bool:
 
 
 def infer_execution_strategy_heuristic(question: str, *, mode: str) -> ExecutionStrategy:
+    if mode == "policies":
+        if is_eligibility_question_heuristic(question):
+            return "eligibility"
+        # Other Policies-mode questions are handled by dedicated tool fast-paths.
+        return "hybrid"
     if is_eligibility_question_heuristic(question):
         return "eligibility"
     if is_graph_structured_question(question, mode=mode):

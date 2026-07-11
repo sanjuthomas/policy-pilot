@@ -9,7 +9,7 @@ def test_health_reports_degraded_when_opa_unready(test_client) -> None:
             return_value={
                 "ok": False,
                 "policy_count": 0,
-                "detail": "expected at least 11 policies",
+                "detail": "expected at least 15 policies",
             }
         )
         response = test_client.get("/health")
@@ -25,7 +25,7 @@ def test_health_reports_up_when_opa_ready(test_client) -> None:
         opa_cls.return_value.policy_health = AsyncMock(
             return_value={
                 "ok": True,
-                "policy_count": 11,
+                "policy_count": 15,
                 "detail": "policies loaded",
             }
         )
@@ -34,4 +34,4 @@ def test_health_reports_up_when_opa_ready(test_client) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "UP"
-    assert payload["components"]["opa"]["policy_count"] == 11
+    assert payload["components"]["opa"]["policy_count"] == 15

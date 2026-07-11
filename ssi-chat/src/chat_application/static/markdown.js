@@ -6,6 +6,14 @@ function escapeHtml(text) {
     .replace(/"/g, "&quot;");
 }
 
+function formatInlineMarkdown(text) {
+  let html = escapeHtml(text);
+  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+  html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/_([^_\n]+)_/g, "<em>$1</em>");
+  return html;
+}
+
 function parseTableRow(line) {
   const trimmed = line.trim();
   if (!trimmed.startsWith("|") || !trimmed.endsWith("|")) {
@@ -26,14 +34,52 @@ function isTableSeparator(line) {
 }
 
 function buildTableHtml(header, rows) {
-  const thead = header.map((cell) => `<th>${escapeHtml(cell)}</th>`).join("");
+  const thead = header
+    .map((cell) => `<th>${formatInlineMarkdown(cell)}</th>`)
+    .join("");
   const tbody = rows
     .map(
       (row) =>
-        `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`
+        `<tr>${row.map((cell) => `<td>${formatInlineMarkdown(cell)}</td>`).join("")}</tr>`
     )
     .join("");
   return `<div class="table-wrap"><table class="md-table"><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table></div>`;
+}
+
+function isBulletLine(line) {
+  return /^\s*[-*]\s+/.test(line);
+}
+
+function renderPlainMarkdown(lines) {
+  const parts = [];
+  let index = 0;
+
+  while (index < lines.length) {
+    const line = lines[index];
+    if (!line.trim()) {
+      index += 1;
+      continue;
+    }
+
+    if (isBulletLine(line)) {
+      const items = [];
+      while (index < lines.length && isBulletLine(lines[index])) {
+        items.push(lines[index].replace(/^\s*[-*]\s+/, ""));
+        index += 1;
+      }
+      parts.push(
+        `<ul class="md-list">${items
+          .map((item) => `<li>${formatInlineMarkdown(item)}</li>`)
+          .join("")}</ul>`
+      );
+      continue;
+    }
+
+    parts.push(`<p class="md-p">${formatInlineMarkdown(line)}</p>`);
+    index += 1;
+  }
+
+  return parts.join("");
 }
 
 function renderAssistantMarkdown(text) {
@@ -69,7 +115,7 @@ function renderAssistantMarkdown(text) {
     }
 
     if (plain.length) {
-      parts.push(`<div class="md-text">${escapeHtml(plain.join("\n"))}</div>`);
+      parts.push(renderPlainMarkdown(plain));
     }
   }
 
