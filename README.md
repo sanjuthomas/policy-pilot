@@ -21,55 +21,28 @@ Policy Pilot models that end to end. Every mutation is recorded, streamed throug
 
 Policy Pilot surfaces **fraud patterns, compliance violations, and collusion signals** — not just application status screens.
 
-**Demo tags** (see [intent determination](docs/intent-determination.md)): **`graph`** — planned Neo4j Cypher (counts, lists, relationships) · **`tools`** — live OPA / policy directory API (who *can* approve, what policy requires, person entitlements) · **`vector`** — semantic retrieval over security-event audit text · **`multimodal`** — indexed event narratives (dense embeddings + BM25 on the same multimodal store; use **Events** mode)
+**Demo tags** (see [intent determination](docs/intent-determination.md)): **`graph`** · **`tools`** · **`vector`** · **`multimodal`**
 
 **Graph**
 
 - _Are there any instances of approving each other's instructions?_ **`graph`**
 - _Are there cases where one user created an instruction that another user approved, and that approver later created a payment on the same instruction that the original creator then approved?_ **`graph`**
-- _Can you list all instructions without any payments?_ **`graph`**
-- _Are there instructions approved by someone who reports directly to the creator?_ **`graph`**
-- _Are there active instructions sharing the same creditor account and currency?_ **`graph`**
 - _Who approved instruction X, and why was it allowed?_ **`graph`** **`multimodal`**
 
-**Tools** (live policy — use **Policies** mode; log in as compliance analyst `comp-001`)
-
-Normative policy summaries (OPA `policy_summary`):
+**Tools** (live policy — use **Policies** mode; log in as `comp-001`)
 
 - _What is the funding approval policy?_ **`tools`**
-- _Can you summarize the payment approval policy?_ **`tools`**
-- _What is the instruction approval policy?_ **`tools`**
-- _Explain the payment creation policy_ **`tools`**
-
-Who may approve (directory — no payment ID required):
-
 - _Who has permission to approve payments worth more than $25 billion, and for which lines of business?_ **`tools`**
-- _Who can approve payments of at least $1 billion?_ **`tools`**
 - _Who has permission to approve payments belong to LOB FICC?_ **`tools`**
-- _Who has permission to approve payments for LOB FX?_ **`tools`**
-- _Who has permission to approve payments exceeding $1 million for FICC?_ **`tools`**
-
-Person entitlements (ZITADEL directory projection):
-
 - _Can you list the permissions of Kowalski, Anna?_ **`tools`**
-- _Summarize permissions for pay-203_ **`tools`**
-- _What can Sophie Laurent do?_ **`tools`**
-- _List the permissions of Wei Chen_ **`tools`**
-
-Live eligibility for a specific entity (include a real payment or instruction ID):
-
 - _Who can approve payment Y?_ **`tools`**
-- _Who can approve instruction X?_ **`tools`**
 
-**Vector / multimodal** (open-ended audit trail — use **Events** mode)
+**Vector / multimodal** (use **Events** mode)
 
 - _Show payment policy denial ALERT events today with actor and reason._ **`vector`** **`multimodal`**
-- _What explanations appear in the audit trail when a payment approval is blocked because the approver reports directly to the payment creator?_ **`vector`** **`multimodal`**
 - _Show ALERT events for LOB coverage violations on payments._ **`vector`** **`multimodal`**
-- _Show all REJECT events this week with the rejection reason._ **`vector`** **`multimodal`**
-- _Show all ALERT events for FICC instructions in the last 7 days._ **`vector`** **`multimodal`**
 
-More examples and demo personas: **[Domain models and demo users](docs/domain-models.md)**. Full regression bank with retrieval tags: **[ssi-chat/regression/questions.yaml](ssi-chat/regression/questions.yaml)**.
+**Full list:** **[Sample questions](docs/sample-questions.md)**. Demo personas: **[Domain models and demo users](docs/domain-models.md)**. Regression bank: **[ssi-chat/regression/questions.yaml](ssi-chat/regression/questions.yaml)**.
 
 ---
 
@@ -82,6 +55,7 @@ Policy Pilot sits at the end of an event-driven pipeline: domain services enforc
 | Topic | Summary |
 |-------|---------|
 | **[OPA policy controls](docs/opa-controls.md)** | Segregation of duties, reporting-line inversion of control, LOB boundaries, amount clubs — the checks and balances enforced on every action. |
+| **[Sample questions](docs/sample-questions.md)** | Curated demo questions by retrieval path (`graph`, `tools`, `vector` / `multimodal`), including Policies-mode examples. |
 | **[Intent determination](docs/intent-determination.md)** | Gemini returns a strict `RouterDecision` (eligibility, graph, vector, or hybrid). Selective retrieval — no blind merge of graph and vector on every question. |
 | **[Data flow](docs/data-flow.md)** | Mongo transactions → Kafka CDC → four ETL pipelines → Neo4j + multimodal store → chat. |
 | **[Architecture decisions](docs/architecture-decisions.md)** | Why ZITADEL, OPA, MongoDB, Kafka, Neo4j hybrid search, Vertex AI, and `cypher_builder`. |
