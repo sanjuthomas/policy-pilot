@@ -50,7 +50,7 @@ Policy Pilot surfaces **fraud patterns, compliance violations, and collusion sig
 
 ![End-to-end architecture](docs/architecture-2.png)
 
-Policy Pilot sits at the end of an event-driven pipeline: domain services enforce OPA policy and write versioned state + security events to MongoDB; Kafka Connect streams changes; **ssi-indexer** builds a shared Neo4j graph and multimodal search index; **ssi-chat** routes each question through a **Route → Retrieve → Synthesize** pipeline before answering.
+Policy Pilot sits at the end of an event-driven pipeline: domain services enforce OPA policy and write versioned state + security events to MongoDB; Kafka Connect streams changes; **ssi-indexer** builds a shared Neo4j graph and multimodal search index; **ssi-chat** routes each question through a **Route → Retrieve → Synthesize** pipeline. Live policy and eligibility answers go through the same **authorization-service → OPA** path as mutations, using the logged-in user's JWT / ZITADEL session — not a parallel unchecked tool layer.
 
 | Topic | Summary |
 |-------|---------|
@@ -81,20 +81,24 @@ We do **not** use fuzzy ML text classification for routing. Intent is expressed 
 
 ### End-to-end flow
 
+Live policy questions do not stop at the chat backend. The logged-in user's **JWT / ZITADEL session** is resolved to a subject, then **authorization-service** evaluates the request against **OPA** — the same policy engine that guards mutations in the domain services.
+
 ```mermaid
 flowchart TD
-    Q[User question + search mode] --> R[1. Route — LLM RouterDecision]
-    R --> E{strategy = eligibility?}
-    E -->|yes| OPA[CheckEligibilityAPI — live OPA]
+    Q["User question + Bearer JWT + search mode"] --> ID[Identity — ZITADEL subject]
+    ID --> R[1. Route — LLM RouterDecision]
+    R --> E{live policy / eligibility / tools?}
+    E -->|yes| AZ[2. Authorization-service]
+    AZ --> OPA[OPA policy evaluation]
     OPA --> A[Answer]
-    E -->|no| D[2. Neo4j direct fast path]
+    E -->|no| D[3. Neo4j direct fast path]
     D -->|match| A
-    D -->|no match| RET[3. Selective retrieval]
+    D -->|no match| RET[4. Selective retrieval]
     RET --> G{strategy}
     G -->|graph| N[Neo4j + exact ID lookup]
     G -->|vector| V[Embeddings + BM25]
     G -->|hybrid| H[Neo4j + vector/BM25]
-    N --> S[4. Synthesize]
+    N --> S[5. Synthesize]
     V --> S
     H --> S
     S --> A

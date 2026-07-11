@@ -15,20 +15,24 @@ We do **not** use fuzzy ML text classification for routing. Intent is expressed 
 
 ## End-to-end flow
 
+Live policy questions carry the logged-in user's **JWT / ZITADEL session** into **authorization-service**, which evaluates against **OPA** — the same policy path domain services use for mutations.
+
 ```mermaid
 flowchart TD
-    Q[User question + search mode] --> R[1. Route — LLM RouterDecision]
-    R --> E{strategy = eligibility?}
-    E -->|yes| OPA[CheckEligibilityAPI — live OPA]
+    Q["User question + Bearer JWT + search mode"] --> ID[Identity — ZITADEL subject]
+    ID --> R[1. Route — LLM RouterDecision]
+    R --> E{live policy / eligibility / tools?}
+    E -->|yes| AZ[2. Authorization-service]
+    AZ --> OPA[OPA policy evaluation]
     OPA --> A[Answer]
-    E -->|no| D[2. Neo4j direct fast path]
+    E -->|no| D[3. Neo4j direct fast path]
     D -->|match| A
-    D -->|no match| RET[3. Selective retrieval]
+    D -->|no match| RET[4. Selective retrieval]
     RET --> G{strategy}
     G -->|graph| N[Neo4j + exact ID lookup]
     G -->|vector| V[Embeddings + BM25]
     G -->|hybrid| H[Neo4j + vector/BM25]
-    N --> S[4. Synthesize]
+    N --> S[5. Synthesize]
     V --> S
     H --> S
     S --> A
