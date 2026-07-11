@@ -21,7 +21,7 @@ Policy Pilot models that end to end. Every mutation is recorded, streamed throug
 
 Policy Pilot surfaces **fraud patterns, compliance violations, and collusion signals** — not just application status screens.
 
-**Demo tags** (see [intent determination](docs/intent-determination.md)): **`graph`** — planned Neo4j Cypher (counts, lists, relationships) · **`tools`** — live OPA / policy directory API (who *can* approve) · **`vector`** — semantic retrieval over security-event audit text · **`multimodal`** — indexed event narratives (dense embeddings + BM25 on the same multimodal store; use **Events** mode)
+**Demo tags** (see [intent determination](docs/intent-determination.md)): **`graph`** — planned Neo4j Cypher (counts, lists, relationships) · **`tools`** — live OPA / policy directory API (who *can* approve, what policy requires, person entitlements) · **`vector`** — semantic retrieval over security-event audit text · **`multimodal`** — indexed event narratives (dense embeddings + BM25 on the same multimodal store; use **Events** mode)
 
 **Graph**
 
@@ -32,10 +32,34 @@ Policy Pilot surfaces **fraud patterns, compliance violations, and collusion sig
 - _Are there active instructions sharing the same creditor account and currency?_ **`graph`**
 - _Who approved instruction X, and why was it allowed?_ **`graph`** **`multimodal`**
 
-**Tools** (live policy — log in as compliance analyst `comp-001` for directory lookups)
+**Tools** (live policy — use **Policies** mode; log in as compliance analyst `comp-001`)
+
+Normative policy summaries (OPA `policy_summary`):
+
+- _What is the funding approval policy?_ **`tools`**
+- _Can you summarize the payment approval policy?_ **`tools`**
+- _What is the instruction approval policy?_ **`tools`**
+- _Explain the payment creation policy_ **`tools`**
+
+Who may approve (directory — no payment ID required):
 
 - _Who has permission to approve payments worth more than $25 billion, and for which lines of business?_ **`tools`**
+- _Who can approve payments of at least $1 billion?_ **`tools`**
+- _Who has permission to approve payments belong to LOB FICC?_ **`tools`**
+- _Who has permission to approve payments for LOB FX?_ **`tools`**
+- _Who has permission to approve payments exceeding $1 million for FICC?_ **`tools`**
+
+Person entitlements (ZITADEL directory projection):
+
+- _Can you list the permissions of Kowalski, Anna?_ **`tools`**
+- _Summarize permissions for pay-203_ **`tools`**
+- _What can Sophie Laurent do?_ **`tools`**
+- _List the permissions of Wei Chen_ **`tools`**
+
+Live eligibility for a specific entity (include a real payment or instruction ID):
+
 - _Who can approve payment Y?_ **`tools`**
+- _Who can approve instruction X?_ **`tools`**
 
 **Vector / multimodal** (open-ended audit trail — use **Events** mode)
 
