@@ -147,14 +147,10 @@ docker compose stop ssi-indexer
 # Drop stale indexes if dimension changed (768 for text-embedding-004)
 docker exec neo4j cypher-shell -u neo4j -p devpassword "
 DROP INDEX multimodal_embedding IF EXISTS;
-DROP INDEX multimodal_search_text IF EXISTS;
 "
 
-# Re-apply constraints (+ drop legacy fulltext if still present)
+# Re-apply constraints
 docker exec -i neo4j cypher-shell -u neo4j -p devpassword < neo4j-graph-model/schema.cypher
-docker exec neo4j cypher-shell -u neo4j -p devpassword "
-DROP INDEX multimodal_search_text IF EXISTS;
-"
 
 for TOPIC_GROUP in \
   "instruction_security_events:instruction-security-event-etl" \

@@ -121,15 +121,15 @@ In this demo Kafka runs as a single broker with no replication. Production would
 
 ---
 
-## Why Neo4j dense vector search (not BM25)?
+## Why Neo4j dense vector search?
 
 No single retrieval strategy reliably handles the full range of policy, lifecycle, and audit questions investigators ask.
 
 **Dense vector search** (via **Vertex AI `text-embedding-004`** on `MultimodalDocument` nodes) excels at **semantic similarity** — "who tried to approve each other's instructions?" or "show me policy denial events for FX desk".
 
-**Exact identifiers** (UUIDs, payment ids, user ids) are handled by dedicated Neo4j lookups and graph/Cypher paths — not by a lexical BM25 index. Policy Pilot previously also ran Neo4j Lucene BM25 over `search_text` and fused it with dense ranks via RRF; that path was removed because it overlapped exact lookup + graph routing and mostly added latency and ranking noise.
+**Exact identifiers** (UUIDs, payment ids, user ids) and **structured relationships** are handled by dedicated Neo4j lookups and graph/Cypher paths.
 
-**Hybrid retrieval** in chat now means **vector + graph** (RRF when both run), selected per question by the [intent router](intent-determination.md) — not vector + BM25.
+**Hybrid retrieval** in chat means **vector + graph** (RRF when both run), selected per question by the [intent router](intent-determination.md).
 
 Using **one Neo4j store** for graph traversal and dense vectors keeps infrastructure simple — no separate vector database.
 

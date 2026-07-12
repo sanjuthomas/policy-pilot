@@ -126,9 +126,7 @@ Observability path: `neo4j_direct` → `retrieval_strategy: deterministic`.
 
 ## Step 3 — Selective retrieval (no blind merge)
 
-Previously, the fallback path always ran **vector + lexical (BM25) + graph in parallel** and merged everything with RRF. That polluted structured answers with fuzzy semantic hits.
-
-Now `execute_selective_retrieval()` runs only what the router chose:
+`execute_selective_retrieval()` runs only the backends the router chose — graph, vector, or both:
 
 | Strategy | Neo4j / exact lookup | Dense vector |
 |----------|----------------------|--------------|
