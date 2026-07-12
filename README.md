@@ -42,7 +42,7 @@ Policy Pilot surfaces **fraud patterns, compliance violations, and collusion sig
 
 - _Can you create a payment for instruction ID 20260705-FICC-I-31? Value date tomorrow; amount: 12 million USD._ **`skill`**
 
-  Scripted **create-payment** skill: parse request → load instruction → dry-run OPA `CREATE` → confirmation card (debtor / creditor / intermediaries) with **Go / No Go** → create draft only on **Go**. Fail closed on deny or No Go.
+  Scripted **create-payment** skill: parse request → load instruction → dry-run OPA `CREATE` → confirmation card (debtor / creditor / intermediaries) with **Go / No Go** → create draft only on **Go**. Fail closed on deny or No Go. Full write-up: **[Create-payment skill](docs/create-payment-skill.md)**.
 
 **Vector / multimodal** (use **Events** mode)
 
@@ -61,6 +61,7 @@ Policy Pilot sits at the end of an event-driven pipeline: domain services enforc
 
 | Topic | Summary |
 |-------|---------|
+| **[Create-payment skill](docs/create-payment-skill.md)** | First mutation skill: OPA preflight, Go / No Go confirmation, payment-service CREATE → Mongo. |
 | **[OPA policy controls](docs/opa-controls.md)** | Segregation of duties, reporting-line inversion of control, LOB boundaries, amount clubs — the checks and balances enforced on every action. |
 | **[Sample questions](docs/sample-questions.md)** | Curated demo questions by retrieval path (`graph`, `tools`, `skill`, `vector` / `multimodal`), including Policies-mode and create-payment skill examples. |
 | **[Intent determination](docs/intent-determination.md)** | Gemini returns a strict `RouterDecision` (eligibility, graph, vector, or hybrid). Selective retrieval — no blind merge of graph and vector on every question. |
@@ -118,7 +119,7 @@ flowchart TD
     S --> A
 ```
 
-Implementation entry point: `RagService.ask()` delegates to `RagPipelineOrchestrator` in `ssi-chat/src/chat_application/pipeline/orchestrator.py`. Create-payment skill: `ssi-chat/src/chat_application/skills/`. Full specification: **[docs/intent-determination.md](docs/intent-determination.md)**.
+Implementation entry point: `RagService.ask()` delegates to `RagPipelineOrchestrator` in `ssi-chat/src/chat_application/pipeline/orchestrator.py`. Create-payment skill: **[docs/create-payment-skill.md](docs/create-payment-skill.md)** (`ssi-chat/src/chat_application/skills/`). Full routing specification: **[docs/intent-determination.md](docs/intent-determination.md)**.
 
 ---
 

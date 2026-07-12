@@ -71,7 +71,7 @@ Grab IDs from the [demo harness](http://localhost:8091) or instruction/payment U
 
 Use **Payments** mode. Sign in as a middle-office payment creator (`pay-101`, `pay-205`, …) with `Password1!`.
 
-Skills are **scripted pipelines**, not free-form agent tool loops. Create-payment always dry-runs OPA `CREATE`, shows a confirmation card, and mutates only after **Go**.
+Skills are **scripted pipelines**, not free-form agent tool loops. Create-payment always dry-runs OPA `CREATE`, shows a confirmation card, and mutates only after **Go**. Details: **[Create-payment skill](create-payment-skill.md)**.
 
 - _Can you create a payment for instruction ID 20260705-FICC-I-31? Value date tomorrow; amount: 12 million USD._ **`skill`**
 - _Can you create a payment using instruction 20260705-FX-I-12? Value date today and amount 10 million._ **`skill`**

@@ -59,7 +59,9 @@ Natural-language create for payment creators (`PAYMENT_CREATOR` + middle office)
 
 > Can you create a payment for instruction ID 20260705-FICC-I-31? Value date tomorrow; amount: 12 million USD.
 
-Flow: detect/parse → load instruction → dry-run authz `CREATE` → confirmation card (parties + accounts) → **Go** creates a DRAFT via payment-service, **No Go** cancels. Implementation: `src/chat_application/skills/`. Confirm API: `POST /api/chat/skills/create-payment/confirm`.
+Flow: detect/parse → load instruction → dry-run authz `CREATE` → confirmation card (parties + accounts) → **Go** creates a DRAFT via payment-service, **No Go** cancels.
+
+Full sequence diagram and API map: **[Create-payment skill](../docs/create-payment-skill.md)**. Package README: [`src/chat_application/skills/README.md`](src/chat_application/skills/README.md). Confirm API: `POST /api/chat/skills/create-payment/confirm`.
 
 ## Who / When / Why (approval audit)
 
