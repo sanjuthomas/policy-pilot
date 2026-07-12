@@ -56,6 +56,7 @@ from chat_application.neo4j import Neo4jClient
 from chat_application.neo4j_intents import try_neo4j_direct_answer
 from chat_application.pipeline.orchestrator import RagPipelineOrchestrator
 from chat_application.reranker import RankedHit, rrf_merge
+from chat_application.subject import Subject
 
 logger = logging.getLogger(__name__)
 
@@ -709,6 +710,7 @@ class RagService:
         mode: SearchMode = "events",
         bearer_token: str | None = None,
         session_id: str | None = None,
+        subject: Subject | None = None,
     ) -> ChatResponse:
         """Run the full RAG pipeline (route → retrieve → synthesize)."""
         return await self._pipeline.ask(
@@ -717,6 +719,7 @@ class RagService:
             mode=mode,
             bearer_token=bearer_token,
             session_id=session_id,
+            subject=subject,
         )
 
     async def _search_vector(

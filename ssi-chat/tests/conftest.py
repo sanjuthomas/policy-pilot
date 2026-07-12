@@ -83,14 +83,14 @@ def compliance_subject():
 @pytest.fixture
 def test_client(mock_ml_client, mock_multimodal, mock_neo4j, compliance_subject):
     import chat_application.main as main_module
-    from chat_application.dependencies import get_compliance_subject
+    from chat_application.dependencies import get_chat_subject
 
     main_module.ml_client = mock_ml_client
     main_module.multimodal_client = mock_multimodal
     main_module.neo4j_client = mock_neo4j
     main_module.rag_service = None
 
-    main_module.app.dependency_overrides[get_compliance_subject] = lambda: compliance_subject
+    main_module.app.dependency_overrides[get_chat_subject] = lambda: compliance_subject
 
     with TestClient(main_module.app) as client:
         yield client

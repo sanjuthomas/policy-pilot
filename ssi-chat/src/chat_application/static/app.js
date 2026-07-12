@@ -22,8 +22,11 @@ const ASSISTANT_NAME = "PolicyPilot";
 /** @type {{ role: 'user' | 'assistant', content: string }[]} */
 let history = [];
 
-/** @type {{ user_id: string, session_id: string, session_token: string } | null} */
+/** @type {{ user_id: string, session_id: string, session_token: string, audiences?: string[], roles?: string[] } | null} */
 let session = null;
+
+/** @type {Map<string, { audiences: string[], roles: string[] }>} */
+const chatUserDirectory = new Map();
 
 function loadSession() {
   try {
@@ -33,6 +36,7 @@ function loadSession() {
     session = null;
   }
   updateAuthUi();
+  updatePoliciesModeVisibility();
 }
 
 function saveSession() {
@@ -42,6 +46,30 @@ function saveSession() {
     localStorage.removeItem(AUTH_STORAGE_KEY);
   }
   updateAuthUi();
+  updatePoliciesModeVisibility();
+}
+
+function canUsePoliciesMode() {
+  const audiences = session?.audiences || [];
+  return audiences.includes("compliance");
+}
+
+function updatePoliciesModeVisibility() {
+  const policiesOption = document.getElementById("mode-option-policies");
+  if (!policiesOption) {
+    return;
+  }
+  const allow = !session || canUsePoliciesMode();
+  policiesOption.classList.toggle("hidden", !allow);
+  if (!allow) {
+    const policiesRadio = policiesOption.querySelector('input[name="mode"]');
+    if (policiesRadio?.checked) {
+      const eventsRadio = document.querySelector('input[name="mode"][value="events"]');
+      if (eventsRadio) {
+        eventsRadio.checked = true;
+      }
+    }
+  }
 }
 
 function updateAuthUi() {
@@ -62,21 +90,37 @@ function updateAuthUi() {
   }
 }
 
-async function loadComplianceUsers() {
+async function loadChatUsers() {
   try {
-    const response = await fetch("/api/compliance-users");
+    const response = await fetch("/api/chat-users");
     if (!response.ok) {
       return;
     }
     const data = await response.json();
+    chatUserDirectory.clear();
     for (const user of data.users || []) {
+      chatUserDirectory.set(user.user_id, {
+        audiences: user.audiences || [],
+        roles: user.roles || [],
+      });
       const option = document.createElement("option");
       option.value = user.user_id;
-      option.textContent = `${user.display_name} (${user.user_id})`;
+      const audiences = (user.audiences || []).join(", ");
+      option.textContent = audiences
+        ? `${user.display_name} (${user.user_id}) · ${audiences}`
+        : `${user.display_name} (${user.user_id})`;
       authUser.appendChild(option);
     }
+    if (session?.user_id && (!session.audiences || session.audiences.length === 0)) {
+      const entry = chatUserDirectory.get(session.user_id);
+      if (entry) {
+        session = { ...session, audiences: entry.audiences, roles: entry.roles };
+        saveSession();
+      }
+    }
+    updatePoliciesModeVisibility();
   } catch (error) {
-    console.warn("could not load compliance users", error);
+    console.warn("could not load chat users", error);
   }
 }
 
@@ -99,10 +143,13 @@ async function login() {
     if (!response.ok) {
       throw new Error(payload.detail || `HTTP ${response.status}`);
     }
+    const directory = chatUserDirectory.get(payload.user_id) || {};
     session = {
       user_id: payload.user_id,
       session_id: payload.session_id,
       session_token: payload.session_token,
+      audiences: payload.audiences || directory.audiences || [],
+      roles: payload.roles || directory.roles || [],
     };
     saveSession();
     authPassword.value = "";
@@ -373,5 +420,5 @@ authPassword.addEventListener("keydown", (event) => {
 });
 
 loadSession();
-loadComplianceUsers();
+loadChatUsers();
 input.focus();

@@ -194,6 +194,20 @@ users:
     groups: []
 
   # ═══════════════════════════════════════════════════════════════════════════
+  # Chat service account
+  # Used for OBO evaluate calls from ssi-chat → authorization-service
+  # (me-centric “can I approve/create?” and future mutation skills).
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - user_id: svc-chat
+    given_name: Chat
+    family_name: Service
+    title: Service Account
+    roles:
+      - INSTRUCTION_VIEWER
+    groups: []
+
+  # ═══════════════════════════════════════════════════════════════════════════
   # PAYMENT SERVICE USERS
   #
   # Roles:

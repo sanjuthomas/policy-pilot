@@ -20,6 +20,7 @@ from chat_application.routing_observability import (
 
 if TYPE_CHECKING:
     from chat_application.rag import RagService
+    from chat_application.subject import Subject
 
 logger = logging.getLogger(__name__)
 
@@ -38,66 +39,98 @@ class RagPipelineOrchestrator:
         mode: SearchMode = "events",
         bearer_token: str | None = None,
         session_id: str | None = None,
+        subject: "Subject | None" = None,
     ) -> ChatResponse:
         started = time.perf_counter()
 
         decision = await route_question(self._service.ml_client, message, mode=mode)
 
-        policy_summary_response = await self._try_policy_summary(
-            message,
-            mode=mode,
-            bearer_token=bearer_token,
-            session_id=session_id,
-            started=started,
-        )
-        if policy_summary_response is not None:
-            return policy_summary_response
+        if subject is not None:
+            me_response = await self._try_me_intent(
+                message,
+                mode=mode,
+                subject=subject,
+                started=started,
+            )
+            if me_response is not None:
+                return me_response
 
-        policy_directory_response = await self._try_policy_directory(
-            message,
-            mode=mode,
-            bearer_token=bearer_token,
-            session_id=session_id,
-            started=started,
-        )
-        if policy_directory_response is not None:
-            return policy_directory_response
+        from chat_application.capabilities import capabilities_for
 
-        person_permission_response = await self._try_person_permissions(
-            message,
-            mode=mode,
-            bearer_token=bearer_token,
-            session_id=session_id,
-            started=started,
-        )
-        if person_permission_response is not None:
-            return person_permission_response
+        allow_compliance_tools = subject is None or capabilities_for(subject).is_compliance
 
-        eligibility_response = await self._try_eligibility(
-            message,
-            mode=mode,
-            decision=decision,
-            bearer_token=bearer_token,
-            session_id=session_id,
-            started=started,
-            force=mode == "policies",
-        )
-        if eligibility_response is not None:
-            return eligibility_response
+        if allow_compliance_tools:
+            policy_summary_response = await self._try_policy_summary(
+                message,
+                mode=mode,
+                bearer_token=bearer_token,
+                session_id=session_id,
+                started=started,
+            )
+            if policy_summary_response is not None:
+                return policy_summary_response
 
-        if mode == "policies":
-            from chat_application.policy_summary import policies_mode_guidance
+            policy_directory_response = await self._try_policy_directory(
+                message,
+                mode=mode,
+                bearer_token=bearer_token,
+                session_id=session_id,
+                started=started,
+            )
+            if policy_directory_response is not None:
+                return policy_directory_response
 
+            person_permission_response = await self._try_person_permissions(
+                message,
+                mode=mode,
+                bearer_token=bearer_token,
+                session_id=session_id,
+                started=started,
+            )
+            if person_permission_response is not None:
+                return person_permission_response
+
+            eligibility_response = await self._try_eligibility(
+                message,
+                mode=mode,
+                decision=decision,
+                bearer_token=bearer_token,
+                session_id=session_id,
+                started=started,
+                force=mode == "policies",
+            )
+            if eligibility_response is not None:
+                return eligibility_response
+
+            if mode == "policies":
+                from chat_application.policy_summary import policies_mode_guidance
+
+                elapsed = (time.perf_counter() - started) * 1000
+                return finalize_chat_response(
+                    message,
+                    mode,
+                    answer=policies_mode_guidance(),
+                    retrieval_ms=0.0,
+                    generation_ms=elapsed,
+                    path="eligibility",
+                    cypher_provenance="none",
+                    answer_synthesis="eligibility_api",
+                )
+        elif mode == "policies":
             elapsed = (time.perf_counter() - started) * 1000
             return finalize_chat_response(
                 message,
                 mode,
-                answer=policies_mode_guidance(),
+                answer=(
+                    "Policies mode is available to compliance analysts. "
+                    "As an operational user, ask me-centric questions such as "
+                    "“Are there any other users like me?” or switch to Payments / Events mode."
+                ),
                 retrieval_ms=0.0,
                 generation_ms=elapsed,
                 path="eligibility",
                 cypher_provenance="none",
-                answer_synthesis="eligibility_api",
+                answer_synthesis="formatter",
             )
 
         direct = await self._service._try_neo4j_direct_answer(message, mode=mode)
@@ -164,6 +197,33 @@ class RagPipelineOrchestrator:
             path="full_rag",
             cypher_provenance=graph_provenance,
             answer_synthesis=answer_synthesis,
+        )
+
+    async def _try_me_intent(
+        self,
+        message: str,
+        *,
+        mode: SearchMode,
+        subject: Subject,
+        started: float,
+    ) -> ChatResponse | None:
+        from chat_application.me import try_me_intent
+
+        result = await try_me_intent(message, subject=subject)
+        if result is None:
+            return None
+
+        elapsed = (time.perf_counter() - started) * 1000
+        return finalize_chat_response(
+            message,
+            mode,
+            answer=format_chat_response(result.answer),
+            retrieval_ms=0.0,
+            generation_ms=elapsed,
+            path="eligibility",
+            cypher_provenance="none",
+            answer_synthesis="formatter",
+            intent_id=result.intent_id,
         )
 
     async def _try_policy_summary(

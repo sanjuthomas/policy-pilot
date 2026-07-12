@@ -561,6 +561,7 @@ services:
       GRAPH_MODEL_DIR: /app/neo4j-graph-model
       PAYMENT_SERVICE_URL: http://payment-service:8093
       INSTRUCTION_SERVICE_URL: http://instruction-service:8000
+      AUTHORIZATION_SERVICE_URL: http://authorization-service:8094
       USERS_FILE: /app/zitadel-seed/users.yaml
       ZITADEL_URL: http://zitadel-proxy
       ZITADEL_HOST_HEADER: localhost

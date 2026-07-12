@@ -14,8 +14,9 @@ from telemetry import (
 )
 
 from chat_application import __version__
+from chat_application.capabilities import audience_labels
 from chat_application.config import settings
-from chat_application.dependencies import get_compliance_subject
+from chat_application.dependencies import get_chat_subject
 from chat_application.feedback_observability import (
     ChatFeedbackContext,
     get_feedback_distribution,
@@ -27,8 +28,9 @@ from chat_application.multimodal_search import MultimodalSearchClient
 from chat_application.neo4j import Neo4jClient
 from chat_application.rag import RagService
 from chat_application.routing_observability import get_routing_distribution
+from chat_application.service_identity import service_identity
 from chat_application.subject import Subject
-from chat_application.users import compliance_users
+from chat_application.users import chat_users, compliance_users, load_users
 from chat_application.zitadel_auth import ZitadelAuthClient, login_name_for_user
 
 logger = get_logger(__name__)
@@ -49,6 +51,10 @@ async def lifespan(app: FastAPI):
         await ml_client.warmup()
     except Exception as exc:
         logger.warning("Vertex warmup failed (chat may still work): %s", exc)
+    try:
+        await service_identity.login()
+    except Exception as exc:
+        logger.warning("chat service identity login failed: %s", exc)
     rag_service = RagService(
         ml_client=ml_client,
         multimodal=multimodal_client,
@@ -103,6 +109,7 @@ class LoginRequest(BaseModel):
 
 @app.get("/api/compliance-users")
 async def list_compliance_users() -> dict:
+    """Legacy endpoint — compliance-only users. Prefer ``/api/chat-users``."""
     users = compliance_users(settings.users_file, allowed_roles=settings.compliance_role_set)
     return {
         "users": [
@@ -110,10 +117,18 @@ async def list_compliance_users() -> dict:
                 "user_id": user.user_id,
                 "display_name": f"{user.family_name}, {user.given_name}",
                 "title": user.title,
+                "roles": list(user.roles),
+                "audiences": ["compliance"],
             }
             for user in users
         ]
     }
+
+
+@app.get("/api/chat-users")
+async def list_chat_users() -> dict:
+    """Users allowed to sign in to Policy Pilot (compliance + operational)."""
+    return {"users": chat_users(settings.users_file, allowed_roles=settings.chat_role_set)}
 
 
 @app.post("/api/auth/login")
@@ -126,17 +141,32 @@ async def auth_login(request: LoginRequest) -> dict:
         session = await client.login(login_name, request.password)
     except Exception as exc:
         raise HTTPException(status_code=401, detail=f"login failed: {exc}") from exc
+
+    audiences: list[str] = []
+    roles: list[str] = []
+    try:
+        seed = load_users(settings.users_file)
+        for user in seed.users:
+            if user.user_id == session.user_id:
+                roles = list(user.roles)
+                audiences = audience_labels(user.roles)
+                break
+    except Exception:
+        logger.warning("could not resolve audiences for %s", session.user_id)
+
     return {
         "user_id": session.user_id,
         "session_id": session.session_id,
         "session_token": session.session_token,
+        "roles": roles,
+        "audiences": audiences,
     }
 
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(
     request: ChatRequest,
-    _subject: Subject = Depends(get_compliance_subject),
+    subject: Subject = Depends(get_chat_subject),
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
 ) -> ChatResponse:
@@ -152,6 +182,7 @@ async def chat(
             mode=request.mode,
             bearer_token=bearer_token,
             session_id=x_session_id,
+            subject=subject,
         )
     except Exception as exc:
         logger.exception("chat failed")
@@ -161,7 +192,7 @@ async def chat(
 @app.post("/api/chat/feedback")
 async def chat_feedback(
     request: ChatFeedbackRequest,
-    subject: Subject = Depends(get_compliance_subject),
+    subject: Subject = Depends(get_chat_subject),
 ) -> dict[str, str]:
     feedback = ChatFeedbackContext.from_payload(
         rating=request.rating,

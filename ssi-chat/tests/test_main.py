@@ -66,9 +66,9 @@ class TestChatEndpoint:
 
     def test_chat_requires_auth(self, test_client: TestClient) -> None:
         import chat_application.main as main_module
-        from chat_application.dependencies import get_compliance_subject
+        from chat_application.dependencies import get_chat_subject
 
-        main_module.app.dependency_overrides.pop(get_compliance_subject, None)
+        main_module.app.dependency_overrides.pop(get_chat_subject, None)
         response = test_client.post(
             "/api/chat",
             json={"message": "hello"},

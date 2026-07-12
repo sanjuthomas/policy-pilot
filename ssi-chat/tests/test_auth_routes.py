@@ -35,6 +35,31 @@ def test_list_compliance_users(client: TestClient) -> None:
     assert users[0]["user_id"] == "comp-001"
 
 
+def test_list_chat_users_includes_operational(client: TestClient, tmp_path, monkeypatch) -> None:
+    users_file = tmp_path / "users.yaml"
+    users_file.write_text(
+        """
+users:
+  - user_id: comp-001
+    given_name: Alex
+    family_name: Morgan
+    title: Compliance Analyst
+    roles: [COMPLIANCE_ANALYST]
+  - user_id: pay-101
+    given_name: Mina
+    family_name: Okonkwo
+    title: Payment Ops
+    roles: [PAYMENT_CREATOR]
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("chat_application.main.settings.users_file", users_file)
+    response = client.get("/api/chat-users")
+    assert response.status_code == 200
+    ids = {user["user_id"] for user in response.json()["users"]}
+    assert ids == {"comp-001", "pay-101"}
+
+
 def test_auth_login_success(client: TestClient) -> None:
     session = SessionCredentials(
         session_id="sid",

@@ -18,7 +18,7 @@
       <div class="topbar-links">
         <div id="auth-panel" class="auth-panel">
           <span id="auth-status" class="auth-status muted">Not signed in</span>
-          <select id="auth-user" class="auth-select" aria-label="Compliance user">
+          <select id="auth-user" class="auth-select" aria-label="Chat user">
             <option value="">Sign in as…</option>
           </select>
           <input
@@ -43,9 +43,9 @@
           <div class="message assistant">
             <div class="message-role">PolicyPilot</div>
             <div class="message-body">
-              I'm PolicyPilot — ask me about instruction lifecycle security events: who created
-              or approved instructions, rejections, alerts, counts by wire scope, and more.
-              I run vector, BM25, and Neo4j (Cypher) retrieval automatically.
+              I'm PolicyPilot — ask about instruction and payment security events,
+              policy inquiries, or (when signed in as a payment creator/approver)
+              me-centric questions such as “Are there any other users like me?”
             </div>
           </div>
         </div>
@@ -65,7 +65,7 @@
               <input type="radio" name="mode" value="payments" />
               <span class="mode-pill">Payments</span>
             </label>
-            <label class="mode-option">
+            <label class="mode-option" id="mode-option-policies">
               <input type="radio" name="mode" value="policies" />
               <span class="mode-pill">Policies</span>
             </label>
@@ -114,6 +114,6 @@
     </main>
 
     <script src="/static/markdown.js?v=3"></script>
-    <script src="/static/app.js?v=10"></script>
+    <script src="/static/app.js?v=12"></script>
   </body>
 </html>

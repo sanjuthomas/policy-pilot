@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     auth_mode: str = "auto"
 
     compliance_roles: str = "COMPLIANCE_ANALYST,COMPLIANCE_OFFICER,PLATFORM_ADMIN"
-    authorized_service_user_ids: str = "svc-instruction,svc-payment"
+    authorized_service_user_ids: str = "svc-instruction,svc-payment,svc-chat"
 
     @property
     def compliance_role_set(self) -> set[str]:

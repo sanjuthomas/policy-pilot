@@ -27,3 +27,15 @@ def get_compliance_subject(subject: Subject = Depends(get_subject)) -> Subject:
             detail="COMPLIANCE_ANALYST role required for chat",
         )
     return subject
+
+
+def get_chat_subject(subject: Subject = Depends(get_subject)) -> Subject:
+    """Allow compliance oversight users and operational payment actors."""
+    if not settings.chat_role_set.intersection(subject.roles):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Chat requires COMPLIANCE_ANALYST, PAYMENT_CREATOR, or FUNDING_APPROVER"
+            ),
+        )
+    return subject

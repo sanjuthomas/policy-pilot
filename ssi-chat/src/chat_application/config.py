@@ -47,11 +47,22 @@ class Settings(BaseSettings):
     oidc_internal_url: str | None = None
     oidc_audience: str | None = None
     compliance_roles: str = "COMPLIANCE_ANALYST,COMPLIANCE_OFFICER,PLATFORM_ADMIN"
+    operational_roles: str = "PAYMENT_CREATOR,FUNDING_APPROVER"
+    service_user_id: str = "svc-chat"
+    service_user_password: str = "Password1!"
     default_user_password: str = "Password1!"
 
     @property
     def compliance_role_set(self) -> set[str]:
         return {role.strip() for role in self.compliance_roles.split(",") if role.strip()}
+
+    @property
+    def operational_role_set(self) -> set[str]:
+        return {role.strip() for role in self.operational_roles.split(",") if role.strip()}
+
+    @property
+    def chat_role_set(self) -> set[str]:
+        return self.compliance_role_set | self.operational_role_set
 
     @property
     def graph_schema_path(self) -> Path:
