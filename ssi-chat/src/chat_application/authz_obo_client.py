@@ -103,3 +103,48 @@ class AuthzOboClient:
             violations=list(body.get("violations") or []),
             is_alert=bool(body.get("is_alert")),
         )
+
+    async def eligible_payment_approvers(
+        self,
+        *,
+        payment: dict[str, Any],
+        instruction_status: str,
+        instruction_end_date: str = "",
+        service_token: str | None = None,
+        service_session_id: str | None = None,
+    ) -> dict[str, Any]:
+        if not service_token:
+            raise AuthzOboClientError(
+                "service token required for eligible-approvers evaluation"
+            )
+        headers = {
+            "Authorization": f"Bearer {service_token}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+        if service_session_id:
+            headers["X-Session-Id"] = service_session_id
+        payload = {
+            "payment": payment,
+            "instruction_status": instruction_status,
+            "instruction_end_date": instruction_end_date,
+        }
+        url = f"{self._base}/api/v1/authorization/payments/eligible-approvers"
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                response = await client.post(url, json=payload, headers=headers)
+        except httpx.HTTPError as exc:
+            raise AuthzOboClientError(
+                f"authorization-service unreachable at {self._base}"
+            ) from exc
+        if response.status_code >= 400:
+            detail = response.text
+            try:
+                detail = str(response.json().get("detail", detail))
+            except Exception:
+                pass
+            raise AuthzOboClientError(
+                f"authorization-service rejected eligible-approvers "
+                f"({response.status_code}): {detail}"
+            )
+        return response.json()

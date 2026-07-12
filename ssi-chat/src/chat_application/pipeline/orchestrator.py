@@ -52,6 +52,18 @@ class RagPipelineOrchestrator:
 
         decision = await route_question(self._service.ml_client, message, mode=mode)
 
+        if subject is not None and bearer_token:
+            skill_response = await self._try_create_payment_skill(
+                message,
+                mode=mode,
+                subject=subject,
+                bearer_token=bearer_token,
+                session_id=session_id,
+                started=started,
+            )
+            if skill_response is not None:
+                return skill_response
+
         if subject is not None:
             me_response = await self._try_me_intent(
                 message,
@@ -245,6 +257,58 @@ class RagPipelineOrchestrator:
         if graph_result.get("cypher") or graph_result.get("rows"):
             return False
         return True
+
+    async def _try_create_payment_skill(
+        self,
+        message: str,
+        *,
+        mode: SearchMode,
+        subject: Subject,
+        bearer_token: str,
+        session_id: str | None,
+        started: float,
+    ) -> ChatResponse | None:
+        from chat_application.models import SkillConfirmationInfo
+        from chat_application.skills import (
+            detect_create_payment_skill,
+            run_create_payment_phase1,
+        )
+
+        params = detect_create_payment_skill(message)
+        if params is None:
+            return None
+
+        result = await run_create_payment_phase1(
+            message,
+            subject=subject,
+            user_token=bearer_token,
+            user_session_id=session_id,
+            params=params,
+        )
+        if result is None:
+            return None
+
+        elapsed = (time.perf_counter() - started) * 1000
+        confirmation = None
+        if result.pending_id and result.confirmation is not None:
+            confirmation = SkillConfirmationInfo(
+                pending_id=result.pending_id,
+                skill="create_payment",
+                card=result.confirmation.to_api(),
+            )
+        return finalize_chat_response(
+            message,
+            mode,
+            answer=format_chat_response(result.answer),
+            retrieval_ms=0.0,
+            generation_ms=elapsed,
+            path="skill",
+            cypher_provenance="none",
+            answer_synthesis="formatter",
+            intent_id=result.intent_id,
+            skill_activities=result.activities,
+            skill_confirmation=confirmation,
+        )
 
     async def _try_me_intent(
         self,
