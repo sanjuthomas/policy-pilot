@@ -79,6 +79,16 @@ intents:
     query: payment_detail_by_id
     formatter: payment_creator_and_approver_by_id
 
+  - id: payment.show_by_id
+    priority: 90
+    modes: [payments, all, events]
+    match: '\b(show|get|display|look\s*up|find|fetch|open|pull\s+up)\b.*\bpayment\b|\b(tell\s+me\s+about|details?\s+(?:for|of|on)|what\s+about)\b.*\bpayment\b|\bpayment\b\s+(?:id\s+)?\d{8}-[A-Z]+-P-\d+'
+    exclude: '\bversions?\b|\bwho\s+created\b|\bwho\s+approv|\bstatus of\b|\bwhat is\s+the\s+status\b|\bcreate\b|\bdraft\b'
+    requires:
+      payment_id: true
+    query: payment_detail_by_id
+    formatter: payment_detail_by_id
+
   - id: instruction.versions_by_id
     priority: 105
     modes: [instructions, all]

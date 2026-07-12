@@ -9,6 +9,7 @@ from cypher_builder.query_engine import is_approval_denial_alert_list_question
 from chat_application.formatting import (
     format_approval_auth_lines,
     format_markdown_table,
+    format_money_amount,
     parse_authorization_basis,
 )
 
@@ -70,6 +71,54 @@ def format_payment_creator_and_approver_by_id(
     if approved_at:
         lines.append(f"Approved at: {approved_at}")
     return "\n".join(lines)
+
+
+def _payment_amount_cell(row: dict[str, Any]) -> str:
+    amount = row.get("amount")
+    currency = row.get("currency")
+    formatted = format_money_amount(amount, currency, currency_first=True)
+    if formatted.endswith(".00") and currency:
+        # Prefer USD 15,000,000 over USD 15,000,000.00 for whole amounts.
+        return formatted[:-3]
+    return formatted
+
+
+def format_payment_detail_by_id(question: str, rows: list[dict[str, Any]]) -> str | None:
+    """Full payment card for “show me payment …” style questions."""
+    row = _first_row(rows)
+    if row is None:
+        return "No payment with that ID was found in the graph."
+
+    payment_id = str(row.get("payment_id") or "—")
+    instruction_id = str(row.get("instruction_id") or "—")
+    status = str(row.get("status") or "—")
+    creator = str(row.get("creator_display") or "—")
+    approver = str(row.get("approver_display") or "").strip()
+    if not approver:
+        approver = "— (not yet approved)"
+
+    table = format_markdown_table(
+        ["Field", "Value"],
+        [
+            ["Payment id", f"`{payment_id}`"],
+            ["Instruction", f"`{instruction_id}`"],
+            ["Status", f"**{status}**"],
+            ["Amount", f"**{_payment_amount_cell(row)}**"],
+            ["Value date", str(row.get("value_date") or "—")],
+            ["Owning LOB", f"**{row.get('owning_lob') or '—'}**"],
+            ["Creator", creator],
+            ["Approver", approver],
+        ],
+    )
+    created_at = row.get("created_at")
+    approved_at = row.get("approved_at")
+    extra: list[str] = []
+    if created_at:
+        extra.append(f"Created at: {created_at}")
+    if approved_at:
+        extra.append(f"Approved at: {approved_at}")
+    footer = ("\n\n" + "\n".join(extra)) if extra else ""
+    return f"### Payment `{payment_id}`\n\n{table}{footer}"
 
 
 def format_instruction_status_by_id(question: str, rows: list[dict[str, Any]]) -> str | None:
@@ -408,6 +457,7 @@ FORMATTERS: dict[str, Formatter] = {
     "payment_creator_by_id": format_payment_creator_by_id,
     "payment_status_by_id": format_payment_status_by_id,
     "payment_creator_and_approver_by_id": format_payment_creator_and_approver_by_id,
+    "payment_detail_by_id": format_payment_detail_by_id,
     "instruction_inventory_table": format_instruction_inventory_table,
     "instruction_mutual_approval": format_instruction_mutual_approval,
     "cross_entity_reciprocal_approval": format_cross_entity_reciprocal_approval,

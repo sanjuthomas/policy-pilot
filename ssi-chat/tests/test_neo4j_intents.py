@@ -7,6 +7,7 @@ from chat_application.neo4j_formatters import (
     format_instruction_creator_by_id,
     format_instruction_status_by_id,
     format_payment_creator_by_id,
+    format_payment_detail_by_id,
 )
 from chat_application.neo4j_intents import (
     build_match_context,
@@ -37,6 +38,13 @@ class TestNeo4jDirectMatching:
         assert match.intent_id == "payment.creator_by_id"
         assert match.formatter_name == "payment_creator_by_id"
         assert "payment_detail" in match.planned[0][0]
+
+    def test_matches_show_payment_by_id(self) -> None:
+        question = "can you show me the payment 20260712-FICC-P-2?"
+        match = match_neo4j_direct_intent(question, mode="payments")
+        assert match is not None
+        assert match.intent_id == "payment.show_by_id"
+        assert match.formatter_name == "payment_detail_by_id"
 
     def test_matches_creator_by_payment_id_in_events_mode(self) -> None:
         question = "Who created 20260704-FICC-P-1?"
@@ -160,6 +168,30 @@ class TestNeo4jDirectFormatters:
         assert answer is not None
         assert "20260704-FICC-P-1" in answer
         assert "Rodriguez, Emily (pay-101)" in answer
+
+    def test_format_payment_detail_by_id(self) -> None:
+        answer = format_payment_detail_by_id(
+            "can you show me the payment 20260712-FICC-P-2?",
+            [
+                {
+                    "payment_id": "20260712-FICC-P-2",
+                    "instruction_id": "20260705-FICC-I-31",
+                    "status": "DRAFT",
+                    "amount": 15_000_000.0,
+                    "currency": "USD",
+                    "value_date": "2026-07-13",
+                    "owning_lob": "FICC",
+                    "creator_display": "Al-Rashid, Fatima (pay-205)",
+                    "approver_display": "",
+                }
+            ],
+        )
+        assert answer is not None
+        assert "### Payment `20260712-FICC-P-2`" in answer
+        assert "USD 15,000,000" in answer
+        assert "not yet approved" in answer
+        assert "paymentid:" not in answer.lower()
+        assert "| Field" in answer and "| Value" in answer
 
 
 class TestNeo4jDirectExecution:
