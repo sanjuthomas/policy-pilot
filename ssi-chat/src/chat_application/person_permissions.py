@@ -24,7 +24,12 @@ _TRAILING_NOISE = re.compile(
 
 
 def extract_person_permission_query(message: str) -> str | None:
-    """Return the person name/id for a person-permission question, else None."""
+    """Deprecated intent+parse — prefer LLM person_query; keep for fallback/tests."""
+    return extract_person_name_heuristic(message)
+
+
+def extract_person_name_heuristic(message: str) -> str | None:
+    """Parse person name/id once person_permissions intent is known (or LLM fallback)."""
     text = " ".join(message.strip().split())
     if not text:
         return None
@@ -37,7 +42,6 @@ def extract_person_permission_query(message: str) -> str | None:
 
     person = match.group(1).strip(" \t\"'`")
     person = _TRAILING_NOISE.sub("", person).strip(" ,")
-    # Drop leading politeness left in the capture for "Can you list..."
     person = re.sub(
         r"^(?:can\s+you|please|could\s+you)\s+",
         "",
@@ -46,7 +50,6 @@ def extract_person_permission_query(message: str) -> str | None:
     ).strip(" ,")
     if len(person) < 2:
         return None
-    # Avoid treating policy topics as people.
     if re.search(r"\b(policy|approval|funding|payment|instruction)\b", person, re.IGNORECASE):
         return None
     return person

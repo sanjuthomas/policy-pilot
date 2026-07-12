@@ -209,5 +209,6 @@ See the root [README.md](README.md) for architecture, storage names, and demo UR
 - Match existing code style in each service (imports, naming, FastAPI patterns).
 - Keep changes focused; avoid unrelated refactors.
 - Maintain **≥ 70% test coverage** on `inst`, `ps`, `etl`, and `chat_application` (see above); `ssi-demo-harness` is exempt.
+- **ssi-chat intent thumb rule:** determine natural-language intent with Gemini structured output / LLM semantic routing (`RouterDecision.path`) — not regex or fuzzy classification. Regex is OK for slot parsing (ids, amounts) and LLM-failure fallback only. Details: [docs/intent-determination.md](docs/intent-determination.md) and `.cursor/rules/intent-semantic-routing.mdc`.
 - Do not commit secrets (`.env`, PAT files, credentials).
 - Only create git commits when the user explicitly asks.

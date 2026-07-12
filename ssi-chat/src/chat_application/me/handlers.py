@@ -20,12 +20,13 @@ async def try_me_intent(
     message: str,
     *,
     subject: Subject,
+    intent: MeIntent | None = None,
 ) -> MeIntentResult | None:
-    """Run a me-centric handler when the question matches a known shape."""
-    intent = detect_me_intent(message)
-    if intent is None:
+    """Run a me-centric handler when intent is provided or heuristic fallback matches."""
+    resolved = intent if intent is not None else detect_me_intent(message)
+    if resolved is None:
         return None
-    return await dispatch_me_intent(intent, subject=subject)
+    return await dispatch_me_intent(resolved, subject=subject)
 
 
 async def dispatch_me_intent(

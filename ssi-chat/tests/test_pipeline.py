@@ -107,6 +107,7 @@ class TestRouteQuestion:
 
         decision = await route_question(mock_ml_client, "How many alerts?", mode="events")
         assert decision.strategy == "graph"
+        assert decision.path == "graph"
         mock_ml_client.route_query.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -116,6 +117,16 @@ class TestRouteQuestion:
 
         decision = await route_question(mock_ml_client, "How many alerts?", mode="events")
         assert decision.strategy == "graph"
+
+    def test_router_decision_normalizes_legacy_strategy(self) -> None:
+        decision = RouterDecision(strategy="vector", reasoning="legacy")
+        assert decision.path == "vector"
+        assert decision.retrieval_strategy == "vector"
+
+    def test_router_decision_skill_path(self) -> None:
+        decision = RouterDecision(path="skill", reasoning="create payment")
+        assert decision.skill == "create_payment"
+        assert decision.retrieval_strategy == "hybrid"
 
 
 class TestGraphUnavailableShortCircuit:

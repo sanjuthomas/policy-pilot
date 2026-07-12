@@ -34,9 +34,26 @@ _ELIGIBILITY_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+_CREATE_PAYMENT_SKILL = re.compile(
+    r"\b("
+    r"(please\s+)?(create|draft)\s+(a\s+)?payment|"
+    r"can\s+you\s+create\s+(a\s+)?payment|"
+    r"would\s+you\s+create\s+(a\s+)?payment|"
+    r"create\s+me\s+(a\s+)?payment"
+    r")\b",
+    re.IGNORECASE,
+)
+
+_CAPABILITY_ONLY = re.compile(
+    r"^\s*(can|may|do)\s+i\b|"
+    r"^\s*am\s+i\s+(allowed|able|permitted)\b|"
+    r"\b(permission|allowed)\s+to\s+create\b",
+    re.IGNORECASE,
+)
+
 
 def resolve_eligibility_target(message: str, *, mode: str) -> EligibilityTarget | None:
-    """Resolve payment vs instruction for eligibility without phrase lists."""
+    """Resolve payment vs instruction for eligibility (slot / id heuristics)."""
     upper = message.upper()
     if "-P-" in upper:
         return "payment"
@@ -60,7 +77,6 @@ def resolve_eligibility_target(message: str, *, mode: str) -> EligibilityTarget 
     if mentions_instruction:
         return "instruction"
     if mode == "policies":
-        # Prefer payment funding checks when the question is ambiguous in Policies mode.
         return "payment"
     return None
 
@@ -131,7 +147,6 @@ def infer_execution_strategy_heuristic(question: str, *, mode: str) -> Execution
     if mode == "policies":
         if is_eligibility_question_heuristic(question):
             return "eligibility"
-        # Other Policies-mode questions are handled by dedicated tool fast-paths.
         return "hybrid"
     if is_eligibility_question_heuristic(question):
         return "eligibility"
@@ -142,10 +157,70 @@ def infer_execution_strategy_heuristic(question: str, *, mode: str) -> Execution
     return "hybrid"
 
 
+def _looks_like_create_payment_skill(message: str) -> bool:
+    text = message.strip()
+    if not text or not _CREATE_PAYMENT_SKILL.search(text):
+        return False
+    if _CAPABILITY_ONLY.search(text) and "you" not in text.lower()[:40]:
+        if "instruction" not in text.lower():
+            return False
+    from chat_application.skills.detect import parse_create_payment_params
+
+    return parse_create_payment_params(text) is not None
+
+
 def heuristic_router_decision(question: str, *, mode: str) -> RouterDecision:
+    """Resilience fallback when Gemini routing fails — not primary NLU."""
+    from chat_application.me.detect import detect_me_intent_heuristic
+    from chat_application.person_permissions import extract_person_name_heuristic
+    from chat_application.policy_directory import is_payment_approval_directory_question
+    from chat_application.policy_summary import detect_policy_summary_question
+
+    if _looks_like_create_payment_skill(question):
+        return RouterDecision(
+            path="skill",
+            skill="create_payment",
+            reasoning="heuristic fallback: create_payment skill",
+        )
+
+    me = detect_me_intent_heuristic(question)
+    if me is not None:
+        return RouterDecision(
+            path="me",
+            me_kind=me.kind,
+            me_action=me.action,
+            me_entity_type=me.entity_type,
+            reasoning="heuristic fallback: me intent",
+        )
+
+    person = extract_person_name_heuristic(question)
+    if person is not None:
+        return RouterDecision(
+            path="person_permissions",
+            person_query=person,
+            reasoning="heuristic fallback: person permissions",
+        )
+
+    policy = detect_policy_summary_question(question, mode=mode)
+    if policy is not None:
+        domain, action = policy
+        return RouterDecision(
+            path="policy_summary",
+            policy_domain=domain,  # type: ignore[arg-type]
+            policy_action=action,  # type: ignore[arg-type]
+            reasoning="heuristic fallback: policy summary",
+        )
+
+    if is_payment_approval_directory_question(question):
+        return RouterDecision(
+            path="policy_directory",
+            reasoning="heuristic fallback: policy directory",
+        )
+
     strategy = infer_execution_strategy_heuristic(question, mode=mode)
     target = resolve_eligibility_target(question, mode=mode) if strategy == "eligibility" else None
     return RouterDecision(
+        path=strategy,
         strategy=strategy,
         eligibility_target=target,
         reasoning="heuristic fallback",

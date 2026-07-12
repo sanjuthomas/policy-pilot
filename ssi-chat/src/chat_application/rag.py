@@ -924,6 +924,7 @@ class RagService:
         *,
         bearer_token: str | None,
         session_id: str | None,
+        force: bool = False,
     ) -> str | None:
         from chat_application.authorization_client import (
             EligibilityClientError,
@@ -936,7 +937,7 @@ class RagService:
             merge_group_member_rows,
         )
 
-        if not is_payment_approval_directory_question(message):
+        if not force and not is_payment_approval_directory_question(message):
             return None
 
         if not bearer_token:
@@ -988,6 +989,8 @@ class RagService:
         mode: SearchMode = "events",
         bearer_token: str | None = None,
         session_id: str | None = None,
+        domain: str | None = None,
+        action: str | None = None,
     ) -> str | None:
         from chat_application.authorization_client import (
             EligibilityClientError,
@@ -995,11 +998,11 @@ class RagService:
         )
         from chat_application.policy_summary import detect_policy_summary_question
 
-        detected = detect_policy_summary_question(message, mode=mode)
-        if detected is None:
-            return None
-
-        domain, action = detected
+        if domain is None or action is None:
+            detected = detect_policy_summary_question(message, mode=mode)
+            if detected is None:
+                return None
+            domain, action = detected
         if not bearer_token:
             return (
                 "This question requires live OPA policy access. "
@@ -1025,14 +1028,15 @@ class RagService:
         *,
         bearer_token: str | None = None,
         session_id: str | None = None,
+        person_query: str | None = None,
     ) -> str | None:
         from chat_application.authorization_client import (
             EligibilityClientError,
             format_person_permission_summary_answer,
         )
-        from chat_application.person_permissions import extract_person_permission_query
+        from chat_application.person_permissions import extract_person_name_heuristic
 
-        query = extract_person_permission_query(message)
+        query = person_query or extract_person_name_heuristic(message)
         if query is None:
             return None
 
