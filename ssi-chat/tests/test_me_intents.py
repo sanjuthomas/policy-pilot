@@ -4,7 +4,11 @@ from pathlib import Path
 
 import pytest
 from chat_application.capabilities import audience_labels, capabilities_for
-from chat_application.me.can_create import answer_can_create_payment
+from chat_application.me.can_create import (
+    answer_can_approve_payment,
+    answer_can_create_instruction,
+    answer_can_create_payment,
+)
 from chat_application.me.detect import detect_me_intent
 from chat_application.me.handlers import try_me_intent
 from chat_application.me.my_permissions import answer_my_permissions
@@ -101,7 +105,16 @@ def test_detect_who_can_create_for_lob() -> None:
     intent = detect_me_intent("Who can create a payment for LOB FX?")
     assert intent is not None
     assert intent.kind == "who_can_create"
+    assert intent.entity_type == "payment"
     assert intent.covering_lob == "FX"
+
+
+def test_detect_who_can_create_instruction() -> None:
+    intent = detect_me_intent("Who can create instructions for LOB FICC?")
+    assert intent is not None
+    assert intent.kind == "who_can_create"
+    assert intent.entity_type == "instruction"
+    assert intent.covering_lob == "FICC"
 
 
 def test_answer_who_can_create_for_fx(tmp_path: Path) -> None:
@@ -129,14 +142,58 @@ users:
     roles: [FUNDING_APPROVER]
     groups: [MIDDLE_OFFICE, UP_TO_1_BILLION_CLUB]
     covering_lobs: [FICC, FX]
+  - user_id: mo-100
+    given_name: Sarah
+    family_name: Chen
+    title: Analyst
+    roles: [INSTRUCTION_CREATOR]
+    groups: [MIDDLE_OFFICE]
 """,
         encoding="utf-8",
     )
-    result = answer_who_can_create(covering_lob="FX", users_file=users_file)
-    assert result.intent_id == "me.who_can_create"
+    result = answer_who_can_create(
+        entity_type="payment",
+        covering_lob="FX",
+        users_file=users_file,
+    )
+    assert result.intent_id == "me.who_can_create.payment"
     assert "`pay-101`" in result.answer
     assert "`fo-fx-101`" not in result.answer
     assert "`pay-201`" not in result.answer
+    assert "`mo-100`" not in result.answer
+
+
+def test_answer_who_can_create_instruction(tmp_path: Path) -> None:
+    users_file = tmp_path / "users.yaml"
+    users_file.write_text(
+        """
+users:
+  - user_id: mo-100
+    given_name: Sarah
+    family_name: Chen
+    title: Analyst
+    roles: [INSTRUCTION_CREATOR]
+    groups: [MIDDLE_OFFICE]
+    supervisor_id: mo-050
+  - user_id: pay-101
+    given_name: Emily
+    family_name: Rodriguez
+    title: Analyst
+    roles: [PAYMENT_CREATOR]
+    groups: [MIDDLE_OFFICE, UP_TO_100_MILLION_CLUB]
+    covering_lobs: [FICC, FX]
+""",
+        encoding="utf-8",
+    )
+    result = answer_who_can_create(
+        entity_type="instruction",
+        covering_lob="FICC",
+        users_file=users_file,
+    )
+    assert result.intent_id == "me.who_can_create.instruction"
+    assert "`mo-100`" in result.answer
+    assert "INSTRUCTION_CREATOR" in result.answer
+    assert "`pay-101`" not in result.answer
 
 
 def test_detect_can_i_create() -> None:
@@ -144,6 +201,45 @@ def test_detect_can_i_create() -> None:
     assert intent is not None
     assert intent.kind == "can_act_on_entity"
     assert intent.action == "CREATE"
+    assert intent.entity_type == "payment"
+
+
+def test_detect_can_i_create_instruction() -> None:
+    intent = detect_me_intent("Can I create an instruction?")
+    assert intent is not None
+    assert intent.kind == "can_act_on_entity"
+    assert intent.action == "CREATE"
+    assert intent.entity_type == "instruction"
+
+
+def test_answer_can_create_instruction_no_for_payment_creator() -> None:
+    subject = Subject(
+        user_id="pay-101",
+        given_name="Emily",
+        family_name="Rodriguez",
+        title="Analyst",
+        roles=["PAYMENT_CREATOR"],
+        groups=["MIDDLE_OFFICE", "UP_TO_100_MILLION_CLUB"],
+        covering_lobs=["FICC", "FX"],
+    )
+    result = answer_can_create_instruction(subject)
+    assert result.intent_id == "me.can_create_instruction.no"
+    assert "INSTRUCTION_CREATOR" in result.answer
+    assert "PAYMENT_CREATOR" in result.answer
+
+
+def test_answer_can_create_instruction_yes() -> None:
+    subject = Subject(
+        user_id="mo-100",
+        given_name="Sarah",
+        family_name="Chen",
+        title="Analyst",
+        roles=["INSTRUCTION_CREATOR"],
+        groups=["MIDDLE_OFFICE"],
+    )
+    result = answer_can_create_instruction(subject)
+    assert result.intent_id == "me.can_create_instruction.yes"
+    assert "**Yes**" in result.answer
 
 
 def test_answer_can_create_fo_submitter() -> None:
@@ -174,6 +270,43 @@ def test_answer_can_create_middle_office() -> None:
     result = answer_can_create_payment(subject)
     assert result.intent_id == "me.can_create_payment.yes"
     assert "**Yes**" in result.answer
+
+
+def test_detect_can_i_approve_generic() -> None:
+    intent = detect_me_intent("Can I approve payments?")
+    assert intent is not None
+    assert intent.kind == "can_act_on_entity"
+    assert intent.action == "APPROVE"
+    assert intent.entity_id is None
+
+
+def test_answer_can_approve_yes() -> None:
+    subject = Subject(
+        user_id="pay-201",
+        given_name="Sophie",
+        family_name="Laurent",
+        title="Vice President",
+        roles=["FUNDING_APPROVER"],
+        groups=["MIDDLE_OFFICE", "UP_TO_1_BILLION_CLUB"],
+        covering_lobs=["FICC", "FX"],
+    )
+    result = answer_can_approve_payment(subject)
+    assert result.intent_id == "me.can_approve_payment.yes"
+    assert "**Yes**" in result.answer
+    assert "FX" in result.answer
+
+
+def test_answer_can_approve_no_creator_only() -> None:
+    subject = Subject(
+        user_id="pay-101",
+        title="Analyst",
+        roles=["PAYMENT_CREATOR"],
+        groups=["MIDDLE_OFFICE", "UP_TO_100_MILLION_CLUB"],
+        covering_lobs=["FICC"],
+    )
+    result = answer_can_approve_payment(subject)
+    assert result.intent_id == "me.can_approve_payment.no"
+    assert "FUNDING_APPROVER" in result.answer
 
 
 def test_detect_can_i_approve() -> None:
@@ -279,3 +412,21 @@ async def test_waiting_for_me_not_approver() -> None:
     )
     assert result is not None
     assert "FUNDING_APPROVER" in result.answer
+
+
+@pytest.mark.asyncio
+async def test_try_me_intent_can_create_instruction_not_payment() -> None:
+    subject = Subject(
+        user_id="pay-101",
+        given_name="Emily",
+        family_name="Rodriguez",
+        title="Analyst",
+        roles=["PAYMENT_CREATOR"],
+        groups=["MIDDLE_OFFICE", "UP_TO_100_MILLION_CLUB"],
+        covering_lobs=["FICC", "FX"],
+    )
+    result = await try_me_intent("Can I create an instruction?", subject=subject)
+    assert result is not None
+    assert result.intent_id == "me.can_create_instruction.no"
+    assert "**No**" in result.answer
+    assert "draft payments" not in result.answer.lower()

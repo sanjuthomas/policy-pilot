@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from chat_application.capabilities import capabilities_for
 from chat_application.me.can_create import (
+    answer_can_approve_payment,
+    answer_can_create_instruction,
     answer_can_create_payment,
     answer_can_submit_payment,
 )
@@ -41,6 +43,7 @@ async def dispatch_me_intent(
 
     if intent.kind == "who_can_create":
         return answer_who_can_create(
+            entity_type=intent.entity_type,
             covering_lob=intent.covering_lob,
             subject=subject,
         )
@@ -70,13 +73,17 @@ async def dispatch_me_intent(
 
     if intent.kind == "can_act_on_entity":
         if intent.action == "CREATE":
+            if intent.entity_type == "instruction":
+                return answer_can_create_instruction(subject)
             return answer_can_create_payment(subject)
         if intent.action == "SUBMIT":
             return answer_can_submit_payment(subject)
+        if intent.action == "APPROVE" and not intent.entity_id:
+            return answer_can_approve_payment(subject)
         if not intent.entity_id:
             return MeIntentResult(
                 answer=(
-                    "Include a payment id when asking whether you may approve, "
+                    "Include a payment id when asking about a specific payment action, "
                     "for example: “Do I have permission to approve payment 20260705-FX-P-534?”"
                 ),
                 intent_id="me.can_act_on_entity.need_id",

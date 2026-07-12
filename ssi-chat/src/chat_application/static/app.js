@@ -36,7 +36,7 @@ function loadSession() {
     session = null;
   }
   updateAuthUi();
-  updatePoliciesModeVisibility();
+  updateModeVisibility();
 }
 
 function saveSession() {
@@ -46,29 +46,70 @@ function saveSession() {
     localStorage.removeItem(AUTH_STORAGE_KEY);
   }
   updateAuthUi();
-  updatePoliciesModeVisibility();
+  updateModeVisibility();
+}
+
+function sessionAudiences() {
+  return session?.audiences || [];
+}
+
+function isComplianceAudience() {
+  return sessionAudiences().includes("compliance");
+}
+
+function isOperationalAudience() {
+  const audiences = sessionAudiences();
+  return (
+    audiences.includes("payment_creator") || audiences.includes("funding_approver")
+  );
 }
 
 function canUsePoliciesMode() {
-  const audiences = session?.audiences || [];
-  return audiences.includes("compliance");
+  // Unsigned: show all modes. Signed: compliance / admin only.
+  return !session || isComplianceAudience();
 }
 
-function updatePoliciesModeVisibility() {
-  const policiesOption = document.getElementById("mode-option-policies");
-  if (!policiesOption) {
-    return;
+function canUseEventsMode() {
+  // Unsigned or compliance: show Security Events. Pure operational users: hide.
+  if (!session) {
+    return true;
   }
-  const allow = !session || canUsePoliciesMode();
-  policiesOption.classList.toggle("hidden", !allow);
-  if (!allow) {
-    const policiesRadio = policiesOption.querySelector('input[name="mode"]');
-    if (policiesRadio?.checked) {
-      const eventsRadio = document.querySelector('input[name="mode"][value="events"]');
-      if (eventsRadio) {
-        eventsRadio.checked = true;
-      }
+  if (isComplianceAudience()) {
+    return true;
+  }
+  return !isOperationalAudience();
+}
+
+function selectFallbackMode(preferredValues) {
+  for (const value of preferredValues) {
+    const radio = document.querySelector(`input[name="mode"][value="${value}"]`);
+    const option = radio?.closest(".mode-option");
+    if (radio && option && !option.classList.contains("hidden")) {
+      radio.checked = true;
+      return;
     }
+  }
+}
+
+function updateModeVisibility() {
+  const policiesOption = document.getElementById("mode-option-policies");
+  const eventsOption = document.getElementById("mode-option-events");
+
+  if (policiesOption) {
+    const allowPolicies = canUsePoliciesMode();
+    policiesOption.classList.toggle("hidden", !allowPolicies);
+  }
+
+  if (eventsOption) {
+    const allowEvents = canUseEventsMode();
+    eventsOption.classList.toggle("hidden", !allowEvents);
+  }
+
+  const checked = document.querySelector('input[name="mode"]:checked');
+  const checkedOption = checked?.closest(".mode-option");
+  if (checkedOption?.classList.contains("hidden")) {
+    // Operational users land on Payments; otherwise Events / Instructions.
+    selectFallbackMode(["payments", "instructions", "events", "all"]);
   }
 }
 
@@ -118,7 +159,7 @@ async function loadChatUsers() {
         saveSession();
       }
     }
-    updatePoliciesModeVisibility();
+    updateModeVisibility();
   } catch (error) {
     console.warn("could not load chat users", error);
   }
