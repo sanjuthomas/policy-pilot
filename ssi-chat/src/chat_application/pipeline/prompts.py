@@ -4,8 +4,11 @@ Choose exactly one primary intent path for the user's question.
 Paths (set `path` to exactly one):
 - skill: user asks YOU to create/draft a payment (mutation). Set skill=create_payment.
   NOT for "can I create a payment?" (that is me).
-- me: questions about the logged-in user — who am I, my permissions, can I create/approve,
-  who can create, users like me, waiting for my approval. Set me_kind (+ me_action / me_entity_type).
+- me: questions about the logged-in user or org directory about people —
+  who am I, my permissions, can I create/approve, who can create, who covers a LOB,
+  users like me, waiting for my approval. Set me_kind (+ me_action / me_entity_type).
+  For "who covers LOB FICC / FX / …" set me_kind=who_covers_lob (list users whose
+  covering_lobs include that desk). Not policy_directory (that is funding-approver clubs).
 - policy_summary: normative "what is the … policy" / explain funding or instruction policy rules.
   Set policy_domain + policy_action (CREATE|APPROVE|…).
 - policy_directory: who/which users may approve payments by amount club or covering LOB
@@ -26,7 +29,8 @@ Rules:
   "Can I create a payment?" / "Am I allowed to create…" → me (me_kind=can_act_on_entity, me_action=CREATE).
 - eligibility vs graph: future/potential approvers → eligibility; past "who approved" → graph.
 - eligibility vs policy_directory: specific entity id / who can approve this payment → eligibility;
-  amount-club or LOB member lists without an id → policy_directory.
+  amount-club funding-approver lists without an id → policy_directory.
+- who covers LOB X (covering_lobs directory) → me with me_kind=who_covers_lob — not vector, not graph.
 - When search mode is Policies, prefer policy_summary / policy_directory / eligibility / person_permissions
   over vector unless the question is purely explanatory.
 - Prefer graph over hybrid when structured data alone can answer.

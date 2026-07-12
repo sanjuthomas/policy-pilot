@@ -27,6 +27,7 @@ MeIntentKind = Literal[
     "can_act_on_entity",
     "who_else_can_act",
     "who_can_create",
+    "who_covers_lob",
     "waiting_for_me",
     "users_like_me",
     "past_similar",

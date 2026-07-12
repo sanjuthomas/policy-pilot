@@ -13,6 +13,7 @@ from chat_application.me.my_permissions import answer_my_permissions
 from chat_application.me.users_like_me import answer_users_like_me
 from chat_application.me.who_am_i import answer_who_am_i
 from chat_application.me.who_can_create import answer_who_can_create
+from chat_application.me.who_covers_lob import answer_who_covers_lob
 from chat_application.subject import Subject
 
 
@@ -48,6 +49,9 @@ async def dispatch_me_intent(
             covering_lob=intent.covering_lob,
             subject=subject,
         )
+
+    if intent.kind == "who_covers_lob":
+        return answer_who_covers_lob(covering_lob=intent.covering_lob)
 
     if intent.kind == "users_like_me":
         return answer_users_like_me(subject)

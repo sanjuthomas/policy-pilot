@@ -104,6 +104,18 @@ _WHO_CAN_CREATE = re.compile(
     re.IGNORECASE,
 )
 
+_WHO_COVERS_LOB = re.compile(
+    r"\b("
+    r"who covers|"
+    r"who (else )?(covers|cover)|"
+    r"which users? (cover|covers)|"
+    r"who (is|are) covering|"
+    r"list .{0,40}(covering|covers)|"
+    r"users? (that |who )?(cover|covers)"
+    r")\b",
+    re.IGNORECASE,
+)
+
 
 def _create_entity_type(message: str) -> Literal["payment", "instruction"] | None:
     lowered = message.lower()
@@ -153,6 +165,9 @@ def me_intent_from_router(decision: RouterDecision, message: str) -> MeIntent | 
             covering_lob=covering_lob,
         )
 
+    if kind == "who_covers_lob":
+        return MeIntent(kind=kind, covering_lob=covering_lob)
+
     if kind == "can_act_on_entity":
         return MeIntent(
             kind=kind,
@@ -200,6 +215,11 @@ def detect_me_intent_heuristic(message: str) -> MeIntent | None:
                 entity_type=entity_type,
                 covering_lob=lob_filter_from_question(text),
             )
+
+    if _WHO_COVERS_LOB.search(text):
+        covering_lob = lob_filter_from_question(text)
+        if covering_lob is not None:
+            return MeIntent(kind="who_covers_lob", covering_lob=covering_lob)
 
     if _CAN_I_CREATE.search(text):
         entity_type = _create_entity_type(text) or "payment"
