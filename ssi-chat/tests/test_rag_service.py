@@ -370,3 +370,30 @@ class TestRagServiceAsk:
         result = await rag_service._search_graph("random question", mode="events")
         assert result["rows"] == []
         assert result.get("cypher") is None
+        assert result.get("graph_unavailable") is True
+
+    @pytest.mark.asyncio
+    async def test_search_graph_marks_unavailable_on_plan_extraction_failure(
+        self, rag_service, mock_ml_client
+    ) -> None:
+        mock_ml_client.extract_graph_query_plan = AsyncMock(
+            side_effect=RuntimeError("vertex down")
+        )
+        result = await rag_service._search_graph(
+            "unusual alert wording with no planned match",
+            mode="events",
+        )
+        assert result["rows"] == []
+        assert result.get("cypher") is None
+        assert result.get("graph_unavailable") is True
+
+    @pytest.mark.asyncio
+    async def test_search_graph_marks_unavailable_on_query_failure(
+        self, rag_service, mock_neo4j
+    ) -> None:
+        mock_neo4j.run_cypher = AsyncMock(side_effect=RuntimeError("neo4j down"))
+        result = await rag_service._search_graph("How many alerts today?", mode="events")
+        assert result["rows"] == []
+        assert result.get("cypher") is None
+        assert result.get("graph_unavailable") is True
+        assert result.get("cypher_provenance") == "predefined_planned"
