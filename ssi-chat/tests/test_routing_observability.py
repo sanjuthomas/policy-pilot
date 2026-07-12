@@ -3,7 +3,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from chat_application.routing_observability import (
     AnswerRouting,
     cypher_class_for_provenance,

@@ -46,6 +46,12 @@ class AnswerRoutingInfo(BaseModel):
     retrieval_strategy: str | None = None
 
 
+class SkillConfirmationInfo(BaseModel):
+    pending_id: str
+    skill: str = "create_payment"
+    card: dict[str, Any]
+
+
 class ChatResponse(BaseModel):
     answer: str
     sources: list[SourceHit]
@@ -54,3 +60,5 @@ class ChatResponse(BaseModel):
     retrieval_ms: float | None = None
     generation_ms: float | None = None
     routing: AnswerRoutingInfo | None = None
+    skill_activities: list[str] = Field(default_factory=list)
+    skill_confirmation: SkillConfirmationInfo | None = None

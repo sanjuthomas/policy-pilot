@@ -36,9 +36,10 @@ RetrievalPath = Literal[
     "neo4j_direct",
     "eligibility",
     "full_rag",
+    "skill",
 ]
 
-RetrievalStrategy = Literal["deterministic", "graph", "vector", "eligibility"]
+RetrievalStrategy = Literal["deterministic", "graph", "vector", "eligibility", "skill"]
 
 SOURCE_CHANNELS = ("vector", "bm25", "neo4j", "exact")
 
@@ -66,6 +67,7 @@ PATH_LABELS: dict[str, str] = {
     "neo4j_direct": "Neo4j direct (early exit)",
     "eligibility": "Eligibility shortcut",
     "full_rag": "Full RAG (vector + BM25 + graph)",
+    "skill": "Mutation skill",
 }
 
 _logger = get_logger(__name__)
@@ -126,6 +128,8 @@ def classify_retrieval_strategy(
 ) -> RetrievalStrategy:
     if path == "eligibility":
         return "eligibility"
+    if path == "skill":
+        return "skill"
     if path == "neo4j_direct":
         return "deterministic"
 
@@ -412,7 +416,11 @@ def finalize_chat_response(
     cypher_provenance: CypherProvenance,
     answer_synthesis: AnswerSynthesis,
     intent_id: str | None = None,
+    skill_activities: list[str] | None = None,
+    skill_confirmation: Any | None = None,
 ) -> ChatResponse:
+    from chat_application.models import SkillConfirmationInfo
+
     question_length, question_hash = question_fingerprint(message)
     source_channels = count_source_channels(sources)
     retrieval_strategy = classify_retrieval_strategy(
@@ -438,6 +446,12 @@ def finalize_chat_response(
         question_hash=question_hash,
     )
     log_answer_routing(routing)
+    confirmation: SkillConfirmationInfo | None = None
+    if skill_confirmation is not None:
+        if isinstance(skill_confirmation, SkillConfirmationInfo):
+            confirmation = skill_confirmation
+        else:
+            confirmation = SkillConfirmationInfo.model_validate(skill_confirmation)
     return ChatResponse(
         answer=answer,
         sources=sources or [],
@@ -446,4 +460,6 @@ def finalize_chat_response(
         retrieval_ms=round(retrieval_ms, 1),
         generation_ms=round(generation_ms, 1),
         routing=routing.to_api(),
+        skill_activities=list(skill_activities or []),
+        skill_confirmation=confirmation,
     )

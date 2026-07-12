@@ -521,6 +521,89 @@ body {
   display: none !important;
 }
 
+.skill-activities {
+  margin: 0 0 0.85rem;
+  padding-left: 1.1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.skill-activities li {
+  margin: 0.25rem 0;
+}
+
+.skill-confirm {
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.skill-confirm.resolved {
+  opacity: 0.72;
+}
+
+.skill-confirm-title {
+  font-weight: 600;
+  margin-bottom: 0.65rem;
+}
+
+.skill-confirm-grid {
+  display: grid;
+  grid-template-columns: 9rem 1fr;
+  gap: 0.35rem 0.75rem;
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+}
+
+.skill-confirm-grid dt {
+  color: var(--muted);
+  margin: 0;
+}
+
+.skill-confirm-grid dd {
+  margin: 0;
+}
+
+.skill-confirm-intermediaries ul {
+  margin: 0.35rem 0 0.85rem;
+  padding-left: 1.1rem;
+}
+
+.skill-confirm-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.btn-go {
+  background: var(--success);
+  color: #062416;
+  border: none;
+  border-radius: 8px;
+  padding: 0.45rem 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-nogo {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.45rem 1rem;
+  cursor: pointer;
+}
+
+.btn-go:disabled,
+.btn-nogo:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 @media (max-width: 960px) {
   .chat-layout {
     grid-template-columns: 1fr;

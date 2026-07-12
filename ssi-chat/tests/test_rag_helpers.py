@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from chat_application.cypher import format_facet_aggregate_answer
 from chat_application.formatting import (
     format_usd_compact,
     humanize_authorization_text,
@@ -7,7 +8,6 @@ from chat_application.formatting import (
     humanize_policy_basis_point,
     parse_authorization_basis,
 )
-from chat_application.cypher import format_facet_aggregate_answer
 from chat_application.rag import (
     RagService,
     _append_policy_basis,
@@ -15,10 +15,10 @@ from chat_application.rag import (
     _format_alert_ranking_answer,
     _format_instruction_count_aggregate_answer,
     _format_largest_payment_answer,
-    _format_payments_above_amount_answer,
     _format_max_payments_per_instruction_answer,
     _format_payment_count_aggregate_answer,
     _format_payment_total_amount_answer,
+    _format_payments_above_amount_answer,
     _format_payments_for_instruction_answer,
     _format_security_event_count_aggregate_answer,
     _instruction_lifecycle_party_lines,
@@ -422,7 +422,9 @@ class TestPaymentAggregateAnswers:
         assert "32 INFO" in answer
 
     def test_formats_security_event_alert_group_by_lob(self) -> None:
-        from chat_application.rag import _format_security_event_alert_group_by_lob_answer
+        from chat_application.rag import (
+            _format_security_event_alert_group_by_lob_answer,
+        )
 
         answer = _format_security_event_alert_group_by_lob_answer(
             "Can you group alerts by LOB?",

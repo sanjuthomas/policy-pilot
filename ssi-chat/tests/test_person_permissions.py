@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from chat_application.authorization_client import format_person_permission_summary_answer
+from chat_application.authorization_client import (
+    format_person_permission_summary_answer,
+)
 from chat_application.person_permissions import extract_person_permission_query
 
 

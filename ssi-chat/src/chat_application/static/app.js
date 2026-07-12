@@ -226,7 +226,23 @@ function appendMessage(role, content, chatMeta = null) {
   `;
   const body = wrap.querySelector(".message-body");
   if (role === "assistant") {
-    body.innerHTML = renderAssistantMarkdown(content);
+    if (chatMeta?.skill_activities?.length) {
+      const activityList = document.createElement("ul");
+      activityList.className = "skill-activities";
+      for (const line of chatMeta.skill_activities) {
+        const item = document.createElement("li");
+        item.textContent = line.replace(/\*\*/g, "");
+        activityList.appendChild(item);
+      }
+      body.appendChild(activityList);
+    }
+    const answerDiv = document.createElement("div");
+    answerDiv.className = "skill-answer";
+    answerDiv.innerHTML = renderAssistantMarkdown(content);
+    body.appendChild(answerDiv);
+    if (chatMeta?.skill_confirmation) {
+      body.appendChild(createSkillConfirmation(chatMeta.skill_confirmation, chatMeta));
+    }
     if (chatMeta?.routing) {
       wrap.appendChild(createFeedbackBar(chatMeta));
     }
@@ -235,6 +251,98 @@ function appendMessage(role, content, chatMeta = null) {
   }
   thread.appendChild(wrap);
   thread.scrollTop = thread.scrollHeight;
+}
+
+function createSkillConfirmation(confirmation, chatMeta) {
+  const card = confirmation.card || {};
+  const panel = document.createElement("div");
+  panel.className = "skill-confirm";
+  panel.dataset.pendingId = confirmation.pending_id;
+
+  const intermediaryText = (card.intermediaries || []).length
+    ? (card.intermediaries || []).join("; ")
+    : "None";
+
+  panel.innerHTML = `
+    <div class="skill-confirm-title">Confirm payment create</div>
+    <dl class="skill-confirm-grid">
+      <dt>Instruction</dt><dd class="mono">${escapeHtml(card.instruction_id || "—")}</dd>
+      <dt>Amount</dt><dd><strong>${escapeHtml(String(card.currency || ""))} ${escapeHtml(formatNumber(card.amount))}</strong></dd>
+      <dt>Value date</dt><dd>${escapeHtml(card.value_date || "—")}</dd>
+      <dt>Owning LOB</dt><dd>${escapeHtml(card.owning_lob || "—")}</dd>
+      <dt>Debtor</dt><dd>${escapeHtml(card.debtor_name || "—")}</dd>
+      <dt>Debtor account</dt><dd class="mono">${escapeHtml(card.debtor_account || "—")}</dd>
+      <dt>Creditor</dt><dd>${escapeHtml(card.creditor_name || "—")}</dd>
+      <dt>Creditor account</dt><dd class="mono">${escapeHtml(card.creditor_account || "—")}</dd>
+      <dt>Intermediaries</dt><dd>${escapeHtml(intermediaryText)}</dd>
+    </dl>
+    <div class="skill-confirm-actions">
+      <button type="button" class="btn btn-go">Go</button>
+      <button type="button" class="btn btn-nogo">No Go</button>
+      <span class="skill-confirm-status muted"></span>
+    </div>
+  `;
+
+  const goBtn = panel.querySelector(".btn-go");
+  const noGoBtn = panel.querySelector(".btn-nogo");
+  const status = panel.querySelector(".skill-confirm-status");
+
+  async function decide(decision) {
+    goBtn.disabled = true;
+    noGoBtn.disabled = true;
+    status.textContent = decision === "go" ? "Creating…" : "Cancelling…";
+    try {
+      const response = await fetch("/api/chat/skills/create-payment/confirm", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders(),
+        },
+        body: JSON.stringify({
+          pending_id: confirmation.pending_id,
+          decision,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.detail || `HTTP ${response.status}`);
+      }
+      panel.classList.add("resolved");
+      status.textContent = decision === "go" ? "Go" : "No Go";
+      appendMessage("assistant", payload.answer, {
+        mode: chatMeta?.mode || "payments",
+        routing: payload.routing,
+        skill_activities: payload.skill_activities,
+      });
+      history.push({ role: "assistant", content: payload.answer });
+      if (history.length > 40) {
+        history = history.slice(-40);
+      }
+      renderMeta(payload);
+    } catch (error) {
+      goBtn.disabled = false;
+      noGoBtn.disabled = false;
+      status.textContent = `Failed: ${error.message}`;
+    }
+  }
+
+  goBtn.addEventListener("click", () => decide("go"));
+  noGoBtn.addEventListener("click", () => decide("no_go"));
+  return panel;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function formatNumber(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "—";
+  return num.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
 function createFeedbackBar(chatMeta) {
@@ -403,6 +511,8 @@ async function sendMessage(text) {
     appendMessage("assistant", payload.answer, {
       mode,
       routing: payload.routing,
+      skill_activities: payload.skill_activities,
+      skill_confirmation: payload.skill_confirmation,
     });
     history.push({ role: "assistant", content: payload.answer });
     if (history.length > 40) {
