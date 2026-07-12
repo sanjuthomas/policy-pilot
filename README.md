@@ -90,11 +90,40 @@ We do **not** use fuzzy ML text classification for routing. Intent is expressed 
 
 ### End-to-end flow
 
-Live policy questions do not stop at the chat backend. The logged-in user's **JWT / ZITADEL session** is resolved to a subject, then **authorization-service** evaluates the request against **OPA** — the same policy engine that guards mutations in the domain services.
+The logged-in user's **JWT / ZITADEL session** is resolved to a subject. Live policy and eligibility answers still go through **authorization-service → OPA** — the same engine that guards domain mutations. What the chat pipeline offers next depends on the persona.
+
+#### Compliance and audit (read-only)
+
+Compliance analysts (`comp-001` / `comp-002`) investigate policy, eligibility, graph patterns, and event history. They do **not** run mutation skills.
 
 ```mermaid
 flowchart TD
-    Q["User question + Bearer JWT + search mode"] --> ID[Identity — ZITADEL subject]
+    Q["Compliance / audit question + Bearer JWT + search mode"] --> ID[Identity — ZITADEL subject]
+    ID --> R[1. Route — LLM RouterDecision]
+    R --> E{live policy / eligibility / tools?}
+    E -->|yes| AZ[2. Authorization-service]
+    AZ --> OPA[OPA policy evaluation]
+    OPA --> A[Answer]
+    E -->|no| D[3. Neo4j direct fast path]
+    D -->|match| A
+    D -->|no match| RET[4. Selective retrieval]
+    RET --> G{strategy}
+    G -->|graph| N[Neo4j + exact ID lookup]
+    G -->|vector| V[Dense embeddings]
+    G -->|hybrid| H[Neo4j + vector]
+    N --> S[5. Synthesize]
+    V --> S
+    H --> S
+    S --> A
+```
+
+#### Front and middle office (payment operations)
+
+Payment creators and funding approvers (`pay-*`, `mo-*`) use the same route → retrieve → synthesize path for questions, and can also run **mutation skills** (create-payment today) after OPA preflight and an explicit **Go / No Go**.
+
+```mermaid
+flowchart TD
+    Q["Front / middle office question + Bearer JWT + search mode"] --> ID[Identity — ZITADEL subject]
     ID --> SK{create-payment skill?}
     SK -->|yes| PRE[OPA CREATE preflight]
     PRE -->|allow| CONF[Confirm card — Go / No Go]

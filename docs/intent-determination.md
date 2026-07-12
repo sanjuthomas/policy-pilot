@@ -29,11 +29,15 @@ People can express the same intent with many wordings. Regex and keyword heurist
 
 ## End-to-end flow
 
-Live policy questions carry the logged-in user's **JWT / ZITADEL session** into **authorization-service**, which evaluates against **OPA** — the same policy path domain services use for mutations.
+The logged-in user's **JWT / ZITADEL session** is resolved to a subject. Live policy and eligibility answers go through **authorization-service → OPA**. The diagrams below split the chat surface by persona.
+
+### Compliance and audit (read-only)
+
+Compliance analysts investigate policy, eligibility, graph patterns, and event history. They do **not** run mutation skills.
 
 ```mermaid
 flowchart TD
-    Q["User question + Bearer JWT + search mode"] --> ID[Identity — ZITADEL subject]
+    Q["Compliance / audit question + Bearer JWT + search mode"] --> ID[Identity — ZITADEL subject]
     ID --> R[1. Route — LLM RouterDecision]
     R --> E{live policy / eligibility / tools?}
     E -->|yes| AZ[2. Authorization-service]
@@ -52,7 +56,38 @@ flowchart TD
     S --> A
 ```
 
-Implementation entry point: `RagService.ask()` delegates to `RagPipelineOrchestrator` in `ssi-chat/src/chat_application/pipeline/orchestrator.py`.
+### Front and middle office (payment operations)
+
+Payment creators and funding approvers use the same investigation path, and can also run **mutation skills** (create-payment) after OPA preflight and an explicit **Go / No Go**.
+
+```mermaid
+flowchart TD
+    Q["Front / middle office question + Bearer JWT + search mode"] --> ID[Identity — ZITADEL subject]
+    ID --> SK{create-payment skill?}
+    SK -->|yes| PRE[OPA CREATE preflight]
+    PRE -->|allow| CONF[Confirm card — Go / No Go]
+    CONF -->|Go| PAY[POST payment-service]
+    PAY --> A[Answer]
+    CONF -->|No Go / deny| A
+    SK -->|no| R[1. Route — LLM RouterDecision]
+    R --> E{live policy / eligibility / tools?}
+    E -->|yes| AZ[2. Authorization-service]
+    AZ --> OPA[OPA policy evaluation]
+    OPA --> A
+    E -->|no| D[3. Neo4j direct fast path]
+    D -->|match| A
+    D -->|no match| RET[4. Selective retrieval]
+    RET --> G{strategy}
+    G -->|graph| N[Neo4j + exact ID lookup]
+    G -->|vector| V[Dense embeddings]
+    G -->|hybrid| H[Neo4j + vector]
+    N --> S[5. Synthesize]
+    V --> S
+    H --> S
+    S --> A
+```
+
+Implementation entry point: `RagService.ask()` delegates to `RagPipelineOrchestrator` in `ssi-chat/src/chat_application/pipeline/orchestrator.py`. Create-payment skill: [docs/create-payment-skill.md](create-payment-skill.md).
 
 ## Step 1 — Semantic routing (LLM)
 
