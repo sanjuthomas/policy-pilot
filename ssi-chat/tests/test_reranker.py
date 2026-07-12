@@ -13,23 +13,23 @@ class TestRrfMerge:
                 "merged": {"action": "APPROVE", "message": "ok"},
             }
         ]
-        bm25_hits = [
+        graph_hits = [
             {
-                "source": "bm25",
+                "source": "neo4j",
                 "event_id": "evt-1",
                 "instruction_id": "inst-1",
                 "merged": {"action": "APPROVE"},
             }
         ]
-        merged = rrf_merge([vector_hits, bm25_hits], k=60)
+        merged = rrf_merge([vector_hits, graph_hits], k=60)
         assert len(merged) == 1
         assert merged[0].event_id == "evt-1"
-        assert merged[0].sources == {"vector", "bm25"}
+        assert merged[0].sources == {"vector", "neo4j"}
         assert merged[0].score > 0
 
     def test_sorts_by_combined_score(self) -> None:
         list_a = [{"source": "vector", "event_id": "a", "summary": "first"}]
-        list_b = [{"source": "bm25", "event_id": "b", "summary": "second"}]
+        list_b = [{"source": "neo4j", "event_id": "b", "summary": "second"}]
         merged = rrf_merge([list_a, list_b], k=1)
         assert merged[0].event_id == "a"
         assert merged[1].event_id == "b"
@@ -49,7 +49,7 @@ class TestRrfMerge:
         ]
         hits_b = [
             {
-                "source": "bm25",
+                "source": "neo4j",
                 "event_id": "evt-1",
                 "summary": "much longer summary text",
             }

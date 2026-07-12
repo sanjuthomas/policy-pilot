@@ -44,8 +44,8 @@ flowchart TD
     D -->|no match| RET[4. Selective retrieval]
     RET --> G{strategy}
     G -->|graph| N[Neo4j + exact ID lookup]
-    G -->|vector| V[Embeddings + BM25]
-    G -->|hybrid| H[Neo4j + vector/BM25]
+    G -->|vector| V[Dense embeddings]
+    G -->|hybrid| H[Neo4j + vector]
     N --> S[5. Synthesize]
     V --> S
     H --> S
@@ -126,15 +126,15 @@ Observability path: `neo4j_direct` → `retrieval_strategy: deterministic`.
 
 ## Step 3 — Selective retrieval (no blind merge)
 
-Previously, the fallback path always ran **vector + BM25 + graph in parallel** and merged everything with RRF. That polluted structured answers with fuzzy semantic hits.
+Previously, the fallback path always ran **vector + lexical (BM25) + graph in parallel** and merged everything with RRF. That polluted structured answers with fuzzy semantic hits.
 
 Now `execute_selective_retrieval()` runs only what the router chose:
 
-| Strategy | Neo4j / exact lookup | Vector + BM25 |
-|----------|----------------------|---------------|
+| Strategy | Neo4j / exact lookup | Dense vector |
+|----------|----------------------|--------------|
 | `graph` | Yes | No |
 | `vector` | No | Yes |
-| `hybrid` | Yes | Yes |
+| `hybrid` | Yes | Yes (RRF with graph) |
 | `eligibility` | N/A (handled in step 1) | N/A |
 
 Graph retrieval still uses the existing stack: planned Cypher from `cypher_builder`, LLM `GraphQueryPlan` extraction when needed, and exact UUID/sequence ID lookups.

@@ -166,7 +166,6 @@ class TestRagRoutingIntegration:
             ]
         )
         mock_multimodal.search_vector = AsyncMock(return_value=[])
-        mock_multimodal.search_bm25 = AsyncMock(return_value=[])
         mock_ml_client.synthesize_answer = AsyncMock(return_value="should not be called")
 
         response = await rag_service.ask(
@@ -188,7 +187,6 @@ class TestRagRoutingIntegration:
     ) -> None:
         rag_service._try_neo4j_direct_answer = AsyncMock(return_value=None)
         mock_multimodal.search_vector = AsyncMock(return_value=[])
-        mock_multimodal.search_bm25 = AsyncMock(return_value=[])
         mock_neo4j.run_cypher = AsyncMock(return_value=[{"total": 0}])
         mock_ml_client.synthesize_answer = AsyncMock(return_value="unused")
 

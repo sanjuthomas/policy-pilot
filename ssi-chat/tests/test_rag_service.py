@@ -12,7 +12,6 @@ class TestRagServiceAsk:
         self, rag_service, mock_ml_client, mock_multimodal, mock_neo4j
     ) -> None:
         mock_multimodal.search_vector = AsyncMock(return_value=[])
-        mock_multimodal.search_bm25 = AsyncMock(return_value=[])
         mock_neo4j.run_cypher = AsyncMock(return_value=[{"total": 0}])
         mock_ml_client.synthesize_answer = AsyncMock(return_value="There were 0 alerts.")
 
@@ -36,7 +35,6 @@ class TestRagServiceAsk:
             }
         )
         mock_multimodal.search_vector = AsyncMock(return_value=[])
-        mock_multimodal.search_bm25 = AsyncMock(return_value=[])
         mock_neo4j.lookup_instruction_for_event = AsyncMock(
             return_value=[{"event_id": event_id, "instruction_id": "inst-1"}]
         )
@@ -52,7 +50,6 @@ class TestRagServiceAsk:
     ) -> None:
         iid = "2846a7c0-4734-4626-bb58-13a966f935a1"
         mock_multimodal.search_vector = AsyncMock(return_value=[])
-        mock_multimodal.search_bm25 = AsyncMock(return_value=[])
         mock_multimodal.fetch_by_instruction_id = AsyncMock(
             return_value={
                 "source": "exact_instruction",
@@ -93,7 +90,6 @@ class TestRagServiceAsk:
     ) -> None:
         iid = "20260628-FICC-I-13"
         mock_multimodal.search_vector = AsyncMock(return_value=[])
-        mock_multimodal.search_bm25 = AsyncMock(return_value=[])
         mock_multimodal.fetch_by_instruction_id = AsyncMock(
             return_value={
                 "source": "exact_instruction",
@@ -137,7 +133,6 @@ class TestRagServiceAsk:
     ) -> None:
         pid = "9b3251c9-d28e-4ad5-9bf4-dbc3c4fc13d8"
         mock_multimodal.search_vector = AsyncMock(return_value=[])
-        mock_multimodal.search_bm25 = AsyncMock(return_value=[])
         mock_multimodal.fetch_by_payment_id = AsyncMock(
             return_value={
                 "source": "exact_payment",
@@ -204,7 +199,6 @@ class TestRagServiceAsk:
     ) -> None:
         iid = "3bcb9b9a-9415-44ce-b707-4cc4c8281bb9"
         mock_multimodal.search_vector = AsyncMock(return_value=[])
-        mock_multimodal.search_bm25 = AsyncMock(return_value=[])
         mock_neo4j.run_cypher = AsyncMock(
             return_value=[
                 {
@@ -243,7 +237,6 @@ class TestRagServiceAsk:
     ) -> None:
         iid = "3bcb9b9a-9415-44ce-b707-4cc4c8281bb9"
         mock_multimodal.search_vector = AsyncMock(return_value=[])
-        mock_multimodal.search_bm25 = AsyncMock(return_value=[])
         mock_neo4j.run_cypher = AsyncMock(
             return_value=[
                 {
@@ -276,7 +269,6 @@ class TestRagServiceAsk:
         self, rag_service, mock_ml_client, mock_multimodal, mock_neo4j
     ) -> None:
         mock_multimodal.search_vector = AsyncMock(return_value=[])
-        mock_multimodal.search_bm25 = AsyncMock(return_value=[])
         mock_neo4j.run_cypher = AsyncMock(
             return_value=[
                 {
@@ -302,7 +294,6 @@ class TestRagServiceAsk:
         self, rag_service, mock_ml_client, mock_multimodal, mock_neo4j
     ) -> None:
         mock_multimodal.search_vector = AsyncMock(return_value=[])
-        mock_multimodal.search_bm25 = AsyncMock(return_value=[])
         mock_neo4j.run_cypher = AsyncMock(
             side_effect=[
                 [

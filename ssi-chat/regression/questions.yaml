@@ -3,7 +3,7 @@
 # retrieval — primary engine expected to produce the answer:
 #   deterministic  Neo4j planned query + formatter (skips LLM synthesis)
 #   graph          Neo4j planned or LLM Cypher is authoritative (vector runs but de-prioritized)
-#   vector         Neo4j dense/BM25 hits are primary for open-ended event-log questions
+#   vector         Neo4j dense vector hits are primary for open-ended event-log questions
 #   eligibility    Live OPA via authorization-service (no case in this bank yet)
 #
 # Note: PolicyPilot still invokes dense vector search in parallel for all cases except eligibility.

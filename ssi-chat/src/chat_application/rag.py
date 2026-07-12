@@ -754,15 +754,6 @@ class RagService:
             logger.warning("vector search failed: %s", exc)
             return []
 
-    async def _search_bm25(
-        self, query: str, limit: int, source: str | None = None
-    ) -> list[dict[str, Any]]:
-        try:
-            return await self.multimodal.search_bm25(query, limit=limit, source=source)
-        except Exception as exc:
-            logger.warning("BM25 search failed: %s", exc)
-            return []
-
     async def _lookup_exact_event_ids(
         self, event_ids: list[str]
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -834,10 +825,9 @@ class RagService:
     def _merge_with_exact(
         exact_hits: list[dict[str, Any]],
         vector_hits: list[dict[str, Any]],
-        bm25_hits: list[dict[str, Any]],
         graph_hits: list[dict[str, Any]],
     ) -> list[RankedHit]:
-        merged = rrf_merge([vector_hits, bm25_hits, graph_hits])
+        merged = rrf_merge([vector_hits, graph_hits])
         if not exact_hits:
             return merged[: settings.max_context_hits]
 
@@ -1315,12 +1305,12 @@ class RagService:
             if mode == "instructions":
                 sections.append(
                     "Note: instruction graph search was unavailable. "
-                    "Do not infer hierarchy or structural relationships from vector/BM25 hits."
+                    "Do not infer hierarchy or structural relationships from vector hits."
                 )
             else:
                 sections.append(
                     "Note: graph search was unavailable for this question. "
-                    "Answer using the retrieved vector and BM25 results below only."
+                    "Answer using the retrieved vector results below only."
                 )
 
         if cypher:
@@ -1371,7 +1361,7 @@ class RagService:
                 "Neo4j graph results: 0 rows — the graph query found no matching records. "
                 "For structural questions (supervisor relationships, hierarchy violations, "
                 "cross-approvals) this means no such case exists in the data. "
-                "Do NOT use vector/BM25 hits to contradict this finding."
+                "Do NOT use vector hits to contradict this finding."
             )
 
         if hits:
@@ -1380,7 +1370,7 @@ class RagService:
                 payload = hit.merged or {}
                 snap = payload.get("instruction_snapshot") or {}
                 src = payload.get("source") or (sorted(hit.sources)[0] if hit.sources else "?")
-                if src in {"vector", "bm25", "exact"} and payload.get("source"):
+                if src in {"vector", "exact"} and payload.get("source"):
                     src = payload.get("source")
 
                 if src == "instruction_state" or src == "exact_instruction":
@@ -1470,7 +1460,7 @@ class RagService:
                 "payments": "Retrieved payment records",
                 "all": "Retrieved results across all entity types",
             }.get(mode, "Retrieved results")
-            sections.append(f"{label} (vector + BM25 + graph):\n" + "\n".join(lines))
+            sections.append(f"{label} (vector + graph):\n" + "\n".join(lines))
 
         if not sections:
             return "No indexed data was found."

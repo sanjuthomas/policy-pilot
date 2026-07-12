@@ -1,8 +1,8 @@
 # SSI Indexer
 
-Kafka consumers that index instruction and payment facts into **Neo4j** — both the **graph projection** and a **multimodal store** (dense vector + fulltext BM25 on `MultimodalDocument` nodes).
+Kafka consumers that index instruction and payment facts into **Neo4j** — both the **graph projection** and a **multimodal store** (dense vector embeddings on `MultimodalDocument` nodes).
 
-Also exposes a **Search Console** UI for manual vector / BM25 / hybrid / Neo4j queries.
+Also exposes a **Search Console** UI for manual vector / Neo4j queries.
 
 ## URL
 
@@ -61,7 +61,7 @@ For each message:
 2. Upsert Neo4j nodes/relationships (see `neo4j-graph-model/`). User upserts also write `REPORTS_TO` from `supervisor_id`.
 3. Embed `search_text` with **Vertex `text-embedding-004`** → upsert a `MultimodalDocument` with `embedding` + `search_text`.
 
-Each pipeline message is processed as: **build search text → Vertex embed → one Neo4j transaction** (graph nodes/relationships + `MultimodalDocument` vector/fulltext payload).
+Each pipeline message is processed as: **build search text → Vertex embed → one Neo4j transaction** (graph nodes/relationships + `MultimodalDocument` vector payload).
 
 ## Enriched document shape (instruction security events)
 
@@ -72,7 +72,7 @@ Stored in the multimodal document payload (and used for search text):
 | `security_event` | Full Kafka/Mongo event (includes `instruction_snapshot`) |
 | `instruction` | Instruction snapshot from the event |
 | `merged` | Denormalized join (actor, creator, action, wire_scope, …) |
-| `search_text` | Flattened string for embedding + BM25 |
+| `search_text` | Flattened string for embedding |
 | `source` | `instruction_security_event`, `instruction_state`, `payment_security_event`, or `payment_fact` |
 
 ### Authorization fields (indexed for chat)
@@ -89,13 +89,11 @@ On APPROVE instruction security events, the pipeline **patches** the existing `i
 
 | Mode | Backend |
 |------|---------|
-| Hybrid | Neo4j vector + fulltext → client-side RRF |
 | Vector | Neo4j vector index (`multimodal_embedding`) |
-| BM25 | Neo4j fulltext index (`multimodal_search_text`) |
 | Neo4j | Text search on `SecurityEvent` nodes |
 | Cypher generate | Vertex Gemini → structured graph query plan (admin API) |
 
-Component status bar shows Kafka, multimodal vector/fulltext indexes, Neo4j graph, and Vertex embedding health.
+Component status bar shows Kafka, multimodal vector index, Neo4j graph, and Vertex embedding health.
 
 ## Configuration (Docker)
 
@@ -115,7 +113,6 @@ Copy `.env.example` to `.env` at the repo root to override defaults. Docker Comp
 | `KAFKA_PAYMENT_SECURITY_EVENTS_TOPIC` | `payment_security_events` |
 | `KAFKA_PAYMENTS_TOPIC` | `payments` |
 | `MULTIMODAL_VECTOR_INDEX` | `multimodal_embedding` |
-| `MULTIMODAL_FULLTEXT_INDEX` | `multimodal_search_text` |
 | `NEO4J_URI` | `bolt://neo4j:7687` |
 
 Requires **GCP Vertex AI** credentials for embeddings and vector search.
@@ -134,9 +131,7 @@ ssi-indexer   # serves on :8090
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/stats` | Component health + multimodal document counts |
-| POST | `/api/search/hybrid` | Hybrid search |
 | POST | `/api/search/vector` | Dense vector search (Vertex embed query) |
-| POST | `/api/search/bm25` | Fulltext BM25 search |
 | POST | `/api/intent/extract` | Natural language → graph query plan (Vertex Gemini) |
 | POST | `/api/cypher/run` | Validate and run read-only Cypher against Neo4j |
 | GET | `/api/graph/events` | Neo4j event text search |
@@ -155,8 +150,11 @@ DROP INDEX multimodal_embedding IF EXISTS;
 DROP INDEX multimodal_search_text IF EXISTS;
 "
 
-# Re-apply constraints + fulltext index
+# Re-apply constraints (+ drop legacy fulltext if still present)
 docker exec -i neo4j cypher-shell -u neo4j -p devpassword < neo4j-graph-model/schema.cypher
+docker exec neo4j cypher-shell -u neo4j -p devpassword "
+DROP INDEX multimodal_search_text IF EXISTS;
+"
 
 for TOPIC_GROUP in \
   "instruction_security_events:instruction-security-event-etl" \

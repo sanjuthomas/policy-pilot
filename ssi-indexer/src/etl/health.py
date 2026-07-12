@@ -100,30 +100,6 @@ async def check_multimodal_vector(
         return _status(False, "down", detail=str(exc), **base)
 
 
-async def check_multimodal_fulltext(
-    multimodal_store: MultimodalNeo4jStore,
-) -> ComponentStatus:
-    base = {
-        "store": "neo4j_multimodal",
-        "fulltext_index": settings.multimodal_fulltext_index,
-    }
-    try:
-        exists = await _index_exists(multimodal_store._writer, settings.multimodal_fulltext_index)
-        count = await multimodal_store.document_count()
-        if not exists:
-            return _status(
-                False,
-                "empty",
-                detail="fulltext index not created yet",
-                documents_count=count,
-                **base,
-            )
-        return _status(True, "up", documents_count=count, **base)
-    except Exception as exc:
-        logger.warning("multimodal fulltext health check failed: %s", exc)
-        return _status(False, "down", detail=str(exc), **base)
-
-
 async def check_vertex_embeddings(
     embedding_client: VertexEmbeddingClient,
 ) -> ComponentStatus:
@@ -187,18 +163,15 @@ async def component_status(
         neo4j_status,
         vertex_status,
         vector_status,
-        fulltext_status,
     ) = await asyncio.gather(
         check_kafka(instruction_security_event_consumer),
         check_neo4j(neo4j_writer),
         check_vertex_embeddings(embedding_client),
         check_multimodal_vector(multimodal_store),
-        check_multimodal_fulltext(multimodal_store),
     )
     return {
         "kafka": kafka_status,
         "vertex_embeddings": vertex_status,
         "multimodal_vector": vector_status,
-        "multimodal_fulltext": fulltext_status,
         "neo4j": neo4j_status,
     }

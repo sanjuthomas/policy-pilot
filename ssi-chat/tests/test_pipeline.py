@@ -56,7 +56,6 @@ class TestSelectiveRetrieval:
     @pytest.mark.asyncio
     async def test_graph_strategy_skips_vector(self, rag_service, mock_multimodal, mock_neo4j) -> None:
         mock_multimodal.search_vector = AsyncMock(return_value=[{"source": "vector"}])
-        mock_multimodal.search_bm25 = AsyncMock(return_value=[{"source": "bm25"}])
         mock_neo4j.run_cypher = AsyncMock(return_value=[{"total": 3}])
 
         from chat_application.pipeline.retrieve import execute_selective_retrieval
@@ -72,13 +71,11 @@ class TestSelectiveRetrieval:
             entity_ids=[],
         )
         mock_multimodal.search_vector.assert_not_called()
-        mock_multimodal.search_bm25.assert_not_called()
         assert result.graph_result["rows"] == [{"total": 3}]
 
     @pytest.mark.asyncio
     async def test_vector_strategy_skips_graph(self, rag_service, mock_ml_client, mock_multimodal) -> None:
         mock_multimodal.search_vector = AsyncMock(return_value=[{"source": "vector"}])
-        mock_multimodal.search_bm25 = AsyncMock(return_value=[])
         rag_service._search_graph = AsyncMock(return_value={"cypher": None, "rows": [], "cypher_provenance": "none"})
 
         from chat_application.pipeline.retrieve import execute_selective_retrieval

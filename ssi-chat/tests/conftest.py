@@ -41,7 +41,6 @@ def mock_multimodal():
     client = MagicMock()
     client.has_documents = AsyncMock(return_value=False)
     client.search_vector = AsyncMock(return_value=[])
-    client.search_bm25 = AsyncMock(return_value=[])
     client.fetch_by_event_id = AsyncMock(return_value=None)
     client.fetch_by_instruction_id = AsyncMock(return_value=None)
     client.fetch_instruction_approve_events = AsyncMock(return_value=[])

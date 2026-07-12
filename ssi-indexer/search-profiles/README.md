@@ -1,7 +1,7 @@
 # Search text profiles
 
 Each YAML file declares which fields are flattened into **`search_text`** — the string
-embedded as the dense vector and indexed for BM25 in Neo4j multimodal documents.
+embedded as the dense vector in Neo4j multimodal documents.
 
 | File | Multimodal `source` | Wired to builder |
 |------|-----------------|------------------|

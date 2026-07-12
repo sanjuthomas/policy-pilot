@@ -3,7 +3,7 @@
 Lightweight proxies (no LLM-as-judge / ragas dependency):
 - routing accuracy vs declared ``retrieval`` strategy
 - entity source recall (id appears in sources, graph rows, or answer)
-- source-channel precision@k (vector/bm25/neo4j/exact)
+- source-channel precision@k (vector/neo4j/exact)
 - graph groundedness (answer token overlap with graph row values)
 - faithfulness proxy (answer token overlap with retrieved context)
 """
@@ -83,7 +83,7 @@ ROUTING_BY_RETRIEVAL: dict[RetrievalStrategy, RoutingExpectation] = {
         cypher_classes=None,
         synthesis_modes=frozenset({"gemini_full", "formatter"}),
         min_sources=1,
-        source_channels_any=frozenset({"vector", "bm25"}),
+        source_channels_any=frozenset({"vector"}),
     ),
 }
 

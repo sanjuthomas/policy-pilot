@@ -22,7 +22,6 @@ class Settings(BaseSettings):
     vertex_timeout_seconds: float = 120.0
 
     multimodal_vector_index: str = "multimodal_embedding"
-    multimodal_fulltext_index: str = "multimodal_search_text"
 
     neo4j_uri: str = "bolt://neo4j:7687"
     neo4j_user: str = "neo4j"
