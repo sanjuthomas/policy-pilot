@@ -506,20 +506,30 @@ def is_cross_entity_reciprocal_approval_question(question: str) -> bool:
 
 def is_payment_list_by_status_question(question: str, *, mode: str = "payments") -> bool:
     """True when the user wants a tabular list of payments filtered by lifecycle status."""
-    if mode not in ("payments", "all"):
-        return False
-    if is_count_question(question):
-        return False
-    if is_payments_for_instruction_question(question):
-        return False
-    if not _PAYMENT_LIST_QUESTION.search(question):
+    if not is_payment_list_question(question, mode=mode):
         return False
     q = question.lower()
-    if "payment" not in q:
-        return False
     if payment_status_filter_from_question(question):
         return True
     return any(token in q for token in ("draft", "submit", "approv", "reject", "cancel", "pending"))
+
+
+def is_payment_list_question(question: str, *, mode: str = "payments") -> bool:
+    """True when the user wants a tabular list of payments (optional status/time/LOB filters)."""
+    if mode not in ("payments", "all"):
+        return False
+    if is_payments_for_instruction_question(question):
+        return False
+    if is_payment_versions_list_question(question, mode=mode):
+        return False
+    # Prefer list over count when both appear (e.g. follow-up expansions).
+    if is_count_question(question) and not re.search(
+        r"\b(list|show|enumerate|display)\b", question, re.IGNORECASE
+    ):
+        return False
+    if not _PAYMENT_LIST_QUESTION.search(question):
+        return False
+    return "payment" in question.lower()
 
 
 def is_instruction_payment_count_list_question(question: str, *, mode: str = "instructions") -> bool:
@@ -1953,9 +1963,7 @@ def plan_graph_queries(question: str, *, mode: str) -> list[tuple[str, str]] | N
     ):
         return builder.instructions_without_payments(question)
 
-    if mode in ("payments", "all") and is_payment_list_by_status_question(
-        question, mode=mode
-    ):
+    if mode in ("payments", "all") and is_payment_list_question(question, mode=mode):
         return builder.payment_list(question, flags)
 
     if mode in ("instructions", "all") and is_instruction_versions_list_question(

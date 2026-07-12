@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+
 from chat_application.cypher import (
     extract_entity_ids,
     extract_uuids,
@@ -684,6 +685,16 @@ class TestDownvoteRegressionQueries:
         assert planned is not None
         assert planned[0][0] == "payment_list"
         assert "SUBMITTED" in planned[0][1]
+
+    def test_payment_list_without_status(self) -> None:
+        from cypher_builder import is_payment_list_question
+
+        question = "Can you list those payments created this week?"
+        assert is_payment_list_question(question, mode="payments")
+        planned = plan_graph_queries(question, mode="payments")
+        assert planned is not None
+        assert planned[0][0] == "payment_list"
+        assert "duration('P7D')" in planned[0][1]
 
     def test_instruction_payment_count_list(self) -> None:
         question = "Can you list instructions and count of payments for each instruction?"

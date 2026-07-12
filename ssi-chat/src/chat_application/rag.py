@@ -24,6 +24,7 @@ from chat_application.cypher import (
     is_payment_amount_threshold_question,
     is_payment_count_aggregate_question,
     is_payment_id_lookup_for_instruction_question,
+    is_payment_list_by_status_question,
     is_payment_total_amount_question,
     is_payments_for_instruction_question,
     is_security_event_alert_count_question,
@@ -149,6 +150,27 @@ def _format_payment_list_by_status_answer(message: str, graph_rows: list[dict[st
         return f"No payments in {status} state were found in the graph."
     return (
         f"Payments in {status} state ({len(payment_rows)}):\n\n"
+        f"{_format_payment_list_table(payment_rows)}"
+    )
+
+
+def _format_payment_list_answer(message: str, graph_rows: list[dict[str, Any]]) -> str:
+    """Tabular list for general payment-list questions (time / LOB / status filters)."""
+    if payment_status_filter_from_question(message) or any(
+        token in message.lower()
+        for token in ("draft", "submit", "approv", "reject", "cancel", "pending")
+    ):
+        # Prefer the status-specific wording when a lifecycle filter is present.
+        if is_payment_list_by_status_question(message, mode="payments"):
+            return _format_payment_list_by_status_answer(message, graph_rows)
+
+    payment_rows = _dedupe_payment_graph_rows(graph_rows)
+    period = payment_aggregate_period_label(message)
+    scope = _payment_aggregate_scope_label(message)
+    if not payment_rows:
+        return f"No matching payments were found for {scope} ({period})."
+    return (
+        f"Payments for {scope} ({period}) — {len(payment_rows)}:\n\n"
         f"{_format_payment_list_table(payment_rows)}"
     )
 

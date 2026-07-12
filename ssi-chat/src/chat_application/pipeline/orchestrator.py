@@ -50,6 +50,10 @@ class RagPipelineOrchestrator:
     ) -> ChatResponse:
         started = time.perf_counter()
 
+        from chat_application.pipeline.follow_up import expand_follow_up_question
+
+        message = expand_follow_up_question(message, history)
+
         decision = await route_question(self._service.ml_client, message, mode=mode)
         path = decision.path or decision.retrieval_strategy
 
@@ -567,6 +571,7 @@ class RagPipelineOrchestrator:
             is_cross_entity_reciprocal_approval_question,
             is_instruction_versions_list_question,
             is_max_payments_per_instruction_question,
+            is_payment_list_question,
             is_payment_versions_list_question,
             is_payments_for_instruction_question,
             plan_graph_queries,
@@ -584,6 +589,7 @@ class RagPipelineOrchestrator:
             _format_largest_payment_answer,
             _format_max_payments_per_instruction_answer,
             _format_payment_count_aggregate_answer,
+            _format_payment_list_answer,
             _format_payment_total_amount_answer,
             _format_payments_above_amount_answer,
             _format_payments_for_instruction_answer,
@@ -646,6 +652,9 @@ class RagPipelineOrchestrator:
                     question=message,
                 )
                 answer_synthesis = "formatter"
+        if answer is None and is_payment_list_question(message, mode=mode):
+            answer = _format_payment_list_answer(message, graph_result["rows"])
+            answer_synthesis = "formatter"
         if answer is None and is_alert_ranking_question(message, mode=mode):
             answer = _format_alert_ranking_answer(message, graph_result["rows"])
             answer_synthesis = "formatter"
