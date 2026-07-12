@@ -48,9 +48,18 @@ See **[Intent Determination in Policy Pilot](../docs/intent-determination.md)** 
 Summary:
 
 1. **Route** — Gemini structured `RouterDecision` (eligibility / graph / vector / hybrid)
-2. **Fast paths** — live OPA eligibility API; Neo4j direct YAML intents (planned Cypher + formatters)
-3. **Selective retrieve** — graph only, vector+BM25 only, or hybrid (RRF when both run)
-4. **Synthesize** — deterministic formatters, Who/When/Why audit, or Gemini over context
+2. **Skills** — scripted mutations (create-payment: OPA preflight → Go / No Go → `POST /payments`)
+3. **Fast paths** — live OPA eligibility API; Neo4j direct YAML intents (planned Cypher + formatters); me-intents
+4. **Selective retrieve** — graph only, vector+BM25 only, or hybrid (RRF when both run)
+5. **Synthesize** — deterministic formatters, Who/When/Why audit, or Gemini over context
+
+### Create-payment skill
+
+Natural-language create for payment creators (`PAYMENT_CREATOR` + middle office). Example:
+
+> Can you create a payment for instruction ID 20260705-FICC-I-31? Value date tomorrow; amount: 12 million USD.
+
+Flow: detect/parse → load instruction → dry-run authz `CREATE` → confirmation card (parties + accounts) → **Go** creates a DRAFT via payment-service, **No Go** cancels. Implementation: `src/chat_application/skills/`. Confirm API: `POST /api/chat/skills/create-payment/confirm`.
 
 ## Who / When / Why (approval audit)
 

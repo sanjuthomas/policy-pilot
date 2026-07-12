@@ -8,10 +8,11 @@ Curated natural-language questions for demoing Policy Pilot. Prefer these over i
 |-----|---------|
 | **`graph`** | Planned Neo4j Cypher (counts, lists, relationships) |
 | **`tools`** | Live OPA / policy directory / person entitlements |
+| **`skill`** | Scripted mutation skill (create-payment with Go / No Go) |
 | **`vector`** | Semantic retrieval over security-event audit text |
 | **`multimodal`** | Indexed event narratives (embeddings + BM25; use **Events** mode) |
 
-**Chat modes:** **Policies** for `tools` questions (sign in as `comp-001` / `Password1!`). **Events** for vector/multimodal audit questions. **Instructions** / **Payments** for domain graph questions.
+**Chat modes:** **Policies** for `tools` questions (sign in as `comp-001` / `Password1!`). **Payments** for create-payment **`skill`** (sign in as `pay-101` or `pay-205`). **Events** for vector/multimodal audit questions. **Instructions** / **Payments** for domain graph questions.
 
 Demo personas and seed users: **[Domain models and demo users](domain-models.md)**. Automated regression bank: **[ssi-chat/regression/questions.yaml](../ssi-chat/regression/questions.yaml)**.
 
@@ -25,6 +26,7 @@ Demo personas and seed users: **[Domain models and demo users](domain-models.md)
 - _Are there instructions approved by someone who reports directly to the creator?_ **`graph`**
 - _Are there active instructions sharing the same creditor account and currency?_ **`graph`**
 - _Who approved instruction X, and why was it allowed?_ **`graph`** **`multimodal`**
+- _Can you show me the payment 20260712-FICC-P-2?_ **`graph`**
 
 ---
 
@@ -62,6 +64,21 @@ Use **Policies** mode. Sign in as compliance analyst `comp-001`.
 - _Who can approve instruction X?_ **`tools`**
 
 Grab IDs from the [demo harness](http://localhost:8091) or instruction/payment UIs after seeding.
+
+---
+
+## Skills (mutation)
+
+Use **Payments** mode. Sign in as a middle-office payment creator (`pay-101`, `pay-205`, …) with `Password1!`.
+
+Skills are **scripted pipelines**, not free-form agent tool loops. Create-payment always dry-runs OPA `CREATE`, shows a confirmation card, and mutates only after **Go**.
+
+- _Can you create a payment for instruction ID 20260705-FICC-I-31? Value date tomorrow; amount: 12 million USD._ **`skill`**
+- _Can you create a payment using instruction 20260705-FX-I-12? Value date today and amount 10 million._ **`skill`**
+
+After create, try:
+
+- _Can you show me the payment 20260712-FICC-P-2?_ **`graph`**
 
 ---
 

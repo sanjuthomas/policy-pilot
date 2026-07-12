@@ -2,7 +2,7 @@
 
 An event-driven, policy-aware knowledge platform for regulated financial systems — OPA authorization, Neo4j knowledge graphs, hybrid retrieval, and LLM-powered investigation in one conversational surface.
 
-Policy Pilot gives supervisors and compliance officers a single place to ask questions over the cash leg of Standard Settlement Instructions (SSI). It unifies **live policy rules** (OPA), **operational state** (instructions and payments), and the **immutable audit trail** of what was allowed or denied — so teams investigate in natural language instead of stitching answers from LDAP, databases, and ticket queues.
+Policy Pilot gives supervisors, compliance officers, and **payment operations** users a single place to ask questions over the cash leg of Standard Settlement Instructions (SSI). It unifies **live policy rules** (OPA), **operational state** (instructions and payments), and the **immutable audit trail** of what was allowed or denied — so teams investigate in natural language instead of stitching answers from LDAP, databases, and ticket queues.
 
 ## Why this exists
 
@@ -21,13 +21,14 @@ Policy Pilot models that end to end. Every mutation is recorded, streamed throug
 
 Policy Pilot surfaces **fraud patterns, compliance violations, and collusion signals** — not just application status screens.
 
-**Demo tags** (see [intent determination](docs/intent-determination.md)): **`graph`** · **`tools`** · **`vector`** · **`multimodal`**
+**Demo tags** (see [intent determination](docs/intent-determination.md)): **`graph`** · **`tools`** · **`vector`** · **`multimodal`** · **`skill`**
 
 **Graph**
 
 - _Are there any instances of approving each other's instructions?_ **`graph`**
 - _Are there cases where one user created an instruction that another user approved, and that approver later created a payment on the same instruction that the original creator then approved?_ **`graph`**
 - _Who approved instruction X, and why was it allowed?_ **`graph`** **`multimodal`**
+- _Can you show me the payment 20260712-FICC-P-2?_ **`graph`**
 
 **Tools** (live policy — use **Policies** mode; log in as `comp-001`)
 
@@ -36,6 +37,12 @@ Policy Pilot surfaces **fraud patterns, compliance violations, and collusion sig
 - _Who has permission to approve payments belong to LOB FICC?_ **`tools`**
 - _Can you list the permissions of Kowalski, Anna?_ **`tools`**
 - _Who can approve payment Y?_ **`tools`**
+
+**Skills** (mutation — use **Payments** mode; log in as a payment creator, e.g. `pay-101` / `pay-205`)
+
+- _Can you create a payment for instruction ID 20260705-FICC-I-31? Value date tomorrow; amount: 12 million USD._ **`skill`**
+
+  Scripted **create-payment** skill: parse request → load instruction → dry-run OPA `CREATE` → confirmation card (debtor / creditor / intermediaries) with **Go / No Go** → create draft only on **Go**. Fail closed on deny or No Go.
 
 **Vector / multimodal** (use **Events** mode)
 
@@ -55,7 +62,7 @@ Policy Pilot sits at the end of an event-driven pipeline: domain services enforc
 | Topic | Summary |
 |-------|---------|
 | **[OPA policy controls](docs/opa-controls.md)** | Segregation of duties, reporting-line inversion of control, LOB boundaries, amount clubs — the checks and balances enforced on every action. |
-| **[Sample questions](docs/sample-questions.md)** | Curated demo questions by retrieval path (`graph`, `tools`, `vector` / `multimodal`), including Policies-mode examples. |
+| **[Sample questions](docs/sample-questions.md)** | Curated demo questions by retrieval path (`graph`, `tools`, `skill`, `vector` / `multimodal`), including Policies-mode and create-payment skill examples. |
 | **[Intent determination](docs/intent-determination.md)** | Gemini returns a strict `RouterDecision` (eligibility, graph, vector, or hybrid). Selective retrieval — no blind merge of graph and vector on every question. |
 | **[Data flow](docs/data-flow.md)** | Mongo transactions → Kafka CDC → four ETL pipelines → Neo4j + multimodal store → chat. |
 | **[Architecture decisions](docs/architecture-decisions.md)** | Why ZITADEL, OPA, MongoDB, Kafka, Neo4j hybrid search, Vertex AI, and `cypher_builder`. |
@@ -73,11 +80,12 @@ Policy Pilot's chat layer (**ssi-chat**) decides what to do with a natural-langu
 | Layer | Mechanism | Purpose |
 |-------|-----------|---------|
 | **Route** | Gemini Flash + structured `RouterDecision` JSON | Pick retrieval strategy from question intent |
-| **Fast paths** | Neo4j direct YAML intents, live OPA eligibility API | Skip full RAG when a specialized handler applies |
+| **Skills** | Scripted multi-step actions (e.g. create-payment) | Mutate only after OPA preflight + explicit Go / No Go |
+| **Fast paths** | Neo4j direct YAML intents, live OPA eligibility API, me-intents | Skip full RAG when a specialized handler applies |
 | **Retrieve** | Selective backends (graph, vector, or both) | Avoid merging unrelated search results |
 | **Synthesize** | Deterministic formatters or Gemini | Produce the final answer from retrieved context |
 
-We do **not** use fuzzy ML text classification for routing. Intent is expressed as a strict Pydantic schema returned by Gemini structured output.
+We do **not** use fuzzy ML text classification for routing. Intent is expressed as a strict Pydantic schema returned by Gemini structured output. **Skills** are not free-form agent tool loops — they are fixed pipelines that reuse the same authorization-service → OPA path as domain mutations.
 
 ### End-to-end flow
 
@@ -86,11 +94,17 @@ Live policy questions do not stop at the chat backend. The logged-in user's **JW
 ```mermaid
 flowchart TD
     Q["User question + Bearer JWT + search mode"] --> ID[Identity — ZITADEL subject]
-    ID --> R[1. Route — LLM RouterDecision]
+    ID --> SK{create-payment skill?}
+    SK -->|yes| PRE[OPA CREATE preflight]
+    PRE -->|allow| CONF[Confirm card — Go / No Go]
+    CONF -->|Go| PAY[POST payment-service]
+    PAY --> A[Answer]
+    CONF -->|No Go / deny| A
+    SK -->|no| R[1. Route — LLM RouterDecision]
     R --> E{live policy / eligibility / tools?}
     E -->|yes| AZ[2. Authorization-service]
     AZ --> OPA[OPA policy evaluation]
-    OPA --> A[Answer]
+    OPA --> A
     E -->|no| D[3. Neo4j direct fast path]
     D -->|match| A
     D -->|no match| RET[4. Selective retrieval]
@@ -104,7 +118,7 @@ flowchart TD
     S --> A
 ```
 
-Implementation entry point: `RagService.ask()` delegates to `RagPipelineOrchestrator` in `ssi-chat/src/chat_application/pipeline/orchestrator.py`. Full specification: **[docs/intent-determination.md](docs/intent-determination.md)**.
+Implementation entry point: `RagService.ask()` delegates to `RagPipelineOrchestrator` in `ssi-chat/src/chat_application/pipeline/orchestrator.py`. Create-payment skill: `ssi-chat/src/chat_application/skills/`. Full specification: **[docs/intent-determination.md](docs/intent-determination.md)**.
 
 ---
 
