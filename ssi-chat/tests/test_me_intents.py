@@ -125,6 +125,25 @@ def test_detect_who_covers_lob() -> None:
     assert intent.covering_lob == "FICC"
 
 
+def test_detect_who_can_create_desk_rates() -> None:
+    intent = detect_me_intent("Who can create payments for DESK_RATES?")
+    assert intent is not None
+    assert intent.kind == "who_can_create"
+    assert intent.entity_type == "payment"
+    assert intent.covering_lob == "DESK_RATES"
+
+
+def test_me_intent_from_router_remaps_covers_when_create() -> None:
+    from chat_application.me.detect import me_intent_from_router
+    from chat_application.pipeline.models import RouterDecision
+
+    decision = RouterDecision(path="me", me_kind="who_covers_lob", reasoning="oops")
+    intent = me_intent_from_router(decision, "Who can create payments for DESK_RATES?")
+    assert intent is not None
+    assert intent.kind == "who_can_create"
+    assert intent.covering_lob == "DESK_RATES"
+
+
 def test_answer_who_covers_lob(tmp_path: Path) -> None:
     from chat_application.me.who_covers_lob import answer_who_covers_lob
 

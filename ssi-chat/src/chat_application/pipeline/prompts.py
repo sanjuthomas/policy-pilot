@@ -27,6 +27,9 @@ Rules:
 - Prefer path over guessing synonyms with keywords — understand the user's meaning.
 - skill vs me: "Can you create a payment for instruction X…" → skill.
   "Can I create a payment?" / "Am I allowed to create…" → me (me_kind=can_act_on_entity, me_action=CREATE).
+  "Who can create payments for FICC / FX / DESK_RATES?" → me (me_kind=who_can_create,
+  me_action=CREATE, me_entity_type=payment). Desk codes like DESK_RATES are LOBs.
+  "Who covers LOB FICC?" → me (me_kind=who_covers_lob) — covering_lobs directory, not create.
 - eligibility vs graph: future/potential approvers → eligibility; past "who approved" → graph.
 - eligibility vs policy_directory: specific entity id / who can approve this payment → eligibility;
   amount-club funding-approver lists without an id → policy_directory.

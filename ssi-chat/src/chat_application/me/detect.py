@@ -166,6 +166,15 @@ def me_intent_from_router(decision: RouterDecision, message: str) -> MeIntent | 
         )
 
     if kind == "who_covers_lob":
+        # Do not confuse with "who can create … for LOB X".
+        if re.search(r"\b(create|draft)\b", text, re.IGNORECASE):
+            entity_type = _create_entity_type(text) or "payment"
+            return MeIntent(
+                kind="who_can_create",
+                action="CREATE",
+                entity_type=entity_type,
+                covering_lob=covering_lob,
+            )
         return MeIntent(kind=kind, covering_lob=covering_lob)
 
     if kind == "can_act_on_entity":

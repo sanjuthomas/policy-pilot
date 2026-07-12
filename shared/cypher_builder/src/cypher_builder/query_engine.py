@@ -55,8 +55,10 @@ _PAYMENT_TOTAL_AMOUNT = re.compile(
     re.IGNORECASE,
 )
 
+# Align with instruction-service OWNING_LOB taxonomy: FICC, FX, DESK_* desks.
 _LOB_FILTER = re.compile(
-    r"\b(?:lob\s+|for\s+|payments?\s+for\s+)?(FICC|FX|DESK)\b",
+    r"\b(?:lob\s+|desk\s+lob\s+|for\s+|payments?\s+for\s+)?"
+    r"(FICC|FX|DESK_[A-Z][A-Z0-9_]*)\b",
     re.IGNORECASE,
 )
 

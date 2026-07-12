@@ -452,6 +452,12 @@ class TestPlanGraphQueries:
             "What is the total approved payment amount for FICC today?"
         ) == "FICC"
 
+    def test_lob_filter_desk_rates(self) -> None:
+        assert lob_filter_from_question(
+            "Who can create payments for DESK_RATES?"
+        ) == "DESK_RATES"
+        assert lob_filter_from_question("Who covers LOB DESK_RATES?") == "DESK_RATES"
+
     def test_non_count_question_returns_none(self) -> None:
         assert plan_graph_queries("List recent events", mode="events") is None
 
