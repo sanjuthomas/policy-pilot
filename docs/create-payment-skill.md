@@ -24,6 +24,21 @@ Sign in as `pay-205` / `Password1!`, select **Payments**, then send the question
 
 ---
 
+## How intent is identified
+
+**Thumb rule** ([intent determination](intent-determination.md)): natural-language intent uses Gemini structured output (`RouterDecision.path`). Create-payment is selected when `path=skill` and `skill=create_payment`.
+
+| Step | Mechanism |
+|------|-----------|
+| Intent | Gemini `route_query` → `path=skill` |
+| Slot parse | Deterministic parsers for instruction id, amount, value date |
+| Execution | Scripted preflight → Go / No Go → payment-service CREATE |
+
+Capability questions like “Can I create a payment?” should route to `path=me`, not this mutation skill.
+
+
+---
+
 ## Sequence (happy path)
 
 ```mermaid
@@ -31,6 +46,7 @@ sequenceDiagram
     actor U as User (browser)
     participant UI as Policy Pilot UI
     participant C as ssi-chat
+    participant L as Gemini (router)
     participant I as instruction-service
     participant A as authorization-service / OPA
     participant P as payment-service
@@ -38,6 +54,10 @@ sequenceDiagram
 
     U->>UI: Create payment (instruction, amount, value date)
     UI->>C: POST /api/chat (Bearer JWT)
+
+    C->>L: route_question → RouterDecision
+    L-->>C: path=skill, skill=create_payment
+    Note over C: parse slots (instruction id, amount, value date)
 
     Note over C: Phase 1 — preflight (no mutate)
     C-->>UI: activity: Parsed request…
@@ -80,7 +100,8 @@ sequenceDiagram
 
 | Step | Activity / UI | Side effect |
 |------|---------------|-------------|
-| 1. Detect + parse | Parsed instruction, amount, value date | None |
+| 0. Route | (none for skill) | Gemini `path=skill` |
+| 1. Parse slots | Parsed instruction, amount, value date | Deterministic parsers |
 | 2. Load instruction | Loading / loaded LOB, status, currency | None |
 | 3. Preflight CREATE | Checking roles, groups, covering LOBs, amount club… | Authz evaluate only |
 | 4. Explain | **Yes** + humanized allow basis, or **No** + stop | None |
@@ -95,7 +116,7 @@ sequenceDiagram
 
 | Rule | Meaning |
 |------|---------|
-| **Scripted pipeline** | Detector + fixed steps — not an agent inventing APIs |
+| **Scripted pipeline** | Regex detector + fixed steps — not an agent inventing APIs; Gemini router is not the skill classifier |
 | **OPA stays normative** | Preflight and create both use payment `CREATE` policy |
 | **Explain before confirm** | Stream permission reasoning before any Go button |
 | **Confirm before mutate** | No Mongo write until **Go** |

@@ -1,0 +1,24 @@
+---
+description: Thumb rule — use Gemini structured output for chat intent, not regex/fuzzy NLU
+globs: ssi-chat/**/*
+alwaysApply: false
+---
+
+# Intent detection thumb rule (ssi-chat)
+
+**Natural-language intent is determined by Gemini structured output / LLM semantic routing — not regex phrase lists or fuzzy classification.**
+
+People phrase the same intent many ways. Growing regex or heuristic keyword lists will miss synonyms and drift. Prefer extending the Pydantic `RouterDecision` schema (`path`, skill/me/policy fields) and the router system prompt.
+
+## Do
+
+- Route open-ended NLU (skills, me-intents, eligibility vs audit, graph vs vector, policy tools) via LLM structured output (`path`).
+- Keep **deterministic execution** after the route decision (scripted skill steps, OPA, Neo4j, formatters).
+- Use regex / ID extractors only as **parsers** (instruction id, amount, dates, person name) once intent is known — or as **LLM-failure fallback**, not primary NLU.
+
+## Don't
+
+- Add new primary intent detectors as regex / fuzzy keyword lists.
+- Treat heuristic fallback as the long-term classifier.
+
+Canonical write-up: `docs/intent-determination.md`.

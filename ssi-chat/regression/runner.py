@@ -220,11 +220,15 @@ def run_case(
 
 
 def print_quality_summary(result: SuiteResult) -> None:
-    scored = [
-        (case.retrieval, CaseQualityScores(**case.quality))
-        for case in result.cases
-        if case.quality and case.retrieval and not case.skipped
-    ]
+    from dataclasses import fields
+
+    allowed = {f.name for f in fields(CaseQualityScores)}
+    scored = []
+    for case in result.cases:
+        if not case.quality or not case.retrieval or case.skipped:
+            continue
+        payload = {k: v for k, v in case.quality.items() if k in allowed}
+        scored.append((case.retrieval, CaseQualityScores(**payload)))
     if not scored:
         return
 

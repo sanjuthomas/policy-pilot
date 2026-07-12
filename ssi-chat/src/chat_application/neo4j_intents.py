@@ -31,7 +31,7 @@ from chat_application.cypher import (
     is_largest_payment_question,
     is_max_payments_per_instruction_question,
     is_payment_amount_threshold_question,
-    is_payment_list_by_status_question,
+    is_payment_list_question,
     is_payment_total_amount_question,
     is_payment_versions_list_question,
     is_payments_for_instruction_question,
@@ -336,10 +336,10 @@ def _format_planned_graph_answer(
 
         return _format_payment_total_amount_answer(question, rows)
 
-    if "payment_list" in labels and is_payment_list_by_status_question(question, mode=mode):
-        from chat_application.rag import _format_payment_list_by_status_answer
+    if "payment_list" in labels and is_payment_list_question(question, mode=mode):
+        from chat_application.rag import _format_payment_list_answer
 
-        return _format_payment_list_by_status_answer(question, rows)
+        return _format_payment_list_answer(question, rows)
 
     if "instruction_payment_counts" in labels and is_instruction_payment_count_list_question(
         question, mode=mode

@@ -13,6 +13,7 @@ from chat_application.me.my_permissions import answer_my_permissions
 from chat_application.me.users_like_me import answer_users_like_me
 from chat_application.me.who_am_i import answer_who_am_i
 from chat_application.me.who_can_create import answer_who_can_create
+from chat_application.me.who_covers_lob import answer_who_covers_lob
 from chat_application.subject import Subject
 
 
@@ -20,12 +21,13 @@ async def try_me_intent(
     message: str,
     *,
     subject: Subject,
+    intent: MeIntent | None = None,
 ) -> MeIntentResult | None:
-    """Run a me-centric handler when the question matches a known shape."""
-    intent = detect_me_intent(message)
-    if intent is None:
+    """Run a me-centric handler when intent is provided or heuristic fallback matches."""
+    resolved = intent if intent is not None else detect_me_intent(message)
+    if resolved is None:
         return None
-    return await dispatch_me_intent(intent, subject=subject)
+    return await dispatch_me_intent(resolved, subject=subject)
 
 
 async def dispatch_me_intent(
@@ -47,6 +49,9 @@ async def dispatch_me_intent(
             covering_lob=intent.covering_lob,
             subject=subject,
         )
+
+    if intent.kind == "who_covers_lob":
+        return answer_who_covers_lob(covering_lob=intent.covering_lob)
 
     if intent.kind == "users_like_me":
         return answer_users_like_me(subject)

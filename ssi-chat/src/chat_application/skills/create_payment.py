@@ -10,7 +10,7 @@ from chat_application.formatting import (
     format_policy_basis_cell,
 )
 from chat_application.service_identity import service_identity
-from chat_application.skills.detect import detect_create_payment_skill
+from chat_application.skills.detect import parse_create_payment_params
 from chat_application.skills.format import (
     confirmation_card_from_instruction,
     format_amount,
@@ -83,7 +83,7 @@ async def run_create_payment_phase1(
     params: CreatePaymentParams | None = None,
 ) -> SkillRunResult | None:
     """Parse → load instruction → dry-run CREATE → confirmation card (no mutate)."""
-    params = params or detect_create_payment_skill(message)
+    params = params or parse_create_payment_params(message)
     if params is None:
         return None
 
@@ -451,9 +451,8 @@ async def _eligible_approvers_section(
     )
 
 
-# Re-export detector for callers / tests.
 __all__ = [
     "confirm_create_payment",
-    "detect_create_payment_skill",
+    "parse_create_payment_params",
     "run_create_payment_phase1",
 ]

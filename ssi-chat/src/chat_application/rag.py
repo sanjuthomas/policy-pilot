@@ -24,6 +24,7 @@ from chat_application.cypher import (
     is_payment_amount_threshold_question,
     is_payment_count_aggregate_question,
     is_payment_id_lookup_for_instruction_question,
+    is_payment_list_by_status_question,
     is_payment_total_amount_question,
     is_payments_for_instruction_question,
     is_security_event_alert_count_question,
@@ -149,6 +150,27 @@ def _format_payment_list_by_status_answer(message: str, graph_rows: list[dict[st
         return f"No payments in {status} state were found in the graph."
     return (
         f"Payments in {status} state ({len(payment_rows)}):\n\n"
+        f"{_format_payment_list_table(payment_rows)}"
+    )
+
+
+def _format_payment_list_answer(message: str, graph_rows: list[dict[str, Any]]) -> str:
+    """Tabular list for general payment-list questions (time / LOB / status filters)."""
+    if payment_status_filter_from_question(message) or any(
+        token in message.lower()
+        for token in ("draft", "submit", "approv", "reject", "cancel", "pending")
+    ):
+        # Prefer the status-specific wording when a lifecycle filter is present.
+        if is_payment_list_by_status_question(message, mode="payments"):
+            return _format_payment_list_by_status_answer(message, graph_rows)
+
+    payment_rows = _dedupe_payment_graph_rows(graph_rows)
+    period = payment_aggregate_period_label(message)
+    scope = _payment_aggregate_scope_label(message)
+    if not payment_rows:
+        return f"No matching payments were found for {scope} ({period})."
+    return (
+        f"Payments for {scope} ({period}) — {len(payment_rows)}:\n\n"
         f"{_format_payment_list_table(payment_rows)}"
     )
 
@@ -924,6 +946,7 @@ class RagService:
         *,
         bearer_token: str | None,
         session_id: str | None,
+        force: bool = False,
     ) -> str | None:
         from chat_application.authorization_client import (
             EligibilityClientError,
@@ -936,7 +959,7 @@ class RagService:
             merge_group_member_rows,
         )
 
-        if not is_payment_approval_directory_question(message):
+        if not force and not is_payment_approval_directory_question(message):
             return None
 
         if not bearer_token:
@@ -988,6 +1011,8 @@ class RagService:
         mode: SearchMode = "events",
         bearer_token: str | None = None,
         session_id: str | None = None,
+        domain: str | None = None,
+        action: str | None = None,
     ) -> str | None:
         from chat_application.authorization_client import (
             EligibilityClientError,
@@ -995,11 +1020,11 @@ class RagService:
         )
         from chat_application.policy_summary import detect_policy_summary_question
 
-        detected = detect_policy_summary_question(message, mode=mode)
-        if detected is None:
-            return None
-
-        domain, action = detected
+        if domain is None or action is None:
+            detected = detect_policy_summary_question(message, mode=mode)
+            if detected is None:
+                return None
+            domain, action = detected
         if not bearer_token:
             return (
                 "This question requires live OPA policy access. "
@@ -1025,14 +1050,15 @@ class RagService:
         *,
         bearer_token: str | None = None,
         session_id: str | None = None,
+        person_query: str | None = None,
     ) -> str | None:
         from chat_application.authorization_client import (
             EligibilityClientError,
             format_person_permission_summary_answer,
         )
-        from chat_application.person_permissions import extract_person_permission_query
+        from chat_application.person_permissions import extract_person_name_heuristic
 
-        query = extract_person_permission_query(message)
+        query = person_query or extract_person_name_heuristic(message)
         if query is None:
             return None
 

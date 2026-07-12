@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+
 from chat_application.capabilities import audience_labels, capabilities_for
 from chat_application.me.can_create import (
     answer_can_approve_payment,
@@ -115,6 +116,70 @@ def test_detect_who_can_create_instruction() -> None:
     assert intent.kind == "who_can_create"
     assert intent.entity_type == "instruction"
     assert intent.covering_lob == "FICC"
+
+
+def test_detect_who_covers_lob() -> None:
+    intent = detect_me_intent("Who covers LOB FICC?")
+    assert intent is not None
+    assert intent.kind == "who_covers_lob"
+    assert intent.covering_lob == "FICC"
+
+
+def test_detect_who_can_create_desk_rates() -> None:
+    intent = detect_me_intent("Who can create payments for DESK_RATES?")
+    assert intent is not None
+    assert intent.kind == "who_can_create"
+    assert intent.entity_type == "payment"
+    assert intent.covering_lob == "DESK_RATES"
+
+
+def test_me_intent_from_router_remaps_covers_when_create() -> None:
+    from chat_application.me.detect import me_intent_from_router
+    from chat_application.pipeline.models import RouterDecision
+
+    decision = RouterDecision(path="me", me_kind="who_covers_lob", reasoning="oops")
+    intent = me_intent_from_router(decision, "Who can create payments for DESK_RATES?")
+    assert intent is not None
+    assert intent.kind == "who_can_create"
+    assert intent.covering_lob == "DESK_RATES"
+
+
+def test_answer_who_covers_lob(tmp_path: Path) -> None:
+    from chat_application.me.who_covers_lob import answer_who_covers_lob
+
+    users_file = tmp_path / "users.yaml"
+    users_file.write_text(
+        """
+users:
+  - user_id: pay-101
+    given_name: Emily
+    family_name: Rodriguez
+    title: Analyst
+    roles: [PAYMENT_CREATOR]
+    groups: [MIDDLE_OFFICE]
+    covering_lobs: [FICC, FX]
+  - user_id: fo-ficc-101
+    given_name: Ava
+    family_name: Chen
+    title: Trader
+    roles: [INSTRUCTION_SUBMITTER]
+    covering_lobs: [FICC]
+  - user_id: pay-fx-only
+    given_name: Sam
+    family_name: Ortiz
+    title: Analyst
+    roles: [PAYMENT_CREATOR]
+    groups: [MIDDLE_OFFICE]
+    covering_lobs: [FX]
+""",
+        encoding="utf-8",
+    )
+    result = answer_who_covers_lob(covering_lob="FICC", users_file=users_file)
+    assert result.intent_id == "me.who_covers_lob"
+    assert "FICC" in result.answer
+    assert "pay-101" in result.answer
+    assert "fo-ficc-101" in result.answer
+    assert "pay-fx-only" not in result.answer
 
 
 def test_answer_who_can_create_for_fx(tmp_path: Path) -> None:

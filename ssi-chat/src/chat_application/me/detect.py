@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from chat_application.cypher import (
     extract_entity_ids,
@@ -9,6 +9,9 @@ from chat_application.cypher import (
     lob_filter_from_question,
 )
 from chat_application.me.models import MeIntent
+
+if TYPE_CHECKING:
+    from chat_application.pipeline.models import RouterDecision
 
 _WHO_AM_I = re.compile(
     r"^\s*("
@@ -101,6 +104,18 @@ _WHO_CAN_CREATE = re.compile(
     re.IGNORECASE,
 )
 
+_WHO_COVERS_LOB = re.compile(
+    r"\b("
+    r"who covers|"
+    r"who (else )?(covers|cover)|"
+    r"which users? (cover|covers)|"
+    r"who (is|are) covering|"
+    r"list .{0,40}(covering|covers)|"
+    r"users? (that |who )?(cover|covers)"
+    r")\b",
+    re.IGNORECASE,
+)
+
 
 def _create_entity_type(message: str) -> Literal["payment", "instruction"] | None:
     lowered = message.lower()
@@ -125,8 +140,71 @@ def _create_entity_type(message: str) -> Literal["payment", "instruction"] | Non
     return None
 
 
-def detect_me_intent(message: str) -> MeIntent | None:
-    """Detect me-centric operational intents from natural language."""
+def me_intent_from_router(decision: RouterDecision, message: str) -> MeIntent | None:
+    """Build a MeIntent from LLM router fields + deterministic slot parsers."""
+    if decision.path != "me" or decision.me_kind is None:
+        return None
+
+    text = message.strip()
+    payment_ids = extract_payment_ids(text) or extract_entity_ids(text)
+    entity_id = payment_ids[0] if payment_ids else None
+    covering_lob = lob_filter_from_question(text)
+
+    kind = decision.me_kind
+    action = decision.me_action
+    entity_type = decision.me_entity_type
+
+    if kind == "who_can_create":
+        entity_type = entity_type or _create_entity_type(text)
+        if entity_type is None:
+            return None
+        return MeIntent(
+            kind=kind,
+            action=action or "CREATE",
+            entity_type=entity_type,
+            covering_lob=covering_lob,
+        )
+
+    if kind == "who_covers_lob":
+        # Do not confuse with "who can create … for LOB X".
+        if re.search(r"\b(create|draft)\b", text, re.IGNORECASE):
+            entity_type = _create_entity_type(text) or "payment"
+            return MeIntent(
+                kind="who_can_create",
+                action="CREATE",
+                entity_type=entity_type,
+                covering_lob=covering_lob,
+            )
+        return MeIntent(kind=kind, covering_lob=covering_lob)
+
+    if kind == "can_act_on_entity":
+        return MeIntent(
+            kind=kind,
+            action=action or "CREATE",
+            entity_type=entity_type or "payment",
+            entity_id=entity_id,
+        )
+
+    if kind == "who_else_can_act":
+        return MeIntent(
+            kind=kind,
+            action=action or "APPROVE",
+            entity_type=entity_type or "payment",
+            entity_id=entity_id,
+        )
+
+    if kind == "waiting_for_me":
+        return MeIntent(
+            kind=kind,
+            action=action or "APPROVE",
+            entity_type=entity_type or "payment",
+        )
+
+    return MeIntent(kind=kind, action=action, entity_type=entity_type, entity_id=entity_id)
+
+
+def detect_me_intent_heuristic(message: str) -> MeIntent | None:
+    """LLM-failure fallback only — not primary NLU."""
     text = message.strip()
     if not text:
         return None
@@ -146,6 +224,11 @@ def detect_me_intent(message: str) -> MeIntent | None:
                 entity_type=entity_type,
                 covering_lob=lob_filter_from_question(text),
             )
+
+    if _WHO_COVERS_LOB.search(text):
+        covering_lob = lob_filter_from_question(text)
+        if covering_lob is not None:
+            return MeIntent(kind="who_covers_lob", covering_lob=covering_lob)
 
     if _CAN_I_CREATE.search(text):
         entity_type = _create_entity_type(text) or "payment"
@@ -190,3 +273,8 @@ def detect_me_intent(message: str) -> MeIntent | None:
         return MeIntent(kind="waiting_for_me", action="APPROVE", entity_type="payment")
 
     return None
+
+
+def detect_me_intent(message: str) -> MeIntent | None:
+    """Deprecated alias for tests — use me_intent_from_router in the happy path."""
+    return detect_me_intent_heuristic(message)

@@ -50,9 +50,14 @@ class RagPipelineOrchestrator:
     ) -> ChatResponse:
         started = time.perf_counter()
 
-        decision = await route_question(self._service.ml_client, message, mode=mode)
+        from chat_application.pipeline.follow_up import expand_follow_up_question
 
-        if subject is not None and bearer_token:
+        message = expand_follow_up_question(message, history)
+
+        decision = await route_question(self._service.ml_client, message, mode=mode)
+        path = decision.path or decision.retrieval_strategy
+
+        if path == "skill" and subject is not None and bearer_token:
             skill_response = await self._try_create_payment_skill(
                 message,
                 mode=mode,
@@ -60,16 +65,18 @@ class RagPipelineOrchestrator:
                 bearer_token=bearer_token,
                 session_id=session_id,
                 started=started,
+                routed=True,
             )
             if skill_response is not None:
                 return skill_response
 
-        if subject is not None:
+        if path == "me" and subject is not None:
             me_response = await self._try_me_intent(
                 message,
                 mode=mode,
                 subject=subject,
                 started=started,
+                decision=decision,
             )
             if me_response is not None:
                 return me_response
@@ -79,47 +86,56 @@ class RagPipelineOrchestrator:
         allow_compliance_tools = subject is None or capabilities_for(subject).is_compliance
 
         if allow_compliance_tools:
-            policy_summary_response = await self._try_policy_summary(
-                message,
-                mode=mode,
-                bearer_token=bearer_token,
-                session_id=session_id,
-                started=started,
-            )
-            if policy_summary_response is not None:
-                return policy_summary_response
+            if path == "policy_summary":
+                policy_summary_response = await self._try_policy_summary(
+                    message,
+                    mode=mode,
+                    bearer_token=bearer_token,
+                    session_id=session_id,
+                    started=started,
+                    decision=decision,
+                )
+                if policy_summary_response is not None:
+                    return policy_summary_response
 
-            policy_directory_response = await self._try_policy_directory(
-                message,
-                mode=mode,
-                bearer_token=bearer_token,
-                session_id=session_id,
-                started=started,
-            )
-            if policy_directory_response is not None:
-                return policy_directory_response
+            if path == "policy_directory":
+                policy_directory_response = await self._try_policy_directory(
+                    message,
+                    mode=mode,
+                    bearer_token=bearer_token,
+                    session_id=session_id,
+                    started=started,
+                    force=True,
+                )
+                if policy_directory_response is not None:
+                    return policy_directory_response
 
-            person_permission_response = await self._try_person_permissions(
-                message,
-                mode=mode,
-                bearer_token=bearer_token,
-                session_id=session_id,
-                started=started,
-            )
-            if person_permission_response is not None:
-                return person_permission_response
+            if path == "person_permissions":
+                person_permission_response = await self._try_person_permissions(
+                    message,
+                    mode=mode,
+                    bearer_token=bearer_token,
+                    session_id=session_id,
+                    started=started,
+                    decision=decision,
+                )
+                if person_permission_response is not None:
+                    return person_permission_response
 
-            eligibility_response = await self._try_eligibility(
-                message,
-                mode=mode,
-                decision=decision,
-                bearer_token=bearer_token,
-                session_id=session_id,
-                started=started,
-                force=mode == "policies",
-            )
-            if eligibility_response is not None:
-                return eligibility_response
+            if path == "eligibility" or (
+                mode == "policies" and path in {"eligibility", "graph", "vector", "hybrid"}
+            ):
+                eligibility_response = await self._try_eligibility(
+                    message,
+                    mode=mode,
+                    decision=decision,
+                    bearer_token=bearer_token,
+                    session_id=session_id,
+                    started=started,
+                    force=path == "eligibility" or mode == "policies",
+                )
+                if eligibility_response is not None:
+                    return eligibility_response
 
             if mode == "policies":
                 from chat_application.policy_summary import policies_mode_guidance
@@ -152,27 +168,37 @@ class RagPipelineOrchestrator:
                 answer_synthesis="formatter",
             )
 
-        direct = await self._service._try_neo4j_direct_answer(message, mode=mode)
-        if direct is not None:
-            elapsed = (time.perf_counter() - started) * 1000
-            return finalize_chat_response(
-                message,
-                mode,
-                answer=format_chat_response(direct.answer),
-                cypher=direct.cypher,
-                graph_rows=direct.graph_rows,
-                retrieval_ms=elapsed,
-                generation_ms=0.0,
-                path="neo4j_direct",
-                cypher_provenance=cypher_provenance_for_direct_intent(
-                    direct.intent_id,
-                    source=direct.source,
-                ),
-                answer_synthesis="formatter",
-                intent_id=direct.intent_id,
-            )
+        # Neo4j direct YAML match is a latency fast-path for retrieval questions
+        # (not primary NLU). Skip for dedicated skill/me/policy/eligibility handlers.
+        if path not in {
+            "skill",
+            "me",
+            "policy_summary",
+            "policy_directory",
+            "person_permissions",
+            "eligibility",
+        }:
+            direct = await self._service._try_neo4j_direct_answer(message, mode=mode)
+            if direct is not None:
+                elapsed = (time.perf_counter() - started) * 1000
+                return finalize_chat_response(
+                    message,
+                    mode,
+                    answer=format_chat_response(direct.answer),
+                    cypher=direct.cypher,
+                    graph_rows=direct.graph_rows,
+                    retrieval_ms=elapsed,
+                    generation_ms=0.0,
+                    path="neo4j_direct",
+                    cypher_provenance=cypher_provenance_for_direct_intent(
+                        direct.intent_id,
+                        source=direct.source,
+                    ),
+                    answer_synthesis="formatter",
+                    intent_id=direct.intent_id,
+                )
 
-        execution_strategy = decision.strategy
+        execution_strategy = decision.retrieval_strategy
         if execution_strategy == "eligibility":
             execution_strategy = "graph"
 
@@ -267,15 +293,34 @@ class RagPipelineOrchestrator:
         bearer_token: str,
         session_id: str | None,
         started: float,
+        routed: bool = False,
     ) -> ChatResponse | None:
         from chat_application.models import SkillConfirmationInfo
         from chat_application.skills import (
-            detect_create_payment_skill,
+            parse_create_payment_params,
             run_create_payment_phase1,
         )
 
-        params = detect_create_payment_skill(message)
+        params = parse_create_payment_params(message)
         if params is None:
+            if routed:
+                # Router selected skill but slots are incomplete — explain, don't fall through.
+                elapsed = (time.perf_counter() - started) * 1000
+                return finalize_chat_response(
+                    message,
+                    mode,
+                    answer=format_chat_response(
+                        "I understood you want to create a payment, but I need an "
+                        "instruction id, amount, and value date "
+                        "(e.g. today/tomorrow or YYYY-MM-DD)."
+                    ),
+                    retrieval_ms=0.0,
+                    generation_ms=elapsed,
+                    path="skill",
+                    cypher_provenance="none",
+                    answer_synthesis="formatter",
+                    intent_id="skill.create_payment.incomplete",
+                )
             return None
 
         result = await run_create_payment_phase1(
@@ -317,10 +362,14 @@ class RagPipelineOrchestrator:
         mode: SearchMode,
         subject: Subject,
         started: float,
+        decision: RouterDecision | None = None,
     ) -> ChatResponse | None:
-        from chat_application.me import try_me_intent
+        from chat_application.me import me_intent_from_router, try_me_intent
 
-        result = await try_me_intent(message, subject=subject)
+        intent = None
+        if decision is not None:
+            intent = me_intent_from_router(decision, message)
+        result = await try_me_intent(message, subject=subject, intent=intent)
         if result is None:
             return None
 
@@ -345,12 +394,17 @@ class RagPipelineOrchestrator:
         bearer_token: str | None,
         session_id: str | None,
         started: float,
+        decision: RouterDecision | None = None,
     ) -> ChatResponse | None:
+        domain = decision.policy_domain if decision else None
+        action = decision.policy_action if decision else None
         answer = await self._service._answer_policy_summary(
             message,
             mode=mode,
             bearer_token=bearer_token,
             session_id=session_id,
+            domain=domain,
+            action=action,
         )
         if answer is None:
             return None
@@ -375,11 +429,13 @@ class RagPipelineOrchestrator:
         bearer_token: str | None,
         session_id: str | None,
         started: float,
+        force: bool = False,
     ) -> ChatResponse | None:
         answer = await self._service._answer_payment_approval_directory(
             message,
             bearer_token=bearer_token,
             session_id=session_id,
+            force=force,
         )
         if answer is None:
             return None
@@ -404,11 +460,14 @@ class RagPipelineOrchestrator:
         bearer_token: str | None,
         session_id: str | None,
         started: float,
+        decision: RouterDecision | None = None,
     ) -> ChatResponse | None:
+        person_query = decision.person_query if decision else None
         answer = await self._service._answer_person_permission_summary(
             message,
             bearer_token=bearer_token,
             session_id=session_id,
+            person_query=person_query,
         )
         if answer is None:
             return None
@@ -441,12 +500,13 @@ class RagPipelineOrchestrator:
             is_eligibility_question_heuristic,
         )
 
-        if decision.strategy != "eligibility" and not force:
+        path = decision.path or decision.retrieval_strategy
+        if path != "eligibility" and decision.retrieval_strategy != "eligibility" and not force:
             return None
 
-        # Policies mode used to mark every question as eligibility; only run the
-        # live eligible-approvers API for true who-can / entity-id questions.
-        if mode == "policies" or force:
+        # Policies mode: only run live eligible-approvers for true who-can / entity-id questions
+        # when the router did not explicitly choose eligibility.
+        if (mode == "policies" or force) and path != "eligibility":
             if not is_eligibility_question_heuristic(message):
                 if not extract_entity_ids(message) and not extract_payment_ids(message):
                     return None
@@ -511,6 +571,7 @@ class RagPipelineOrchestrator:
             is_cross_entity_reciprocal_approval_question,
             is_instruction_versions_list_question,
             is_max_payments_per_instruction_question,
+            is_payment_list_question,
             is_payment_versions_list_question,
             is_payments_for_instruction_question,
             plan_graph_queries,
@@ -528,6 +589,7 @@ class RagPipelineOrchestrator:
             _format_largest_payment_answer,
             _format_max_payments_per_instruction_answer,
             _format_payment_count_aggregate_answer,
+            _format_payment_list_answer,
             _format_payment_total_amount_answer,
             _format_payments_above_amount_answer,
             _format_payments_for_instruction_answer,
@@ -590,6 +652,9 @@ class RagPipelineOrchestrator:
                     question=message,
                 )
                 answer_synthesis = "formatter"
+        if answer is None and is_payment_list_question(message, mode=mode):
+            answer = _format_payment_list_answer(message, graph_result["rows"])
+            answer_synthesis = "formatter"
         if answer is None and is_alert_ranking_question(message, mode=mode):
             answer = _format_alert_ranking_answer(message, graph_result["rows"])
             answer_synthesis = "formatter"

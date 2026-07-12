@@ -9,7 +9,7 @@ from chat_application.skills.create_payment import (
     confirm_create_payment,
     run_create_payment_phase1,
 )
-from chat_application.skills.detect import detect_create_payment_skill
+from chat_application.skills.detect import parse_create_payment_params
 from chat_application.skills.pending_store import pending_create_payment_store
 from chat_application.subject import Subject
 
@@ -63,9 +63,9 @@ def _instruction() -> dict:
     }
 
 
-class TestDetectCreatePaymentSkill:
-    def test_detects_actionable_create(self) -> None:
-        params = detect_create_payment_skill(
+class TestParseCreatePaymentParams:
+    def test_parses_actionable_create(self) -> None:
+        params = parse_create_payment_params(
             "Can you create a payment using instruction 20260705-FX-I-12? "
             "Value date today and amount 10 million."
         )
@@ -74,8 +74,8 @@ class TestDetectCreatePaymentSkill:
         assert params.amount == 10_000_000
         assert params.value_date == date.today().isoformat()
 
-    def test_detects_tomorrow_and_currency_suffix(self) -> None:
-        params = detect_create_payment_skill(
+    def test_parses_tomorrow_and_currency_suffix(self) -> None:
+        params = parse_create_payment_params(
             "Can you create a payment for instruction ID 20260705-FICC-I-31? "
             "Value date tomorrow; amount: 12 million USD."
         )
@@ -84,12 +84,10 @@ class TestDetectCreatePaymentSkill:
         assert params.amount == 12_000_000
         assert params.value_date == (date.today() + timedelta(days=1)).isoformat()
 
-    def test_ignores_capability_question(self) -> None:
-        assert detect_create_payment_skill("Can I create a payment?") is None
-
-    def test_requires_amount_and_instruction(self) -> None:
+    def test_requires_slots(self) -> None:
+        assert parse_create_payment_params("Can I create a payment?") is None
         assert (
-            detect_create_payment_skill(
+            parse_create_payment_params(
                 "Create a payment using instruction 20260705-FX-I-12 value date today"
             )
             is None

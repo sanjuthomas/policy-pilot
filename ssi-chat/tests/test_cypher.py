@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+
 from chat_application.cypher import (
     extract_entity_ids,
     extract_uuids,
@@ -452,6 +453,12 @@ class TestPlanGraphQueries:
             "What is the total approved payment amount for FICC today?"
         ) == "FICC"
 
+    def test_lob_filter_desk_rates(self) -> None:
+        assert lob_filter_from_question(
+            "Who can create payments for DESK_RATES?"
+        ) == "DESK_RATES"
+        assert lob_filter_from_question("Who covers LOB DESK_RATES?") == "DESK_RATES"
+
     def test_non_count_question_returns_none(self) -> None:
         assert plan_graph_queries("List recent events", mode="events") is None
 
@@ -678,6 +685,16 @@ class TestDownvoteRegressionQueries:
         assert planned is not None
         assert planned[0][0] == "payment_list"
         assert "SUBMITTED" in planned[0][1]
+
+    def test_payment_list_without_status(self) -> None:
+        from cypher_builder import is_payment_list_question
+
+        question = "Can you list those payments created this week?"
+        assert is_payment_list_question(question, mode="payments")
+        planned = plan_graph_queries(question, mode="payments")
+        assert planned is not None
+        assert planned[0][0] == "payment_list"
+        assert "duration('P7D')" in planned[0][1]
 
     def test_instruction_payment_count_list(self) -> None:
         question = "Can you list instructions and count of payments for each instruction?"
