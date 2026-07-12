@@ -24,6 +24,13 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_GRAPH_UNAVAILABLE_ANSWER = (
+    "I couldn't retrieve Neo4j graph results for this question "
+    "(query planning or execution failed). "
+    "I won't invent an answer without graph evidence — please rephrase, "
+    "include a specific entity id, or try again shortly."
+)
+
 
 class RagPipelineOrchestrator:
     """Route → retrieve → synthesize pipeline for RagService."""
@@ -173,6 +180,31 @@ class RagPipelineOrchestrator:
         )
         retrieval_ms = (time.perf_counter() - started) * 1000
 
+        graph_result = retrieval.graph_result
+        graph_provenance = graph_result.get("cypher_provenance") or "none"
+        if self._should_short_circuit_graph_unavailable(
+            execution_strategy, graph_result
+        ):
+            logger.warning(
+                "short-circuiting Gemini synthesis: graph strategy with unavailable graph "
+                "(provenance=%s)",
+                graph_provenance,
+            )
+            return finalize_chat_response(
+                message,
+                mode,
+                answer=format_chat_response(_GRAPH_UNAVAILABLE_ANSWER),
+                sources=[self._service._to_source(hit) for hit in retrieval.merged],
+                cypher=graph_result.get("cypher"),
+                graph_rows=retrieval.graph_rows,
+                retrieval_ms=retrieval_ms,
+                generation_ms=0.0,
+                path="full_rag",
+                cypher_provenance=graph_provenance,
+                answer_synthesis="formatter",
+                intent_id="graph.unavailable",
+            )
+
         gen_started = time.perf_counter()
         answer, answer_synthesis = await self._synthesize(
             message,
@@ -180,17 +212,16 @@ class RagPipelineOrchestrator:
             mode=mode,
             entity_ids=entity_ids,
             merged=retrieval.merged,
-            graph_result=retrieval.graph_result,
+            graph_result=graph_result,
         )
         generation_ms = (time.perf_counter() - gen_started) * 1000
 
-        graph_provenance = retrieval.graph_result.get("cypher_provenance") or "none"
         return finalize_chat_response(
             message,
             mode,
             answer=answer,
             sources=[self._service._to_source(hit) for hit in retrieval.merged],
-            cypher=retrieval.graph_result.get("cypher"),
+            cypher=graph_result.get("cypher"),
             graph_rows=retrieval.graph_rows,
             retrieval_ms=retrieval_ms,
             generation_ms=max(generation_ms, 0.0),
@@ -198,6 +229,22 @@ class RagPipelineOrchestrator:
             cypher_provenance=graph_provenance,
             answer_synthesis=answer_synthesis,
         )
+
+    @staticmethod
+    def _should_short_circuit_graph_unavailable(
+        strategy: str,
+        graph_result: dict[str, Any],
+    ) -> bool:
+        """Pure graph routes must not invent answers when Neo4j produced no evidence.
+
+        Successful empty queries still set ``cypher`` (0 rows is a real answer). Failures
+        and missing plans leave no Cypher and no rows — those must not call Gemini.
+        """
+        if strategy != "graph":
+            return False
+        if graph_result.get("cypher") or graph_result.get("rows"):
+            return False
+        return True
 
     async def _try_me_intent(
         self,

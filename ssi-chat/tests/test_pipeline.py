@@ -116,3 +116,54 @@ class TestRouteQuestion:
 
         decision = await route_question(mock_ml_client, "How many alerts?", mode="events")
         assert decision.strategy == "graph"
+
+
+class TestGraphUnavailableShortCircuit:
+    def test_short_circuit_when_graph_empty(self) -> None:
+        from chat_application.pipeline.orchestrator import RagPipelineOrchestrator
+
+        assert RagPipelineOrchestrator._should_short_circuit_graph_unavailable(
+            "graph",
+            {"cypher": None, "rows": [], "graph_unavailable": True},
+        )
+        assert RagPipelineOrchestrator._should_short_circuit_graph_unavailable(
+            "graph",
+            {"cypher": None, "rows": [], "cypher_provenance": "none"},
+        )
+
+    def test_no_short_circuit_for_hybrid_or_successful_empty(self) -> None:
+        from chat_application.pipeline.orchestrator import RagPipelineOrchestrator
+
+        assert not RagPipelineOrchestrator._should_short_circuit_graph_unavailable(
+            "hybrid",
+            {"cypher": None, "rows": [], "graph_unavailable": True},
+        )
+        assert not RagPipelineOrchestrator._should_short_circuit_graph_unavailable(
+            "graph",
+            {
+                "cypher": "MATCH (n) RETURN count(n) AS total",
+                "rows": [],
+                "graph_unavailable": False,
+            },
+        )
+        assert not RagPipelineOrchestrator._should_short_circuit_graph_unavailable(
+            "graph",
+            {"cypher": None, "rows": [{"total": 0}], "graph_unavailable": True},
+        )
+
+    @pytest.mark.asyncio
+    async def test_ask_skips_gemini_when_graph_unavailable(
+        self, rag_service, mock_ml_client, mock_neo4j
+    ) -> None:
+        mock_ml_client.route_query = AsyncMock(
+            return_value=RouterDecision(strategy="graph", reasoning="structured count")
+        )
+        mock_neo4j.run_cypher = AsyncMock(side_effect=RuntimeError("neo4j down"))
+
+        response = await rag_service.ask("How many alerts today?", [])
+
+        mock_ml_client.synthesize_answer.assert_not_awaited()
+        assert "couldn't retrieve Neo4j graph results" in response.answer
+        assert response.routing is not None
+        assert response.routing.answer_synthesis == "formatter"
+        assert response.routing.intent_id == "graph.unavailable"

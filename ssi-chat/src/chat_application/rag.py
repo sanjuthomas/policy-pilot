@@ -842,15 +842,37 @@ class RagService:
                     cypher_provenance = "llm_graph_plan"
             except Exception as exc:
                 logger.warning("graph plan extraction failed: %s", exc)
+                return {
+                    "cypher": None,
+                    "rows": [],
+                    "cypher_provenance": "none",
+                    "graph_unavailable": True,
+                }
 
         if planned is not None:
             try:
                 result = await self._run_planned_graph_queries(planned)
-                return {**result, "cypher_provenance": cypher_provenance}
+                return {
+                    **result,
+                    "cypher_provenance": cypher_provenance,
+                    "graph_unavailable": False,
+                }
             except Exception as exc:
                 logger.warning("planned graph query failed: %s", exc)
+                return {
+                    "cypher": None,
+                    "rows": [],
+                    "cypher_provenance": cypher_provenance,
+                    "graph_unavailable": True,
+                }
 
-        return {"cypher": None, "rows": [], "cypher_provenance": "none"}
+        # Graph was attempted but no executable plan was produced.
+        return {
+            "cypher": None,
+            "rows": [],
+            "cypher_provenance": "none",
+            "graph_unavailable": True,
+        }
 
     async def _run_planned_graph_queries(
         self, planned: list[tuple[str, str]]

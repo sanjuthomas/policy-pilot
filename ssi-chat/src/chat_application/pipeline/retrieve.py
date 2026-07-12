@@ -21,7 +21,12 @@ class SelectiveRetrievalResult:
 
 
 def _empty_graph_result() -> dict[str, Any]:
-    return {"cypher": None, "rows": [], "cypher_provenance": "none"}
+    return {
+        "cypher": None,
+        "rows": [],
+        "cypher_provenance": "none",
+        "graph_unavailable": False,
+    }
 
 
 async def execute_selective_retrieval(
