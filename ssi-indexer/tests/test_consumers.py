@@ -154,6 +154,48 @@ async def test_instruction_security_event_consumer_start_and_run():
     pipeline.process_instruction_security_event.assert_awaited_once()
 
 
+async def test_instruction_security_event_consumer_close_stops_task_and_consumer():
+    consumer = InstructionSecurityEventKafkaConsumer(AsyncMock())
+    kafka = AsyncMock()
+    consumer._consumer = kafka
+    consumer._task = asyncio.create_task(_pending_task())
+
+    await consumer.close()
+
+    assert consumer._task is None
+    assert consumer._consumer is None
+    kafka.stop.assert_awaited_once()
+
+
+async def test_instruction_security_event_consumer_run_retries_transient_error():
+    pipeline = AsyncMock()
+    pipeline.process_instruction_security_event.side_effect = [
+        TransientError("deadlock"),
+        None,
+    ]
+    consumer = InstructionSecurityEventKafkaConsumer(pipeline)
+    message = MagicMock(value={"event_id": "evt-1"}, offset=0, partition=0)
+    _one_message_consumer(consumer, message)
+
+    with patch("etl.instruction_security_event_consumer.asyncio.sleep", AsyncMock()):
+        await consumer._run()
+
+    assert pipeline.process_instruction_security_event.await_count == 2
+    consumer._consumer.commit.assert_awaited_once()
+
+
+async def test_instruction_security_event_consumer_run_skips_generic_error():
+    pipeline = AsyncMock()
+    pipeline.process_instruction_security_event.side_effect = RuntimeError("bad event")
+    consumer = InstructionSecurityEventKafkaConsumer(pipeline)
+    message = MagicMock(value={"event_id": "evt-1"}, offset=0, partition=0)
+    _one_message_consumer(consumer, message)
+
+    await consumer._run()
+
+    consumer._consumer.commit.assert_not_awaited()
+
+
 async def test_payment_security_event_consumer_handle():
     pipeline = AsyncMock()
     consumer = PaymentSecurityEventKafkaConsumer(pipeline)

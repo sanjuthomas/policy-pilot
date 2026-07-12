@@ -36,7 +36,7 @@ jobs:
         working-directory: ${{ matrix.service }}
         run: ruff check src/ --select E,F,W,I --ignore E501
 
-  # ── Unit test coverage (≥70%, excludes test harness) ───────────────────────
+  # ── Unit test coverage (≥80%, excludes test harness) ───────────────────────
   test-coverage:
     name: Coverage — ${{ matrix.service }}
     runs-on: ubuntu-latest
@@ -85,7 +85,7 @@ jobs:
         working-directory: ${{ matrix.service }}
         run: |
           pip install --quiet -e ".[${{ matrix.extra }}]"
-          pytest --cov=${{ matrix.package }} --cov-report=term-missing --cov-fail-under=70
+          pytest --cov=${{ matrix.package }} --cov-report=term-missing --cov-fail-under=80
 
   # ── Docker build ───────────────────────────────────────────────────────────
   docker-build:
