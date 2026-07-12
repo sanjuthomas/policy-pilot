@@ -31,7 +31,7 @@ class EnrichedSecurityEventDocument(BaseModel):
         description="Denormalized actor + instruction parties for analytics and search",
     )
     search_text: str = Field(
-        description="Flattened text used for dense embeddings and BM25 lexical index"
+        description="Flattened text used for dense embeddings"
     )
 
 

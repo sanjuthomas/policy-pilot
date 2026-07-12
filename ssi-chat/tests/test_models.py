@@ -52,7 +52,7 @@ class TestSourceHit:
             event_id="evt-1",
             instruction_id="inst-1",
             score=0.75,
-            sources=["vector", "bm25"],
+            sources=["vector"],
             summary="Approved",
             merged={"action": "APPROVE"},
             security_event={"event_id": "evt-1"},

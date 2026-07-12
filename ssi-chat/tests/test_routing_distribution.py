@@ -51,7 +51,7 @@ class TestRetrievalStrategyClassification:
                 path="full_rag",
                 cypher_provenance="none",
                 answer_synthesis="gemini_full",
-                source_channels={"vector": 3, "bm25": 1, "neo4j": 0, "exact": 0},
+                source_channels={"vector": 4, "neo4j": 0, "exact": 0},
                 graph_row_count=0,
             )
             == "vector"
@@ -61,12 +61,11 @@ class TestRetrievalStrategyClassification:
 class TestSourceChannelCounts:
     def test_count_source_channels(self) -> None:
         sources = [
-            SourceHit(score=1.0, sources=["vector", "bm25"], summary="a"),
+            SourceHit(score=1.0, sources=["vector"], summary="a"),
             SourceHit(score=0.8, sources=["neo4j"], summary="b"),
         ]
         assert count_source_channels(sources) == {
             "vector": 1,
-            "bm25": 1,
             "neo4j": 1,
             "exact": 0,
         }
@@ -96,7 +95,7 @@ class TestRoutingDistributionTracker:
                 answer_synthesis="gemini_full",
                 mode="payments",
                 retrieval_strategy="graph",
-                source_channels={"vector": 2, "bm25": 0, "neo4j": 1, "exact": 0},
+                source_channels={"vector": 2, "neo4j": 1, "exact": 0},
             )
         )
 

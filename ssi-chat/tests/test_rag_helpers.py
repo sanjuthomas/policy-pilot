@@ -560,7 +560,7 @@ class TestRagServiceBuildContext:
             event_id=None,
             instruction_id="inst-1",
             score=0.3,
-            sources={"bm25"},
+            sources={"vector"},
             merged={
                 "source": "payment_fact",
                 "payment_id": "pay-1",
@@ -588,13 +588,13 @@ class TestRagServiceMergeWithExact:
         monkeypatch.setattr("chat_application.rag.settings.max_context_hits", 5)
         exact = [{"source": "exact", "event_id": "evt-exact", "summary": "exact hit"}]
         vector = [{"source": "vector", "event_id": "evt-other", "summary": "vector hit"}]
-        merged = RagService._merge_with_exact(exact, vector, [], [])
+        merged = RagService._merge_with_exact(exact, vector, [])
         assert merged[0].event_id == "evt-exact"
 
     def test_without_exact_returns_rrf_only(self, monkeypatch) -> None:
         monkeypatch.setattr("chat_application.rag.settings.max_context_hits", 10)
         vector = [{"source": "vector", "event_id": "evt-1", "summary": "one"}]
-        merged = RagService._merge_with_exact([], vector, [], [])
+        merged = RagService._merge_with_exact([], vector, [])
         assert len(merged) == 1
         assert merged[0].event_id == "evt-1"
 

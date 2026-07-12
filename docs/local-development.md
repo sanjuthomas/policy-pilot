@@ -95,7 +95,7 @@ The regression suite (`ssi-chat/regression/`) measures answer quality beyond key
 
 - **Routing accuracy** — expected path (`neo4j_direct`, `full_rag`, `eligibility`) and synthesis mode
 - **Entity recall** — instruction/payment IDs grounded in sources or graph rows
-- **Source precision@5** — vector-mode cases include `vector` or `bm25` channels
+- **Source precision@5** — vector-mode cases include `vector` channels
 - **Groundedness / faithfulness** — token-overlap proxies against graph rows and context
 
 Run: `python -m regression.runner --seed --report regression-report.json`. Golden set: `--eval-golden`. See `ssi-chat/regression/README.md` and [Intent Determination](intent-determination.md).

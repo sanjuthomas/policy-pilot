@@ -50,7 +50,7 @@ Summary:
 1. **Route** — Gemini structured `RouterDecision` (eligibility / graph / vector / hybrid)
 2. **Skills** — scripted mutations (create-payment: OPA preflight → Go / No Go → `POST /payments`)
 3. **Fast paths** — live OPA eligibility API; Neo4j direct YAML intents (planned Cypher + formatters); me-intents
-4. **Selective retrieve** — graph only, vector+BM25 only, or hybrid (RRF when both run)
+4. **Selective retrieve** — graph only, vector only, or hybrid (RRF of vector + graph when both run)
 5. **Synthesize** — deterministic formatters, Who/When/Why audit, or Gemini over context
 
 ### Create-payment skill
@@ -99,7 +99,7 @@ Requires **compliance sign-in** at http://localhost:8092 (`comp-001` / `comp-002
 Every `POST /api/chat` answer records retrieval routing:
 
 - **Structured log** — `chat.answer.completed strategy=… path=… cypher=… synthesis=…` plus `chat.retrieval_strategy`, source channel counts, and timing fields on the log record.
-- **OTel counters** — `chat.retrieval.route.count` (by strategy/path/mode), `chat.retrieval.source.channel.count` (vector/bm25/neo4j/exact hits), duration histograms.
+- **OTel counters** — `chat.retrieval.route.count` (by strategy/path/mode), `chat.retrieval.source.channel.count` (vector/neo4j/exact hits), duration histograms.
 - **Live distribution** — `GET /api/routing-stats` returns in-process counts since startup:
 
 ```bash
@@ -149,7 +149,6 @@ Copy `.env.example` to `.env` at the repo root to override defaults. Docker Comp
 | `GCP_SA_KEY_PATH` | host path to service account JSON (Compose mount) |
 | `GOOGLE_APPLICATION_CREDENTIALS` | `/run/secrets/gcp-sa.json` (in container) |
 | `MULTIMODAL_VECTOR_INDEX` | `multimodal_embedding` |
-| `MULTIMODAL_FULLTEXT_INDEX` | `multimodal_search_text` |
 | `NEO4J_URI` | `bolt://neo4j:7687` |
 | `GRAPH_MODEL_DIR` | `/app/neo4j-graph-model` |
 | `PAYMENT_SERVICE_URL` | `http://payment-service:8093` |

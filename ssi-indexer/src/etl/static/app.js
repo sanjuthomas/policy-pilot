@@ -15,13 +15,11 @@ const clearResultsBtn = document.getElementById("clear-results-btn");
 const modeTabs = document.querySelectorAll(".mode-tab");
 
 const MODE_HINTS = {
-  hybrid: "Dense embeddings + BM25 lexical search fused with reciprocal rank fusion (RRF).",
   vector: "Semantic search using Vertex dense embeddings stored in Neo4j.",
-  bm25: "Lexical keyword search using Neo4j fulltext (Lucene BM25).",
   neo4j: "Cypher text search over SecurityEvent nodes in the Neo4j graph.",
 };
 
-let mode = "hybrid";
+let mode = "vector";
 let selectedCard = null;
 let componentsTimer = null;
 
@@ -66,7 +64,6 @@ const COMPONENT_LABELS = {
   kafka: "Kafka",
   vertex_embeddings: "Vertex embeddings",
   multimodal_vector: "Neo4j · Vector",
-  multimodal_fulltext: "Neo4j · BM25",
   neo4j: "Neo4j",
 };
 
@@ -92,11 +89,10 @@ function componentDetail(key, component) {
       .filter(Boolean)
       .join(" · ");
   }
-  if (key === "multimodal_vector" || key === "multimodal_fulltext") {
+  if (key === "multimodal_vector") {
     const docs =
       component.documents_count != null ? `${component.documents_count} document(s)` : null;
-    const index =
-      component.vector_index || component.fulltext_index || component.store;
+    const index = component.vector_index || component.store;
     return [index, docs].filter(Boolean).join(" · ");
   }
   if (key === "neo4j") {
@@ -315,7 +311,7 @@ searchForm.addEventListener("submit", async (event) => {
   }
 });
 
-setMode("hybrid");
+setMode("vector");
 
 function startComponentsPolling() {
   if (componentsTimer) {

@@ -266,7 +266,6 @@ class TestRagNeo4jDirectEarlyExit:
             ]
         )
         mock_multimodal.search_vector = AsyncMock(return_value=[])
-        mock_multimodal.search_bm25 = AsyncMock(return_value=[])
         mock_ml_client.embed = AsyncMock(return_value=[0.1, 0.2])
         mock_ml_client.synthesize_answer = AsyncMock(return_value="should not be called")
 
@@ -294,7 +293,6 @@ class TestRagNeo4jDirectEarlyExit:
             ]
         )
         mock_multimodal.search_vector = AsyncMock(return_value=[])
-        mock_multimodal.search_bm25 = AsyncMock(return_value=[])
         mock_ml_client.embed = AsyncMock(return_value=[0.1, 0.2])
         mock_ml_client.synthesize_answer = AsyncMock(return_value="should not be called")
 

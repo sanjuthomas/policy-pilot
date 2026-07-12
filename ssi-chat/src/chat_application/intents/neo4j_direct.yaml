@@ -1,4 +1,4 @@
-# Neo4j-direct intents: fixed Cypher + formatter (no vector / BM25 / LLM Cypher / synthesis).
+# Neo4j-direct intents: fixed Cypher + formatter (no vector / LLM Cypher / synthesis).
 #
 # Fields:
 #   id          — stable intent name

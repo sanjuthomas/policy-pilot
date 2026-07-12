@@ -121,29 +121,23 @@ In this demo Kafka runs as a single broker with no replication. Production would
 
 ---
 
-## Why Neo4j vector + fulltext BM25 (hybrid search)?
+## Why Neo4j dense vector search?
 
 No single retrieval strategy reliably handles the full range of policy, lifecycle, and audit questions investigators ask.
 
-**Dense vector search** (via **Vertex AI `text-embedding-004`** on `MultimodalDocument` nodes) excels at **semantic similarity** — "who tried to approve each other's instructions?" or "show me policy denial events for FX desk". But dense search struggles with **exact identifiers** like UUIDs.
+**Dense vector search** (via **Vertex AI `text-embedding-004`** on `MultimodalDocument` nodes) excels at **semantic similarity** — "who tried to approve each other's instructions?" or "show me policy denial events for FX desk".
 
-**BM25 fulltext search** (Neo4j Lucene index on `search_text`) excels at **exact-match tokens** — UUIDs, user IDs (`mo-100`, `ficc-300`), action names (`APPROVE`, `REJECT`), currency codes. BM25 has no concept of synonymy — "declined" and "rejected" are unrelated tokens.
+**Exact identifiers** (UUIDs, payment ids, user ids) and **structured relationships** are handled by dedicated Neo4j lookups and graph/Cypher paths.
 
-**Hybrid search** fuses both signals with reciprocal rank fusion (RRF, k=60) when a question genuinely needs both structured facts and semantic policy text:
+**Hybrid retrieval** in chat means **vector + graph** (RRF when both run), selected per question by the [intent router](intent-determination.md).
 
-```
-score_hybrid(doc) = 1/(k + rank_dense) + 1/(k + rank_bm25)
-```
-
-Using **one Neo4j store** for graph traversal, dense vectors, and lexical search keeps infrastructure simple — no separate vector database.
-
-Policy Pilot does **not** always run hybrid retrieval. The [intent router](intent-determination.md) selects graph-only, vector-only, or hybrid paths per question.
+Using **one Neo4j store** for graph traversal and dense vectors keeps infrastructure simple — no separate vector database.
 
 ---
 
 ## Why Neo4j (knowledge graph)?
 
-Vector + BM25 retrieval operates over **flat document similarity**. Relationships between events — cross-approval, duplicate routes, org hierarchy — are **invisible** to document ranking alone.
+Dense vector retrieval operates over **flat document similarity**. Relationships between events — cross-approval, duplicate routes, org hierarchy — are **invisible** to document ranking alone.
 
 A **knowledge graph** makes those relationships first-class:
 
@@ -217,10 +211,6 @@ The indexer Search Console `POST /api/cypher/generate` endpoint uses the same pl
 | Used for | Routing, answer synthesis, authorization WHY summarization |
 
 Retrieved context is passed to Gemini; the model does **not** emit raw Cypher directly — graph fallback uses structured plan extraction via `cypher_builder`.
-
-### Lexical retrieval — Neo4j fulltext (BM25)
-
-Neo4j's **fulltext index** on `MultimodalDocument.search_text` (Lucene BM25) complements dense semantic search for UUIDs, user IDs, and action names.
 
 ### Per-question LLM calls (Policy Pilot)
 

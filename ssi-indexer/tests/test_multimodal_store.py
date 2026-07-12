@@ -12,7 +12,6 @@ from etl.multimodal_store import (
     _node_to_result,
     _numeric_summary,
     _payload_from_node,
-    _rrf_merge,
     _source_filter_values,
     event_document_id,
     instruction_document_id,
@@ -95,14 +94,6 @@ def test_source_filter_values() -> None:
     ]
     assert _source_filter_values("payment") == ["payment_fact"]
     assert _source_filter_values("instruction_state") == ["instruction_state"]
-
-
-def test_rrf_merge_combines_rankings() -> None:
-    dense = [{"event_id": "e1", "payload": {"event_id": "e1"}, "score": 0.9}]
-    bm25 = [{"event_id": "e2", "payload": {"event_id": "e2"}, "score": 0.8}]
-    merged = _rrf_merge(dense, bm25, limit=2)
-    assert len(merged) == 2
-    assert {row["event_id"] for row in merged} == {"e1", "e2"}
 
 
 async def test_document_count(store: MultimodalNeo4jStore, neo4j_session: AsyncMock) -> None:
@@ -206,29 +197,6 @@ async def test_search_dense_returns_hits(store: MultimodalNeo4jStore, neo4j_sess
     hits = await store.search_dense([0.1, 0.2], limit=5)
     assert hits[0]["event_id"] == "evt-1"
     assert hits[0]["score"] == 0.88
-
-
-async def test_search_bm25_returns_hits(store: MultimodalNeo4jStore, neo4j_session: AsyncMock) -> None:
-    node = {
-        "search_text": "APPROVE",
-        "payload_json": json.dumps({"instruction_id": "instr-9"}),
-    }
-    neo4j_session.run = AsyncMock(return_value=_AsyncRecords([{"node": node, "score": 1.2}]))
-    hits = await store.search_bm25("APPROVE", limit=3, source="instruction_state")
-    assert hits[0]["instruction_id"] == "instr-9"
-
-
-async def test_search_hybrid_merges(store: MultimodalNeo4jStore, neo4j_session: AsyncMock) -> None:
-    dense_node = {"payload_json": json.dumps({"event_id": "e-dense"})}
-    bm25_node = {"payload_json": json.dumps({"event_id": "e-bm25"})}
-    neo4j_session.run = AsyncMock(
-        side_effect=[
-            _AsyncRecords([{"node": dense_node, "score": 0.7}]),
-            _AsyncRecords([{"node": bm25_node, "score": 0.6}]),
-        ]
-    )
-    hits = await store.search_hybrid("query", [0.1], limit=2)
-    assert len(hits) == 2
 
 
 async def test_search_text_chunk_stats(store: MultimodalNeo4jStore, neo4j_session: AsyncMock) -> None:

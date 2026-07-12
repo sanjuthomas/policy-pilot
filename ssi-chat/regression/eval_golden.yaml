@@ -87,7 +87,7 @@ cases:
   expect:
     require_routing: true
     routing_path: full_rag
-    source_channels_any: [vector, bm25]
+    source_channels_any: [vector]
     min_sources: 1
     min_answer_length: 40
     min_faithfulness: 0.05

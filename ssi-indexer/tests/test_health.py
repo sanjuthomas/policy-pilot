@@ -8,7 +8,6 @@ from etl.config import settings
 from etl.health import (
     _status,
     check_kafka,
-    check_multimodal_fulltext,
     check_multimodal_vector,
     check_neo4j,
     check_vertex_embeddings,
@@ -92,30 +91,6 @@ async def test_check_multimodal_vector_up():
     assert result["documents_count"] == 42
 
 
-async def test_check_multimodal_fulltext_missing_index():
-    store = MagicMock()
-    store._writer = MagicMock()
-    store.document_count = AsyncMock(return_value=3)
-
-    with patch("etl.health._index_exists", AsyncMock(return_value=False)):
-        result = await check_multimodal_fulltext(store)
-
-    assert result["ok"] is False
-    assert "fulltext index" in result["detail"]
-
-
-async def test_check_multimodal_fulltext_up():
-    store = MagicMock()
-    store._writer = MagicMock()
-    store.document_count = AsyncMock(return_value=7)
-
-    with patch("etl.health._index_exists", AsyncMock(return_value=True)):
-        result = await check_multimodal_fulltext(store)
-
-    assert result["ok"] is True
-    assert result["documents_count"] == 7
-
-
 async def test_check_vertex_embeddings_not_ready():
     client = MagicMock()
     client._ready = False
@@ -178,10 +153,6 @@ async def test_component_status_aggregates():
             "etl.health.check_multimodal_vector",
             AsyncMock(return_value={"ok": True, "status": "up"}),
         ),
-        patch(
-            "etl.health.check_multimodal_fulltext",
-            AsyncMock(return_value={"ok": True, "status": "up"}),
-        ),
     ):
         result = await component_status(
             instruction_security_event_consumer=consumer,
@@ -194,7 +165,6 @@ async def test_component_status_aggregates():
         "kafka",
         "vertex_embeddings",
         "multimodal_vector",
-        "multimodal_fulltext",
         "neo4j",
     }
     assert result["vertex_embeddings"]["ok"] is False

@@ -12,7 +12,7 @@
         <span class="brand-mark"></span>
         <div>
           <h1>Security Event Search</h1>
-          <p class="subtitle">Neo4j graph · vector · BM25 · hybrid RRF</p>
+          <p class="subtitle">Neo4j graph · vector embeddings</p>
         </div>
       </div>
       <div class="status-group">
@@ -77,8 +77,8 @@
         <div>
           <h2>Search text profiles</h2>
           <p class="panel-intro">
-            Fields listed here are flattened into <code>search_text</code> for dense embedding and
-            BM25. Everything else stays in the document payload only — browse full JSON in search
+            Fields listed here are flattened into <code>search_text</code> for dense embedding.
+            Everything else stays in the document payload only — browse full JSON in search
             results below.
           </p>
         </div>
@@ -97,13 +97,11 @@
     <main class="layout">
       <section class="panel search-panel">
         <div class="mode-tabs" role="tablist" aria-label="Search mode">
-          <button type="button" class="mode-tab active" data-mode="hybrid">Hybrid</button>
-          <button type="button" class="mode-tab" data-mode="vector">Vector</button>
-          <button type="button" class="mode-tab" data-mode="bm25">BM25</button>
+          <button type="button" class="mode-tab active" data-mode="vector">Vector</button>
           <button type="button" class="mode-tab" data-mode="neo4j">Neo4j</button>
         </div>
 
-        <p id="mode-hint" class="mode-hint">Dense + BM25 with reciprocal rank fusion.</p>
+        <p id="mode-hint" class="mode-hint">Semantic search using Vertex dense embeddings stored in Neo4j.</p>
 
         <form id="search-form" class="search-form">
           <label class="field" for="query-input">

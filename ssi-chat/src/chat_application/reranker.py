@@ -49,7 +49,7 @@ def rrf_merge(
     *,
     k: int | None = None,
 ) -> list[RankedHit]:
-    """Reciprocal rank fusion across vector, BM25, and Neo4j hit lists."""
+    """Reciprocal rank fusion across vector and Neo4j hit lists."""
     k = k or settings.rrf_k
     combined: dict[str, RankedHit] = {}
 

@@ -39,7 +39,6 @@ class Settings(BaseSettings):
     graph_model_dir: str = "/app/neo4j-graph-model"
 
     multimodal_vector_index: str = "multimodal_embedding"
-    multimodal_fulltext_index: str = "multimodal_search_text"
 
     gcp_project_id: str = "rag-demos-501323"
     gcp_region: str = "us-central1"

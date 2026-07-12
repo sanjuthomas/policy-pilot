@@ -10,7 +10,7 @@ Curated natural-language questions for demoing Policy Pilot. Prefer these over i
 | **`tools`** | Live OPA / policy directory / person entitlements |
 | **`skill`** | Scripted mutation skill (create-payment with Go / No Go) |
 | **`vector`** | Semantic retrieval over security-event audit text |
-| **`multimodal`** | Indexed event narratives (embeddings + BM25; use **Events** mode) |
+| **`multimodal`** | Indexed event narratives (dense embeddings; use **Events** mode) |
 
 **Chat modes:** **Policies** for `tools` questions (sign in as `comp-001` / `Password1!`). **Payments** for create-payment **`skill`** (sign in as `pay-101` or `pay-205`). **Events** for vector/multimodal audit questions. **Instructions** / **Payments** for domain graph questions.
 

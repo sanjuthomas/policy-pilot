@@ -64,7 +64,7 @@ def test_source_channel_precision_at_k():
     ]
     precision = source_channel_precision_at_k(
         sources,
-        required_channels=frozenset({"vector", "bm25"}),
+        required_channels=frozenset({"vector"}),
         k=2,
     )
     assert precision == 0.5
@@ -180,7 +180,7 @@ def test_golden_eval_yaml_loads():
     ],
 )
 def test_routing_path_acceptance(retrieval, path, synthesis, should_pass):
-    sources = [{"sources": ["vector", "bm25"], "summary": "denial alert event log"}]
+    sources = [{"sources": ["vector"], "summary": "denial alert event log"}]
     scores = evaluate_case_quality(
         retrieval=retrieval,
         expect=ExpectConfig(),

@@ -100,42 +100,8 @@ def _source_filter_values(source: str | None) -> list[str] | None:
     return [source]
 
 
-def _rrf_merge(
-    dense_results: list[dict[str, Any]],
-    bm25_results: list[dict[str, Any]],
-    *,
-    limit: int,
-    k: int = 60,
-) -> list[dict[str, Any]]:
-    scores: dict[str, float] = {}
-    payloads: dict[str, dict[str, Any]] = {}
-
-    for results in (dense_results, bm25_results):
-        for rank, row in enumerate(results, start=1):
-            payload = row.get("payload") or {}
-            key = (
-                row.get("event_id")
-                or row.get("instruction_id")
-                or row.get("payment_id")
-                or payload.get("event_id")
-                or payload.get("instruction_id")
-                or payload.get("payment_id")
-                or str(rank)
-            )
-            scores[key] = scores.get(key, 0.0) + 1.0 / (k + rank)
-            payloads.setdefault(key, row)
-
-    ranked = sorted(scores.items(), key=lambda item: item[1], reverse=True)[:limit]
-    merged: list[dict[str, Any]] = []
-    for key, score in ranked:
-        row = dict(payloads[key])
-        row["score"] = score
-        merged.append(row)
-    return merged
-
-
 class MultimodalNeo4jStore:
-    """Neo4j-backed multimodal store — dense vectors + fulltext lexical search."""
+    """Neo4j-backed multimodal store — dense vector search."""
 
     def __init__(self, neo4j_writer: Neo4jGraphWriter) -> None:
         self._writer = neo4j_writer
@@ -172,9 +138,8 @@ class MultimodalNeo4jStore:
                     logger.warning("multimodal index statement failed: %s", exc)
         self._indexes_ready = True
         logger.info(
-            "multimodal store indexes ready vector=%s fulltext=%s dim=%s",
+            "multimodal store indexes ready vector=%s dim=%s",
             vector_index,
-            settings.multimodal_fulltext_index,
             dense_dimension,
         )
 
@@ -398,41 +363,6 @@ class MultimodalNeo4jStore:
         if rows:
             return [_node_to_result(dict(row["node"]), float(row["score"])) for row in rows]
         return []
-
-    async def search_bm25(self, query_text: str, *, limit: int, source: str | None = None) -> list[dict]:
-        sources = _source_filter_values(source)
-        async with self._driver.session() as session:
-            result = await session.run(
-                f"""
-                CALL db.index.fulltext.queryNodes(
-                  '{settings.multimodal_fulltext_index}',
-                  $query
-                )
-                YIELD node, score
-                WHERE $sources IS NULL OR node.source IN $sources
-                RETURN node, score
-                ORDER BY score DESC
-                LIMIT $limit
-                """,
-                query=query_text,
-                limit=limit,
-                sources=sources,
-            )
-            rows = [record async for record in result]
-        return [_node_to_result(dict(row["node"]), float(row["score"])) for row in rows]
-
-    async def search_hybrid(
-        self,
-        query_text: str,
-        query_vector: list[float],
-        *,
-        limit: int,
-        source: str | None = None,
-    ) -> list[dict]:
-        prefetch_limit = max(limit * 2, 10)
-        dense = await self.search_dense(query_vector, limit=prefetch_limit, source=source)
-        bm25 = await self.search_bm25(query_text, limit=prefetch_limit, source=source)
-        return _rrf_merge(dense, bm25, limit=limit)
 
     async def search_text_chunk_stats(self, *, top_n: int = 10) -> dict[str, Any]:
         async with self._driver.session() as session:

@@ -41,7 +41,7 @@ RetrievalPath = Literal[
 
 RetrievalStrategy = Literal["deterministic", "graph", "vector", "eligibility", "skill"]
 
-SOURCE_CHANNELS = ("vector", "bm25", "neo4j", "exact")
+SOURCE_CHANNELS = ("vector", "neo4j", "exact")
 
 CYPHER_LABELS: dict[str, str] = {
     "predefined_yaml": "Predefined Cypher (YAML)",
@@ -66,7 +66,7 @@ SYNTHESIS_LABELS: dict[str, str] = {
 PATH_LABELS: dict[str, str] = {
     "neo4j_direct": "Neo4j direct (early exit)",
     "eligibility": "Eligibility shortcut",
-    "full_rag": "Full RAG (vector + BM25 + graph)",
+    "full_rag": "Full RAG (vector + graph)",
     "skill": "Mutation skill",
 }
 
@@ -134,7 +134,7 @@ def classify_retrieval_strategy(
         return "deterministic"
 
     channels = source_channels or {}
-    vector_hits = channels.get("vector", 0) + channels.get("bm25", 0)
+    vector_hits = channels.get("vector", 0)
     graph_hits = channels.get("neo4j", 0) + channels.get("exact", 0)
 
     if (

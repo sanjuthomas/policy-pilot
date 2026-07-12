@@ -56,7 +56,7 @@ class RegressionCase(BaseModel):
     retrieval: RetrievalStrategy = Field(
         description=(
             "Primary engine for the answer: deterministic (Neo4j formatter, no LLM synthesis), "
-            "graph (Neo4j planned/LLM Cypher authoritative), vector (Neo4j dense/BM25 primary), "
+            "graph (Neo4j planned/LLM Cypher authoritative), vector (Neo4j dense primary), "
             "eligibility (live OPA via authorization-service, no multimodal search)."
         ),
     )

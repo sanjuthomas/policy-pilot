@@ -15,7 +15,7 @@ In a large bank, answering even simple supervision questions is painfully slow:
 
 The answers rarely live in one place. Rules sit in **LDAP**, **OPA**, **application code**, and **database config** that only one team understands. Worse, **what policy says** and **what actually happened** can diverge — investigators need both the **policy decision** (allow/deny and why) and the **operational fact**, captured together at decision time.
 
-Policy Pilot models that end to end. Every mutation is recorded, streamed through Kafka, indexed into Neo4j (graph + multimodal vector/fulltext), and made queryable in conversation — a **holistic, evidence-backed view** grounded in what the system actually did.
+Policy Pilot models that end to end. Every mutation is recorded, streamed through Kafka, indexed into Neo4j (graph + multimodal vector store), and made queryable in conversation — a **holistic, evidence-backed view** grounded in what the system actually did.
 
 ## What you can ask
 
@@ -111,8 +111,8 @@ flowchart TD
     D -->|no match| RET[4. Selective retrieval]
     RET --> G{strategy}
     G -->|graph| N[Neo4j + exact ID lookup]
-    G -->|vector| V[Embeddings + BM25]
-    G -->|hybrid| H[Neo4j + vector/BM25]
+    G -->|vector| V[Dense embeddings]
+    G -->|hybrid| H[Neo4j + vector]
     N --> S[5. Synthesize]
     V --> S
     H --> S

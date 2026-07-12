@@ -89,7 +89,6 @@ def test_health_endpoint(client):
                 "kafka": {"ok": True, "status": "up"},
                 "vertex_embeddings": {"ok": True, "status": "up"},
                 "multimodal_vector": {"ok": True, "status": "up"},
-                "multimodal_fulltext": {"ok": True, "status": "up"},
                 "neo4j": {"ok": True, "status": "up"},
             }
         ),
@@ -106,7 +105,6 @@ def test_stats_endpoint(client):
         "kafka": {"ok": False, "status": "down"},
         "vertex_embeddings": {"ok": True, "status": "up"},
         "multimodal_vector": {"ok": True, "status": "up"},
-        "multimodal_fulltext": {"ok": True, "status": "up"},
         "neo4j": {"ok": True, "status": "up"},
     }
     with patch("etl.main.component_status", AsyncMock(return_value=status)):
@@ -193,25 +191,6 @@ def test_search_vector_error(client):
     mock_embedding.embed_query = AsyncMock(side_effect=RuntimeError("vertex down"))
     response = test_client.post("/api/search/vector", json={"query": "fail"})
     assert response.status_code == 503
-
-
-def test_search_bm25(client):
-    test_client, _, _, mock_multimodal = client
-    mock_multimodal.search_bm25 = AsyncMock(return_value=[])
-
-    response = test_client.post("/api/search/bm25", json={"query": "denied"})
-    assert response.status_code == 200
-    assert response.json()["count"] == 0
-
-
-def test_search_hybrid(client):
-    test_client, _, mock_embedding, mock_multimodal = client
-    mock_embedding.embed_query = AsyncMock(return_value=[0.3])
-    mock_multimodal.search_hybrid = AsyncMock(return_value=[{"score": 0.8}])
-
-    response = test_client.post("/api/search/hybrid", json={"query": "hybrid"})
-    assert response.status_code == 200
-    assert response.json()["mode"] == "hybrid"
 
 
 def test_graph_search_events(client):

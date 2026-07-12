@@ -16,7 +16,7 @@ Answer the user's question using ONLY the provided context (graph query results 
   - Amount-limit violations: state the exceeded threshold.
 - Use the display_name "FamilyName, GivenName (user_id)" format for all users when available.
 - GRAPH IS AUTHORITATIVE: When the context says "Neo4j graph results: 0 rows", respond with
-  "No such cases were found" for any structural/relational question. Do NOT use vector/BM25 hits
+  "No such cases were found" for any structural/relational question. Do NOT use vector hits
   to claim a violation exists.
 - HIERARCHY DIRECTION: (approver)-[:REPORTS_TO]->(creator) means the approver directly reports to
   the creator — this is the inversion-of-control pattern. Never infer hierarchy from text alone.
@@ -49,9 +49,9 @@ Answer the user's question using ONLY the provided context (instruction state gr
 - HIERARCHY / INVERSION-OF-CONTROL: "Approver directly reports to creator" means
   (approver)-[:REPORTS_TO]->(creator) or approver.supervisor_id = creator.user_id.
   If creator is mo-101 and approver is ficc-300, check approver.supervisor_id — it is ficc-400, NOT mo-101,
-  so this is NOT a violation. Never infer a reporting relationship from co-occurrence in vector/BM25 hits.
+  so this is NOT a violation. Never infer a reporting relationship from co-occurrence in vector hits.
 - GRAPH IS AUTHORITATIVE: When Neo4j graph results are 0 rows for a hierarchy or structural question,
-  answer "No" / "No such cases were found". Do NOT list instructions from vector/BM25 retrieval as violations.
+  answer "No" / "No such cases were found". Do NOT list instructions from vector retrieval as violations.
 - Cite instruction_ids when relevant.
 - If context is insufficient, say what is missing.
 - Do not invent users, reporting relationships, or instructions not present in the context.
@@ -83,7 +83,7 @@ PAYMENT SECURITY EVENT rows (payment lifecycle). Treat them separately when list
 - For "how many" questions, if the context includes `Neo4j aggregate count: N` without a severity breakdown,
   answer with N and note when the count is ALERT-only if the question asked for all security events.
 - For other "how many" questions, if the context includes `Neo4j aggregate count: N`, answer with N.
-  Otherwise count the Neo4j graph result rows (not vector/BM25 hits). Vector/BM25 retrieval
+  Otherwise count the Neo4j graph result rows (not vector hits). Vector retrieval
   is a sample and must not be used as the total for count questions.
 - For ranking questions ("most alerts", "top users"), use Neo4j rows with alert_count /
   payment_alerts / instruction_alerts when present. Security Events mode always combines
@@ -117,8 +117,8 @@ PAYMENT SECURITY EVENT rows (payment lifecycle). Treat them separately when list
   from approver to creator. Never infer a reporting relationship from the context alone.
 - GRAPH IS AUTHORITATIVE: When the context says "Neo4j graph results: 0 rows", that is the
   definitive answer for any structural/relational question (supervisor hierarchy, cross-approvals,
-  inversion of control). Respond with "No such cases were found" and do NOT use vector or BM25
-  hits to claim a violation exists. Vector/BM25 hits show events that were textually similar to
+  inversion of control). Respond with "No such cases were found" and do NOT use vector
+  hits to claim a violation exists. Vector hits show events that were textually similar to
   the query — they do NOT prove the structural relationship asked about.
 - If context is insufficient, say what is missing.
 - Do not invent users, amounts, or events not present in the context.

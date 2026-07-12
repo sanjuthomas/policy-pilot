@@ -82,7 +82,7 @@ FOR (v:PaymentVersion) ON (v.created_at);
 CREATE INDEX payment_security_event_id IF NOT EXISTS
 FOR (e:SecurityEvent) ON (e.payment_id);
 
-// Multimodal store — unified vector + fulltext search in Neo4j
+// Multimodal store — dense vector search in Neo4j
 CREATE CONSTRAINT multimodal_document_id_unique IF NOT EXISTS
 FOR (d:MultimodalDocument) REQUIRE d.document_id IS UNIQUE;
 
@@ -112,6 +112,3 @@ FOR (v:InstructionVersion) ON (v.used_by);
 
 CREATE INDEX payment_current_status IF NOT EXISTS
 FOR (p:Payment) ON (p.current_status);
-
-CREATE FULLTEXT INDEX multimodal_search_text IF NOT EXISTS
-FOR (d:MultimodalDocument) ON EACH [d.search_text];

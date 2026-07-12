@@ -158,7 +158,7 @@ async def health() -> dict:
 
 @api_router.get("/search-profiles")
 async def search_profiles() -> dict:
-    """YAML search_text field lists — what feeds dense + BM25 indexing per entity."""
+    """YAML search_text field lists — what feeds dense embedding indexing per entity."""
     profiles = await asyncio.to_thread(list_search_profiles)
     return {"count": len(profiles), "profiles": profiles}
 
@@ -226,32 +226,6 @@ async def search_vector(request: SearchRequest) -> dict:
     except Exception as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {"mode": "vector", "query": request.query, "count": len(results), "results": results}
-
-
-@api_router.post("/search/bm25")
-async def search_bm25(request: SearchRequest) -> dict:
-    try:
-        results = await multimodal_store.search_bm25(
-            request.query,
-            limit=request.limit,
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return {"mode": "bm25", "query": request.query, "count": len(results), "results": results}
-
-
-@api_router.post("/search/hybrid")
-async def search_hybrid(request: SearchRequest) -> dict:
-    try:
-        vector = await embedding_client.embed_query(request.query)
-        results = await multimodal_store.search_hybrid(
-            request.query,
-            vector,
-            limit=request.limit,
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return {"mode": "hybrid", "query": request.query, "count": len(results), "results": results}
 
 
 @api_router.get("/graph/events")

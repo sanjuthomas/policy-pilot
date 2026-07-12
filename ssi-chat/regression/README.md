@@ -10,7 +10,7 @@ Each case also declares a **`retrieval`** tag — the primary engine the answer 
 |-------------|---------|---------------|
 | `deterministic` | Neo4j planned query + formatter; skips LLM synthesis | 18 |
 | `graph` | Neo4j planned or LLM Cypher is authoritative | 36 |
-| `vector` | Neo4j dense/BM25 hits drive open-ended security-event answers | 5 |
+| `vector` | Neo4j dense vector hits drive open-ended security-event answers | 5 |
 | `eligibility` | Live OPA via authorization-service (no multimodal search) | 0 (supported in chat, not in this bank) |
 
 PolicyPilot still runs dense vector search **in parallel** for every case except `eligibility` — the tag documents where the answer should actually come from.
@@ -118,7 +118,7 @@ Every regression run now computes **retrieval-quality metrics** alongside answer
 |--------|---------|
 | `routing_accuracy` | Share of cases where `ChatResponse.routing.path` matches the declared `retrieval` strategy |
 | `mean_entity_recall` | Entity IDs in the question found in answer, sources, or graph rows |
-| `mean_source_precision@5` | Share of top-5 sources using expected channels (`vector`, `bm25`, …) |
+| `mean_source_precision@5` | Share of top-5 sources using expected channels (`vector`, `neo4j`, …) |
 | `mean_groundedness` | Answer token overlap with primary graph row (deterministic/graph cases) |
 | `mean_faithfulness` | Answer token overlap with retrieved context (lightweight ragas-style proxy) |
 
@@ -143,7 +143,7 @@ expect:
   cypher_class: deterministic
   require_entity_recall: true
   min_faithfulness: 0.15
-  source_channels_any: [vector, bm25]
+  source_channels_any: [vector]
 ```
 
 ### Offline unit tests

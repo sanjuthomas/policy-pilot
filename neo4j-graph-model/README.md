@@ -189,7 +189,7 @@ ETL edge constants: `ssi-indexer/src/etl/graph_model.py`.
 
 ## Multimodal documents (four source tags)
 
-The ETL writes searchable `MultimodalDocument` nodes in Neo4j (vector + fulltext). Each document has a `source` tag:
+The ETL writes searchable `MultimodalDocument` nodes in Neo4j (dense vector embeddings). Each document has a `source` tag:
 
 | `source` tag | Document ID | One per | Written by |
 |---|---|---|---|

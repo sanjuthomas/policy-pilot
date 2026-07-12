@@ -13,7 +13,6 @@ from chat_application.reranker import RankedHit, graph_rows_to_hits
 @dataclass
 class SelectiveRetrievalResult:
     vector_hits: list[dict[str, Any]]
-    bm25_hits: list[dict[str, Any]]
     graph_result: dict[str, Any]
     exact_hits: list[dict[str, Any]]
     graph_rows: list[dict[str, Any]]
@@ -49,11 +48,6 @@ async def execute_selective_retrieval(
         if run_vector
         else None
     )
-    bm25_task = (
-        asyncio.create_task(service._search_bm25(message, limit, search_source))
-        if run_vector
-        else None
-    )
     cypher_task = (
         asyncio.create_task(service._search_graph(message, mode=mode))
         if run_graph
@@ -83,13 +77,10 @@ async def execute_selective_retrieval(
         )
 
     vector_hits: list[dict[str, Any]] = []
-    bm25_hits: list[dict[str, Any]] = []
     graph_result = _empty_graph_result()
 
     if vector_task is not None:
         vector_hits = await vector_task
-    if bm25_task is not None:
-        bm25_hits = await bm25_task
     if cypher_task is not None:
         graph_result = await cypher_task
 
@@ -113,15 +104,14 @@ async def execute_selective_retrieval(
 
     if run_graph:
         graph_hits = graph_rows_to_hits(graph_result["rows"])
-        merged = service._merge_with_exact(exact_hits, vector_hits, bm25_hits, graph_hits)
+        merged = service._merge_with_exact(exact_hits, vector_hits, graph_hits)
     elif run_vector:
-        merged = service._merge_with_exact(exact_hits, vector_hits, bm25_hits, [])
+        merged = service._merge_with_exact(exact_hits, vector_hits, [])
     else:
         merged = []
 
     return SelectiveRetrievalResult(
         vector_hits=vector_hits,
-        bm25_hits=bm25_hits,
         graph_result=graph_result,
         exact_hits=exact_hits,
         graph_rows=graph_rows,

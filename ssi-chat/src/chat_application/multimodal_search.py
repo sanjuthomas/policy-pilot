@@ -36,7 +36,7 @@ def _payload_from_node(node: dict[str, Any]) -> dict[str, Any]:
 
 
 class MultimodalSearchClient:
-    """Read path for the Neo4j multimodal store (vector + fulltext)."""
+    """Read path for the Neo4j multimodal store (dense vector search)."""
 
     def __init__(self, neo4j_client) -> None:
         self._neo4j = neo4j_client
@@ -113,36 +113,6 @@ class MultimodalSearchClient:
             )
             rows = [record async for record in result]
         return [self._to_hit(dict(row["node"]), float(row["score"]), "vector") for row in rows]
-
-    async def search_bm25(
-        self,
-        query_text: str,
-        *,
-        limit: int,
-        source: str | None = None,
-    ) -> list[dict[str, Any]]:
-        if not await self.has_documents():
-            return []
-        sources = _source_filter_values(source)
-        async with self._driver.session(default_access_mode=READ_ACCESS) as session:
-            result = await session.run(
-                f"""
-                CALL db.index.fulltext.queryNodes(
-                  '{settings.multimodal_fulltext_index}',
-                  $query
-                )
-                YIELD node, score
-                WHERE $sources IS NULL OR node.source IN $sources
-                RETURN node, score
-                ORDER BY score DESC
-                LIMIT $limit
-                """,
-                query=query_text,
-                limit=limit,
-                sources=sources,
-            )
-            rows = [record async for record in result]
-        return [self._to_hit(dict(row["node"]), float(row["score"]), "bm25") for row in rows]
 
     async def _fetch_document(self, document_id: str, *, hit_source: str) -> dict[str, Any] | None:
         async with self._driver.session(default_access_mode=READ_ACCESS) as session:
