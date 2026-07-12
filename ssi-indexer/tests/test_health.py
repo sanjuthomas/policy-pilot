@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from etl.config import settings
 from etl.health import (
+    _index_exists,
     _status,
     check_kafka,
     check_multimodal_vector,
@@ -51,6 +52,19 @@ async def test_check_kafka_task_done_with_exception():
     assert "boom" in result["detail"]
 
 
+async def test_check_kafka_task_done_without_exception():
+    consumer = MagicMock()
+    consumer._consumer = MagicMock()
+    consumer._task = MagicMock()
+    consumer._task.done.return_value = True
+    consumer._task.exception.return_value = None
+
+    with patch.object(settings, "kafka_enabled", True):
+        result = await check_kafka(consumer)
+
+    assert result["detail"] == "consumer task stopped"
+
+
 async def test_check_kafka_running():
     consumer = MagicMock()
     consumer._consumer = MagicMock()
@@ -63,6 +77,36 @@ async def test_check_kafka_running():
     assert result["ok"] is True
     assert result["status"] == "up"
     assert result["brokers"] == 2
+
+
+async def test_check_kafka_running_without_cluster_metadata():
+    consumer = MagicMock()
+    consumer._consumer._client.cluster.brokers.side_effect = RuntimeError("unavailable")
+    consumer._task.done.return_value = False
+
+    with patch.object(settings, "kafka_enabled", True):
+        result = await check_kafka(consumer)
+
+    assert result["brokers"] is None
+
+
+async def test_index_exists_requires_driver():
+    writer = MagicMock()
+    writer._driver = None
+    assert await _index_exists(writer, "vector-index") is False
+
+
+async def test_index_exists_returns_result_presence():
+    writer = MagicMock()
+    session = AsyncMock()
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock(return_value=False)
+    result = AsyncMock()
+    result.single = AsyncMock(return_value={"name": "vector-index"})
+    session.run = AsyncMock(return_value=result)
+    writer._driver.session = MagicMock(return_value=session)
+
+    assert await _index_exists(writer, "vector-index") is True
 
 
 async def test_check_multimodal_vector_missing_index():
@@ -91,6 +135,21 @@ async def test_check_multimodal_vector_up():
     assert result["documents_count"] == 42
 
 
+async def test_check_multimodal_vector_handles_failure():
+    store = MagicMock()
+    store._writer = MagicMock()
+    with patch("etl.health._index_exists", AsyncMock(side_effect=RuntimeError("offline"))):
+        result = await check_multimodal_vector(store)
+
+    assert result == {
+        "ok": False,
+        "status": "down",
+        "detail": "offline",
+        "store": "neo4j_multimodal",
+        "vector_index": settings.multimodal_vector_index,
+    }
+
+
 async def test_check_vertex_embeddings_not_ready():
     client = MagicMock()
     client._ready = False
@@ -108,6 +167,16 @@ async def test_check_vertex_embeddings_up():
     assert result["ok"] is True
     assert result["embeddings"] == "ready"
     assert result["dimension"] == 768
+
+
+async def test_check_vertex_embeddings_handles_failure():
+    client = MagicMock()
+    type(client)._dimension = property(lambda _: (_ for _ in ()).throw(RuntimeError("offline")))
+
+    result = await check_vertex_embeddings(client)
+
+    assert result["ok"] is False
+    assert result["detail"] == "offline"
 
 
 async def test_check_neo4j_not_connected():
@@ -134,6 +203,17 @@ async def test_check_neo4j_up():
     result = await check_neo4j(writer)
     assert result["ok"] is True
     assert result["total_nodes"] == 5
+
+
+async def test_check_neo4j_handles_failure():
+    writer = MagicMock()
+    writer._driver = AsyncMock()
+    writer._driver.verify_connectivity.side_effect = RuntimeError("offline")
+
+    result = await check_neo4j(writer)
+
+    assert result["ok"] is False
+    assert result["detail"] == "offline"
 
 
 async def test_component_status_aggregates():

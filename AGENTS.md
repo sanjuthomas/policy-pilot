@@ -42,9 +42,9 @@ done
 
 Do **not** commit or push if any service still reports errors.
 
-### Test coverage (minimum 70%)
+### Test coverage (minimum 80%)
 
-Every Python service **except** `ssi-demo-harness` must maintain **≥ 70% line coverage** on its application package. The harness is integration/demo tooling and is exempt.
+Every Python service **except** `ssi-demo-harness` must maintain **≥ 80% line coverage** on its application package. The harness is integration/demo tooling and is exempt.
 
 | Service | Coverage target (`--cov`) |
 |---------|---------------------------|
@@ -55,7 +55,7 @@ Every Python service **except** `ssi-demo-harness` must maintain **≥ 70% line 
 | `ssi-indexer` | `etl` |
 | `ssi-chat` | `chat_application` |
 
-When you add or change code in a service, **add or update tests** so that service stays at or above 70%. Do not commit or push if coverage on a touched service falls below the threshold.
+When you add or change code in a service, **add or update tests** so that service stays at or above 80%. Do not commit or push if coverage on a touched service falls below the threshold.
 
 #### One command (required before every commit/push)
 
@@ -74,19 +74,19 @@ for spec in \
 do
   svc="${spec%%:*}"
   pkg="${spec##*:}"
-  echo "=== $svc (≥70% on $pkg) ==="
+  echo "=== $svc (≥80% on $pkg) ==="
   (
     cd "$svc"
     pip install -q -e .
     pip install -q pytest pytest-cov
-    pytest --cov="$pkg" --cov-report=term-missing --cov-fail-under=70
+    pytest --cov="$pkg" --cov-report=term-missing --cov-fail-under=80
   )
 done
 ```
 
 If a service has no `tests/` directory yet, create one and add tests for the code you touched — do not skip the coverage check.
 
-Optional chat regression suite (does not replace the 70% unit-coverage requirement):
+Optional chat regression suite (does not replace the 80% unit-coverage requirement):
 
 ```bash
 cd ssi-chat
@@ -138,7 +138,7 @@ inside each service directory listed in the lint matrix:
 
 It also builds Docker images for the application services. Keep `payment-service` lint-clean even though it is not in the Docker build matrix yet.
 
-The same workflow runs **unit test coverage** (≥ 70% line coverage) for:
+The same workflow runs **unit test coverage** (≥ 80% line coverage) for:
 
 - `instruction-service` (`inst`)
 - `payment-service` (`ps`)
@@ -185,7 +185,7 @@ When removing a symbol from code, **remove its import** in the same edit (`F401`
 
 1. Make code changes.
 2. Run the **required** lint loop (`--fix` then verify) on every touched Python service.
-3. Run the **required** coverage loop (≥ 70%) on every touched non-harness service; add tests when needed.
+3. Run the **required** coverage loop (≥ 80%) on every touched non-harness service; add tests when needed.
 4. Fix any remaining errors manually — do not push with lint failures or sub-threshold coverage.
 5. Commit only when the user asks; if committing, ensure all touched Python services pass lint and all non-harness application services meet coverage.
 6. After push, confirm the GitHub Actions **Build** workflow succeeds (lint, coverage, and Docker build jobs).
@@ -208,7 +208,7 @@ See the root [README.md](README.md) for architecture, storage names, and demo UR
 
 - Match existing code style in each service (imports, naming, FastAPI patterns).
 - Keep changes focused; avoid unrelated refactors.
-- Maintain **≥ 70% test coverage** on `inst`, `ps`, `etl`, and `chat_application` (see above); `ssi-demo-harness` is exempt.
+- Maintain **≥ 80% test coverage** on `inst`, `ps`, `authz`, `seq`, `etl`, and `chat_application` (see above); `ssi-demo-harness` is exempt.
 - **ssi-chat intent thumb rule:** determine natural-language intent with Gemini structured output / LLM semantic routing (`RouterDecision.path`) — not regex or fuzzy classification. Regex is OK for slot parsing (ids, amounts) and LLM-failure fallback only. Details: [docs/intent-determination.md](docs/intent-determination.md) and `.cursor/rules/intent-semantic-routing.mdc`.
 - Do not commit secrets (`.env`, PAT files, credentials).
 - Only create git commits when the user explicitly asks.

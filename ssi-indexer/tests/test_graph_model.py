@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from etl.graph_model import (
     INSTRUCTION_ACTION_TO_EDGE,
     PAYMENT_ACTION_TO_EDGE,
@@ -57,6 +58,46 @@ def test_instruction_use_actor_props():
     assert props["delegated_by"] == "svc-payment"
 
 
+@pytest.mark.parametrize(
+    ("action", "snapshot_field", "expected_user"),
+    [
+        ("CREATE", "created_by", "creator"),
+        ("SUBMIT", "submitted_by", "submitter"),
+        ("APPROVE", "approved_by", "approver"),
+        ("REJECT", "rejected_by", "rejector"),
+        ("CANCEL", "cancelled_by", "canceller"),
+    ],
+)
+def test_instruction_lifecycle_actor_snapshot_actions(
+    action: str, snapshot_field: str, expected_user: str
+) -> None:
+    user_id, props = instruction_lifecycle_actor(
+        {
+            "action": action,
+            "instruction_snapshot": {snapshot_field: {"user_id": expected_user}},
+        }
+    )
+
+    assert user_id == expected_user
+    assert props == {}
+
+
+@pytest.mark.parametrize("action", ["SUSPEND", "REACTIVATE", "RELEASE_USE"])
+def test_instruction_lifecycle_actor_direct_actions(action: str) -> None:
+    assert instruction_lifecycle_actor({"action": action, "actor_user_id": "operator"}) == (
+        "operator",
+        {},
+    )
+
+
+def test_instruction_lifecycle_actor_handles_empty_lifecycle_details() -> None:
+    assert instruction_lifecycle_actor({"action": "USE", "instruction_snapshot": {}}) == (
+        None,
+        {},
+    )
+    assert instruction_lifecycle_actor({"action": "UNKNOWN"}) == (None, {})
+
+
 def test_release_use_payment_id():
     fact = {
         "action": "RELEASE_USE",
@@ -75,3 +116,22 @@ def test_payment_lifecycle_actor_submit_legacy():
         "submitted_by": {"user_id": "fo-200", "given_name": "A", "family_name": "B"},
     }
     assert payment_lifecycle_actor(fact) == "fo-200"
+
+
+@pytest.mark.parametrize(
+    ("action", "field"),
+    [
+        ("CREATE", "created_by"),
+        ("APPROVE", "approved_by"),
+        ("REJECT", "rejected_by"),
+        ("CANCEL", "cancelled_by"),
+    ],
+)
+def test_payment_lifecycle_actor_snapshot_actions(action: str, field: str) -> None:
+    assert payment_lifecycle_actor(
+        {"action": action, field: {"user_id": "actor"}}
+    ) == "actor"
+
+
+def test_payment_lifecycle_actor_falls_back_to_actor_user_id() -> None:
+    assert payment_lifecycle_actor({"action": "UNKNOWN", "actor_user_id": "actor"}) == "actor"
