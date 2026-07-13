@@ -3,23 +3,23 @@ from __future__ import annotations
 from chat_application.authorization_client import (
     format_person_permission_summary_answer,
 )
-from chat_application.person_permissions import extract_person_permission_query
+from chat_application.person_permissions import extract_person_name_heuristic
 
 
 def test_extract_permissions_of_display_name() -> None:
     assert (
-        extract_person_permission_query("Can you list the permissions of Kowalski, Anna?")
+        extract_person_name_heuristic("Can you list the permissions of Kowalski, Anna?")
         == "Kowalski, Anna"
     )
 
 
 def test_extract_permissions_for_user_id() -> None:
-    assert extract_person_permission_query("Summarize permissions for pay-203") == "pay-203"
+    assert extract_person_name_heuristic("Summarize permissions for pay-203") == "pay-203"
 
 
 def test_extract_skips_who_list_questions() -> None:
     assert (
-        extract_person_permission_query(
+        extract_person_name_heuristic(
             "Who has permission to approve payments for LOB FICC?"
         )
         is None

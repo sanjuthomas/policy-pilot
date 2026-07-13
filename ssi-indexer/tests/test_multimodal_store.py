@@ -148,46 +148,6 @@ async def test_get_instruction_state_payload_found(
     assert payload["authorization_summary"] == "ok"
 
 
-async def test_patch_instruction_state_authorization_no_summary(
-    store: MultimodalNeo4jStore, neo4j_session: AsyncMock
-) -> None:
-    neo4j_session.run = AsyncMock()
-    await store.patch_instruction_state_authorization(
-        "instr-1",
-        approved_at="2024-01-01",
-        authorization_summary=None,
-        authorization_basis=[],
-    )
-    neo4j_session.run.assert_not_awaited()
-
-
-async def test_patch_instruction_state_authorization_updates(
-    store: MultimodalNeo4jStore, neo4j_session: AsyncMock
-) -> None:
-    lookup = AsyncMock()
-    lookup.single = AsyncMock(
-        return_value={
-            "d": {
-                "search_text": "wire",
-                "embedding": [0.5, 0.5],
-                "payload_json": json.dumps({"instruction_id": "instr-1"}),
-            }
-        }
-    )
-    neo4j_session.run = AsyncMock(return_value=lookup)
-    tx = await neo4j_session.begin_transaction()
-
-    await store.patch_instruction_state_authorization(
-        "instr-1",
-        approved_at="2024-06-01",
-        authorization_summary="approved by manager",
-        authorization_basis=["role-match"],
-    )
-    neo4j_session.run.assert_awaited_once()
-    tx.run.assert_awaited_once()
-    tx.commit.assert_awaited_once()
-
-
 async def test_search_dense_returns_hits(store: MultimodalNeo4jStore, neo4j_session: AsyncMock) -> None:
     node = {
         "search_text": "denied payment",

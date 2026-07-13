@@ -5,13 +5,6 @@ from enum import StrEnum
 OWNING_LOB_PATTERN = re.compile(r"^(FICC|FX|DESK_[A-Z][A-Z0-9_]*)$")
 
 
-class OwningProfitCenter(StrEnum):
-    """P&L profit centers that own cash settlement instructions."""
-
-    FICC = "FICC"
-    FX = "FX"
-
-
 def is_valid_owning_lob(value: str) -> bool:
     return bool(OWNING_LOB_PATTERN.match(value))
 

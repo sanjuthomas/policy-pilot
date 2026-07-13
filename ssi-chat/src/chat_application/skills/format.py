@@ -64,32 +64,6 @@ def format_amount(amount: float, currency: str) -> str:
     return f"{currency} {amount:,.2f}"
 
 
-def format_confirmation_markdown(card: ConfirmationCard) -> str:
-    intermediaries = (
-        "\n".join(f"- {line}" for line in card.intermediaries)
-        if card.intermediaries
-        else "- None"
-    )
-    return (
-        f"### Confirm payment create\n\n"
-        f"Please confirm this is the payment you want the skill to create:\n\n"
-        f"| Field | Value |\n"
-        f"| --- | --- |\n"
-        f"| Instruction | `{card.instruction_id}` |\n"
-        f"| Status | {card.instruction_status} |\n"
-        f"| Owning LOB | **{card.owning_lob}** |\n"
-        f"| Amount | **{format_amount(card.amount, card.currency)}** |\n"
-        f"| Value date | **{card.value_date}** |\n"
-        f"| Debtor | {card.debtor_name} |\n"
-        f"| Debtor account | `{card.debtor_account}` |\n"
-        f"| Creditor | {card.creditor_name} |\n"
-        f"| Creditor account | `{card.creditor_account}` |\n"
-        f"\n**Intermediaries**\n{intermediaries}\n\n"
-        f"Choose **Go** to create the draft, or **No Go** to cancel. "
-        f"Nothing has been created yet."
-    )
-
-
 def format_created_payment_report(
     payment: dict[str, Any],
     *,

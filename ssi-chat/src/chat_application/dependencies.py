@@ -20,15 +20,6 @@ def get_subject(
     return subject_from_bearer_token(token, session_id=x_session_id)
 
 
-def get_compliance_subject(subject: Subject = Depends(get_subject)) -> Subject:
-    if not settings.compliance_role_set.intersection(subject.roles):
-        raise HTTPException(
-            status_code=403,
-            detail="COMPLIANCE_ANALYST role required for chat",
-        )
-    return subject
-
-
 def get_chat_subject(subject: Subject = Depends(get_subject)) -> Subject:
     """Allow compliance oversight users and operational payment actors."""
     if not settings.chat_role_set.intersection(subject.roles):

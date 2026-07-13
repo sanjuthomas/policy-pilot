@@ -13,7 +13,6 @@ from inst.models.enums import (
     FinancialInstitutionIdScheme,
     InstructionStatus,
     InstructionType,
-    OwningProfitCenter,
     WireScope,
     is_valid_owning_lob,
 )
@@ -60,7 +59,6 @@ __all__ = [
     "InstructionStatus",
     "InstructionType",
     "LifecycleEvent",
-    "OwningProfitCenter",
     "PartyIdentification",
     "PaymentIdentification",
     "PaymentTypeInformation",
