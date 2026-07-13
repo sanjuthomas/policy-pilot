@@ -6,10 +6,8 @@ from chat_application.policy_directory import (
     is_payment_approval_directory_question,
     is_strict_payment_amount_threshold,
     merge_group_member_rows,
-    payment_approval_club_for_amount,
     payment_approval_clubs_for_amount,
     payment_approval_clubs_from_question,
-    payment_approval_group_from_question,
 )
 
 
@@ -20,8 +18,6 @@ def test_payment_approval_directory_question_detects_amount() -> None:
     assert clubs == ["UP_TO_100_BILLION_CLUB"]
     assert amount == 25_000_000_000.0
     assert strict is True
-    group, _ = payment_approval_group_from_question(question)
-    assert group == "UP_TO_100_BILLION_CLUB"
 
 
 def test_payment_approval_directory_detects_covering_lob() -> None:
@@ -43,10 +39,19 @@ def test_payment_approval_directory_skips_when_payment_id_present() -> None:
     assert not is_payment_approval_directory_question(question)
 
 
-def test_payment_approval_club_for_amount() -> None:
-    assert payment_approval_club_for_amount(50_000_000) == "UP_TO_100_MILLION_CLUB"
-    assert payment_approval_club_for_amount(500_000_000) == "UP_TO_1_BILLION_CLUB"
-    assert payment_approval_club_for_amount(25_000_000_000) == "UP_TO_100_BILLION_CLUB"
+def test_payment_approval_clubs_for_amount_inclusive() -> None:
+    assert payment_approval_clubs_for_amount(50_000_000, strict=False) == [
+        "UP_TO_100_MILLION_CLUB",
+        "UP_TO_1_BILLION_CLUB",
+        "UP_TO_100_BILLION_CLUB",
+    ]
+    assert payment_approval_clubs_for_amount(500_000_000, strict=False) == [
+        "UP_TO_1_BILLION_CLUB",
+        "UP_TO_100_BILLION_CLUB",
+    ]
+    assert payment_approval_clubs_for_amount(25_000_000_000, strict=False) == [
+        "UP_TO_100_BILLION_CLUB",
+    ]
 
 
 def test_exceeding_one_billion_requires_highest_club_only() -> None:

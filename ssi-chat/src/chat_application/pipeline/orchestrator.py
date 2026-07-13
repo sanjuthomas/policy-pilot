@@ -605,9 +605,9 @@ class RagPipelineOrchestrator:
             _should_format_payment_total_amount,
             _should_format_payments_above_amount,
             _should_format_security_event_alert_count,
-            _should_format_security_event_alert_group_by_lob,
             _should_format_security_event_alert_list,
             _should_format_security_event_count_aggregate,
+            _should_format_security_event_group_by_lob,
         )
 
         context = self._service._build_context(
@@ -679,7 +679,7 @@ class RagPipelineOrchestrator:
         if answer is None and _should_format_security_event_alert_list(message, mode):
             answer = format_security_event_alert_list(message, graph_result["rows"])
             answer_synthesis = "formatter"
-        if answer is None and _should_format_security_event_alert_group_by_lob(message, mode):
+        if answer is None and _should_format_security_event_group_by_lob(message, mode):
             answer = _format_security_event_group_by_lob_answer(
                 message, graph_result["rows"]
             )

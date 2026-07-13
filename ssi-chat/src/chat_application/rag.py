@@ -68,15 +68,6 @@ def _format_basis_join(basis: list[str] | None) -> str:
     return " | ".join(humanize_policy_basis(basis))
 
 
-def _append_policy_basis(why: str, basis: list[str]) -> str:
-    if not basis:
-        return why
-    readable = humanize_policy_basis(basis)
-    table_rows = [[index, point] for index, point in enumerate(readable, start=1)]
-    table = format_markdown_table(["#", "Policy check"], table_rows)
-    return f"{why.rstrip()}\n\nPolicy basis ({len(readable)} checks):\n\n{table}"
-
-
 def _is_instruction_approval_question(message: str, mode: SearchMode) -> bool:
     q = message.lower()
     if "approv" not in q:
@@ -574,20 +565,10 @@ def _format_security_event_group_by_lob_answer(
     ).replace("  ", " ")
 
 
-def _format_security_event_alert_group_by_lob_answer(
-    message: str, graph_rows: list[dict[str, Any]]
-) -> str:
-    return _format_security_event_group_by_lob_answer(message, graph_rows)
-
-
 def _should_format_security_event_group_by_lob(message: str, mode: SearchMode) -> bool:
     return mode in ("events", "all") and is_security_event_group_by_lob_question(
         message, mode=mode
     )
-
-
-def _should_format_security_event_alert_group_by_lob(message: str, mode: SearchMode) -> bool:
-    return _should_format_security_event_group_by_lob(message, mode)
 
 
 def _format_payment_count_aggregate_answer(message: str, graph_rows: list[dict[str, Any]]) -> str:

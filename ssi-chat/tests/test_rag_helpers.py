@@ -10,7 +10,6 @@ from chat_application.formatting import (
 )
 from chat_application.rag import (
     RagService,
-    _append_policy_basis,
     _display_from_snap_user,
     _format_alert_ranking_answer,
     _format_instruction_count_aggregate_answer,
@@ -21,7 +20,9 @@ from chat_application.rag import (
     _format_payments_above_amount_answer,
     _format_payments_for_instruction_answer,
     _format_security_event_count_aggregate_answer,
+    _format_security_event_group_by_lob_answer,
     _instruction_lifecycle_party_lines,
+    _should_format_security_event_group_by_lob,
 )
 from chat_application.reranker import RankedHit
 
@@ -78,15 +79,6 @@ class TestUsdAmountFormatting:
         assert "amount $1 million within subject and absolute limits" in humanize_authorization_text(
             summary
         )
-
-    def test_append_policy_basis_formats_amounts(self) -> None:
-        why = "Approved under policy."
-        basis = ["amount 1e+06 within subject and absolute limits"]
-        result = _append_policy_basis(why, basis)
-        assert "Policy basis (1 checks):" in result
-        assert "Policy check" in result
-        assert "| --- |" in result or "| ---  |" in result
-        assert "amount $1 million within subject and absolute limits" in result
 
 
 class TestMaxPaymentsPerInstructionAnswer:
@@ -422,11 +414,7 @@ class TestPaymentAggregateAnswers:
         assert "32 INFO" in answer
 
     def test_formats_security_event_alert_group_by_lob(self) -> None:
-        from chat_application.rag import (
-            _format_security_event_alert_group_by_lob_answer,
-        )
-
-        answer = _format_security_event_alert_group_by_lob_answer(
+        answer = _format_security_event_group_by_lob_answer(
             "Can you group alerts by LOB?",
             [
                 {"lob": "FICC", "alert_count": 12},
@@ -438,6 +426,43 @@ class TestPaymentAggregateAnswers:
         assert "12" in answer
         assert "EQUITIES" in answer
         assert "19 total" in answer
+
+    def test_should_format_security_event_group_by_lob(self) -> None:
+        assert _should_format_security_event_group_by_lob(
+            "Can you group alerts by LOB?", "events"
+        )
+        assert _should_format_security_event_group_by_lob(
+            "Group security events by LOB", "all"
+        )
+        assert not _should_format_security_event_group_by_lob(
+            "How many payments were approved?", "events"
+        )
+        assert not _should_format_security_event_group_by_lob(
+            "Can you group alerts by LOB?", "payments"
+        )
+
+    def test_formats_security_event_group_by_lob_empty_rows(self) -> None:
+        alert_empty = _format_security_event_group_by_lob_answer(
+            "Can you group alerts by LOB?", []
+        )
+        assert "No ALERT events were found to group by LOB." in alert_empty
+
+        alert_zero = _format_security_event_group_by_lob_answer(
+            "Group alerts by LOB",
+            [{"lob": "FICC", "alert_count": 0}],
+        )
+        assert "no" in alert_zero.lower() and "ALERT" in alert_zero
+
+        all_empty = _format_security_event_group_by_lob_answer(
+            "Group security events by LOB", []
+        )
+        assert "No security events were found to group by LOB." in all_empty
+
+        all_zero = _format_security_event_group_by_lob_answer(
+            "Group security events by LOB",
+            [{"lob": "FICC", "event_count": 0, "alert_count": 0, "info_count": 0}],
+        )
+        assert "no" in all_zero.lower() and "security events" in all_zero.lower()
 
     def test_formats_security_event_group_by_lob_all_severities(self) -> None:
         from chat_application.rag import _format_security_event_group_by_lob_answer

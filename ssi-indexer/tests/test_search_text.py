@@ -5,7 +5,6 @@ from __future__ import annotations
 from etl.instruction_pipeline import _display_name, build_instruction_state_search_text
 from etl.payment_pipeline import (
     _display,
-    _roles_json,
     build_payment_event_search_text,
     build_payment_fact_search_text,
 )
@@ -130,6 +129,3 @@ def test_payment_fact_search_text():
 def test_payment_display_helpers():
     assert _display({"given_name": "A", "family_name": "B", "user_id": "u1"}) == "B, A (u1)"
     assert _display({"user_id": "only"}) == "only"
-    assert _roles_json(["admin", "viewer"]) == '["admin", "viewer"]'
-    assert _roles_json(None) is None
-    assert _roles_json([]) is None
