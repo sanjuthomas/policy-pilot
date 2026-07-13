@@ -38,8 +38,8 @@ All topics carry **full Mongo documents** via Kafka Connect — the ETL makes no
 
 | Writer type | Pipelines | Owns |
 |-------------|-----------|------|
-| **Fact** (state) | `InstructionPipeline`, `PaymentFactPipeline` | Versions, `CURRENT`, `SUPERSEDES`, lifecycle edges (`_*IV` / `_*PV`), structural edges, root denorm, multimodal state docs |
-| **Audit** (events) | `InstructionSecurityEventPipeline`, `PaymentSecurityEventPipeline` | `SecurityEvent`, `ACTED_AS`, `FOR` → version, `INVOLVES_LOB`, multimodal event docs |
+| **Fact** (state) | `InstructionPipeline`, `PaymentFactPipeline` | Versions, `CURRENT`, `SUPERSEDES`, lifecycle edges (`_*IV` / `_*PV`), structural edges, root denorm, vector state docs |
+| **Audit** (events) | `InstructionSecurityEventPipeline`, `PaymentSecurityEventPipeline` | `SecurityEvent`, `ACTED_AS`, `FOR` → version, `INVOLVES_LOB`, vector event docs |
 
 ### Fact pipelines own state
 
@@ -47,13 +47,13 @@ All topics carry **full Mongo documents** via Kafka Connect — the ETL makes no
 - Lifecycle edges: `CREATED_IV`, `SUBMITTED_IV`, `APPROVED_IV`, … and `CREATED_PV`, `SUBMITTED_PV`, …
 - Structural edges: `OWNED_BY`, `BELONGS_TO`, `CONFLICTS_WITH`, `FOR_INSTRUCTION`, `HAS_PAYMENT`, `CONSUMED` / `CONSUMED_BY`
 - Root denormalization: `current_status`, `current_version_number`, `current_used_by`, etc.
-- Multimodal docs: `instruction_state`, `payment_fact`
+- Vector docs: `instruction_state`, `payment_fact`
 
 ### Security-event pipelines own audit only
 
 - `SecurityEvent`, `ACTED_AS`, `FOR` → `InstructionVersion` or `PaymentVersion`, `INVOLVES_LOB`
 - Sparse version merge for search (no lifecycle, `CURRENT`, `CONSUMED`, `HAS_PAYMENT`, or `FOR_INSTRUCTION` writes)
-- Multimodal docs: `instruction_security_event`, `payment_security_event`
+- Vector docs: `instruction_security_event`, `payment_security_event`
 
 ## Graph model
 
@@ -187,9 +187,9 @@ All: `(User)-[:<EDGE> {at: <iso>}]->(PaymentVersion)`
 
 ETL edge constants: `ssi-indexer/src/etl/graph_model.py`.
 
-## Multimodal documents (four source tags)
+## Vector documents (four source tags)
 
-The ETL writes searchable `MultimodalDocument` nodes in Neo4j (dense vector embeddings). Each document has a `source` tag:
+The ETL writes searchable `MultimodalDocument` nodes in Neo4j for dense vector search. Each document has a `source` tag:
 
 | `source` tag | Document ID | One per | Written by |
 |---|---|---|---|
@@ -200,7 +200,7 @@ The ETL writes searchable `MultimodalDocument` nodes in Neo4j (dense vector embe
 
 The chat API filters by source based on the selected mode:
 
-| Chat mode | Multimodal filter | Neo4j focus |
+| Chat mode | Vector `source` filter | Neo4j focus |
 |---|---|---|
 | `events` | `instruction_security_event` + `payment_security_event` | Security events + `FOR` audit links |
 | `instructions` | `instruction_state` | Instruction master graph |

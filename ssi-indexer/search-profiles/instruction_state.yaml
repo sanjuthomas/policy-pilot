@@ -1,7 +1,7 @@
 entity: instruction_state
 wired: true
 description: >
-  Instruction facts (instructions Kafka topic) — one multimodal document per instruction,
+  Instruction facts (instructions Kafka topic) — one vector document per instruction,
   updated in place. Kafka payloads are versioned Mongo rows (_id = instruction_id|version);
   etl.mongo_cdc normalizes them to InstructionFact shape before indexing.
 

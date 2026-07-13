@@ -64,7 +64,7 @@ Browse logs: open [OpenSearch Dashboards](http://localhost:5601), create an inde
 |-----------|------|
 | `instruction-service` | FastAPI lifecycle API — OBO authz, Mongo persistence, eligible-approvers API |
 | `payment-service` | Payment lifecycle — same authz pattern, payment UIs |
-| `ssi-indexer` | Four Kafka consumers → Neo4j graph + multimodal indexer + search console |
+| `ssi-indexer` | Four Kafka consumers → Neo4j graph + vector indexer + search console |
 | `kafka-connect` | MongoDB CDC → domain Kafka topics |
 | `ssi-chat` | **Policy Pilot** — conversational investigation UI |
 | `shared/cypher_builder` | Neo4j query planner — deterministic intents + Gemini plan parsing |

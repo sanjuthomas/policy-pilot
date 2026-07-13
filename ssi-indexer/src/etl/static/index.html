@@ -38,7 +38,7 @@
         <div>
           <h2>Indexed text size monitor</h2>
           <p class="panel-intro">
-            One multimodal document per record — no semantic chunking. Each document embeds a flattened
+            One vector document per record — no semantic chunking. Each document embeds a flattened
             <code>search_text</code> field (salient fields only, not the full JSON document).
             Top 10 largest texts help you decide if chunking is needed before hitting the
             embedding model limit (<span id="chunk-embed-limit">32K</span> tokens).
@@ -48,7 +48,7 @@
       </div>
 
       <div id="chunk-stats-empty" class="empty-state muted">
-        Sign in to load chunk size stats from the multimodal store.
+        Sign in to load chunk size stats from the vector store.
       </div>
 
       <div id="chunk-stats-content" class="hidden">

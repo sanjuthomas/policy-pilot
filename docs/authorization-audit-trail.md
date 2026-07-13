@@ -14,7 +14,7 @@ Every authorized instruction or payment mutation stores an OPA **authorization b
 | `details.authorization.subject_at_decision` | Actor snapshot at decision time |
 | `event.reason` | Copy of `summary` on successful actions |
 
-The ETL denormalizes these onto multimodal documents (`authorization_summary`, `authorization_basis`, `approved_at` on `instruction_state`) and Neo4j (`InstructionVersion.approved_at`, `authorization_summary`, `authorization_basis`).
+The ETL denormalizes these onto vector documents (`authorization_summary`, `authorization_basis`, `approved_at` on `instruction_state`) and Neo4j (`InstructionVersion.approved_at`, `authorization_summary`, `authorization_basis`).
 
 ## Past-tense approval audit (who *did* approve?)
 

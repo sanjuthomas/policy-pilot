@@ -45,7 +45,7 @@ function setMode(nextMode) {
   neo4jActionWrap.classList.toggle("hidden", !neo4jMode);
   neo4jActionWrap.setAttribute("aria-hidden", neo4jMode ? "false" : "true");
   resultsTitle.textContent =
-    mode === "neo4j" ? "Neo4j graph matches" : `Multimodal ${mode} matches`;
+    mode === "neo4j" ? "Neo4j graph matches" : `Vector ${mode} matches`;
 }
 
 function clearResults() {
@@ -403,7 +403,7 @@ async function refreshChunkStats() {
   if (!AdminAuth.loadSession()) {
     chunkStatsContent.classList.add("hidden");
     chunkStatsEmpty.classList.remove("hidden");
-    chunkStatsEmpty.textContent = "Sign in to load chunk size stats from the multimodal store.";
+    chunkStatsEmpty.textContent = "Sign in to load chunk size stats from the vector store.";
     return;
   }
 
