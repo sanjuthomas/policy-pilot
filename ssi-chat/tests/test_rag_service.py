@@ -9,9 +9,9 @@ from cypher_builder import GraphIntent, GraphQueryPlan
 class TestRagServiceAsk:
     @pytest.mark.asyncio
     async def test_ask_returns_chat_response(
-        self, rag_service, mock_ml_client, mock_multimodal, mock_neo4j
+        self, rag_service, mock_ml_client, mock_vector_search, mock_neo4j
     ) -> None:
-        mock_multimodal.search_vector = AsyncMock(return_value=[])
+        mock_vector_search.search_vector = AsyncMock(return_value=[])
         mock_neo4j.run_cypher = AsyncMock(return_value=[{"total": 0}])
         mock_ml_client.synthesize_answer = AsyncMock(return_value="There were 0 alerts.")
 
@@ -23,10 +23,10 @@ class TestRagServiceAsk:
 
     @pytest.mark.asyncio
     async def test_ask_with_event_uuid_triggers_exact_lookup(
-        self, rag_service, mock_multimodal, mock_neo4j, mock_ml_client
+        self, rag_service, mock_vector_search, mock_neo4j, mock_ml_client
     ) -> None:
         event_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
-        mock_multimodal.fetch_by_event_id = AsyncMock(
+        mock_vector_search.fetch_by_event_id = AsyncMock(
             return_value={
                 "source": "exact",
                 "event_id": event_id,
@@ -34,7 +34,7 @@ class TestRagServiceAsk:
                 "merged": {"source": "instruction_security_event", "action": "VIEW"},
             }
         )
-        mock_multimodal.search_vector = AsyncMock(return_value=[])
+        mock_vector_search.search_vector = AsyncMock(return_value=[])
         mock_neo4j.lookup_instruction_for_event = AsyncMock(
             return_value=[{"event_id": event_id, "instruction_id": "inst-1"}]
         )
@@ -42,15 +42,15 @@ class TestRagServiceAsk:
 
         response = await rag_service.ask(f"What about event {event_id}?", [], mode="events")
         assert "Found event" in response.answer
-        mock_multimodal.fetch_by_event_id.assert_awaited_once_with(event_id)
+        mock_vector_search.fetch_by_event_id.assert_awaited_once_with(event_id)
 
     @pytest.mark.asyncio
     async def test_ask_instruction_approval_synthesis(
-        self, rag_service, mock_ml_client, mock_multimodal, mock_neo4j
+        self, rag_service, mock_ml_client, mock_vector_search, mock_neo4j
     ) -> None:
         iid = "2846a7c0-4734-4626-bb58-13a966f935a1"
-        mock_multimodal.search_vector = AsyncMock(return_value=[])
-        mock_multimodal.fetch_by_instruction_id = AsyncMock(
+        mock_vector_search.search_vector = AsyncMock(return_value=[])
+        mock_vector_search.fetch_by_instruction_id = AsyncMock(
             return_value={
                 "source": "exact_instruction",
                 "instruction_id": iid,
@@ -86,11 +86,11 @@ class TestRagServiceAsk:
 
     @pytest.mark.asyncio
     async def test_ask_instruction_approval_synthesis_sequence_id(
-        self, rag_service, mock_ml_client, mock_multimodal, mock_neo4j
+        self, rag_service, mock_ml_client, mock_vector_search, mock_neo4j
     ) -> None:
         iid = "20260628-FICC-I-13"
-        mock_multimodal.search_vector = AsyncMock(return_value=[])
-        mock_multimodal.fetch_by_instruction_id = AsyncMock(
+        mock_vector_search.search_vector = AsyncMock(return_value=[])
+        mock_vector_search.fetch_by_instruction_id = AsyncMock(
             return_value={
                 "source": "exact_instruction",
                 "instruction_id": iid,
@@ -129,11 +129,11 @@ class TestRagServiceAsk:
 
     @pytest.mark.asyncio
     async def test_ask_payment_approval_synthesis(
-        self, rag_service, mock_ml_client, mock_multimodal, mock_neo4j
+        self, rag_service, mock_ml_client, mock_vector_search, mock_neo4j
     ) -> None:
         pid = "9b3251c9-d28e-4ad5-9bf4-dbc3c4fc13d8"
-        mock_multimodal.search_vector = AsyncMock(return_value=[])
-        mock_multimodal.fetch_by_payment_id = AsyncMock(
+        mock_vector_search.search_vector = AsyncMock(return_value=[])
+        mock_vector_search.fetch_by_payment_id = AsyncMock(
             return_value={
                 "source": "exact_payment",
                 "payment_id": pid,
@@ -145,7 +145,7 @@ class TestRagServiceAsk:
                 },
             }
         )
-        mock_multimodal.fetch_payment_approve_events = AsyncMock(
+        mock_vector_search.fetch_payment_approve_events = AsyncMock(
             return_value=[
                 {
                     "source": "exact_approve_payment_event",
@@ -195,10 +195,10 @@ class TestRagServiceAsk:
 
     @pytest.mark.asyncio
     async def test_ask_max_payments_per_instruction(
-        self, rag_service, mock_ml_client, mock_multimodal, mock_neo4j
+        self, rag_service, mock_ml_client, mock_vector_search, mock_neo4j
     ) -> None:
         iid = "3bcb9b9a-9415-44ce-b707-4cc4c8281bb9"
-        mock_multimodal.search_vector = AsyncMock(return_value=[])
+        mock_vector_search.search_vector = AsyncMock(return_value=[])
         mock_neo4j.run_cypher = AsyncMock(
             return_value=[
                 {
@@ -233,10 +233,10 @@ class TestRagServiceAsk:
 
     @pytest.mark.asyncio
     async def test_ask_payments_for_instruction(
-        self, rag_service, mock_ml_client, mock_multimodal, mock_neo4j
+        self, rag_service, mock_ml_client, mock_vector_search, mock_neo4j
     ) -> None:
         iid = "3bcb9b9a-9415-44ce-b707-4cc4c8281bb9"
-        mock_multimodal.search_vector = AsyncMock(return_value=[])
+        mock_vector_search.search_vector = AsyncMock(return_value=[])
         mock_neo4j.run_cypher = AsyncMock(
             return_value=[
                 {
@@ -266,9 +266,9 @@ class TestRagServiceAsk:
 
     @pytest.mark.asyncio
     async def test_ask_payment_total_amount_ficc_today(
-        self, rag_service, mock_ml_client, mock_multimodal, mock_neo4j
+        self, rag_service, mock_ml_client, mock_vector_search, mock_neo4j
     ) -> None:
-        mock_multimodal.search_vector = AsyncMock(return_value=[])
+        mock_vector_search.search_vector = AsyncMock(return_value=[])
         mock_neo4j.run_cypher = AsyncMock(
             return_value=[
                 {
@@ -291,9 +291,9 @@ class TestRagServiceAsk:
 
     @pytest.mark.asyncio
     async def test_ask_alert_ranking(
-        self, rag_service, mock_ml_client, mock_multimodal, mock_neo4j
+        self, rag_service, mock_ml_client, mock_vector_search, mock_neo4j
     ) -> None:
-        mock_multimodal.search_vector = AsyncMock(return_value=[])
+        mock_vector_search.search_vector = AsyncMock(return_value=[])
         mock_neo4j.run_cypher = AsyncMock(
             side_effect=[
                 [

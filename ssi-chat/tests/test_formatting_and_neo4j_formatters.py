@@ -300,7 +300,7 @@ class TestNeo4jFormatters:
 
 class TestMultimodalIds:
     def test_document_ids_are_deterministic(self) -> None:
-        from chat_application.multimodal_ids import (
+        from chat_application.vector_document_ids import (
             event_document_id,
             instruction_document_id,
             payment_document_id,

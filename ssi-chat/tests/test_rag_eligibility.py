@@ -10,7 +10,7 @@ from chat_application.rag import RagService
 def rag_service() -> RagService:
     return RagService(
         ml_client=MagicMock(),
-        multimodal=MagicMock(),
+        vector_search=MagicMock(),
         neo4j=MagicMock(),
     )
 

@@ -255,7 +255,7 @@ class TestNeo4jDirectExecution:
 class TestRagNeo4jDirectEarlyExit:
     @pytest.mark.asyncio
     async def test_ask_uses_neo4j_direct_without_llm(
-        self, rag_service, mock_ml_client, mock_multimodal, mock_neo4j
+        self, rag_service, mock_ml_client, mock_vector_search, mock_neo4j
     ) -> None:
         mock_neo4j.run_cypher = AsyncMock(
             return_value=[
@@ -265,7 +265,7 @@ class TestRagNeo4jDirectEarlyExit:
                 }
             ]
         )
-        mock_multimodal.search_vector = AsyncMock(return_value=[])
+        mock_vector_search.search_vector = AsyncMock(return_value=[])
         mock_ml_client.embed = AsyncMock(return_value=[0.1, 0.2])
         mock_ml_client.synthesize_answer = AsyncMock(return_value="should not be called")
 
@@ -282,7 +282,7 @@ class TestRagNeo4jDirectEarlyExit:
 
     @pytest.mark.asyncio
     async def test_ask_uses_neo4j_direct_for_payment_creator(
-        self, rag_service, mock_ml_client, mock_multimodal, mock_neo4j
+        self, rag_service, mock_ml_client, mock_vector_search, mock_neo4j
     ) -> None:
         mock_neo4j.run_cypher = AsyncMock(
             return_value=[
@@ -292,7 +292,7 @@ class TestRagNeo4jDirectEarlyExit:
                 }
             ]
         )
-        mock_multimodal.search_vector = AsyncMock(return_value=[])
+        mock_vector_search.search_vector = AsyncMock(return_value=[])
         mock_ml_client.embed = AsyncMock(return_value=[0.1, 0.2])
         mock_ml_client.synthesize_answer = AsyncMock(return_value="should not be called")
 

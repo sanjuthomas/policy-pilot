@@ -1,4 +1,4 @@
-"""Deterministic multimodal document ids (shared with ssi-indexer ETL)."""
+"""Deterministic vector document ids (shared with ssi-indexer ETL)."""
 
 from __future__ import annotations
 

@@ -7,7 +7,7 @@ from typing import Any
 from neo4j import READ_ACCESS
 
 from chat_application.config import settings
-from chat_application.multimodal_ids import (
+from chat_application.vector_document_ids import (
     event_document_id,
     instruction_document_id,
     payment_document_id,
@@ -35,8 +35,8 @@ def _payload_from_node(node: dict[str, Any]) -> dict[str, Any]:
     return dict(raw)
 
 
-class MultimodalSearchClient:
-    """Read path for the Neo4j multimodal store (dense vector search)."""
+class VectorSearchClient:
+    """Read path for the Neo4j dense vector store (`MultimodalDocument` nodes)."""
 
     def __init__(self, neo4j_client) -> None:
         self._neo4j = neo4j_client

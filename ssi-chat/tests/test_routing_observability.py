@@ -155,7 +155,7 @@ class TestFinalizeChatResponse:
 class TestRagRoutingIntegration:
     @pytest.mark.asyncio
     async def test_ask_neo4j_direct_includes_routing(
-        self, rag_service, mock_ml_client, mock_multimodal, mock_neo4j
+        self, rag_service, mock_ml_client, mock_vector_search, mock_neo4j
     ) -> None:
         mock_neo4j.run_cypher = AsyncMock(
             return_value=[
@@ -165,7 +165,7 @@ class TestRagRoutingIntegration:
                 }
             ]
         )
-        mock_multimodal.search_vector = AsyncMock(return_value=[])
+        mock_vector_search.search_vector = AsyncMock(return_value=[])
         mock_ml_client.synthesize_answer = AsyncMock(return_value="should not be called")
 
         response = await rag_service.ask(
@@ -183,10 +183,10 @@ class TestRagRoutingIntegration:
 
     @pytest.mark.asyncio
     async def test_ask_full_rag_formatter_includes_routing(
-        self, rag_service, mock_ml_client, mock_multimodal, mock_neo4j
+        self, rag_service, mock_ml_client, mock_vector_search, mock_neo4j
     ) -> None:
         rag_service._try_neo4j_direct_answer = AsyncMock(return_value=None)
-        mock_multimodal.search_vector = AsyncMock(return_value=[])
+        mock_vector_search.search_vector = AsyncMock(return_value=[])
         mock_neo4j.run_cypher = AsyncMock(return_value=[{"total": 0}])
         mock_ml_client.synthesize_answer = AsyncMock(return_value="unused")
 

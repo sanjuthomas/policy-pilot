@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from chat_application.capabilities import audience_labels, capabilities_for
 from chat_application.me.can_create import (
     answer_can_approve_payment,
