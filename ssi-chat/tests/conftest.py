@@ -37,7 +37,7 @@ def mock_ml_client():
 
 
 @pytest.fixture
-def mock_multimodal():
+def mock_vector_search():
     client = MagicMock()
     client.has_documents = AsyncMock(return_value=False)
     client.search_vector = AsyncMock(return_value=[])
@@ -60,10 +60,10 @@ def mock_neo4j():
 
 
 @pytest.fixture
-def rag_service(mock_ml_client, mock_multimodal, mock_neo4j):
+def rag_service(mock_ml_client, mock_vector_search, mock_neo4j):
     return RagService(
         ml_client=mock_ml_client,
-        multimodal=mock_multimodal,
+        vector_search=mock_vector_search,
         neo4j=mock_neo4j,
     )
 
@@ -80,12 +80,12 @@ def compliance_subject():
 
 
 @pytest.fixture
-def test_client(mock_ml_client, mock_multimodal, mock_neo4j, compliance_subject):
+def test_client(mock_ml_client, mock_vector_search, mock_neo4j, compliance_subject):
     import chat_application.main as main_module
     from chat_application.dependencies import get_chat_subject
 
     main_module.ml_client = mock_ml_client
-    main_module.multimodal_client = mock_multimodal
+    main_module.vector_search_client = mock_vector_search
     main_module.neo4j_client = mock_neo4j
     main_module.rag_service = None
 

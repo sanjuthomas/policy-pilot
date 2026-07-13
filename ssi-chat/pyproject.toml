@@ -1,7 +1,7 @@
 [project]
 name = "ssi-chat"
 version = "0.1.0"
-description = "Conversational Q&A over SSI operations index (Neo4j multimodal + graph + Vertex Gemini)"
+description = "Conversational Q&A over SSI operations index (Neo4j graph + vector + Vertex Gemini)"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.0",

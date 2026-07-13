@@ -25,7 +25,6 @@ from chat_application.feedback_observability import (
 )
 from chat_application.ml_client import PolicyPilotMlClient
 from chat_application.models import ChatFeedbackRequest, ChatRequest, ChatResponse
-from chat_application.multimodal_search import MultimodalSearchClient
 from chat_application.neo4j import Neo4jClient
 from chat_application.rag import RagService
 from chat_application.response_formatter import format_chat_response
@@ -37,6 +36,7 @@ from chat_application.service_identity import service_identity
 from chat_application.skills import confirm_create_payment
 from chat_application.subject import Subject
 from chat_application.users import chat_users, compliance_users, load_users
+from chat_application.vector_search import VectorSearchClient
 from chat_application.zitadel_auth import ZitadelAuthClient, login_name_for_user
 
 logger = get_logger(__name__)
@@ -45,7 +45,7 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 ml_client = PolicyPilotMlClient()
 neo4j_client = Neo4jClient()
-multimodal_client = MultimodalSearchClient(neo4j_client)
+vector_search_client = VectorSearchClient(neo4j_client)
 rag_service: RagService | None = None
 
 
@@ -63,7 +63,7 @@ async def lifespan(app: FastAPI):
         logger.warning("chat service identity login failed: %s", exc)
     rag_service = RagService(
         ml_client=ml_client,
-        multimodal=multimodal_client,
+        vector_search=vector_search_client,
         neo4j=neo4j_client,
     )
     logger.info("PolicyPilot ready on port %s", settings.port)
@@ -75,7 +75,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="PolicyPilot",
-    description="PolicyPilot — natural-language policy Q&A over security events (Neo4j multimodal + graph + Vertex Gemini)",
+    description="PolicyPilot — natural-language policy Q&A over security events (Neo4j graph + vector + Vertex Gemini)",
     version=__version__,
     lifespan=lifespan,
 )

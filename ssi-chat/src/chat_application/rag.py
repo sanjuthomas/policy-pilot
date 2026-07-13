@@ -52,12 +52,12 @@ from chat_application.formatting import (
 )
 from chat_application.ml_client import PolicyPilotMlClient
 from chat_application.models import ChatMessage, ChatResponse, SearchMode, SourceHit
-from chat_application.multimodal_search import MultimodalSearchClient
 from chat_application.neo4j import Neo4jClient
 from chat_application.neo4j_intents import try_neo4j_direct_answer
 from chat_application.pipeline.orchestrator import RagPipelineOrchestrator
 from chat_application.reranker import RankedHit, rrf_merge
 from chat_application.subject import Subject
+from chat_application.vector_search import VectorSearchClient
 
 logger = logging.getLogger(__name__)
 
@@ -700,11 +700,11 @@ class RagService:
         self,
         *,
         ml_client: PolicyPilotMlClient,
-        multimodal: MultimodalSearchClient,
+        vector_search: VectorSearchClient,
         neo4j: Neo4jClient,
     ) -> None:
         self.ml_client = ml_client
-        self.multimodal = multimodal
+        self.vector_search = vector_search
         self.neo4j = neo4j
         self._eligibility = EligibilityClient()
         self._pipeline = RagPipelineOrchestrator(self)
@@ -749,7 +749,7 @@ class RagService:
     ) -> list[dict[str, Any]]:
         try:
             vector = await self.ml_client.embed(query)
-            return await self.multimodal.search_vector(vector, limit=limit, source=source)
+            return await self.vector_search.search_vector(vector, limit=limit, source=source)
         except Exception as exc:
             logger.warning("vector search failed: %s", exc)
             return []
@@ -761,7 +761,7 @@ class RagService:
         graph_rows: list[dict[str, Any]] = []
 
         for event_id in event_ids:
-            store_hit = await self.multimodal.fetch_by_event_id(event_id)
+            store_hit = await self.vector_search.fetch_by_event_id(event_id)
             if store_hit is not None:
                 hits.append(store_hit)
 
@@ -784,12 +784,12 @@ class RagService:
         approval_question = "approv" in message.lower()
 
         for instruction_id in instruction_ids:
-            state_hit = await self.multimodal.fetch_by_instruction_id(instruction_id)
+            state_hit = await self.vector_search.fetch_by_instruction_id(instruction_id)
             if state_hit is not None:
                 hits.append(state_hit)
 
             if approval_question:
-                approve_hits = await self.multimodal.fetch_instruction_approve_events(
+                approve_hits = await self.vector_search.fetch_instruction_approve_events(
                     instruction_id
                 )
                 hits.extend(approve_hits)
@@ -804,19 +804,19 @@ class RagService:
         via_instruction = is_instruction_approver_via_payment_question(message)
 
         for payment_id in payment_ids:
-            fact_hit = await self.multimodal.fetch_by_payment_id(payment_id)
+            fact_hit = await self.vector_search.fetch_by_payment_id(payment_id)
             if fact_hit is not None:
                 hits.append(fact_hit)
 
             if approval_question and via_instruction:
                 instruction_id = (fact_hit or {}).get("instruction_id")
                 if instruction_id:
-                    approve_hits = await self.multimodal.fetch_instruction_approve_events(
+                    approve_hits = await self.vector_search.fetch_instruction_approve_events(
                         instruction_id
                     )
                     hits.extend(approve_hits)
             elif approval_question:
-                approve_hits = await self.multimodal.fetch_payment_approve_events(payment_id)
+                approve_hits = await self.vector_search.fetch_payment_approve_events(payment_id)
                 hits.extend(approve_hits)
 
         return hits

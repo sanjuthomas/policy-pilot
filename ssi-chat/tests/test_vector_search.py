@@ -3,8 +3,8 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from chat_application.multimodal_search import (
-    MultimodalSearchClient,
+from chat_application.vector_search import (
+    VectorSearchClient,
     _payload_from_node,
     _source_filter_values,
 )
@@ -38,11 +38,11 @@ class _Session:
         return False
 
 
-def _client(*results) -> tuple[MultimodalSearchClient, _Session]:
+def _client(*results) -> tuple[VectorSearchClient, _Session]:
     session = _Session(results)
     neo4j = MagicMock()
     neo4j._driver.session.return_value = session
-    return MultimodalSearchClient(neo4j), session
+    return VectorSearchClient(neo4j), session
 
 
 def test_source_and_payload_helpers() -> None:
@@ -73,7 +73,7 @@ async def test_document_count_and_driver_connection() -> None:
     disconnected = MagicMock()
     disconnected._driver = None
     with pytest.raises(RuntimeError, match="not connected"):
-        await MultimodalSearchClient(disconnected).document_count()
+        await VectorSearchClient(disconnected).document_count()
 
 
 @pytest.mark.asyncio

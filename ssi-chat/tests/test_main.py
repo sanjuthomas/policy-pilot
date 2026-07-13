@@ -27,7 +27,7 @@ class TestChatEndpoint:
         self,
         test_client: TestClient,
         mock_ml_client,
-        mock_multimodal,
+        mock_vector_search,
         mock_neo4j,
     ) -> None:
         from chat_application.models import ChatResponse, SourceHit
@@ -79,7 +79,7 @@ class TestChatEndpoint:
         self,
         test_client: TestClient,
         mock_ml_client,
-        mock_multimodal,
+        mock_vector_search,
         mock_neo4j,
     ) -> None:
         mock_rag = MagicMock()
