@@ -13,10 +13,10 @@ How an instruction or payment mutation becomes queryable in Policy Pilot — fro
 4. **Authorization service** — sole runtime caller of OPA. Exposes evaluate and eligible-approvers APIs to domain services only (no MongoDB). Reads candidate approvers from `users.yaml` for batch eligibility checks.
 
 5. **SSI indexer** — runs four independent Kafka consumers, all **self-contained** (full snapshots embedded — no API callbacks). Denormalizes `authorization_summary`, `approved_at`, and related fields onto Neo4j `MultimodalDocument` nodes and the graph for chat retrieval.
-   - **InstructionSecurityEventPipeline** (`instruction_security_events`) → Neo4j graph + multimodal `source=instruction_security_event`
-   - **InstructionPipeline** (`instructions`) → instruction master graph + multimodal `source=instruction_state`
-   - **PaymentSecurityEventPipeline** (`payment_security_events`) → payment security graph + multimodal `source=payment_security_event`
-   - **PaymentFactPipeline** (`payments`) → payment master graph + multimodal `source=payment_fact`
+   - **InstructionSecurityEventPipeline** (`instruction_security_events`) → Neo4j graph + vector doc `source=instruction_security_event`
+   - **InstructionPipeline** (`instructions`) → instruction master graph + vector doc `source=instruction_state`
+   - **PaymentSecurityEventPipeline** (`payment_security_events`) → payment security graph + vector doc `source=payment_security_event`
+   - **PaymentFactPipeline** (`payments`) → payment master graph + vector doc `source=payment_fact`
 
 6. **Policy Pilot** (`ssi-chat`) — selects a search mode (`events` / `instructions` / `payments` / `all`), **routes** the question via Gemini structured output (`RouterDecision`), then runs **selective retrieval** (Neo4j only, vector only, or hybrid). Fast paths skip full RAG: live OPA eligibility for *who can approve?*, Neo4j direct YAML intents for known shapes, deterministic formatters for counts and audit trails. Other questions use **Vertex Gemini** synthesis over retrieved context. See [Intent Determination in Policy Pilot](intent-determination.md).
 
@@ -38,8 +38,8 @@ in a **single MongoDB multi-document transaction** per service. **Kafka Connect*
 
 | Layer | Name | Purpose |
 |-------|------|---------|
-| Multimodal vector index | `multimodal_embedding` | Dense search on `MultimodalDocument.embedding` |
-| Multimodal `source` | `instruction_security_event`, `instruction_state`, `payment_security_event`, `payment_fact` | Document type filter for chat modes |
+| Vector index | `multimodal_embedding` | Dense search on `MultimodalDocument.embedding` |
+| Vector document `source` | `instruction_security_event`, `instruction_state`, `payment_security_event`, `payment_fact` | Document type filter for chat modes |
 | MongoDB | `ssi_cash_instructions.instructions` | Instruction versions |
 | MongoDB | `ssi_cash_activities.payments` | Payment records |
 | MongoDB | `security_events.instruction_service` | instruction-service security events |

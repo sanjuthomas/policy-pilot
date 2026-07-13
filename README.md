@@ -1,6 +1,6 @@
 # Policy Pilot
 
-An event-driven, policy-aware knowledge platform for regulated financial systems — OPA authorization, Neo4j knowledge graphs, hybrid retrieval, and LLM-powered investigation in one conversational surface.
+An event-driven, policy-aware knowledge platform for regulated financial systems — OPA authorization, Neo4j knowledge graphs, graph and vector retrieval, and LLM-powered investigation in one conversational surface.
 
 Policy Pilot gives supervisors, compliance officers, and **payment operations** users a single place to ask questions over the cash leg of Standard Settlement Instructions (SSI). It unifies **live policy rules** (OPA), **operational state** (instructions and payments), and the **immutable audit trail** of what was allowed or denied — so teams investigate in natural language instead of stitching answers from LDAP, databases, and ticket queues.
 
@@ -15,19 +15,19 @@ In a large bank, answering even simple supervision questions is painfully slow:
 
 The answers rarely live in one place. Rules sit in **LDAP**, **OPA**, **application code**, and **database config** that only one team understands. Worse, **what policy says** and **what actually happened** can diverge — investigators need both the **policy decision** (allow/deny and why) and the **operational fact**, captured together at decision time.
 
-Policy Pilot models that end to end. Every mutation is recorded, streamed through Kafka, indexed into Neo4j (graph + multimodal vector store), and made queryable in conversation — a **holistic, evidence-backed view** grounded in what the system actually did.
+Policy Pilot models that end to end. Every mutation is recorded, streamed through Kafka, indexed into Neo4j (graph + dense vector store), and made queryable in conversation — a **holistic, evidence-backed view** grounded in what the system actually did.
 
 ## What you can ask
 
 Policy Pilot surfaces **fraud patterns, compliance violations, and collusion signals** — not just application status screens.
 
-**Demo tags** (see [intent determination](docs/intent-determination.md)): **`graph`** · **`tools`** · **`vector`** · **`multimodal`** · **`skill`**
+**Demo tags** (see [intent determination](docs/intent-determination.md)): **`graph`** · **`tools`** · **`vector`** · **`skill`**
 
 **Graph**
 
 - _Are there any instances of approving each other's instructions?_ **`graph`**
 - _Are there cases where one user created an instruction that another user approved, and that approver later created a payment on the same instruction that the original creator then approved?_ **`graph`**
-- _Who approved instruction X, and why was it allowed?_ **`graph`** **`multimodal`**
+- _Who approved instruction X, and why was it allowed?_ **`graph`** **`vector`**
 - _Can you show me the payment 20260712-FICC-P-2?_ **`graph`**
 
 **Tools** (live policy — use **Policies** mode; log in as `comp-001`)
@@ -44,10 +44,10 @@ Policy Pilot surfaces **fraud patterns, compliance violations, and collusion sig
 
   Scripted **create-payment** skill: parse request → load instruction → dry-run OPA `CREATE` → confirmation card (debtor / creditor / intermediaries) with **Go / No Go** → create draft only on **Go**. Fail closed on deny or No Go. Full write-up: **[Create-payment skill](docs/create-payment-skill.md)**.
 
-**Vector / multimodal** (use **Events** mode)
+**Vector** (use **Events** mode)
 
-- _Show payment policy denial ALERT events today with actor and reason._ **`vector`** **`multimodal`**
-- _Show ALERT events for LOB coverage violations on payments._ **`vector`** **`multimodal`**
+- _Show payment policy denial ALERT events today with actor and reason._ **`vector`**
+- _Show ALERT events for LOB coverage violations on payments._ **`vector`**
 
 **Full list:** **[Sample questions](docs/sample-questions.md)**. Demo personas: **[Domain models and demo users](docs/domain-models.md)**. Regression bank: **[ssi-chat/regression/questions.yaml](ssi-chat/regression/questions.yaml)**.
 
@@ -57,16 +57,16 @@ Policy Pilot surfaces **fraud patterns, compliance violations, and collusion sig
 
 ![End-to-end architecture](docs/architecture.drawio.png)
 
-Policy Pilot sits at the end of an event-driven pipeline: domain services enforce OPA policy and write versioned state + security events to MongoDB; Kafka Connect streams changes; **ssi-indexer** builds a shared Neo4j graph and multimodal search index; **ssi-chat** routes each question through a **Route → Retrieve → Synthesize** pipeline. Live policy and eligibility answers go through the same **authorization-service → OPA** path as mutations, using the logged-in user's JWT / ZITADEL session — not a parallel unchecked tool layer.
+Policy Pilot sits at the end of an event-driven pipeline: domain services enforce OPA policy and write versioned state + security events to MongoDB; Kafka Connect streams changes; **ssi-indexer** builds a shared Neo4j graph and dense vector index; **ssi-chat** routes each question through a **Route → Retrieve → Synthesize** pipeline. Live policy and eligibility answers go through the same **authorization-service → OPA** path as mutations, using the logged-in user's JWT / ZITADEL session — not a parallel unchecked tool layer.
 
 | Topic | Summary |
 |-------|---------|
 | **[Create-payment skill](docs/create-payment-skill.md)** | First mutation skill: OPA preflight, Go / No Go confirmation, payment-service CREATE → Mongo. |
 | **[OPA policy controls](docs/opa-controls.md)** | Segregation of duties, reporting-line inversion of control, LOB boundaries, amount clubs — the checks and balances enforced on every action. |
-| **[Sample questions](docs/sample-questions.md)** | Curated demo questions by retrieval path (`graph`, `tools`, `skill`, `vector` / `multimodal`), including Policies-mode and create-payment skill examples. |
+| **[Sample questions](docs/sample-questions.md)** | Curated demo questions by retrieval path (`graph`, `tools`, `skill`, `vector`), including Policies-mode and create-payment skill examples. |
 | **[Intent determination](docs/intent-determination.md)** | Gemini returns a strict `RouterDecision` (eligibility, graph, vector, or hybrid). Selective retrieval — no blind merge of graph and vector on every question. |
-| **[Data flow](docs/data-flow.md)** | Mongo transactions → Kafka CDC → four ETL pipelines → Neo4j + multimodal store → chat. |
-| **[Architecture decisions](docs/architecture-decisions.md)** | Why ZITADEL, OPA, MongoDB, Kafka, Neo4j hybrid search, Vertex AI, and `cypher_builder`. |
+| **[Data flow](docs/data-flow.md)** | Mongo transactions → Kafka CDC → four ETL pipelines → Neo4j graph + vector store → chat. |
+| **[Architecture decisions](docs/architecture-decisions.md)** | Why ZITADEL, OPA, MongoDB, Kafka, Neo4j graph and vector search, Vertex AI, and `cypher_builder`. |
 | **[Authorization audit trail](docs/authorization-audit-trail.md)** | Who / When / Why on past approvals; live *who can approve?* via eligible-approvers APIs. |
 | **[Local development](docs/local-development.md)** | Run services locally, observability, regression evaluation, component map. |
 
@@ -158,8 +158,8 @@ Four ETL pipelines write to the **same Neo4j database**, sharing nodes (`Instruc
 
 | Writer type | Pipelines | Owns |
 |-------------|-----------|------|
-| **Fact** (state) | `InstructionPipeline`, `PaymentFactPipeline` | Versions, `CURRENT`, `SUPERSEDES`, lifecycle edges (`_*IV` / `_*PV`), structural edges, root denorm, multimodal state docs |
-| **Audit** (events) | `InstructionSecurityEventPipeline`, `PaymentSecurityEventPipeline` | `SecurityEvent`, `ACTED_AS`, `FOR` → version, `INVOLVES_LOB`, multimodal event docs |
+| **Fact** (state) | `InstructionPipeline`, `PaymentFactPipeline` | Versions, `CURRENT`, `SUPERSEDES`, lifecycle edges (`_*IV` / `_*PV`), structural edges, root denorm, vector state docs |
+| **Audit** (events) | `InstructionSecurityEventPipeline`, `PaymentSecurityEventPipeline` | `SecurityEvent`, `ACTED_AS`, `FOR` → version, `INVOLVES_LOB`, vector event docs |
 
 Security-event pipelines write audit edges only — they do not write lifecycle edges, `CURRENT`, or `CONSUMED`. Each audit row links to the version that was current at event time via **`FOR`**.
 
@@ -249,7 +249,7 @@ Each application directory also has its own README — see table below.
 │   ├── vertex_client/               # Vertex AI embeddings + Gemini
 │   └── telemetry/                   # OpenTelemetry helpers
 ├── kafka-connect/                   # Mongo CDC → Kafka
-├── ssi-indexer/                     # Kafka → Neo4j + multimodal index
+├── ssi-indexer/                     # Kafka → Neo4j graph + vector index
 ├── ssi-chat/                        # Policy Pilot
 ├── ssi-demo-harness/                # Scenario harness + seed-demo-data.sh
 ├── neo4j-graph-model/               # Graph schema (README.md)

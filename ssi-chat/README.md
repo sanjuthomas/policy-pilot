@@ -30,9 +30,9 @@ Planned Cypher for counts, rankings, hierarchy, and known audit shapes comes fro
 
 ## Search modes
 
-The sidebar radio buttons select what the **Neo4j multimodal store** and graph focus on:
+The sidebar radio buttons select what the **Neo4j vector store** and graph focus on:
 
-| Mode | Multimodal `source` filter | Use for |
+| Mode | Vector document `source` filter | Use for |
 |------|---------------|---------|
 | **Security Events** (`events`) | `instruction_security_event` + `payment_security_event` | Policy denials, audit trail, ALERT/INFO counts |
 | **Instructions** (`instructions`) | `instruction_state` | Instruction state, duplicate routes, **Who/When/Why approval audit** |
@@ -155,7 +155,7 @@ Copy `.env.example` to `.env` at the repo root to override defaults. Docker Comp
 | `INSTRUCTION_SERVICE_URL` | `http://instruction-service:8000` |
 | `OIDC_ISSUER_URL` | `http://localhost:8080` |
 
-Requires Neo4j multimodal documents populated by **ssi-indexer** and **GCP Vertex AI** credentials.
+Requires Neo4j vector documents (`MultimodalDocument` nodes) populated by **ssi-indexer** and **GCP Vertex AI** credentials.
 
 For a populated graph with ALERT demo data, run `./ssi-demo-harness/seed-demo-data.sh` from the repo root (see [ssi-demo-harness/README.md](../ssi-demo-harness/README.md)).
 

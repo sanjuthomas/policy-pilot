@@ -10,9 +10,8 @@ Curated natural-language questions for demoing Policy Pilot. Prefer these over i
 | **`tools`** | Live OPA / policy directory / person entitlements |
 | **`skill`** | Scripted mutation skill (create-payment with Go / No Go) |
 | **`vector`** | Semantic retrieval over security-event audit text |
-| **`multimodal`** | Indexed event narratives (dense embeddings; use **Events** mode) |
 
-**Chat modes:** **Policies** for `tools` questions (sign in as `comp-001` / `Password1!`). **Payments** for create-payment **`skill`** (sign in as `pay-101` or `pay-205`). **Events** for vector/multimodal audit questions. **Instructions** / **Payments** for domain graph questions.
+**Chat modes:** **Policies** for `tools` questions (sign in as `comp-001` / `Password1!`). **Payments** for create-payment **`skill`** (sign in as `pay-101` or `pay-205`). **Events** for vector audit questions. **Instructions** / **Payments** for domain graph questions.
 
 Demo personas and seed users: **[Domain models and demo users](domain-models.md)**. Automated regression bank: **[ssi-chat/regression/questions.yaml](../ssi-chat/regression/questions.yaml)**.
 
@@ -25,7 +24,7 @@ Demo personas and seed users: **[Domain models and demo users](domain-models.md)
 - _Can you list all instructions without any payments?_ **`graph`**
 - _Are there instructions approved by someone who reports directly to the creator?_ **`graph`**
 - _Are there active instructions sharing the same creditor account and currency?_ **`graph`**
-- _Who approved instruction X, and why was it allowed?_ **`graph`** **`multimodal`**
+- _Who approved instruction X, and why was it allowed?_ **`graph`** **`vector`**
 - _Can you show me the payment 20260712-FICC-P-2?_ **`graph`**
 
 ---
@@ -82,12 +81,12 @@ After create, try:
 
 ---
 
-## Vector / multimodal
+## Vector
 
 Use **Events** mode.
 
-- _Show payment policy denial ALERT events today with actor and reason._ **`vector`** **`multimodal`**
-- _What explanations appear in the audit trail when a payment approval is blocked because the approver reports directly to the payment creator?_ **`vector`** **`multimodal`**
-- _Show ALERT events for LOB coverage violations on payments._ **`vector`** **`multimodal`**
-- _Show all REJECT events this week with the rejection reason._ **`vector`** **`multimodal`**
-- _Show all ALERT events for FICC instructions in the last 7 days._ **`vector`** **`multimodal`**
+- _Show payment policy denial ALERT events today with actor and reason._ **`vector`**
+- _What explanations appear in the audit trail when a payment approval is blocked because the approver reports directly to the payment creator?_ **`vector`**
+- _Show ALERT events for LOB coverage violations on payments._ **`vector`**
+- _Show all REJECT events this week with the rejection reason._ **`vector`**
+- _Show all ALERT events for FICC instructions in the last 7 days._ **`vector`**

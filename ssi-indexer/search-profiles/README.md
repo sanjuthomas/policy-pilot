@@ -1,9 +1,9 @@
 # Search text profiles
 
 Each YAML file declares which fields are flattened into **`search_text`** — the string
-embedded as the dense vector in Neo4j multimodal documents.
+embedded as the dense vector in Neo4j `MultimodalDocument` nodes.
 
-| File | Multimodal `source` | Wired to builder |
+| File | Vector document `source` | Wired to builder |
 |------|-----------------|------------------|
 | `instruction_security_event.yaml` | `instruction_security_event` | **Yes** |
 | `instruction_state.yaml` | `instruction_state` | **Yes** |
@@ -12,7 +12,7 @@ embedded as the dense vector in Neo4j multimodal documents.
 
 ## What is *not* in these files
 
-Full JSON documents remain in the multimodal **payload** (`security_event`,
+Full JSON documents remain in the document **payload** (`security_event`,
 `instruction_snapshot`, `payment_snapshot`, etc.) and in the admin UI. Only fields
 listed under `includes` (and shared `profiles`) feed the embedding string.
 
@@ -34,7 +34,7 @@ Kafka Connect publishes full Mongo documents. The ETL normalizes them in
 | `payment_security_events` | sequence id | `event_id` | `payment_security_event.yaml` |
 
 Composite version keys and raw `_id` values are listed under `excludes` — they stay
-in the multimodal payload for lookup but are not embedded in `search_text`.
+in the document payload for lookup but are not embedded in `search_text`.
 
 ## Editing
 

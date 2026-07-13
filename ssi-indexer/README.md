@@ -1,6 +1,6 @@
 # SSI Indexer
 
-Kafka consumers that index instruction and payment facts into **Neo4j** — both the **graph projection** and a **multimodal store** (dense vector embeddings on `MultimodalDocument` nodes).
+Kafka consumers that index instruction and payment facts into **Neo4j** — both the **graph projection** and a **dense vector store** (`MultimodalDocument` nodes with embeddings).
 
 Also exposes a **Search Console** UI for manual vector / Neo4j queries.
 
@@ -39,7 +39,7 @@ flowchart TB
     VTX --> MM[Neo4j MultimodalDocument]
 ```
 
-| Pipeline | Kafka topic | Consumer group | Multimodal `source` tag |
+| Pipeline | Kafka topic | Consumer group | Vector document `source` tag |
 |----------|-------------|----------------|-------------------------|
 | `InstructionSecurityEventPipeline` | `instruction_security_events` | `instruction-security-event-etl` | `instruction_security_event` |
 | `InstructionPipeline` | `instructions` | `ssi-instruction-etl` | `instruction_state` |
@@ -65,7 +65,7 @@ Each pipeline message is processed as: **build search text → Vertex embed → 
 
 ## Enriched document shape (instruction security events)
 
-Stored in the multimodal document payload (and used for search text):
+Stored in the vector document payload (and used for search text):
 
 | Field | Content |
 |-------|---------|
@@ -80,10 +80,10 @@ Stored in the multimodal document payload (and used for search text):
 | Pipeline | Extra indexed fields |
 |----------|---------------------|
 | Instruction security events | `merged.authorization_summary`, `merged.authorization_basis`, `merged.timestamp` |
-| Instruction state (`instructions`) | `approved_at`, `authorization_summary`, `authorization_basis` on multimodal doc + Neo4j `InstructionVersion` |
+| Instruction state (`instructions`) | `approved_at`, `authorization_summary`, `authorization_basis` on the vector document + Neo4j `InstructionVersion` |
 | Payment security events / facts | Same denormalization pattern |
 
-On APPROVE instruction security events, the pipeline **patches** the existing `instruction_state` multimodal document with approval authorization in the **same Neo4j transaction** as the security-event graph + vector write. Non-APPROVE instruction facts preserve existing approval fields when upserting.
+On APPROVE instruction security events, the pipeline **patches** the existing `instruction_state` vector document with approval authorization in the **same Neo4j transaction** as the security-event graph + vector write. Non-APPROVE instruction facts preserve existing approval fields when upserting.
 
 ## Search Console
 
@@ -93,7 +93,7 @@ On APPROVE instruction security events, the pipeline **patches** the existing `i
 | Neo4j | Text search on `SecurityEvent` nodes |
 | Cypher generate | Vertex Gemini → structured graph query plan (admin API) |
 
-Component status bar shows Kafka, multimodal vector index, Neo4j graph, and Vertex embedding health.
+Component status bar shows Kafka, vector index, Neo4j graph, and Vertex embedding health.
 
 ## Configuration (Docker)
 
@@ -130,7 +130,7 @@ ssi-indexer   # serves on :8090
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/stats` | Component health + multimodal document counts |
+| GET | `/api/stats` | Component health + vector document counts |
 | POST | `/api/search/vector` | Dense vector search (Vertex embed query) |
 | POST | `/api/intent/extract` | Natural language → graph query plan (Vertex Gemini) |
 | POST | `/api/cypher/run` | Validate and run read-only Cypher against Neo4j |

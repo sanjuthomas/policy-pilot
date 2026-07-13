@@ -64,7 +64,7 @@ includes:
   - path: effective_date
   - path: end_date
 
-# Documented for readability — still present in multimodal payload / merged, not embedded
+# Documented for readability — still present in document payload / merged, not embedded
 excludes:
   - event_id
   - instruction_id
