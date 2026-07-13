@@ -11,7 +11,6 @@ from etl.authorization_context import (
     authorization_merged_fields,
     authorization_merged_from_fact,
     authorization_neo4j_params,
-    authorization_search_parts,
 )
 
 
@@ -79,34 +78,6 @@ def test_authorization_merged_fields_subject_fallback():
     merged = authorization_merged_fields(event)
     assert merged["actor_groups"] == ["from-subject"]
     assert merged["actor_covering_lobs"] == ["LOB-S"]
-
-
-def test_authorization_search_parts():
-    merged = {
-        "timestamp": "t1",
-        "authorization_summary": "sum",
-        "authorization_decision": "ALLOW",
-        "event_reason": "reason",
-        "authorization_basis": ["a", "b"],
-        "authorization_violations": ["v"],
-        "actor_groups": ["g1"],
-        "actor_covering_lobs": ["lob"],
-    }
-    parts = authorization_search_parts(merged)
-    assert parts == [
-        "t1",
-        "sum",
-        "ALLOW",
-        "reason",
-        "a b",
-        "v",
-        "g1",
-        "lob",
-    ]
-
-
-def test_authorization_search_parts_skips_empty():
-    assert authorization_search_parts({}) == []
 
 
 def test_authorization_neo4j_params():

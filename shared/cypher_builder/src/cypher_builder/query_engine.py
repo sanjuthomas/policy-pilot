@@ -653,14 +653,6 @@ def is_security_event_group_by_lob_question(question: str, *, mode: str = "event
     return True
 
 
-def is_security_event_alert_group_by_lob_question(question: str, *, mode: str = "events") -> bool:
-    """True when the user wants ALERT counts broken down by LOB (not all severities)."""
-    return (
-        is_security_event_group_by_lob_question(question, mode=mode)
-        and security_event_group_by_lob_scope(question) == "alert"
-    )
-
-
 def instruction_type_filter_from_question(question: str) -> str | None:
     """Return instruction_type filter for standing/single-use wording."""
     upper = question.upper()
@@ -1924,16 +1916,6 @@ ORDER BY event_count DESC, lob ASC
 LIMIT 50""",
         ),
     ]
-
-
-def _security_event_alert_group_by_lob_queries(
-    *,
-    time_filter: str,
-    domain: str,
-) -> list[tuple[str, str]]:
-    return _security_event_group_by_lob_queries(
-        time_filter=time_filter, domain=domain, scope="alert"
-    )
 
 
 def plan_graph_queries(question: str, *, mode: str) -> list[tuple[str, str]] | None:

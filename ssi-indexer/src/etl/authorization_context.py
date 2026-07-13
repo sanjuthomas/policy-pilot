@@ -35,20 +35,6 @@ def authorization_merged_fields(security_event: dict[str, Any]) -> dict[str, Any
     }
 
 
-def authorization_search_parts(merged: dict[str, Any]) -> list[str]:
-    parts = [
-        merged.get("timestamp") or "",
-        merged.get("authorization_summary") or "",
-        merged.get("authorization_decision") or "",
-        merged.get("event_reason") or "",
-        " ".join(merged.get("authorization_basis") or []),
-        " ".join(merged.get("authorization_violations") or []),
-        " ".join(merged.get("actor_groups") or []),
-        " ".join(merged.get("actor_covering_lobs") or []),
-    ]
-    return [str(part) for part in parts if part]
-
-
 def authorization_neo4j_params(security_event: dict[str, Any]) -> dict[str, Any]:
     auth = authorization_from_event(security_event)
     return {

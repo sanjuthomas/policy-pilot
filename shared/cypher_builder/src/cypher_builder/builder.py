@@ -156,16 +156,6 @@ class CypherQueryBuilder:
             time_filter=time_filter, domain=domain, approval_only=approval_only
         )
 
-    def security_event_alert_group_by_lob(
-        self,
-        *,
-        time_filter: str,
-        domain: str,
-    ) -> list[tuple[str, str]]:
-        return qe._security_event_alert_group_by_lob_queries(
-            time_filter=time_filter, domain=domain
-        )
-
     def security_event_group_by_lob(
         self,
         *,

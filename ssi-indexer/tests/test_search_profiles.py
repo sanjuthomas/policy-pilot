@@ -5,7 +5,6 @@ from __future__ import annotations
 from etl.authorization_context import (
     authorization_merged_fields,
     authorization_merged_from_fact,
-    authorization_search_parts,
 )
 from etl.enrichment import build_merged_context, build_search_text
 from etl.instruction_pipeline import build_instruction_state_search_text
@@ -29,6 +28,21 @@ from helpers import sample_event as _sample_event
 from helpers import sample_instruction as _sample_instruction
 
 
+def _authorization_search_parts(merged: dict) -> list[str]:
+    """Local parity helper mirroring the former authorization_search_parts API."""
+    parts = [
+        merged.get("timestamp") or "",
+        merged.get("authorization_summary") or "",
+        merged.get("authorization_decision") or "",
+        merged.get("event_reason") or "",
+        " ".join(merged.get("authorization_basis") or []),
+        " ".join(merged.get("authorization_violations") or []),
+        " ".join(merged.get("actor_groups") or []),
+        " ".join(merged.get("actor_covering_lobs") or []),
+    ]
+    return [str(part) for part in parts if part]
+
+
 def _legacy_instruction_security_event_search_text(ctx: dict) -> str:
     """Pre-YAML builder — parity reference for instruction_security_event."""
     parts = [
@@ -37,7 +51,7 @@ def _legacy_instruction_security_event_search_text(ctx: dict) -> str:
         ctx.get("action", ""),
         ctx.get("outcome", ""),
         ctx.get("reason") or "",
-        *authorization_search_parts(ctx),
+        *_authorization_search_parts(ctx),
         ctx.get("actor_user_id", ""),
         ctx.get("actor_given_name") or "",
         ctx.get("actor_family_name") or "",
@@ -123,7 +137,7 @@ def _legacy_instruction_state_search_text(fact: dict) -> str:
         fact.get("actor_family_name") or "",
         fact.get("actor_lob") or "",
         fact.get("action") or "",
-        *authorization_search_parts(authorization_merged_from_fact(fact)),
+        *_authorization_search_parts(authorization_merged_from_fact(fact)),
     ]
     return " ".join(str(part) for part in parts if part).strip()
 
@@ -152,7 +166,7 @@ def _legacy_payment_event_search_text(event: dict) -> str:
         event_ctx.get("action", ""),
         event_ctx.get("outcome", ""),
         event_ctx.get("reason") or "",
-        *authorization_search_parts(auth_ctx),
+        *_authorization_search_parts(auth_ctx),
         actor.get("user_id", ""),
         actor.get("given_name") or "",
         actor.get("family_name") or "",

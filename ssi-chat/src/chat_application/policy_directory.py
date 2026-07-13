@@ -96,12 +96,6 @@ def payment_approval_clubs_for_amount(amount: float, *, strict: bool) -> list[st
     return clubs
 
 
-def payment_approval_club_for_amount(amount: float) -> str | None:
-    """Smallest club whose ceiling covers ``amount`` (inclusive)."""
-    clubs = payment_approval_clubs_for_amount(amount, strict=False)
-    return clubs[0] if clubs else None
-
-
 def payment_approval_clubs_from_question(
     message: str,
 ) -> tuple[list[str], float | None, bool]:
@@ -114,14 +108,6 @@ def payment_approval_clubs_from_question(
         return [], None, True
     strict = is_strict_payment_amount_threshold(message)
     return payment_approval_clubs_for_amount(amount, strict=strict), amount, strict
-
-
-def payment_approval_group_from_question(message: str) -> tuple[str | None, float | None]:
-    """Resolve a single club (legacy) — prefer :func:`payment_approval_clubs_from_question`."""
-    clubs, amount, _strict = payment_approval_clubs_from_question(message)
-    if not clubs:
-        return None, amount
-    return clubs[0], amount
 
 
 def merge_group_member_rows(members: list[dict[str, Any]]) -> list[dict[str, Any]]:

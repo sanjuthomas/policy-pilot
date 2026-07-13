@@ -75,22 +75,6 @@ class LifecycleAction(StrEnum):
     VIEW = "VIEW"
 
 
-MUTATING_ACTIONS = frozenset(
-    {
-        LifecycleAction.CREATE,
-        LifecycleAction.UPDATE,
-        LifecycleAction.CANCEL,
-        LifecycleAction.SUBMIT,
-        LifecycleAction.APPROVE,
-        LifecycleAction.REJECT,
-        LifecycleAction.SUSPEND,
-        LifecycleAction.REACTIVATE,
-        LifecycleAction.USE,
-        LifecycleAction.RELEASE_USE,
-    }
-)
-
-
 class SecurityEventSeverity(StrEnum):
     """Severity for security event monitoring — INFO for allows, ALERT for denials."""
 

@@ -6,7 +6,6 @@ Two sub-pipelines:
 """
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
@@ -33,12 +32,6 @@ def _display(user: dict[str, Any], prefix: str = "") -> str:
     if fn and gn:
         return f"{fn}, {gn} ({uid})"
     return uid
-
-
-def _roles_json(roles: list | None) -> str | None:
-    if not roles:
-        return None
-    return json.dumps(roles)
 
 
 def build_payment_event_search_text(event: dict[str, Any]) -> str:
