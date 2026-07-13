@@ -55,7 +55,7 @@ Policy Pilot surfaces **fraud patterns, compliance violations, and collusion sig
 
 ## How it works
 
-![End-to-end architecture](docs/architecture.drawio.png)
+![End-to-end architecture](docs/architecture-2.png)
 
 Policy Pilot sits at the end of an event-driven pipeline: domain services enforce OPA policy and write versioned state + security events to MongoDB; Kafka Connect streams changes; **ssi-indexer** builds a shared Neo4j graph and dense vector index; **ssi-chat** routes each question through a **Route → Retrieve → Synthesize** pipeline. Live policy and eligibility answers go through the same **authorization-service → OPA** path as mutations, using the logged-in user's JWT / ZITADEL session — not a parallel unchecked tool layer.
 
