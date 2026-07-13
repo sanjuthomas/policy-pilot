@@ -23,11 +23,6 @@ _TRAILING_NOISE = re.compile(
 )
 
 
-def extract_person_permission_query(message: str) -> str | None:
-    """Deprecated intent+parse — prefer LLM person_query; keep for fallback/tests."""
-    return extract_person_name_heuristic(message)
-
-
 def extract_person_name_heuristic(message: str) -> str | None:
     """Parse person name/id once person_permissions intent is known (or LLM fallback)."""
     text = " ".join(message.strip().split())

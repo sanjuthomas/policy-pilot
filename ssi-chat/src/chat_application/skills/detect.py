@@ -121,8 +121,3 @@ def parse_create_payment_params(message: str) -> CreatePaymentParams | None:
         value_date=value_date,
         raw_message=text,
     )
-
-
-def detect_create_payment_skill(message: str) -> CreatePaymentParams | None:
-    """Deprecated alias — slot parse only. Intent comes from the LLM router."""
-    return parse_create_payment_params(message)

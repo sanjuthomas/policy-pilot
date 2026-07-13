@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -84,20 +84,4 @@ def build_instruction_payload(
         "charge_bearer": "SHAR",
         "effective_date": effective.isoformat().replace("+00:00", "Z"),
         "end_date": end.isoformat().replace("+00:00", "Z"),
-    }
-
-
-def build_payment_payload(
-    *,
-    instruction_id: str,
-    amount: float = 1_000_000.0,
-    value_date: str | None = None,
-) -> dict[str, Any]:
-    """Minimal payload for POST /api/v1/payments."""
-    if value_date is None:
-        value_date = (date.today() + timedelta(days=1)).isoformat()
-    return {
-        "instruction_id": instruction_id,
-        "amount": amount,
-        "value_date": value_date,
     }

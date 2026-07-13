@@ -283,56 +283,6 @@ class MultimodalNeo4jStore:
             search_text = f"{search_text} {extra}".strip()
         return document_id, search_text, payload
 
-    async def patch_instruction_state_authorization(
-        self,
-        instruction_id: str,
-        *,
-        approved_at: str | None,
-        authorization_summary: str | None,
-        authorization_basis: list[str] | None,
-        dense_vector: list[float] | None = None,
-    ) -> None:
-        if not authorization_summary:
-            return
-
-        document_id = instruction_document_id(instruction_id)
-        async with self._driver.session() as session:
-            result = await session.run(
-                """
-                MATCH (d:MultimodalDocument {document_id: $document_id})
-                RETURN d
-                """,
-                document_id=document_id,
-            )
-            record = await result.single()
-        if record is None:
-            return
-
-        node = dict(record["d"])
-        payload = _payload_from_node(node)
-        basis = list(authorization_basis or [])
-        payload["approved_at"] = approved_at or payload.get("approved_at")
-        payload["authorization_summary"] = authorization_summary
-        payload["authorization_basis"] = basis
-        extra = " ".join(
-            part
-            for part in [approved_at or "", authorization_summary, " ".join(basis)]
-            if part
-        )
-        search_text = node.get("search_text") or payload.get("search_text") or ""
-        if extra:
-            search_text = f"{search_text} {extra}".strip()
-        embedding = dense_vector if dense_vector is not None else list(node.get("embedding") or [])
-        if not embedding:
-            return
-
-        await self._upsert(
-            document_id=document_id,
-            search_text=search_text,
-            payload=payload,
-            dense_vector=embedding,
-        )
-
     async def search_dense(
         self,
         query_vector: list[float],
