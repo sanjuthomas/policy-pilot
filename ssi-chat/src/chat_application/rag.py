@@ -452,6 +452,9 @@ def _format_security_event_alert_count_answer(
     total = int(graph_rows[0].get("total") or 0) if graph_rows else 0
     scope = _security_event_alert_scope_label(message)
     period = payment_aggregate_period_label(message)
+    q = message.lower()
+    # Prefer "policy denial" wording when the user asked about denials, not alerts.
+    event_label = "policy denial" if ("denial" in q or "denied" in q) else "ALERT"
 
     if period == "today":
         suffix = " today"
@@ -465,10 +468,10 @@ def _format_security_event_alert_count_answer(
     scope_prefix = f"{scope} " if scope else ""
 
     if total == 0:
-        return f"There were no {scope_prefix}ALERT events{suffix}.".replace("  ", " ")
+        return f"There were no {scope_prefix}{event_label} events{suffix}.".replace("  ", " ")
     if total == 1:
-        return f"There was 1 {scope_prefix}ALERT event{suffix}.".replace("  ", " ")
-    return f"There were {total} {scope_prefix}ALERT events{suffix}.".replace("  ", " ")
+        return f"There was 1 {scope_prefix}{event_label} event{suffix}.".replace("  ", " ")
+    return f"There were {total} {scope_prefix}{event_label} events{suffix}.".replace("  ", " ")
 
 
 def _format_security_event_group_by_lob_answer(

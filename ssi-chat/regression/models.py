@@ -41,6 +41,7 @@ class ExpectConfig(BaseModel):
     answer_has_number: bool = False
     min_sources: int = 0
     min_graph_rows: int = 0
+    exact_graph_rows: int | None = None
     requires_cypher: bool = False
     requires_context: list[str] = Field(default_factory=list)
     skip_if_missing_context: bool = True

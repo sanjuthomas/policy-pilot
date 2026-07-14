@@ -386,6 +386,11 @@ def is_instruction_count_aggregate_question(question: str) -> bool:
         return False
     if is_payments_for_instruction_question(question):
         return False
+    # Denial / ALERT counts are security-event questions, not instruction inventory.
+    if "alert" in q or bool(_DENIAL_QUESTION.search(question)):
+        return False
+    if "security event" in q:
+        return False
     return "instruction" in q
 
 
@@ -2112,14 +2117,14 @@ def plan_graph_queries(question: str, *, mode: str) -> list[tuple[str, str]] | N
             return builder.security_event_count(time_filter=time_filter, domain="instructions")
         return builder.security_event_count(time_filter=time_filter, domain="all")
 
-    if mode in ("events", "all") and flags["alerts"] and flags["payments"]:
-        return builder.security_event_alert_count(time_filter=time_filter, domain="payments")
-
-    if mode in ("events", "all") and flags["alerts"] and flags["instructions"]:
-        return builder.security_event_alert_count(time_filter=time_filter, domain="instructions")
-
-    if mode in ("events", "all") and flags["alerts"] and not flags["payments"] and not flags["instructions"]:
-        return builder.security_event_alert_count(time_filter=time_filter, domain="all")
+    # ALERT / policy-denial counts — "denial" is synonymous with alert severity here.
+    if mode in ("events", "all") and is_security_event_alert_count_question(
+        question, mode=mode
+    ):
+        domain = security_event_domain_from_question(question)
+        return builder.security_event_alert_count(
+            time_filter=time_filter, domain=domain
+        )
 
     return None
 

@@ -117,6 +117,17 @@ class TestPlanGraphQueries:
         assert "details" in labels
         assert "date()" in planned[0][1]
 
+    def test_count_instruction_policy_denials_week(self) -> None:
+        planned = plan_graph_queries(
+            "How many instruction policy denials happened this week?",
+            mode="events",
+        )
+        assert planned is not None
+        assert planned[0][0] == "count"
+        assert "e.payment_id IS NULL" in planned[0][1]
+        assert "e.severity = 'ALERT'" in planned[0][1]
+        assert "P7D" in planned[0][1]
+
     def test_count_total_security_events(self) -> None:
         planned = plan_graph_queries(
             "How many security events are there in the system?",

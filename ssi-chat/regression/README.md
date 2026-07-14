@@ -8,7 +8,7 @@ Each case also declares a **`retrieval`** tag — the primary engine the answer 
 
 | `retrieval` | Meaning | Count in bank |
 |-------------|---------|---------------|
-| `deterministic` | Neo4j planned query + formatter; skips LLM synthesis | 23 |
+| `deterministic` | Neo4j planned query + formatter; skips LLM synthesis | 24 |
 | `graph` | Neo4j planned or LLM Cypher is authoritative | 30 |
 | `vector` | Neo4j dense vector hits drive open-ended security-event answers | 3 |
 | `eligibility` | Live OPA via authorization-service (no vector search) | 0 (supported in chat, not in this bank) |
@@ -19,30 +19,31 @@ PolicyPilot still runs dense vector search **in parallel** for every case except
 
 - Full stack running (`docker compose up -d`), including **Kafka Connect** and **ssi-indexer**
 - **GCP Vertex AI** credentials mounted into ssi-indexer and ssi-chat (embeddings + Gemini)
-- Harness reachable at http://localhost:8091 (for `--seed`)
-- Neo4j populated by the indexer (run `./ssi-demo-harness/seed-demo-data.sh` or harness seed before `--seed`)
+- Harness reachable at http://localhost:8091 (regression seed POSTs `/api/actions/...`)
+- Optional larger demo seed: `./ssi-demo-harness/seed-demo-data.sh` (checked in)
 - Graph uses `CREATED_IV`, `APPROVED_IV`, `FOR`, … — see [neo4j-graph-model/README.md](../../neo4j-graph-model/README.md)
 
 ## Quick run
 
-From repo root (stack already has data):
+From repo root with the stack up. **Harness seed from `questions.yaml` runs by default** (policy scenarios + create/submit/approve instructions & payments, then ETL wait):
 
 ```bash
 cd ssi-chat
 pip install -e ".[regression]"
-PYTHONPATH=. python -m regression.runner
+PYTHONPATH=. python -m regression.runner --report regression-report.json
 ```
 
-Seed data, wait for ETL, then run all cases:
+Skip seed only when the graph is already warm:
 
 ```bash
-PYTHONPATH=. python -m regression.runner --seed --report regression-report.json
+PYTHONPATH=. python -m regression.runner --no-seed
 ```
 
 After install:
 
 ```bash
-ssi-chat-regression --seed
+ssi-chat-regression
+ssi-chat-regression --no-seed   # skip seed
 ```
 
 ## Filters
@@ -71,7 +72,7 @@ pip install -e ".[regression]"
 RUN_CHAT_REGRESSION=1 pytest tests/test_chat_regression.py -v
 ```
 
-Use `CHAT_REGRESSION_SEED=1` to run harness seed steps before the suite.
+Harness seed runs by default. Opt out with `CHAT_REGRESSION_SEED=0` on a warm stack.
 
 ## API smoke (cross-service)
 
@@ -79,12 +80,12 @@ Before chat cases, the runner executes **API smoke checks** across services (hea
 
 ```bash
 # Smoke only (fast, skips Vertex-dependent indexer checks)
-PYTHONPATH=. python -m regression.runner --api-smoke-only
+PYTHONPATH=. python -m regression.runner --api-smoke-only --no-seed
 
-# Full run: smoke + 56 chat cases
-PYTHONPATH=. python -m regression.runner --seed
+# Full run: seed + smoke + chat cases (seed is default)
+PYTHONPATH=. python -m regression.runner
 
-# Chat only (skip smoke)
+# Chat only (skip smoke; still seeds unless --no-seed)
 PYTHONPATH=. python -m regression.runner --skip-api-smoke
 ```
 
@@ -129,7 +130,7 @@ Metrics are printed after the case summary and written to `--report` JSON under 
 `eval_golden.yaml` is a smaller hand-labeled set with explicit routing and quality gates (`require_routing`, `require_entity_recall`, `min_faithfulness`, …):
 
 ```bash
-PYTHONPATH=. python -m regression.runner --eval-golden --seed --report golden-eval.json
+PYTHONPATH=. python -m regression.runner --eval-golden --report golden-eval.json
 ```
 
 Cases fail when **both** answer expectations and explicit quality gates fail. The full `questions.yaml` bank still uses flexible keyword assertions; quality metrics are reported for all cases without changing pass/fail unless you add quality fields under `expect:`.

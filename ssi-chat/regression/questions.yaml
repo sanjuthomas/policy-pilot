@@ -54,6 +54,22 @@ cases:
   question: How many instruction policy denials happened this week?
   expect:
     answer_has_number: true
+- id: events_instruction_denials_list_week
+  mode: events
+  retrieval: deterministic
+  tags:
+  - alerts
+  - instructions
+  - list
+  question: Can you list all instruction denial events for this week?
+  expect:
+    min_answer_length: 20
+    exact_graph_rows: 2
+    answer_contains_all:
+    - ALERT security events (2)
+    - Entity ID
+    answer_contains_any:
+    - instruction
 - id: events_payment_denials_today
   mode: events
   retrieval: graph

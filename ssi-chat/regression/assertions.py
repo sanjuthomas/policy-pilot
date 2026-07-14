@@ -41,6 +41,12 @@ def evaluate_expectations(
     if len(graph_rows) < expect.min_graph_rows:
         return False, f"graph_rows={len(graph_rows)} < min_graph_rows={expect.min_graph_rows}"
 
+    if expect.exact_graph_rows is not None and len(graph_rows) != expect.exact_graph_rows:
+        return (
+            False,
+            f"graph_rows={len(graph_rows)} != exact_graph_rows={expect.exact_graph_rows}",
+        )
+
     if expect.requires_cypher and not (cypher or "").strip():
         return False, "expected cypher query but none was generated"
 

@@ -86,7 +86,7 @@ done
 
 If a service has no `tests/` directory yet, create one and add tests for the code you touched — do not skip the coverage check.
 
-Optional chat regression suite (does not replace the 80% unit-coverage requirement):
+Optional chat regression suite (does not replace the 80% unit-coverage requirement). Harness seed from `questions.yaml` runs by default (`CHAT_REGRESSION_SEED=0` to skip):
 
 ```bash
 cd ssi-chat
