@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from chat_application.feedback_observability import (
+from chat_application.observability.feedback import (
     ChatFeedbackContext,
     get_feedback_distribution,
     record_chat_feedback,
@@ -68,7 +68,7 @@ class TestFeedbackDistribution:
     def teardown_method(self) -> None:
         reset_feedback_distribution()
 
-    @patch("chat_application.feedback_observability.record_counter")
+    @patch("chat_application.observability.feedback.record_counter")
     def test_record_chat_feedback_tracks_strategy_satisfaction(self, mock_counter) -> None:
         record_chat_feedback(
             ChatFeedbackContext(

@@ -12,7 +12,7 @@ class TestHealthEndpoint:
         assert response.json() == {"status": "UP"}
 
     def test_routing_stats_returns_distribution(self, test_client: TestClient) -> None:
-        from chat_application.routing_observability import reset_routing_distribution
+        from chat_application.observability.routing import reset_routing_distribution
 
         reset_routing_distribution()
         response = test_client.get("/api/routing-stats")
