@@ -36,6 +36,30 @@ class TestChatFeedbackContext:
         )
         assert feedback.retrieval_strategy == "eligibility"
 
+    def test_from_payload_accepts_policy_directory_strategy(self) -> None:
+        feedback = ChatFeedbackContext.from_payload(
+            rating="up",
+            mode="policies",
+            path="policy_directory",
+            cypher_provenance="none",
+            answer_synthesis="policy_directory_api",
+            retrieval_strategy="policy_directory",
+            user_id="comp-001",
+        )
+        assert feedback.retrieval_strategy == "policy_directory"
+
+    def test_from_payload_derives_policy_directory_when_missing(self) -> None:
+        feedback = ChatFeedbackContext.from_payload(
+            rating="up",
+            mode="policies",
+            path="policy_directory",
+            cypher_provenance="none",
+            answer_synthesis="policy_directory_api",
+            retrieval_strategy=None,
+            user_id="comp-001",
+        )
+        assert feedback.retrieval_strategy == "policy_directory"
+
 
 class TestFeedbackDistribution:
     def setup_method(self) -> None:

@@ -1108,10 +1108,11 @@ _APPROVAL_AUTH_COALESCE = """
 
 
 def _instruction_approval_lookup_queries(instruction_id: str) -> list[tuple[str, str]]:
+    safe_id = _escape_cypher_literal(instruction_id)
     return [
         (
             "approval_lookup",
-            f"""MATCH (i:Instruction {{instruction_id: '{instruction_id}'}})-[:CURRENT]->(v:InstructionVersion)
+            f"""MATCH (i:Instruction {{instruction_id: '{safe_id}'}})-[:CURRENT]->(v:InstructionVersion)
 OPTIONAL MATCH (approverUser:User {{user_id: v.approver_user_id}})
 {_APPROVAL_LOOKUP_EVENT_AUTH}
 RETURN v.instruction_id AS instruction_id,
@@ -1125,10 +1126,11 @@ LIMIT 1""",
 
 
 def _instruction_approver_via_payment_queries(payment_id: str) -> list[tuple[str, str]]:
+    safe_id = _escape_cypher_literal(payment_id)
     return [
         (
             "instruction_approver_via_payment",
-            f"""MATCH (i:Instruction)-[:HAS_PAYMENT]->(p:Payment {{payment_id: '{payment_id}'}})
+            f"""MATCH (i:Instruction)-[:HAS_PAYMENT]->(p:Payment {{payment_id: '{safe_id}'}})
 MATCH (i)-[:CURRENT]->(v:InstructionVersion)
 OPTIONAL MATCH (approverUser:User {{user_id: v.approver_user_id}})
 {_APPROVAL_LOOKUP_EVENT_AUTH}
@@ -1148,11 +1150,14 @@ def _payments_for_instruction_queries(
     *,
     status: str | None = None,
 ) -> list[tuple[str, str]]:
-    status_filter = f"AND p.status = '{status}'" if status else ""
+    safe_id = _escape_cypher_literal(instruction_id)
+    status_filter = (
+        f"AND p.status = '{_escape_cypher_literal(status)}'" if status else ""
+    )
     return [
         (
             "payments_for_instruction",
-            f"""MATCH (i:Instruction {{instruction_id: '{instruction_id}'}})-[:HAS_PAYMENT]->(pay:Payment)
+            f"""MATCH (i:Instruction {{instruction_id: '{safe_id}'}})-[:HAS_PAYMENT]->(pay:Payment)
 MATCH (pay)-[:HAS_VERSION]->(pv:PaymentVersion)
 WHERE pv.status IS NOT NULL
 WITH i, pay, max(pv.version_number) AS max_ver

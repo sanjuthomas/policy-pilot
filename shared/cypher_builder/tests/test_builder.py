@@ -222,6 +222,30 @@ def test_payment_detail_query_includes_creator_and_approver() -> None:
     assert "creator_display" in query
 
 
+def test_lookup_queries_escape_cypher_literals() -> None:
+    from cypher_builder.builder import CypherQueryBuilder
+
+    builder = CypherQueryBuilder()
+    nasty_instruction = "2026-O'Brien-I-1"
+    nasty_payment = "2026-O'Brien-P-1"
+    nasty_status = "APPROVED' OR '1'='1"
+
+    approval = builder.instruction_approval_lookup(nasty_instruction)[0][1]
+    assert "instruction_id: '2026-O\\'Brien-I-1'" in approval
+
+    via_payment = builder.instruction_approver_via_payment(nasty_payment)[0][1]
+    assert "payment_id: '2026-O\\'Brien-P-1'" in via_payment
+
+    payments = builder.payments_for_instruction(
+        nasty_instruction, status=nasty_status
+    )[0][1]
+    assert "instruction_id: '2026-O\\'Brien-I-1'" in payments
+    assert "p.status = 'APPROVED\\' OR \\'1\\'=\\'1'" in payments
+    validate_read_only_cypher(approval)
+    validate_read_only_cypher(via_payment)
+    validate_read_only_cypher(payments)
+
+
 def test_instruction_mutual_approval_query_deduplicates_pairs() -> None:
     from cypher_builder.builder import CypherQueryBuilder
 

@@ -7,7 +7,13 @@ from pydantic import BaseModel, Field
 SearchMode = Literal["events", "instructions", "payments", "all"]
 
 # Primary retrieval path the answer is expected to use (vector still runs in parallel except eligibility).
-RetrievalStrategy = Literal["deterministic", "graph", "vector", "eligibility"]
+RetrievalStrategy = Literal[
+    "deterministic",
+    "graph",
+    "vector",
+    "eligibility",
+    "policy_directory",
+]
 
 
 class SeedStep(BaseModel):

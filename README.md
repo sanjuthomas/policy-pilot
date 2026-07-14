@@ -33,10 +33,10 @@ Policy Pilot surfaces **fraud patterns, compliance violations, and collusion sig
 **Tools** (live policy — use **Policies** mode; log in as `comp-001`)
 
 - _What is the funding approval policy?_ **`tools`**
-- _Who has permission to approve payments worth more than $25 billion, and for which lines of business?_ **`tools`**
-- _Who has permission to approve payments belong to LOB FICC?_ **`tools`**
+- _Who has permission to approve payments worth more than $25 billion, and for which lines of business?_ **`tools`** **`policy_directory`**
+- _Who has permission to approve payments belong to LOB FICC?_ **`tools`** **`policy_directory`**
 - _Can you list the permissions of Kowalski, Anna?_ **`tools`**
-- _Who can approve payment Y?_ **`tools`**
+- _Who can approve payment Y?_ **`tools`** **`eligibility`**
 
 **Skills** (mutation — use **Payments** mode; log in as a payment creator, e.g. `pay-101` / `pay-205`)
 

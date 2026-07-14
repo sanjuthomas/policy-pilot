@@ -7,7 +7,9 @@ Curated natural-language questions for demoing Policy Pilot. Prefer these over i
 | Tag | Meaning |
 |-----|---------|
 | **`graph`** | Planned Neo4j Cypher (counts, lists, relationships) |
-| **`tools`** | Live OPA / policy directory / person entitlements |
+| **`tools`** | Live policy tools umbrella (`policy_directory`, `eligibility`, policy summary, person entitlements) |
+| **`policy_directory`** | Amount-club / LOB funding-approver directory (not live OPA eligibility for a payment id) |
+| **`eligibility`** | Live OPA eligible-approvers for a specific payment or instruction id |
 | **`skill`** | Scripted mutation skill (create-payment with Go / No Go) |
 | **`vector`** | Semantic retrieval over security-event audit text |
 
@@ -43,11 +45,11 @@ Use **Policies** mode. Sign in as compliance analyst `comp-001`.
 
 ### Who may approve (directory — no payment ID)
 
-- _Who has permission to approve payments worth more than $25 billion, and for which lines of business?_ **`tools`**
-- _Who can approve payments of at least $1 billion?_ **`tools`**
-- _Who has permission to approve payments belong to LOB FICC?_ **`tools`**
-- _Who has permission to approve payments for LOB FX?_ **`tools`**
-- _Who has permission to approve payments exceeding $1 million for FICC?_ **`tools`**
+- _Who has permission to approve payments worth more than $25 billion, and for which lines of business?_ **`tools`** **`policy_directory`**
+- _Who can approve payments of at least $1 billion?_ **`tools`** **`policy_directory`**
+- _Who has permission to approve payments belong to LOB FICC?_ **`tools`** **`policy_directory`**
+- _Who has permission to approve payments for LOB FX?_ **`tools`** **`policy_directory`**
+- _Who has permission to approve payments exceeding $1 million for FICC?_ **`tools`** **`policy_directory`**
 
 ### Person entitlements (ZITADEL directory projection)
 
@@ -59,8 +61,8 @@ Use **Policies** mode. Sign in as compliance analyst `comp-001`.
 
 ### Live eligibility (include a real payment or instruction ID)
 
-- _Who can approve payment Y?_ **`tools`**
-- _Who can approve instruction X?_ **`tools`**
+- _Who can approve payment Y?_ **`tools`** **`eligibility`**
+- _Who can approve instruction X?_ **`tools`** **`eligibility`**
 
 Grab IDs from the [demo harness](http://localhost:8091) or instruction/payment UIs after seeding.
 

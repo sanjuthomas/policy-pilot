@@ -58,7 +58,14 @@ class ChatFeedbackContext:
         source_channels: dict[str, int] | None = None,
     ) -> ChatFeedbackContext:
         strategy: RetrievalStrategy
-        if retrieval_strategy in ("deterministic", "graph", "vector", "eligibility"):
+        if retrieval_strategy in (
+            "deterministic",
+            "graph",
+            "vector",
+            "eligibility",
+            "policy_directory",
+            "skill",
+        ):
             strategy = retrieval_strategy  # type: ignore[assignment]
         else:
             strategy = classify_retrieval_strategy(
