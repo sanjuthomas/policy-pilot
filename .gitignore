@@ -26,5 +26,8 @@ gcp-vertex-setup.local.md
 *.log
 data/
 
+# Local regression artifacts
+ssi-chat/regression-report.json
+
 # Node (if added later)
 node_modules/
