@@ -10,12 +10,12 @@ from cypher_builder import (
 )
 from vertex_client import VertexEmbeddingClient, VertexGenerativeClient
 
-from chat_application.pipeline.models import RouterDecision
-from chat_application.pipeline.prompts import ROUTER_SYSTEM_PROMPT
-from chat_application.prompts import (
+from chat_application.gemini.prompts import (
     AUTHORIZATION_WHY_SUMMARY_SYSTEM_PROMPT,
     answer_system_prompt,
 )
+from chat_application.pipeline.models import RouterDecision
+from chat_application.pipeline.prompts import ROUTER_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 

@@ -11,7 +11,8 @@ from typing import Any, Callable
 
 import yaml
 
-from chat_application.cypher import (
+from chat_application.formatting.neo4j import FORMATTERS
+from chat_application.graph.cypher import (
     CypherQueryBuilder,
     extract_entity_ids,
     extract_instruction_ids,
@@ -44,9 +45,8 @@ from chat_application.cypher import (
     plan_graph_queries,
     validate_read_only_cypher,
 )
-from chat_application.formatting.neo4j import FORMATTERS
+from chat_application.graph.neo4j import Neo4jClient
 from chat_application.models import SearchMode
-from chat_application.neo4j import Neo4jClient
 
 logger = logging.getLogger(__name__)
 _INTENTS_PATH = Path(__file__).resolve().parent / "intents" / "neo4j_direct.yaml"

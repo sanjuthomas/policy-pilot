@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from chat_application.authorization_client import format_policy_summary_answer
-from chat_application.policy_summary import detect_policy_summary_question
+from chat_application.authz.client import format_policy_summary_answer
+from chat_application.policy.summary import detect_policy_summary_question
 
 
 def test_detect_funding_approval_policy() -> None:

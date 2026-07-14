@@ -7,7 +7,7 @@ from typing import Any
 
 from chat_application.models import SearchMode
 from chat_application.pipeline.models import ExecutionStrategy
-from chat_application.reranker import RankedHit, graph_rows_to_hits
+from chat_application.vector.reranker import RankedHit, graph_rows_to_hits
 
 
 @dataclass

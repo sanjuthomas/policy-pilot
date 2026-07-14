@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from chat_application.cypher import format_facet_aggregate_answer
 from chat_application.formatting import (
     format_usd_compact,
     humanize_authorization_text,
@@ -8,6 +7,7 @@ from chat_application.formatting import (
     humanize_policy_basis_point,
     parse_authorization_basis,
 )
+from chat_application.graph.cypher import format_facet_aggregate_answer
 from chat_application.rag import (
     RagService,
     _display_from_snap_user,
@@ -24,7 +24,7 @@ from chat_application.rag import (
     _instruction_lifecycle_party_lines,
     _should_format_security_event_group_by_lob,
 )
-from chat_application.reranker import RankedHit
+from chat_application.vector.reranker import RankedHit
 
 
 class TestParseAuthorizationBasis:

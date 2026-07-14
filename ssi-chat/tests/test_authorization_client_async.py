@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
-from chat_application.authorization_client import (
+from chat_application.authz.client import (
     EligibilityClient,
     EligibilityClientError,
 )
@@ -16,7 +16,7 @@ async def test_eligible_approvers_for_payment_success() -> None:
         request=httpx.Request("POST", "http://payment.test/api/v1/payments/p1/eligible-approvers"),
     )
 
-    with patch("chat_application.authorization_client.httpx.AsyncClient") as mock_client_cls:
+    with patch("chat_application.authz.client.httpx.AsyncClient") as mock_client_cls:
         mock_client = mock_client_cls.return_value.__aenter__.return_value
         mock_client.post = AsyncMock(return_value=response)
         client = EligibilityClient(
@@ -39,7 +39,7 @@ async def test_eligible_approvers_for_payment_forbidden() -> None:
         request=httpx.Request("POST", "http://payment.test/api/v1/payments/p1/eligible-approvers"),
     )
 
-    with patch("chat_application.authorization_client.httpx.AsyncClient") as mock_client_cls:
+    with patch("chat_application.authz.client.httpx.AsyncClient") as mock_client_cls:
         mock_client = mock_client_cls.return_value.__aenter__.return_value
         mock_client.post = AsyncMock(return_value=response)
         client = EligibilityClient(payment_service_url="http://payment.test")
@@ -66,7 +66,7 @@ async def test_policy_summary_success() -> None:
         ),
     )
 
-    with patch("chat_application.authorization_client.httpx.AsyncClient") as mock_client_cls:
+    with patch("chat_application.authz.client.httpx.AsyncClient") as mock_client_cls:
         mock_client = mock_client_cls.return_value.__aenter__.return_value
         mock_client.get = AsyncMock(return_value=response)
         client = EligibilityClient(authorization_service_url="http://authz.test")

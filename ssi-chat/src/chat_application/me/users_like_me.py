@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from chat_application.capabilities import OPERATIONAL_ROLES, capabilities_for
+from chat_application.auth.capabilities import OPERATIONAL_ROLES, capabilities_for
+from chat_application.auth.subject import Subject
+from chat_application.auth.users import SeedUser, load_users
 from chat_application.config import settings
 from chat_application.me.models import MeIntentResult
-from chat_application.subject import Subject
-from chat_application.users import SeedUser, load_users
 
 _AMOUNT_CLUBS = frozenset(
     {

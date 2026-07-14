@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from fastapi import Depends, Header, HTTPException
 
-from chat_application.auth import subject_from_bearer_token
+from chat_application.auth.bearer import subject_from_bearer_token
+from chat_application.auth.subject import Subject
 from chat_application.config import settings
-from chat_application.subject import Subject
 
 
 def get_subject(

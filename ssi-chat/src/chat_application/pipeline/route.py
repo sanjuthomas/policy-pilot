@@ -8,7 +8,7 @@ from chat_application.pipeline.heuristic_strategy import heuristic_router_decisi
 from chat_application.pipeline.models import RouterDecision
 
 if TYPE_CHECKING:
-    from chat_application.ml_client import PolicyPilotMlClient
+    from chat_application.gemini.client import PolicyPilotMlClient
 
 logger = logging.getLogger(__name__)
 

@@ -300,7 +300,7 @@ class TestNeo4jFormatters:
 
 class TestMultimodalIds:
     def test_document_ids_are_deterministic(self) -> None:
-        from chat_application.vector_document_ids import (
+        from chat_application.vector.document_ids import (
             event_document_id,
             instruction_document_id,
             payment_document_id,
@@ -312,7 +312,7 @@ class TestMultimodalIds:
 
 class TestPrompts:
     def test_answer_system_prompt_modes(self) -> None:
-        from chat_application.prompts import answer_system_prompt
+        from chat_application.gemini.prompts import answer_system_prompt
 
         assert "payment" in answer_system_prompt("payments").lower()
         assert "instruction" in answer_system_prompt("instructions").lower()

@@ -3,14 +3,14 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
-from chat_application.subject import Subject
+from chat_application.auth.subject import Subject
 from fastapi.testclient import TestClient
 
 
 @pytest.fixture
 def auth_client(test_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     import chat_application.main as main_module
-    from chat_application.dependencies import get_chat_subject
+    from chat_application.auth.dependencies import get_chat_subject
 
     monkeypatch.setattr("chat_application.config.settings.oidc_issuer_url", "http://localhost:8080")
     main_module.app.dependency_overrides.pop(get_chat_subject, None)
@@ -24,7 +24,7 @@ def test_get_chat_subject_rejects_missing_bearer(auth_client: TestClient) -> Non
 
 def test_get_chat_subject_rejects_unrelated_role(auth_client: TestClient) -> None:
     subject = Subject(user_id="fo-001", title="Trader", roles=["INSTRUCTION_CREATOR"])
-    with patch("chat_application.dependencies.subject_from_bearer_token", return_value=subject):
+    with patch("chat_application.auth.dependencies.subject_from_bearer_token", return_value=subject):
         response = auth_client.post(
             "/api/chat",
             headers={"Authorization": "Bearer test-token"},
@@ -42,7 +42,7 @@ def test_get_chat_subject_allows_compliance_analyst(auth_client: TestClient) -> 
         roles=["COMPLIANCE_ANALYST"],
     )
     main_module.rag_service = None
-    with patch("chat_application.dependencies.subject_from_bearer_token", return_value=subject):
+    with patch("chat_application.auth.dependencies.subject_from_bearer_token", return_value=subject):
         response = auth_client.post(
             "/api/chat",
             headers={"Authorization": "Bearer test-token"},
@@ -62,7 +62,7 @@ def test_get_chat_subject_allows_payment_creator(auth_client: TestClient) -> Non
         covering_lobs=["FICC"],
     )
     main_module.rag_service = None
-    with patch("chat_application.dependencies.subject_from_bearer_token", return_value=subject):
+    with patch("chat_application.auth.dependencies.subject_from_bearer_token", return_value=subject):
         response = auth_client.post(
             "/api/chat",
             headers={"Authorization": "Bearer test-token"},
@@ -82,7 +82,7 @@ def test_get_chat_subject_allows_funding_approver(auth_client: TestClient) -> No
         covering_lobs=["FICC", "FX"],
     )
     main_module.rag_service = None
-    with patch("chat_application.dependencies.subject_from_bearer_token", return_value=subject):
+    with patch("chat_application.auth.dependencies.subject_from_bearer_token", return_value=subject):
         response = auth_client.post(
             "/api/chat",
             headers={"Authorization": "Bearer test-token"},
@@ -100,7 +100,7 @@ def test_get_chat_subject_allows_platform_admin(auth_client: TestClient) -> None
         roles=["PLATFORM_ADMIN"],
     )
     main_module.rag_service = None
-    with patch("chat_application.dependencies.subject_from_bearer_token", return_value=subject):
+    with patch("chat_application.auth.dependencies.subject_from_bearer_token", return_value=subject):
         response = auth_client.post(
             "/api/chat",
             headers={"Authorization": "Bearer test-token"},

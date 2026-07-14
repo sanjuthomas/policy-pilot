@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from chat_application.users import chat_users, compliance_users, load_users
+from chat_application.auth.users import chat_users, compliance_users, load_users
 
 
 def test_compliance_users_filters_role(tmp_path: Path) -> None:

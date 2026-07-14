@@ -4,12 +4,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
-from chat_application.service_identity import (
+from chat_application.auth.service_identity import (
     ServiceIdentity,
     _host_header,
     _zitadel_base,
 )
-from chat_application.zitadel_auth import ZitadelAuthClient, login_name_for_user
+from chat_application.auth.zitadel import ZitadelAuthClient, login_name_for_user
 
 
 def _context(response=None, error=None):
@@ -48,7 +48,7 @@ async def test_zitadel_login_retries_short_username_after_status_error() -> None
         "bad credentials", request=first.request, response=first
     ))
 
-    with patch("chat_application.zitadel_auth.httpx.AsyncClient", return_value=context):
+    with patch("chat_application.auth.zitadel.httpx.AsyncClient", return_value=context):
         credentials = await ZitadelAuthClient("http://zitadel.test", "pat").login(
             "user@example.test", "password"
         )
@@ -65,7 +65,7 @@ async def test_zitadel_session_requires_both_session_fields() -> None:
     response = _response(200, {"sessionId": "s1"})
     context, _ = _context(response)
     with (
-        patch("chat_application.zitadel_auth.httpx.AsyncClient", return_value=context),
+        patch("chat_application.auth.zitadel.httpx.AsyncClient", return_value=context),
         pytest.raises(RuntimeError, match="missing session fields"),
     ):
         await ZitadelAuthClient("http://zitadel.test", "pat").login("user", "password")
@@ -81,14 +81,14 @@ async def test_zitadel_login_reraises_last_status_error() -> None:
     )
     context, _ = _context(response)
     with (
-        patch("chat_application.zitadel_auth.httpx.AsyncClient", return_value=context),
+        patch("chat_application.auth.zitadel.httpx.AsyncClient", return_value=context),
         pytest.raises(httpx.HTTPStatusError, match="bad credentials"),
     ):
         await ZitadelAuthClient("http://zitadel.test", "pat").login("user", "password")
 
 
 def test_service_identity_url_and_host_helpers() -> None:
-    with patch("chat_application.service_identity.settings") as settings:
+    with patch("chat_application.auth.service_identity.settings") as settings:
         settings.zitadel_internal_url = "http://internal/"
         settings.oidc_internal_url = "http://oidc-internal"
         settings.oidc_issuer_url = "https://issuer.example.test/path"
@@ -105,7 +105,7 @@ def test_service_identity_url_and_host_helpers() -> None:
 @pytest.mark.asyncio
 async def test_service_identity_login_handles_unconfigured_success_and_failure() -> None:
     identity = ServiceIdentity()
-    with patch("chat_application.service_identity.settings") as settings:
+    with patch("chat_application.auth.service_identity.settings") as settings:
         settings.zitadel_service_pat = ""
         await identity.login()
         assert identity.token is None
@@ -113,8 +113,8 @@ async def test_service_identity_login_handles_unconfigured_success_and_failure()
     response = _response(200, {"sessionId": "s1", "sessionToken": "t1"})
     context, _ = _context(response)
     with (
-        patch("chat_application.service_identity.settings") as settings,
-        patch("chat_application.service_identity.httpx.AsyncClient", return_value=context),
+        patch("chat_application.auth.service_identity.settings") as settings,
+        patch("chat_application.auth.service_identity.httpx.AsyncClient", return_value=context),
     ):
         settings.zitadel_service_pat = "pat"
         settings.service_user_id = "svc-chat"
@@ -128,8 +128,8 @@ async def test_service_identity_login_handles_unconfigured_success_and_failure()
 
     context, _ = _context(error=httpx.ConnectError("down"))
     with (
-        patch("chat_application.service_identity.settings") as settings,
-        patch("chat_application.service_identity.httpx.AsyncClient", return_value=context),
+        patch("chat_application.auth.service_identity.settings") as settings,
+        patch("chat_application.auth.service_identity.httpx.AsyncClient", return_value=context),
     ):
         settings.zitadel_service_pat = "pat"
         settings.service_user_id = "svc-chat"

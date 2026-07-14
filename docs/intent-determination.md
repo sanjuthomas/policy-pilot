@@ -214,9 +214,9 @@ Structured log line: `chat.answer.completed strategy=… path=… cypher=… syn
 | `ssi-chat/src/chat_application/pipeline/prompts.py` | Router system prompt |
 | `ssi-chat/src/chat_application/pipeline/heuristic_strategy.py` | Fallback routing heuristics |
 | `ssi-chat/src/chat_application/pipeline/retrieve.py` | Selective retrieval execution |
-| `ssi-chat/src/chat_application/ml_client.py` | `route_query()` — Gemini structured output |
+| `ssi-chat/src/chat_application/gemini/client.py` | `route_query()` — Gemini structured output |
 | `shared/vertex_client/src/vertex_client/generation.py` | `response_schema` support for Gemini |
-| `ssi-chat/src/chat_application/neo4j_intents.py` | Direct Neo4j intent matching |
+| `ssi-chat/src/chat_application/graph/direct.py` | Direct Neo4j intent matching |
 | `shared/cypher_builder/` | Graph plan extraction and planned Cypher |
 
 ## Reviewer talking points

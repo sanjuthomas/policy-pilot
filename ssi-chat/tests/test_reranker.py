@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from chat_application.reranker import graph_rows_to_hits, rrf_merge
+from chat_application.vector.reranker import graph_rows_to_hits, rrf_merge
 
 
 class TestRrfMerge:

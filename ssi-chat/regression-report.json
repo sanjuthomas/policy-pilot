@@ -1,0 +1,2136 @@
+{
+  "elapsed_seconds": 205.19,
+  "context": {
+    "approved_instruction_id": "20260713-FICC-I-5",
+    "ficc_standing_instruction_id": "20260713-FICC-I-5",
+    "pending_instruction_id": "20260714-DESK_RATES-I-1",
+    "approved_payment_id": "20260713-FX-P-3",
+    "approved_payment_instruction_id": "20260705-FX-I-1",
+    "submitted_payment_id": "20260714-FX-P-1",
+    "any_payment_id": "20260714-FICC-P-3",
+    "any_instruction_id": "20260713-FICC-I-5"
+  },
+  "api_smoke": {
+    "passed": 26,
+    "failed": 0,
+    "skipped": 0,
+    "checks": [
+      {
+        "id": "harness_health",
+        "service": "harness",
+        "description": "GET /health",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      },
+      {
+        "id": "instruction-service_health",
+        "service": "instruction-service",
+        "description": "GET /health",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      },
+      {
+        "id": "payment-service_health",
+        "service": "payment-service",
+        "description": "GET /health",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      },
+      {
+        "id": "ssi-indexer_health",
+        "service": "ssi-indexer",
+        "description": "GET /health",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      },
+      {
+        "id": "ssi-chat_health",
+        "service": "ssi-chat",
+        "description": "GET /health",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      },
+      {
+        "id": "authorization-service_health",
+        "service": "authorization-service",
+        "description": "GET /health",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      },
+      {
+        "id": "chat_compliance_users",
+        "service": "ssi-chat",
+        "description": "GET /api/compliance-users",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      },
+      {
+        "id": "chat_auth_gate",
+        "service": "ssi-chat",
+        "description": "POST /api/chat rejects unauthenticated",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      },
+      {
+        "id": "payment_eligible_auth_gate",
+        "service": "payment-service",
+        "description": "POST eligible-approvers rejects unauthenticated",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      },
+      {
+        "id": "harness_status",
+        "service": "harness",
+        "description": "GET /api/status (admin)",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      },
+      {
+        "id": "harness_action_auth",
+        "service": "harness",
+        "description": "POST /api/actions/create-instructions rejects unauthenticated",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      },
+      {
+        "id": "harness_suspend_auth",
+        "service": "harness",
+        "description": "POST /api/actions/suspend-instructions rejects unauthenticated",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      },
+      {
+        "id": "instruction_service_ui_instructions",
+        "service": "instruction-service",
+        "description": "GET /api/ui/instructions (admin)",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      },
+      {
+        "id": "instruction_service_ui_auth",
+        "service": "instruction-service",
+        "description": "GET /api/ui/instructions rejects unauthenticated",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      },
+      {
+        "id": "instruction_service_rest_auth",
+        "service": "instruction-service",
+        "description": "GET /api/v1/instructions rejects unauthenticated",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      },
+      {
+        "id": "payment_ui_payments",
+        "service": "payment-service",
+        "description": "GET /api/ui/payments (admin)",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      },
+      {
+        "id": "payment_rest_auth",
+        "service": "payment-service",
+        "description": "GET /api/v1/payments rejects unauthenticated",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      },
+      {
+        "id": "indexer_stats",
+        "service": "ssi-indexer",
+        "description": "GET /api/stats (admin)",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      },
+      {
+        "id": "indexer_stats_auth",
+        "service": "ssi-indexer",
+        "description": "GET /api/stats rejects unauthenticated",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      },
+      {
+        "id": "indexer_intent_extract_auth",
+        "service": "ssi-indexer",
+        "description": "POST /api/intent/extract rejects unauthenticated",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      },
+      {
+        "id": "indexer_search_vector",
+        "service": "ssi-indexer",
+        "description": "POST /api/search/vector (admin, Vertex embeddings)",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      },
+      {
+        "id": "indexer_graph_events",
+        "service": "ssi-indexer",
+        "description": "GET /api/graph/events (admin)",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      },
+      {
+        "id": "indexer_cypher_run",
+        "service": "ssi-indexer",
+        "description": "POST /api/cypher/run (admin)",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      },
+      {
+        "id": "indexer_intent_extract",
+        "service": "ssi-indexer",
+        "description": "POST /api/intent/extract (admin, Vertex Gemini)",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      },
+      {
+        "id": "payment_eligible",
+        "service": "payment-service",
+        "description": "POST /api/v1/payments/{id}/eligible-approvers (compliance)",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      },
+      {
+        "id": "instruction_eligible",
+        "service": "instruction-service",
+        "description": "POST /api/v1/instructions/{id}/eligible-approvers (compliance)",
+        "passed": true,
+        "skipped": false,
+        "reason": ""
+      }
+    ]
+  },
+  "chat": {
+    "passed": 55,
+    "failed": 8,
+    "skipped": 0,
+    "cases": [
+      {
+        "id": "events_alerts_today",
+        "mode": "events",
+        "question": "How many ALERT events happened today?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "There were 6 ALERT events today.",
+        "sources": 0,
+        "graph_rows": 1,
+        "retrieval_ms": 1409.5,
+        "generation_ms": 0.0,
+        "tags": [
+          "counts",
+          "alerts",
+          "today"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": 0.0,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "events_instruction_denials_week",
+        "mode": "events",
+        "question": "How many instruction policy denials happened this week?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "There were 4 instruction ALERT events this week.",
+        "sources": 5,
+        "graph_rows": 5,
+        "retrieval_ms": 2849.9,
+        "generation_ms": 1.1,
+        "tags": [
+          "counts",
+          "alerts",
+          "instructions"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": 1.0,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "events_payment_denials_today",
+        "mode": "events",
+        "question": "How many payment policy denial alerts happened today?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "There were 4 payment ALERT events today.",
+        "sources": 0,
+        "graph_rows": 5,
+        "retrieval_ms": 1704.0,
+        "generation_ms": 0.0,
+        "tags": [
+          "counts",
+          "alerts",
+          "payments",
+          "today"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": 1.0,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "events_top_denial_user_week",
+        "mode": "events",
+        "question": "Which user triggered the most policy denial alerts this week?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "User ranking by policy denial alerts (this week): 5 user(s).  | User                       | User ID  | Total Alerts | Payment Alerts | Instruction Alerts | | -------------------------- | -------- | ------------ | -------------- | ------...",
+        "sources": 0,
+        "graph_rows": 17,
+        "retrieval_ms": 1501.8,
+        "generation_ms": 0.0,
+        "tags": [
+          "ranking",
+          "alerts"
+        ],
+        "retrieval": "deterministic",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": 0.1429,
+          "faithfulness": 0.7619,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "events_approve_success_vs_fail_today",
+        "mode": "events",
+        "question": "How many APPROVE events succeeded today vs failed?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "There are 96 security events in the system (today) (6 ALERT, 90 INFO).",
+        "sources": 0,
+        "graph_rows": 1,
+        "retrieval_ms": 1296.0,
+        "generation_ms": 0.0,
+        "tags": [
+          "counts",
+          "approve"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": 0.0,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "events_create_payment_logged_today",
+        "mode": "events",
+        "question": "How many CREATE_PAYMENT events were logged today?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "The provided context does not contain information about the number of `CREATE_PAYMENT` events logged today. The Neo4j query result only provides the total count of all security events, and a breakdown by severity, not by action type.",
+        "sources": 1,
+        "graph_rows": 1,
+        "retrieval_ms": 4352.0,
+        "generation_ms": 1635.7,
+        "tags": [
+          "counts",
+          "payments",
+          "today"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": 0.0455,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "events_who_approved_payment_why",
+        "mode": "events",
+        "question": "Who approved payment 20260713-FX-P-3 and why were they allowed?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "WHO: Chen, Wei (pay-204) WHEN: 2026-07-14T01:16:44.935533Z WHY: Chen, Wei (pay-204) was allowed to APPROVE because amount $5 million within subject and absolute limits; approver does not report to payment creator; covers LOB FX; group MI...",
+        "sources": 0,
+        "graph_rows": 1,
+        "retrieval_ms": 2434.8,
+        "generation_ms": 0.0,
+        "tags": [
+          "who",
+          "why",
+          "when",
+          "payments",
+          "approve"
+        ],
+        "retrieval": "deterministic",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": 1.0,
+          "source_precision_at_k": null,
+          "groundedness": 0.9667,
+          "faithfulness": 0.9667,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "events_when_instruction_approved_why",
+        "mode": "events",
+        "question": "When was instruction 20260713-FICC-I-5 approved, and what was the authorization basis?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "WHO: Nguyen, Caroline (ficc-500) WHEN: 2026-07-14T01:16:25.499583 WHY: Caroline Nguyen (ficc-500) was authorized to approve the instruction as an INSTRUCTION_APPROVER because her LOB (FICC) matched the instruction's LOB and profit center...",
+        "sources": 1,
+        "graph_rows": 1,
+        "retrieval_ms": 4564.5,
+        "generation_ms": 6257.7,
+        "tags": [
+          "who",
+          "why",
+          "when",
+          "instructions",
+          "approve"
+        ],
+        "retrieval": "deterministic",
+        "quality": {
+          "routing_ok": false,
+          "cypher_class_ok": false,
+          "synthesis_ok": false,
+          "entity_recall": 1.0,
+          "source_precision_at_k": null,
+          "groundedness": 0.7391,
+          "faithfulness": 0.7391,
+          "passed": false,
+          "failures": [
+            "routing path='full_rag' not in expected ['neo4j_direct']",
+            "cypher class='llm' not in expected ['deterministic']",
+            "answer_synthesis='gemini_why_only' not in expected ['formatter']",
+            "generation_ms=6257.7 > max=100.0"
+          ]
+        }
+      },
+      {
+        "id": "events_payment_denial_why",
+        "mode": "events",
+        "question": "Show payment policy denial ALERT events today with actor and reason.",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "ALERT security events (114):  | Event ID                | Event Time                  | Entity Type | Entity ID          | Actor                      | Action  | | ----------------------- | --------------------------- | ----------- | ---...",
+        "sources": 0,
+        "graph_rows": 20,
+        "retrieval_ms": 2299.2,
+        "generation_ms": 0.0,
+        "tags": [
+          "deny",
+          "payments",
+          "why"
+        ],
+        "retrieval": "vector",
+        "quality": {
+          "routing_ok": false,
+          "cypher_class_ok": null,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": 0.0265,
+          "faithfulness": 0.2318,
+          "passed": false,
+          "failures": [
+            "routing path='neo4j_direct' not in expected ['full_rag']",
+            "sources=0 < expected min_sources=1"
+          ]
+        }
+      },
+      {
+        "id": "events_approve_payment_ficc_week",
+        "mode": "events",
+        "question": "List payment approval events for FICC this week with who, when, and why.",
+        "passed": false,
+        "skipped": false,
+        "reason": "answer matched none of ['ficc', 'approv', 'payment', 'no', '0']",
+        "answer_preview": "I couldn't retrieve Neo4j graph results for this question (query planning or execution failed). I won't invent an answer without graph evidence \u2014 please rephrase, include a specific entity id, or try again shortly.",
+        "sources": 0,
+        "graph_rows": 0,
+        "retrieval_ms": 3904.7,
+        "generation_ms": 0.0,
+        "tags": [
+          "approve",
+          "payments",
+          "ficc",
+          "when",
+          "why"
+        ],
+        "retrieval": "vector",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": null,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": null,
+          "passed": false,
+          "failures": [
+            "sources=0 < expected min_sources=1"
+          ]
+        }
+      },
+      {
+        "id": "events_self_approval_instruction",
+        "mode": "events",
+        "question": "Show all self-approval attempts on instructions (APPROVE where actor is the creator).",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "No self-approval attempts on instructions were found.",
+        "sources": 0,
+        "graph_rows": 0,
+        "retrieval_ms": 3818.4,
+        "generation_ms": 1060.3,
+        "tags": [
+          "compliance",
+          "self-approval",
+          "instructions"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": null,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "events_payment_self_approval_today",
+        "mode": "events",
+        "question": "Were there any payment self-approval attempts today?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "Yes, there was one payment self-approval attempt today: | Instruction ID    | Currency | Event ID               | Actor                      | Amount    | Lob   | Payment ID        | Time                        | | ----------------- | --...",
+        "sources": 2,
+        "graph_rows": 5,
+        "retrieval_ms": 5303.2,
+        "generation_ms": 3681.6,
+        "tags": [
+          "compliance",
+          "self-approval",
+          "payments",
+          "today"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": 0.5357,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "events_lob_coverage_denials",
+        "mode": "events",
+        "question": "Show ALERT events for LOB coverage violations on payments.",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "ALERT security events (114):  | Event ID                | Event Time                  | Entity Type | Entity ID          | Actor                      | Action  | | ----------------------- | --------------------------- | ----------- | ---...",
+        "sources": 0,
+        "graph_rows": 20,
+        "retrieval_ms": 2388.9,
+        "generation_ms": 0.0,
+        "tags": [
+          "compliance",
+          "payments",
+          "lob"
+        ],
+        "retrieval": "vector",
+        "quality": {
+          "routing_ok": false,
+          "cypher_class_ok": null,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": 0.0265,
+          "faithfulness": 0.2318,
+          "passed": false,
+          "failures": [
+            "routing path='neo4j_direct' not in expected ['full_rag']",
+            "sources=0 < expected min_sources=1"
+          ]
+        }
+      },
+      {
+        "id": "events_unapproved_instruction_use",
+        "mode": "events",
+        "question": "Any attempts to approve using an unapproved or expired instruction?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "The provided security events indicate policy denials for approval actions, but do not specify if these denials were due to an unapproved or expired instruction.",
+        "sources": 10,
+        "graph_rows": 20,
+        "retrieval_ms": 7629.2,
+        "generation_ms": 16147.1,
+        "tags": [
+          "compliance",
+          "payments"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": 0.0769,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "events_instruction_timeline",
+        "mode": "events",
+        "question": "What is the full security event timeline for instruction 20260713-FICC-I-5?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "Security event timeline (4 event(s)):  | Timestamp                   | Action  | Severity | Outcome | Actor                       | Event ID               | | --------------------------- | ------- | -------- | ------- | -----------------...",
+        "sources": 0,
+        "graph_rows": 4,
+        "retrieval_ms": 1337.9,
+        "generation_ms": 0.0,
+        "tags": [
+          "timeline",
+          "instructions"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": 1.0,
+          "source_precision_at_k": null,
+          "groundedness": 0.2727,
+          "faithfulness": 0.7576,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "events_payment_timeline",
+        "mode": "events",
+        "question": "What happened on payment 20260713-FX-P-3 from creation through approval?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "### Payment `20260713-FX-P-3`  | Field       | Value               | | ----------- | ------------------- | | Payment id  | `20260713-FX-P-3`   | | Instruction | `20260705-FX-I-1`   | | Status      | **APPROVED**        | | Amount      | ...",
+        "sources": 0,
+        "graph_rows": 1,
+        "retrieval_ms": 1234.7,
+        "generation_ms": 0.0,
+        "tags": [
+          "timeline",
+          "payments"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": 1.0,
+          "source_precision_at_k": null,
+          "groundedness": 0.5652,
+          "faithfulness": 0.5652,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "events_user_ficc300_today",
+        "mode": "events",
+        "question": "List all events for user ficc-300 today in chronological order.",
+        "passed": false,
+        "skipped": false,
+        "reason": "answer matched none of ['ficc-300', 'event', 'no', '0', 'today']",
+        "answer_preview": "I couldn't retrieve Neo4j graph results for this question (query planning or execution failed). I won't invent an answer without graph evidence \u2014 please rephrase, include a specific entity id, or try again shortly.",
+        "sources": 0,
+        "graph_rows": 0,
+        "retrieval_ms": 2650.6,
+        "generation_ms": 0.0,
+        "tags": [
+          "timeline",
+          "today"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": false,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": null,
+          "passed": false,
+          "failures": [
+            "cypher class='none' not in expected ['deterministic', 'llm']"
+          ]
+        }
+      },
+      {
+        "id": "events_reject_week",
+        "mode": "events",
+        "question": "Show all REJECT events this week with the rejection reason.",
+        "passed": false,
+        "skipped": false,
+        "reason": "answer matched none of ['reject', 'reason', 'no', '0', 'event']",
+        "answer_preview": "I couldn't retrieve Neo4j graph results for this question (query planning or execution failed). I won't invent an answer without graph evidence \u2014 please rephrase, include a specific entity id, or try again shortly.",
+        "sources": 0,
+        "graph_rows": 0,
+        "retrieval_ms": 3455.0,
+        "generation_ms": 0.0,
+        "tags": [
+          "reject"
+        ],
+        "retrieval": "vector",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": null,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": null,
+          "passed": false,
+          "failures": [
+            "sources=0 < expected min_sources=1"
+          ]
+        }
+      },
+      {
+        "id": "events_ficc_alerts_today",
+        "mode": "events",
+        "question": "Show all ALERT events for LOB FICC today.",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "ALERT security events (114):  | Event ID                | Event Time                  | Entity Type | Entity ID          | Actor                      | Action  | | ----------------------- | --------------------------- | ----------- | ---...",
+        "sources": 0,
+        "graph_rows": 20,
+        "retrieval_ms": 1278.3,
+        "generation_ms": 0.0,
+        "tags": [
+          "alerts",
+          "ficc",
+          "today"
+        ],
+        "retrieval": "vector",
+        "quality": {
+          "routing_ok": false,
+          "cypher_class_ok": null,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": 0.0265,
+          "faithfulness": 0.2318,
+          "passed": false,
+          "failures": [
+            "routing path='neo4j_direct' not in expected ['full_rag']",
+            "sources=0 < expected min_sources=1"
+          ]
+        }
+      },
+      {
+        "id": "events_submit_payment_fx_today",
+        "mode": "events",
+        "question": "How many SUBMIT_PAYMENT events happened today for FX?",
+        "passed": false,
+        "skipped": false,
+        "reason": "answer has no numeric digit",
+        "answer_preview": "The provided context does not contain any `SUBMIT_PAYMENT` events for FX, nor does it provide a breakdown of event types by LOB for today's events.",
+        "sources": 1,
+        "graph_rows": 1,
+        "retrieval_ms": 2937.5,
+        "generation_ms": 2119.1,
+        "tags": [
+          "payments",
+          "fx",
+          "today"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": 0.0,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "instructions_created_today",
+        "mode": "instructions",
+        "question": "How many instructions were created today?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "There are 9 matching payment(s) for all LOBs (today).",
+        "sources": 0,
+        "graph_rows": 12,
+        "retrieval_ms": 1152.7,
+        "generation_ms": 0.0,
+        "tags": [
+          "counts",
+          "today"
+        ],
+        "retrieval": "deterministic",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": 0.0,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "instructions_standing_ficc",
+        "mode": "instructions",
+        "question": "How many STANDING instructions are there for LOB FICC?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "There are 9 matching payment(s) for LOB FICC (all time).",
+        "sources": 0,
+        "graph_rows": 11,
+        "retrieval_ms": 1338.8,
+        "generation_ms": 0.0,
+        "tags": [
+          "counts",
+          "ficc",
+          "standing"
+        ],
+        "retrieval": "deterministic",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": 0.2,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "instructions_pending_approval",
+        "mode": "instructions",
+        "question": "How many instructions are in SUBMITTED?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "There are 6 matching payment(s) for all LOBs (all time).",
+        "sources": 0,
+        "graph_rows": 8,
+        "retrieval_ms": 1492.5,
+        "generation_ms": 0.0,
+        "tags": [
+          "counts",
+          "pending"
+        ],
+        "retrieval": "deterministic",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": 0.0,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "instructions_single_use",
+        "mode": "instructions",
+        "question": "List all SINGLE_USE instructions.",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "Found 30 instruction(s).  | Instruction ID          | Status    | LOB        | Currency | Creator                 | Approver                    | | ----------------------- | --------- | ---------- | -------- | ----------------------- | -...",
+        "sources": 0,
+        "graph_rows": 20,
+        "retrieval_ms": 1372.4,
+        "generation_ms": 0.0,
+        "tags": [
+          "inventory"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": 0.1613,
+          "faithfulness": 0.6935,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "instructions_per_lob",
+        "mode": "instructions",
+        "question": "How many instructions exist per LOB?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "Instruction counts by lob (42 total):  | LOB | Instructions | | --- | --- | | FICC | 28 | | FX | 8 | | DESK_RATES | 6 |",
+        "sources": 0,
+        "graph_rows": 3,
+        "retrieval_ms": 1288.5,
+        "generation_ms": 0.0,
+        "tags": [
+          "counts",
+          "lob"
+        ],
+        "retrieval": "deterministic",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": 0.1667,
+          "faithfulness": 0.3333,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "instructions_who_approved",
+        "mode": "instructions",
+        "question": "Who approved instruction 20260713-FICC-I-5?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "WHO: Nguyen, Caroline (ficc-500) WHEN: 2026-07-14T01:16:25.499583 WHY: Nguyen, Caroline (ficc-500) was allowed to APPROVE because approval matrix: Partner may approve work by Managing Director; approver LOB FICC matches instruction LOB; ...",
+        "sources": 0,
+        "graph_rows": 1,
+        "retrieval_ms": 2304.5,
+        "generation_ms": 0.0,
+        "tags": [
+          "who",
+          "approve"
+        ],
+        "retrieval": "deterministic",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": 1.0,
+          "source_precision_at_k": null,
+          "groundedness": 1.0,
+          "faithfulness": 1.0,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "instructions_creator_and_approver",
+        "mode": "instructions",
+        "question": "Who created instruction 20260713-FICC-I-5 and who approved it?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "Instruction: 20260713-FICC-I-5 Creator: Walsh, Patricia (mo-010) Approver: Nguyen, Caroline (ficc-500) Approved at: 2026-07-14T01:16:25.499583",
+        "sources": 0,
+        "graph_rows": 1,
+        "retrieval_ms": 1193.6,
+        "generation_ms": 0.0,
+        "tags": [
+          "who"
+        ],
+        "retrieval": "deterministic",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": 1.0,
+          "source_precision_at_k": null,
+          "groundedness": 1.0,
+          "faithfulness": 1.0,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "instructions_approved_by_ficc300",
+        "mode": "instructions",
+        "question": "List all instructions approved by Elena Vasquez (ficc-300).",
+        "passed": false,
+        "skipped": false,
+        "reason": "answer matched none of ['ficc-300', 'vasquez', 'instruction', 'no', '0', 'approv']",
+        "answer_preview": "I couldn't retrieve Neo4j graph results for this question (query planning or execution failed). I won't invent an answer without graph evidence \u2014 please rephrase, include a specific entity id, or try again shortly.",
+        "sources": 0,
+        "graph_rows": 0,
+        "retrieval_ms": 4043.5,
+        "generation_ms": 0.0,
+        "tags": [
+          "who"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": false,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": null,
+          "passed": false,
+          "failures": [
+            "cypher class='none' not in expected ['deterministic', 'llm']"
+          ]
+        }
+      },
+      {
+        "id": "instructions_created_by_mo100",
+        "mode": "instructions",
+        "question": "Which instructions did mo-100 create?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "No matching instructions were found in the graph.",
+        "sources": 0,
+        "graph_rows": 0,
+        "retrieval_ms": 1443.0,
+        "generation_ms": 0.0,
+        "tags": [
+          "who"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": null,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "instructions_subordinate_approver",
+        "mode": "instructions",
+        "question": "Are there any instructions approved by someone who directly reports to the creator?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "No matching compliance cases were found in the graph.",
+        "sources": 0,
+        "graph_rows": 0,
+        "retrieval_ms": 1357.0,
+        "generation_ms": 0.0,
+        "tags": [
+          "compliance",
+          "hierarchy"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": null,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "instructions_mutual_approval",
+        "mode": "instructions",
+        "question": "Are there any mutual approval cases (A approved B's instruction and B approved A's)?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "Found 1 mutual approval case(s).  | User A                    | User B                 | B created, A approved | A created, B approved | | ------------------------- | ---------------------- | --------------------- | ---------------------...",
+        "sources": 0,
+        "graph_rows": 1,
+        "retrieval_ms": 2207.3,
+        "generation_ms": 0.0,
+        "tags": [
+          "compliance"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": 0.5333,
+          "faithfulness": 0.5333,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "instructions_self_approval",
+        "mode": "instructions",
+        "question": "Show instructions where creator and approver are the same person.",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "No matching compliance cases were found in the graph.",
+        "sources": 0,
+        "graph_rows": 0,
+        "retrieval_ms": 1161.5,
+        "generation_ms": 0.0,
+        "tags": [
+          "compliance",
+          "self-approval"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": null,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "instructions_supervisor_is_creator",
+        "mode": "instructions",
+        "question": "List instructions where the approver's supervisor is the creator.",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "No instructions were found where the approver's supervisor is the creator.",
+        "sources": 0,
+        "graph_rows": 0,
+        "retrieval_ms": 1523.6,
+        "generation_ms": 1587.2,
+        "tags": [
+          "compliance",
+          "hierarchy"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": null,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "instructions_duplicate_routes",
+        "mode": "instructions",
+        "question": "Are there active instructions sharing the same creditor account and currency?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "Found 50 conflicting instruction pair(s).  | Instruction A     | Instruction B           | LOB  | Currency | Creditor Account | | ----------------- | ----------------------- | ---- | -------- | ---------------- | | 20260705-FX-I-1   | 20...",
+        "sources": 0,
+        "graph_rows": 20,
+        "retrieval_ms": 1437.2,
+        "generation_ms": 0.0,
+        "tags": [
+          "conflicts",
+          "compliance"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": 0.1154,
+          "faithfulness": 0.2692,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "instructions_conflicts_ficc",
+        "mode": "instructions",
+        "question": "Show all CONFLICTS_WITH duplicate settlement routes for FICC.",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "Found 50 conflicting instruction pair(s).  | Instruction A     | Instruction B           | LOB  | Currency | Creditor Account | | ----------------- | ----------------------- | ---- | -------- | ---------------- | | 20260705-FICC-I-1 | 20...",
+        "sources": 0,
+        "graph_rows": 20,
+        "retrieval_ms": 1795.7,
+        "generation_ms": 0.0,
+        "tags": [
+          "conflicts",
+          "ficc"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": 0.1429,
+          "faithfulness": 0.75,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "instructions_expired",
+        "mode": "instructions",
+        "question": "Which STANDING instructions have expired (end date in the past)?",
+        "passed": false,
+        "skipped": false,
+        "reason": "answer matched none of ['expir', 'end', 'standing', 'no', '0', 'none']",
+        "answer_preview": "I couldn't retrieve Neo4j graph results for this question (query planning or execution failed). I won't invent an answer without graph evidence \u2014 please rephrase, include a specific entity id, or try again shortly.",
+        "sources": 0,
+        "graph_rows": 0,
+        "retrieval_ms": 5636.9,
+        "generation_ms": 0.0,
+        "tags": [
+          "expiry"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": false,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": null,
+          "passed": false,
+          "failures": [
+            "cypher class='none' not in expected ['deterministic', 'llm']"
+          ]
+        }
+      },
+      {
+        "id": "instructions_expiring_soon_fx",
+        "mode": "instructions",
+        "question": "List instructions expiring in the next 30 days for LOB FX.",
+        "passed": false,
+        "skipped": false,
+        "reason": "answer matched none of ['expir', 'fx', 'end', 'no', '0', 'none', 'instruction']",
+        "answer_preview": "I couldn't retrieve Neo4j graph results for this question (query planning or execution failed). I won't invent an answer without graph evidence \u2014 please rephrase, include a specific entity id, or try again shortly.",
+        "sources": 0,
+        "graph_rows": 0,
+        "retrieval_ms": 6303.0,
+        "generation_ms": 0.0,
+        "tags": [
+          "expiry",
+          "fx"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": false,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": null,
+          "passed": false,
+          "failures": [
+            "cypher class='none' not in expected ['deterministic', 'llm']"
+          ]
+        }
+      },
+      {
+        "id": "instructions_standing_ficc_list",
+        "mode": "instructions",
+        "question": "Show all STANDING instructions for LOB FICC.",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "Here are all STANDING instructions for LOB FICC:  1.  **instruction_id**: 20260705-FICC-I-1, **owning_lob**: FICC, **status**: APPROVED, **currency**: USD, **wire_scope**: DOMESTIC, **creditor**: Not available, **creator**: Okonkwo, Davi...",
+        "sources": 9,
+        "graph_rows": 9,
+        "retrieval_ms": 8839.8,
+        "generation_ms": 10794.2,
+        "tags": [
+          "inventory",
+          "ficc"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": 0.2364,
+          "faithfulness": 0.8,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "instructions_pending_list",
+        "mode": "instructions",
+        "question": "List all SUBMITTED instructions.",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "The following instructions are in SUBMITTED status:  1.  **instruction_id**: 20260713-FX-I-1, **owning_lob**: FX, **status**: SUBMITTED, **currency**: EUR, **wire_scope**: DOMESTIC, **creator**: Chen, Sarah (mo-100) 2.  **instruction_id*...",
+        "sources": 6,
+        "graph_rows": 6,
+        "retrieval_ms": 2697.3,
+        "generation_ms": 2731.3,
+        "tags": [
+          "inventory",
+          "pending"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": 0.2414,
+          "faithfulness": 0.8966,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "payments_approved_ficc_today",
+        "mode": "payments",
+        "question": "How many payments were approved today for FICC?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "There are 1 matching payment(s) for LOB FICC (today).",
+        "sources": 1,
+        "graph_rows": 1,
+        "retrieval_ms": 1309.8,
+        "generation_ms": 0.1,
+        "tags": [
+          "counts",
+          "ficc",
+          "today",
+          "approve"
+        ],
+        "retrieval": "deterministic",
+        "quality": {
+          "routing_ok": false,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": 0.0,
+          "passed": false,
+          "failures": [
+            "routing path='full_rag' not in expected ['neo4j_direct']"
+          ]
+        }
+      },
+      {
+        "id": "payments_submitted_count",
+        "mode": "payments",
+        "question": "How many payments are in SUBMITTED status?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "There are 3 matching payment(s) for all LOBs (all time).",
+        "sources": 1,
+        "graph_rows": 1,
+        "retrieval_ms": 1145.0,
+        "generation_ms": 0.1,
+        "tags": [
+          "counts",
+          "submitted"
+        ],
+        "retrieval": "deterministic",
+        "quality": {
+          "routing_ok": false,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": 0.0,
+          "passed": false,
+          "failures": [
+            "routing path='full_rag' not in expected ['neo4j_direct']"
+          ]
+        }
+      },
+      {
+        "id": "payments_created_week",
+        "mode": "payments",
+        "question": "How many payments were created this week?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "There are 13 matching payment(s) for all LOBs (this week).",
+        "sources": 1,
+        "graph_rows": 1,
+        "retrieval_ms": 1330.9,
+        "generation_ms": 0.1,
+        "tags": [
+          "counts"
+        ],
+        "retrieval": "deterministic",
+        "quality": {
+          "routing_ok": false,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": 0.0,
+          "passed": false,
+          "failures": [
+            "routing path='full_rag' not in expected ['neo4j_direct']"
+          ]
+        }
+      },
+      {
+        "id": "payments_total_approved_ficc_today",
+        "mode": "payments",
+        "question": "What is the total approved payment amount for FICC today?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "Approved payment totals for LOB FICC (today): - Total: 1,000,000.00 USD across 1 payment.",
+        "sources": 0,
+        "graph_rows": 1,
+        "retrieval_ms": 1441.2,
+        "generation_ms": 0.0,
+        "tags": [
+          "counts",
+          "ficc",
+          "totals",
+          "today"
+        ],
+        "retrieval": "deterministic",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": 0.1429,
+          "faithfulness": 0.1429,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "payments_rejected_week",
+        "mode": "payments",
+        "question": "How many payments were rejected this week?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "There are 2 matching payment(s) for all LOBs (this week).",
+        "sources": 1,
+        "graph_rows": 1,
+        "retrieval_ms": 1267.8,
+        "generation_ms": 0.1,
+        "tags": [
+          "counts",
+          "reject"
+        ],
+        "retrieval": "deterministic",
+        "quality": {
+          "routing_ok": false,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": 0.0,
+          "passed": false,
+          "failures": [
+            "routing path='full_rag' not in expected ['neo4j_direct']"
+          ]
+        }
+      },
+      {
+        "id": "payments_who_approved",
+        "mode": "payments",
+        "question": "Who approved payment 20260713-FX-P-3?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "WHO: Chen, Wei (pay-204) WHEN: 2026-07-14T01:16:44.935533Z WHY: Chen, Wei (pay-204) was allowed to APPROVE because amount $5 million within subject and absolute limits; approver does not report to payment creator; covers LOB FX; group MI...",
+        "sources": 0,
+        "graph_rows": 1,
+        "retrieval_ms": 1961.6,
+        "generation_ms": 0.0,
+        "tags": [
+          "who",
+          "approve"
+        ],
+        "retrieval": "deterministic",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": 1.0,
+          "source_precision_at_k": null,
+          "groundedness": 0.9667,
+          "faithfulness": 0.9667,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "payments_approved_by_pay201_week",
+        "mode": "payments",
+        "question": "Show payments approved by Sophie Laurent (pay-201) this week with amounts.",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "Payments in APPROVED state (6):  | Payment ID        | Instruction ID    | Status   | Amount             | Value Date | LOB  | Creator | Approver                   | | ----------------- | ----------------- | -------- | ------------------...",
+        "sources": 0,
+        "graph_rows": 6,
+        "retrieval_ms": 1394.6,
+        "generation_ms": 0.0,
+        "tags": [
+          "who"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": 0.2432,
+          "faithfulness": 0.7568,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "payments_creator_and_approver",
+        "mode": "payments",
+        "question": "Who created payment 20260713-FX-P-3 and who approved it?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "Payment: 20260713-FX-P-3 Creator: pay-103 Approver: Chen, Wei (pay-204) Approved at: 2026-07-14T01:16:44.806740Z",
+        "sources": 0,
+        "graph_rows": 1,
+        "retrieval_ms": 2409.8,
+        "generation_ms": 0.0,
+        "tags": [
+          "who"
+        ],
+        "retrieval": "deterministic",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": 1.0,
+          "source_precision_at_k": null,
+          "groundedness": 0.8,
+          "faithfulness": 0.8,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "payments_for_instruction",
+        "mode": "payments",
+        "question": "List all APPROVED payments for instruction 20260705-FX-I-1.",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "There are 3 payments in total for instruction 20260705-FX-I-1.  | Payment ID      | Status   | Amount             | Value Date | LOB | Creator | Approver                   | | --------------- | -------- | ------------------ | ---------- ...",
+        "sources": 0,
+        "graph_rows": 3,
+        "retrieval_ms": 1614.2,
+        "generation_ms": 0.0,
+        "tags": [
+          "instruction"
+        ],
+        "retrieval": "deterministic",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": 1.0,
+          "source_precision_at_k": null,
+          "groundedness": 0.36,
+          "faithfulness": 0.64,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "payments_over_10m_week",
+        "mode": "payments",
+        "question": "Show payments over $10M approved this week.",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "Payments in APPROVED state (6):  | Payment ID        | Instruction ID    | Status   | Amount             | Value Date | LOB  | Creator | Approver                   | | ----------------- | ----------------- | -------- | ------------------...",
+        "sources": 0,
+        "graph_rows": 6,
+        "retrieval_ms": 1132.0,
+        "generation_ms": 0.0,
+        "tags": [
+          "amounts"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": 0.2432,
+          "faithfulness": 0.7568,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "payments_over_100m",
+        "mode": "payments",
+        "question": "List payments exceeding $100M.",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "Payments for all LOBs (all time) \u2014 34:  | Payment ID         | Instruction ID     | Status    | Amount             | Value Date | LOB  | Creator                     | Approver                    | | ------------------ | -----------------...",
+        "sources": 0,
+        "graph_rows": 20,
+        "retrieval_ms": 1472.6,
+        "generation_ms": 0.0,
+        "tags": [
+          "amounts"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": 0.0833,
+          "faithfulness": 0.6146,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "payments_largest_week_by_lob",
+        "mode": "payments",
+        "question": "What are the largest approved payments this week by LOB?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "The largest payment (all LOBs, this week) is 100,000,000.00 EUR.  | Payment ID      | Instruction ID  | Status   | Amount             | Value Date | LOB | Creator | Approver                   | | --------------- | --------------- | -----...",
+        "sources": 0,
+        "graph_rows": 6,
+        "retrieval_ms": 1653.8,
+        "generation_ms": 0.0,
+        "tags": [
+          "amounts",
+          "ranking"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": 0.4737,
+          "faithfulness": 0.4737,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "payments_draft_fx",
+        "mode": "payments",
+        "question": "List all DRAFT payments for LOB FX.",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "Payments in DRAFT state (1):  | Payment ID      | Instruction ID  | Status | Amount           | Value Date | LOB | Creator                  | Approver | | --------------- | --------------- | ------ | ---------------- | ---------- | --- |...",
+        "sources": 0,
+        "graph_rows": 1,
+        "retrieval_ms": 1513.0,
+        "generation_ms": 0.0,
+        "tags": [
+          "status",
+          "fx"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": 0.4706,
+          "faithfulness": 0.4706,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "payments_submitted_waiting",
+        "mode": "payments",
+        "question": "Which payments are still SUBMITTED and waiting for approval?",
+        "passed": false,
+        "skipped": false,
+        "reason": "answer matched none of ['submitted', 'payment', 'approv', 'wait', 'no', '0']",
+        "answer_preview": "I couldn't retrieve Neo4j graph results for this question (query planning or execution failed). I won't invent an answer without graph evidence \u2014 please rephrase, include a specific entity id, or try again shortly.",
+        "sources": 0,
+        "graph_rows": 0,
+        "retrieval_ms": 3646.0,
+        "generation_ms": 0.0,
+        "tags": [
+          "status",
+          "submitted"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": false,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": null,
+          "passed": false,
+          "failures": [
+            "cypher class='none' not in expected ['deterministic', 'llm']"
+          ]
+        }
+      },
+      {
+        "id": "payments_self_approval",
+        "mode": "payments",
+        "question": "Show payments where the creator also approved (self-approval).",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "Payments in APPROVED state (21):  | Payment ID         | Instruction ID    | Status   | Amount             | Value Date | LOB  | Creator                   | Approver                    | | ------------------ | ----------------- | -------...",
+        "sources": 0,
+        "graph_rows": 20,
+        "retrieval_ms": 1272.9,
+        "generation_ms": 0.0,
+        "tags": [
+          "compliance",
+          "self-approval"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": 0.1587,
+          "faithfulness": 0.7778,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "payments_subordinate_approver",
+        "mode": "payments",
+        "question": "List payments where the approver directly reports to the creator.",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "Payments in matching state (21):  | Payment ID         | Instruction ID    | Status   | Amount             | Value Date | LOB  | Creator                   | Approver                    | | ------------------ | ----------------- | -------...",
+        "sources": 0,
+        "graph_rows": 20,
+        "retrieval_ms": 1267.2,
+        "generation_ms": 0.0,
+        "tags": [
+          "compliance",
+          "hierarchy"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": 0.1562,
+          "faithfulness": 0.7656,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "payments_lob_coverage_mismatch",
+        "mode": "payments",
+        "question": "Show APPROVED payments where approver covers FX but payment LOB is FICC.",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "Payments in APPROVED state (3):  | Payment ID      | Instruction ID  | Status   | Amount             | Value Date | LOB | Creator | Approver                   | | --------------- | --------------- | -------- | ------------------ | ------...",
+        "sources": 0,
+        "graph_rows": 3,
+        "retrieval_ms": 1539.0,
+        "generation_ms": 0.0,
+        "tags": [
+          "compliance",
+          "lob"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": 0.36,
+          "faithfulness": 0.64,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "payments_desk_rates",
+        "mode": "payments",
+        "question": "List all payments for desk LOB DESK_RATES.",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "No matching payments were found for LOB DESK_RATES (all time).",
+        "sources": 0,
+        "graph_rows": 0,
+        "retrieval_ms": 1571.7,
+        "generation_ms": 0.0,
+        "tags": [
+          "lob",
+          "desk"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": null,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "payments_fo_ficc101",
+        "mode": "payments",
+        "question": "Show payments submitted by front-office user fo-ficc-101.",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "No payments in SUBMITTED state were found in the graph.",
+        "sources": 0,
+        "graph_rows": 0,
+        "retrieval_ms": 1845.5,
+        "generation_ms": 0.0,
+        "tags": [
+          "who",
+          "front-office"
+        ],
+        "retrieval": "graph",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": null,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "payments_mo_ficc_week",
+        "mode": "payments",
+        "question": "How many payments were created by middle office for FICC this week?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "There are 6 matching payment(s) for LOB FICC (this week).",
+        "sources": 1,
+        "graph_rows": 1,
+        "retrieval_ms": 1176.0,
+        "generation_ms": 0.2,
+        "tags": [
+          "who",
+          "ficc"
+        ],
+        "retrieval": "deterministic",
+        "quality": {
+          "routing_ok": false,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": null,
+          "faithfulness": 0.0,
+          "passed": false,
+          "failures": [
+            "routing path='full_rag' not in expected ['neo4j_direct']"
+          ]
+        }
+      },
+      {
+        "id": "instructions_group_by_status_facet",
+        "mode": "instructions",
+        "question": "Can you group instructions by status?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "Instruction counts by status (42 total):  | Status | Instructions | | --- | --- | | APPROVED | 34 | | SUBMITTED | 6 | | REJECTED | 2 |",
+        "sources": 0,
+        "graph_rows": 3,
+        "retrieval_ms": 1276.8,
+        "generation_ms": 0.0,
+        "tags": [
+          "facet",
+          "status",
+          "regression"
+        ],
+        "retrieval": "deterministic",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": 0.1429,
+          "faithfulness": 0.4286,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "payments_superlative_top_creator",
+        "mode": "payments",
+        "question": "Who created the most payments?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "**Rodriguez, Emily (pay-101)** created the most payments (15 payments).",
+        "sources": 0,
+        "graph_rows": 1,
+        "retrieval_ms": 1177.8,
+        "generation_ms": 0.0,
+        "tags": [
+          "facet",
+          "superlative",
+          "regression"
+        ],
+        "retrieval": "deterministic",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": 0.5,
+          "faithfulness": 0.5,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "payments_group_by_approver",
+        "mode": "payments",
+        "question": "Can you group payments by approver?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "Payment counts by approver (34 total):  | Approver | Payments | | --- | --- | | unknown | 13 | | Laurent, Sophie (pay-201) | 12 | | Chen, Wei (pay-204) | 4 | | Al-Rashid, Fatima (pay-205) | 2 | | Bergmann, Thomas (pay-300) | 1 | | Johnso...",
+        "sources": 0,
+        "graph_rows": 7,
+        "retrieval_ms": 1165.8,
+        "generation_ms": 0.0,
+        "tags": [
+          "facet",
+          "approver",
+          "regression"
+        ],
+        "retrieval": "deterministic",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": 0.0435,
+          "faithfulness": 0.8261,
+          "passed": true,
+          "failures": []
+        }
+      },
+      {
+        "id": "payments_largest_who_created",
+        "mode": "payments",
+        "question": "Who created the payment with the maximum dollar value?",
+        "passed": true,
+        "skipped": false,
+        "reason": "ok",
+        "answer_preview": "The largest payment amount (all LOBs, all time) is 100,000,000.00 USD \u2014 4 payment(s) tie at that amount.  | Payment ID        | Instruction ID    | Status   | Amount             | Value Date | LOB  | Creator                    | Approver...",
+        "sources": 0,
+        "graph_rows": 20,
+        "retrieval_ms": 1533.0,
+        "generation_ms": 0.0,
+        "tags": [
+          "extreme",
+          "largest",
+          "regression"
+        ],
+        "retrieval": "deterministic",
+        "quality": {
+          "routing_ok": true,
+          "cypher_class_ok": true,
+          "synthesis_ok": true,
+          "entity_recall": null,
+          "source_precision_at_k": null,
+          "groundedness": 0.2432,
+          "faithfulness": 0.6757,
+          "passed": true,
+          "failures": []
+        }
+      }
+    ],
+    "context": {
+      "approved_instruction_id": "20260713-FICC-I-5",
+      "ficc_standing_instruction_id": "20260713-FICC-I-5",
+      "pending_instruction_id": "20260714-DESK_RATES-I-1",
+      "approved_payment_id": "20260713-FX-P-3",
+      "approved_payment_instruction_id": "20260705-FX-I-1",
+      "submitted_payment_id": "20260714-FX-P-1",
+      "any_payment_id": "20260714-FICC-P-3",
+      "any_instruction_id": "20260713-FICC-I-5"
+    },
+    "quality_summary": {
+      "cases_scored": 63,
+      "routing_accuracy": 0.8571,
+      "mean_entity_recall": 1.0,
+      "mean_source_precision_at_k": null,
+      "mean_groundedness": 0.3561,
+      "mean_faithfulness": 0.4869,
+      "quality_failures": 16
+    }
+  }
+}

@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from chat_application.cypher import (
+from chat_application.graph.cypher import (
     extract_payment_ids,
     lob_filter_from_question,
     payment_amount_threshold_from_question,

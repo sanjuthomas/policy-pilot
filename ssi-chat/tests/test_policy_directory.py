@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from chat_application.authorization_client import format_group_members_answer
-from chat_application.policy_directory import (
+from chat_application.authz.client import format_group_members_answer
+from chat_application.policy.directory import (
     directory_groups_for_question,
     is_payment_approval_directory_question,
     is_strict_payment_amount_threshold,

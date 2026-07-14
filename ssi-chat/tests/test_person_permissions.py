@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from chat_application.authorization_client import (
+from chat_application.authz.client import (
     format_person_permission_summary_answer,
 )
-from chat_application.person_permissions import extract_person_name_heuristic
+from chat_application.policy.person import extract_person_name_heuristic
 
 
 def test_extract_permissions_of_display_name() -> None:

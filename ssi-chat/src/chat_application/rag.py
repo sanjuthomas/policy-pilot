@@ -5,14 +5,24 @@ import logging
 import re
 from typing import Any
 
-from chat_application.authorization_client import (
+from chat_application.auth.subject import Subject
+from chat_application.authz.client import (
     EligibilityClient,
     EligibilityClientError,
     format_eligible_approvers_answer,
     format_instruction_eligible_approvers_answer,
 )
 from chat_application.config import settings
-from chat_application.cypher import (
+from chat_application.formatting import (
+    format_approval_auth_lines,
+    format_markdown_table,
+    format_money_amount,
+    humanize_authorization_text,
+    humanize_policy_basis,
+    parse_authorization_basis,
+)
+from chat_application.gemini.client import PolicyPilotMlClient
+from chat_application.graph.cypher import (
     extract_entity_ids,
     extract_payment_ids,
     instruction_count_filters_from_question,
@@ -42,22 +52,12 @@ from chat_application.cypher import (
     security_event_group_by_lob_scope,
     validate_read_only_cypher,
 )
-from chat_application.formatting import (
-    format_approval_auth_lines,
-    format_markdown_table,
-    format_money_amount,
-    humanize_authorization_text,
-    humanize_policy_basis,
-    parse_authorization_basis,
-)
-from chat_application.ml_client import PolicyPilotMlClient
+from chat_application.graph.direct import try_neo4j_direct_answer
+from chat_application.graph.neo4j import Neo4jClient
 from chat_application.models import ChatMessage, ChatResponse, SearchMode, SourceHit
-from chat_application.neo4j import Neo4jClient
-from chat_application.neo4j_intents import try_neo4j_direct_answer
 from chat_application.pipeline.orchestrator import RagPipelineOrchestrator
-from chat_application.reranker import RankedHit, rrf_merge
-from chat_application.subject import Subject
-from chat_application.vector_search import VectorSearchClient
+from chat_application.vector.reranker import RankedHit, rrf_merge
+from chat_application.vector.search import VectorSearchClient
 
 logger = logging.getLogger(__name__)
 
@@ -919,11 +919,11 @@ class RagService:
         session_id: str | None,
         force: bool = False,
     ) -> str | None:
-        from chat_application.authorization_client import (
+        from chat_application.authz.client import (
             EligibilityClientError,
             format_group_members_answer,
         )
-        from chat_application.policy_directory import (
+        from chat_application.policy.directory import (
             covering_lob_filter_from_question,
             directory_groups_for_question,
             is_payment_approval_directory_question,
@@ -985,11 +985,11 @@ class RagService:
         domain: str | None = None,
         action: str | None = None,
     ) -> str | None:
-        from chat_application.authorization_client import (
+        from chat_application.authz.client import (
             EligibilityClientError,
             format_policy_summary_answer,
         )
-        from chat_application.policy_summary import detect_policy_summary_question
+        from chat_application.policy.summary import detect_policy_summary_question
 
         if domain is None or action is None:
             detected = detect_policy_summary_question(message, mode=mode)
@@ -1023,11 +1023,11 @@ class RagService:
         session_id: str | None = None,
         person_query: str | None = None,
     ) -> str | None:
-        from chat_application.authorization_client import (
+        from chat_application.authz.client import (
             EligibilityClientError,
             format_person_permission_summary_answer,
         )
-        from chat_application.person_permissions import extract_person_name_heuristic
+        from chat_application.policy.person import extract_person_name_heuristic
 
         query = person_query or extract_person_name_heuristic(message)
         if query is None:

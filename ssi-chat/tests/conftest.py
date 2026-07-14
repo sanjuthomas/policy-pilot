@@ -70,7 +70,7 @@ def rag_service(mock_ml_client, mock_vector_search, mock_neo4j):
 
 @pytest.fixture
 def compliance_subject():
-    from chat_application.subject import Subject
+    from chat_application.auth.subject import Subject
 
     return Subject(
         user_id="comp-001",
@@ -82,7 +82,7 @@ def compliance_subject():
 @pytest.fixture
 def test_client(mock_ml_client, mock_vector_search, mock_neo4j, compliance_subject):
     import chat_application.main as main_module
-    from chat_application.dependencies import get_chat_subject
+    from chat_application.auth.dependencies import get_chat_subject
 
     main_module.ml_client = mock_ml_client
     main_module.vector_search_client = mock_vector_search

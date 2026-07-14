@@ -5,7 +5,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, Field
 
-from chat_application.capabilities import audience_labels
+from chat_application.auth.capabilities import audience_labels
 
 
 class SeedUser(BaseModel):

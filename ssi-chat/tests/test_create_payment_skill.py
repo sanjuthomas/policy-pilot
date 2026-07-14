@@ -4,14 +4,14 @@ from datetime import date, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from chat_application.authz_obo_client import PolicyDecision
+from chat_application.auth.subject import Subject
+from chat_application.authz.obo import PolicyDecision
 from chat_application.skills.create_payment import (
     confirm_create_payment,
     run_create_payment_phase1,
 )
 from chat_application.skills.detect import parse_create_payment_params
 from chat_application.skills.pending_store import pending_create_payment_store
-from chat_application.subject import Subject
 
 
 def _creator() -> Subject:

@@ -7,7 +7,7 @@ from typing import Any
 from neo4j import READ_ACCESS
 
 from chat_application.config import settings
-from chat_application.vector_document_ids import (
+from chat_application.vector.document_ids import (
     event_document_id,
     instruction_document_id,
     payment_document_id,

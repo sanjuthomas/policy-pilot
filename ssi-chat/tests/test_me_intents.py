@@ -3,7 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from chat_application.capabilities import audience_labels, capabilities_for
+from chat_application.auth.capabilities import audience_labels, capabilities_for
+from chat_application.auth.subject import Subject
 from chat_application.me.can_create import (
     answer_can_approve_payment,
     answer_can_create_instruction,
@@ -15,7 +16,6 @@ from chat_application.me.my_permissions import answer_my_permissions
 from chat_application.me.users_like_me import answer_users_like_me
 from chat_application.me.who_am_i import answer_who_am_i
 from chat_application.me.who_can_create import answer_who_can_create
-from chat_application.subject import Subject
 
 
 def test_capabilities_for_creator() -> None:

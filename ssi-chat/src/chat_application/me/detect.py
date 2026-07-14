@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Literal
 
-from chat_application.cypher import (
+from chat_application.graph.cypher import (
     extract_entity_ids,
     extract_payment_ids,
     lob_filter_from_question,

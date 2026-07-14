@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from chat_application.subject import Subject
+from chat_application.auth.subject import Subject
 
 COMPLIANCE_ROLES = frozenset(
     {"COMPLIANCE_ANALYST", "COMPLIANCE_OFFICER", "PLATFORM_ADMIN"}

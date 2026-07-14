@@ -3,13 +3,14 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from chat_application.authz_obo_client import AuthzOboClient, AuthzOboClientError
-from chat_application.capabilities import capabilities_for
+from chat_application.auth.capabilities import capabilities_for
+from chat_application.auth.service_identity import service_identity
+from chat_application.auth.subject import Subject
+from chat_application.authz.obo import AuthzOboClient, AuthzOboClientError
 from chat_application.formatting import (
     format_eligible_approvers_section,
     format_policy_basis_cell,
 )
-from chat_application.service_identity import service_identity
 from chat_application.skills.detect import parse_create_payment_params
 from chat_application.skills.format import (
     confirmation_card_from_instruction,
@@ -31,7 +32,6 @@ from chat_application.skills.pending_store import (
     build_pending,
     pending_create_payment_store,
 )
-from chat_application.subject import Subject
 
 logger = logging.getLogger(__name__)
 
