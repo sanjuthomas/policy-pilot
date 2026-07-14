@@ -3,6 +3,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 import pytest
+
 from chat_application.formatting.neo4j import (
     format_instruction_creator_by_id,
     format_instruction_status_by_id,
@@ -248,6 +249,8 @@ class TestNeo4jDirectExecution:
         )
         assert result is not None
         assert "2" in result.answer
+        assert "instruction" in result.answer.lower()
+        assert "payment" not in result.answer.lower()
         assert result.intent_id == "planned_graph"
         neo4j.run_cypher.assert_awaited()
 
