@@ -3,11 +3,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from cypher_builder import (
-    is_instruction_group_by_status_question,
-    is_payment_group_by_status_question,
-    load_graph_schema,
-)
 from chat_application.cypher import (
     extract_entity_ids,
     extract_uuids,
@@ -337,10 +332,6 @@ class TestPlanGraphQueries:
         assert "RETURN bucket, total" in query
 
     def test_payment_group_them_by_status(self) -> None:
-        assert is_payment_group_by_status_question(
-            "can you group them by status?",
-            mode="payments",
-        )
         planned = plan_graph_queries(
             "can you group them by status?",
             mode="payments",
@@ -397,10 +388,6 @@ class TestPlanGraphQueries:
         assert "LIMIT 200" not in query
 
     def test_instruction_group_them_by_status(self) -> None:
-        assert is_instruction_group_by_status_question(
-            "can you group them by status?",
-            mode="instructions",
-        )
         planned = plan_graph_queries(
             "can you group them by status?",
             mode="instructions",
@@ -752,12 +739,3 @@ class TestDownvoteRegressionQueries:
         assert planned is not None
         assert planned[0][0] == "cross_entity_reciprocal_approval"
 
-
-class TestLoadGraphSchema:
-    def test_returns_empty_when_missing(self, tmp_path) -> None:
-        assert load_graph_schema(tmp_path / "missing.cypher") == ""
-
-    def test_reads_schema_file(self, tmp_path) -> None:
-        schema_file = tmp_path / "relationships.cypher"
-        schema_file.write_text("MATCH (n) RETURN n LIMIT 1", encoding="utf-8")
-        assert load_graph_schema(schema_file) == "MATCH (n) RETURN n LIMIT 1"

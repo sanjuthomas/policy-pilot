@@ -168,7 +168,6 @@ QUERY_BUILDERS: dict[str, QueryBuilder] = {
     "payment_versions_by_id": _build_payment_versions,
     "instruction_approval_lookup": _build_instruction_approval_lookup,
     "instruction_list_by_status": _build_instruction_list_single_use,
-    "instruction_list_single_use": _build_instruction_list_single_use,
     "instructions_created_by_user": _build_instructions_created_by_user,
     "instruction_mutual_approval": _build_instruction_mutual_approval,
     "cross_entity_reciprocal_approval": _build_cross_entity_reciprocal_approval,

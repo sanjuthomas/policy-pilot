@@ -1,5 +1,4 @@
 from datetime import datetime
-from decimal import Decimal
 from typing import Annotated, Any
 from uuid import uuid4
 
@@ -24,53 +23,6 @@ def _validate_owning_lob(value: str) -> str:
             "owning_lob must be a P&L profit center: FICC, FX, or DESK_<name>"
         )
     return value
-
-
-class ActiveCurrencyAndAmount(BaseModel):
-    """ISO 20022 ActiveCurrencyAndAmount — payment amount with currency."""
-
-    currency: str = Field(min_length=3, max_length=3, description="ISO 4217")
-    amount: Decimal | None = Field(
-        default=None,
-        gt=0,
-        description="Omitted for standing templates without a fixed amount",
-    )
-
-
-class PaymentIdentification(BaseModel):
-    """ISO 20022 PaymentIdentification7."""
-
-    instruction_identification: str | None = Field(default=None, max_length=35)
-    end_to_end_identification: str | None = Field(default=None, max_length=35)
-    transaction_identification: str | None = Field(default=None, max_length=35)
-    uetr: str | None = Field(default=None, max_length=36)
-    clearing_system_reference: str | None = Field(default=None, max_length=35)
-
-
-class PaymentTypeInformation(BaseModel):
-    """ISO 20022 PaymentTypeInformation28 (subset)."""
-
-    instruction_priority: str | None = Field(
-        default=None,
-        max_length=4,
-        description="e.g. HIGH, NORM",
-    )
-    clearing_channel: str | None = Field(
-        default=None,
-        max_length=4,
-        description="e.g. RTGS, MPNS, BOOK",
-    )
-    service_levels: list[str] = Field(
-        default_factory=list,
-        max_length=3,
-        description="e.g. G001 for SWIFT gpi",
-    )
-    local_instrument: str | None = Field(default=None, max_length=35)
-    category_purpose: str | None = Field(
-        default=None,
-        max_length=4,
-        description="ISO 20022 ExternalCategoryPurpose1Code",
-    )
 
 
 class PostalAddress(BaseModel):
@@ -138,97 +90,6 @@ class AgentWithAccount(BaseModel):
 
     agent: BranchAndFinancialInstitutionIdentification
     account: CashAccount | None = None
-
-
-class ChargesInformation(BaseModel):
-    """ISO 20022 Charges7."""
-
-    amount: ActiveCurrencyAndAmount
-    agent: BranchAndFinancialInstitutionIdentification
-
-
-class Purpose(BaseModel):
-    """ISO 20022 Purpose2Choice."""
-
-    code: str | None = Field(default=None, max_length=4)
-    proprietary: str | None = Field(default=None, max_length=35)
-
-    @model_validator(mode="after")
-    def validate_choice(self) -> "Purpose":
-        if self.code is None and self.proprietary is None:
-            raise ValueError("purpose requires code or proprietary")
-        return self
-
-
-class StructuredRemittanceInformation(BaseModel):
-    """ISO 20022 StructuredRemittanceInformation16 (subset)."""
-
-    creditor_reference: str | None = Field(default=None, max_length=35)
-    creditor_reference_type: str | None = Field(
-        default=None,
-        max_length=4,
-        description="e.g. SCOR",
-    )
-    additional_information: list[str] = Field(default_factory=list, max_length=3)
-
-
-class RemittanceInformation(BaseModel):
-    """ISO 20022 RemittanceInformation16 (subset)."""
-
-    unstructured: list[str] = Field(default_factory=list, max_length=3)
-    structured: list[StructuredRemittanceInformation] = Field(default_factory=list)
-
-    @field_validator("unstructured")
-    @classmethod
-    def validate_unstructured_lines(cls, value: list[str]) -> list[str]:
-        for line in value:
-            if len(line) > 140:
-                raise ValueError(
-                    "remittance unstructured lines must be at most 140 characters"
-                )
-        return value
-
-
-class RelatedRemittanceInformation(BaseModel):
-    """ISO 20022 RemittanceLocation7 (subset)."""
-
-    remittance_identification: str | None = Field(default=None, max_length=35)
-
-
-class RegulatoryReportingDetail(BaseModel):
-    """ISO 20022 StructuredRegulatoryReporting3 (subset)."""
-
-    type: str | None = Field(default=None, max_length=35)
-    date: str | None = Field(default=None, max_length=10)
-    country: str | None = Field(default=None, min_length=2, max_length=2)
-    code: str | None = Field(default=None, max_length=10)
-    amount: ActiveCurrencyAndAmount | None = None
-    information: list[str] = Field(default_factory=list, max_length=3)
-
-
-class RegulatoryReporting(BaseModel):
-    """ISO 20022 RegulatoryReporting3 (subset)."""
-
-    debit_credit_reporting_indicator: str | None = Field(
-        default=None,
-        max_length=4,
-        description="CRED, DEBT, or BOTH",
-    )
-    authority_name: str | None = Field(default=None, max_length=140)
-    authority_country: str | None = Field(default=None, min_length=2, max_length=2)
-    details: list[RegulatoryReportingDetail] = Field(default_factory=list)
-
-
-class TaxInformation(BaseModel):
-    """ISO 20022 TaxInformation7 (subset)."""
-
-    creditor_tax_id: str | None = Field(default=None, max_length=35)
-    debtor_tax_id: str | None = Field(default=None, max_length=35)
-    administrative_zone: str | None = Field(default=None, max_length=35)
-    reference_number: str | None = Field(default=None, max_length=140)
-    method: str | None = Field(default=None, max_length=35)
-    total_taxable_base_amount: ActiveCurrencyAndAmount | None = None
-    total_tax_amount: ActiveCurrencyAndAmount | None = None
 
 
 class InstructionForAgent(BaseModel):

@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-import logging
 import re
-from pathlib import Path
 from typing import Any, Literal
-
-logger = logging.getLogger(__name__)
 
 # ── Cypher validation patterns ─────────────────────────────────────────────
 
@@ -234,15 +230,6 @@ _ALERT_LIST_ENTITY_ID = """CASE
        END"""
 
 
-def load_graph_schema(schema_path: Path | None = None) -> str:
-    if schema_path is None:
-        return ""
-    if schema_path.is_file():
-        return schema_path.read_text(encoding="utf-8")
-    logger.warning("graph schema file not found: %s", schema_path)
-    return ""
-
-
 def normalize_read_only_cypher(cypher: str) -> str:
     """Append LIMIT 1 to aggregate-only queries that omit an explicit LIMIT."""
     stripped = cypher.strip()
@@ -398,24 +385,6 @@ def is_instruction_count_aggregate_question(question: str) -> bool:
     if is_payments_for_instruction_question(question):
         return False
     return "instruction" in q
-
-
-def is_instruction_group_by_status_question(question: str, *, mode: str = "instructions") -> bool:
-    from cypher_builder.facets import is_facet_aggregate_question, parse_facet_aggregate
-
-    if not is_facet_aggregate_question(question, mode=mode):
-        return False
-    spec = parse_facet_aggregate(question, mode=mode)
-    return spec is not None and spec.dimension.key == "status"
-
-
-def is_payment_group_by_status_question(question: str, *, mode: str = "payments") -> bool:
-    from cypher_builder.facets import is_facet_aggregate_question, parse_facet_aggregate
-
-    if not is_facet_aggregate_question(question, mode=mode):
-        return False
-    spec = parse_facet_aggregate(question, mode=mode)
-    return spec is not None and spec.dimension.key == "status"
 
 
 def is_security_event_alert_count_question(question: str, *, mode: str = "events") -> bool:
