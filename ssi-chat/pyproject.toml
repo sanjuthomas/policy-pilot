@@ -34,7 +34,7 @@ markers = [
 
 [tool.coverage.run]
 source = ["chat_application"]
-omit = ["src/chat_application/auth.py"]
+omit = ["src/chat_application/auth/bearer.py"]
 
 [tool.coverage.report]
 fail_under = 70
