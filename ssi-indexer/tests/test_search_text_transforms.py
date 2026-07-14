@@ -1,13 +1,6 @@
 from __future__ import annotations
 
-from etl.search_text.transforms import apply_transform, display_name, get_path
-
-
-def test_get_path_nested_and_missing() -> None:
-    doc = {"a": {"b": "value"}}
-    assert get_path(doc, "a.b") == "value"
-    assert get_path(doc, "a.c") is None
-    assert get_path(doc, "x.y") is None
+from etl.search_text.transforms import apply_transform, display_name
 
 
 def test_display_name_variants() -> None:

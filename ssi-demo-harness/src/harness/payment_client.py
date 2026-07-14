@@ -81,11 +81,6 @@ class PaymentServiceClient:
             json_body={"reason": reason},
         )
 
-    def get_payment(
-        self, session: SessionCredentials, payment_id: str
-    ) -> httpx.Response:
-        return self.request("GET", f"/payments/{payment_id}", session=session)
-
     def list_payments(
         self,
         session: SessionCredentials,

@@ -92,13 +92,6 @@ def test_payment_to_opa_payment(payment: Payment) -> None:
     assert payload["created_by"]["user_id"] == "alice"
 
 
-def test_payment_to_mongo_and_from_mongo_roundtrip(payment: Payment) -> None:
-    doc = payment.to_mongo()
-    restored = Payment.from_mongo({**doc, "_id": "mongo-id"})
-    assert restored.payment_id == payment.payment_id
-    assert restored.amount == payment.amount
-
-
 def test_payment_security_event_authorized_action(subject: Subject, payment: Payment) -> None:
     event = PaymentSecurityEvent.authorized_action(
         PaymentAction.CREATE,

@@ -3,16 +3,6 @@ from __future__ import annotations
 from typing import Any
 
 
-def get_path(document: dict[str, Any], path: str) -> Any:
-    """Resolve a dot-separated path on nested dicts."""
-    current: Any = document
-    for segment in path.split("."):
-        if not isinstance(current, dict):
-            return None
-        current = current.get(segment)
-    return current
-
-
 def display_name(user: dict[str, Any] | None) -> str | None:
     if not user:
         return None

@@ -106,11 +106,3 @@ class Payment(BaseModel):
                 "supervisor_id": self.created_by.supervisor_id,
             },
         }
-
-    def to_mongo(self) -> dict:
-        return self.model_dump(mode="json")
-
-    @classmethod
-    def from_mongo(cls, doc: dict) -> "Payment":
-        doc.pop("_id", None)
-        return cls.model_validate(doc)
