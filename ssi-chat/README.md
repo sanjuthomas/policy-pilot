@@ -150,7 +150,6 @@ Copy `.env.example` to `.env` at the repo root to override defaults. Docker Comp
 | `GOOGLE_APPLICATION_CREDENTIALS` | `/run/secrets/gcp-sa.json` (in container) |
 | `MULTIMODAL_VECTOR_INDEX` | `multimodal_embedding` |
 | `NEO4J_URI` | `bolt://neo4j:7687` |
-| `GRAPH_MODEL_DIR` | `/app/neo4j-graph-model` |
 | `PAYMENT_SERVICE_URL` | `http://payment-service:8093` |
 | `INSTRUCTION_SERVICE_URL` | `http://instruction-service:8000` |
 | `OIDC_ISSUER_URL` | `http://localhost:8080` |

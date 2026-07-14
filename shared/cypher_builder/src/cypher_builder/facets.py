@@ -421,10 +421,6 @@ def is_analytics_question(question: str, *, mode: str) -> bool:
     return _is_group_by_facet_question(question, mode=mode)
 
 
-def is_facet_aggregate_question(question: str, *, mode: str) -> bool:
-    return is_analytics_question(question, mode=mode)
-
-
 def _parse_requested_metrics(
     question: str, *, entity: FacetEntity
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:

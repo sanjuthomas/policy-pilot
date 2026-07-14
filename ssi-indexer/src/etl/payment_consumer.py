@@ -60,10 +60,6 @@ class PaymentSecurityEventKafkaConsumer:
             await self._consumer.stop()
             self._consumer = None
 
-    @property
-    def running(self) -> bool:
-        return self._consumer is not None
-
     async def _run(self) -> None:
         assert self._consumer is not None
         try:
@@ -146,10 +142,6 @@ class PaymentFactKafkaConsumer:
         if self._consumer is not None:
             await self._consumer.stop()
             self._consumer = None
-
-    @property
-    def running(self) -> bool:
-        return self._consumer is not None
 
     async def _run(self) -> None:
         assert self._consumer is not None

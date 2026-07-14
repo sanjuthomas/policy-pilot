@@ -7,7 +7,6 @@ from cypher_builder.facets import (
     facet_aggregate_queries,
     format_facet_aggregate_answer,
     is_analytics_question,
-    is_facet_aggregate_question,
     parse_facet_aggregate,
     resolve_facet_dimension,
 )
@@ -27,10 +26,10 @@ class TestFacetDetection:
     )
     def test_detects_facet_questions(self, question: str) -> None:
         mode = "payments" if "payment" in question.lower() else "instructions"
-        assert is_facet_aggregate_question(question, mode=mode) is True
+        assert is_analytics_question(question, mode=mode) is True
 
     def test_plain_count_is_not_facet(self) -> None:
-        assert is_facet_aggregate_question(
+        assert is_analytics_question(
             "How many instructions are there?",
             mode="instructions",
         ) is False

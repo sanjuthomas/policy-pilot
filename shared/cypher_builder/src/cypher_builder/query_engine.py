@@ -107,7 +107,7 @@ _INSTRUCTION_ID_IN_QUESTION = re.compile(
     re.IGNORECASE,
 )
 
-_PAYMENT_STATUSES = ("APPROVED", "SUBMITTED", "REJECTED", "DRAFT", "CANCELLED", "PENDING")
+_PAYMENT_STATUSES = ("APPROVED", "SUBMITTED", "REJECTED", "DRAFT", "CANCELLED")
 
 _DENIAL_QUESTION = re.compile(
     r"\b(policy denial|denials?|denied|alert|alerts)\b",
@@ -757,6 +757,9 @@ def payment_status_filter_from_question(question: str) -> str | None:
     for status in _PAYMENT_STATUSES:
         if status in upper:
             return status
+    # NL "pending" means waiting for approval → SUBMITTED
+    if "PENDING" in upper:
+        return "SUBMITTED"
     return None
 
 

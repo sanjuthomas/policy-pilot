@@ -57,7 +57,6 @@ generation_client = VertexGenerativeClient(
     project_id=settings.gcp_project_id,
     region=settings.gcp_region,
     model=settings.vertex_gemini_model,
-    timeout_seconds=settings.vertex_timeout_seconds,
 )
 multimodal_store = MultimodalNeo4jStore(neo4j_writer)
 

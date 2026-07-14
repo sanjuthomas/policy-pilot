@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from chat_application.config import Settings, settings
 
 
@@ -13,10 +11,6 @@ class TestSettings:
         assert s.retrieval_limit == 15
         assert s.rrf_k == 60
         assert s.max_context_hits == 10
-
-    def test_graph_schema_path(self) -> None:
-        s = Settings(graph_model_dir="/tmp/graph-model")
-        assert s.graph_schema_path == Path("/tmp/graph-model/relationships.cypher")
 
     def test_env_override(self, monkeypatch) -> None:
         monkeypatch.setenv("PORT", "9999")

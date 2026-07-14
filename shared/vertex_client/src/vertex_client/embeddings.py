@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 EmbeddingTaskType = Literal[
     "RETRIEVAL_DOCUMENT",
     "RETRIEVAL_QUERY",
-    "SEMANTIC_SIMILARITY",
 ]
 
 

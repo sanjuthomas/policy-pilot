@@ -41,7 +41,6 @@ async def test_security_event_ui_store_list_recent() -> None:
         events = await store.list_recent(limit=5)
     assert events[0]["event_id"] == "e-denial"
     assert events[1]["event_id"] == "e1"
-    assert "e-denial" in store.seen_event_ids
 
 
 def test_merge_recent_documents_prefers_notable_events() -> None:
@@ -57,14 +56,6 @@ def test_merge_recent_documents_prefers_notable_events() -> None:
         limit=2,
     )
     assert [_document_id(doc) for doc in merged] == ["info-new", "denial"]
-
-
-def test_security_event_ui_store_remember_helpers() -> None:
-    store = SecurityEventUiStore()
-    assert store.remember_event_id("e1") is True
-    assert store.remember_event_id("e1") is False
-    store.remember_poll_timestamp("2025-06-01T00:00:00Z")
-    assert store.last_poll_at is not None
 
 
 def test_main_health_endpoint() -> None:

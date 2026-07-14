@@ -9,7 +9,6 @@ from inst.models.api import (
 )
 from inst.models.enums import (
     AccountIdentificationScheme,
-    ChargeBearer,
     FinancialInstitutionIdScheme,
     InstructionStatus,
     InstructionType,
@@ -17,38 +16,31 @@ from inst.models.enums import (
     is_valid_owning_lob,
 )
 from inst.models.instruction import (
-    AgentWithAccount,
     BranchAndFinancialInstitutionIdentification,
     CashAccount,
     CashSettlementInstruction,
     FinancialInstitutionIdentification,
     FundingAccount,
-    InstructionForAgent,
     LifecycleEvent,
     PartyIdentification,
-    PostalAddress,
     UserReference,
 )
 
 __all__ = [
     "AccountIdentificationScheme",
-    "AgentWithAccount",
     "BranchAndFinancialInstitutionIdentification",
     "CashAccount",
     "CashSettlementInstruction",
-    "ChargeBearer",
     "CreateInstructionRequest",
     "CancelInstructionRequest",
     "FinancialInstitutionIdScheme",
     "FinancialInstitutionIdentification",
     "FundingAccount",
-    "InstructionForAgent",
     "InstructionResponse",
     "InstructionStatus",
     "InstructionType",
     "LifecycleEvent",
     "PartyIdentification",
-    "PostalAddress",
     "RejectInstructionRequest",
     "UpdateInstructionRequest",
     "Subject",
