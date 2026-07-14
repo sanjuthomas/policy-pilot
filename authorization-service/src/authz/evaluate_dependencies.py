@@ -38,6 +38,26 @@ def get_service_caller(
     return service_subject
 
 
+def _identity_mismatch_fields(token_subject: Subject, inline: Subject) -> list[str]:
+    """Compare security-relevant identity fields (not delegation metadata)."""
+    mismatched: list[str] = []
+    if token_subject.user_id != inline.user_id:
+        mismatched.append("user_id")
+    if token_subject.title != inline.title:
+        mismatched.append("title")
+    if token_subject.lob != inline.lob:
+        mismatched.append("lob")
+    if token_subject.supervisor_id != inline.supervisor_id:
+        mismatched.append("supervisor_id")
+    if sorted(token_subject.roles) != sorted(inline.roles):
+        mismatched.append("roles")
+    if sorted(token_subject.groups) != sorted(inline.groups):
+        mismatched.append("groups")
+    if sorted(token_subject.covering_lobs) != sorted(inline.covering_lobs):
+        mismatched.append("covering_lobs")
+    return mismatched
+
+
 def resolve_evaluate_subject(
     *,
     service_token: str,
@@ -46,20 +66,45 @@ def resolve_evaluate_subject(
     x_on_behalf_of_session_id: str | None,
     inline_subject: Subject | None,
 ) -> Subject:
-    if x_on_behalf_of:
-        user_token = x_on_behalf_of.strip()
-        if user_token.lower().startswith("bearer "):
-            user_token = user_token.split(" ", 1)[1].strip()
-        return subject_from_obo_call(
-            service_token,
-            user_token,
-            service_session_id=service_session_id,
-            user_session_id=x_on_behalf_of_session_id,
+    """Resolve the human subject for lifecycle evaluate.
+
+    OBO (verified user token) is always required. An optional inline ``subject``
+    may be sent for the caller's bookkeeping; when present, identity fields must
+    match the OBO-derived subject. OPA evaluation always uses the token-derived
+    subject (including ``delegated_by`` from the Authorization service account).
+
+    Eligible-approvers batch discovery is a separate endpoint and does not use
+    this helper.
+    """
+    if not x_on_behalf_of or not str(x_on_behalf_of).strip():
+        raise HTTPException(
+            status_code=401,
+            detail=(
+                "X-On-Behalf-Of user token is required for lifecycle evaluate; "
+                "inline subject alone is not accepted"
+            ),
         )
 
-    if inline_subject is None:
-        raise HTTPException(
-            status_code=400,
-            detail="subject is required when X-On-Behalf-Of is not provided",
-        )
-    return inline_subject
+    user_token = x_on_behalf_of.strip()
+    if user_token.lower().startswith("bearer "):
+        user_token = user_token.split(" ", 1)[1].strip()
+
+    token_subject = subject_from_obo_call(
+        service_token,
+        user_token,
+        service_session_id=service_session_id,
+        user_session_id=x_on_behalf_of_session_id,
+    )
+
+    if inline_subject is not None:
+        mismatched = _identity_mismatch_fields(token_subject, inline_subject)
+        if mismatched:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "inline subject does not match X-On-Behalf-Of token identity: "
+                    + ", ".join(mismatched)
+                ),
+            )
+
+    return token_subject

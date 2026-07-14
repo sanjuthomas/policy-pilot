@@ -192,23 +192,48 @@ class InstructionService:
         *,
         bearer_token: str | None = None,
         session_id: str | None = None,
+        authz_service_token: str | None = None,
+        authz_service_session_id: str | None = None,
     ):
-        await service_identity.ensure_logged_in()
-        common = {
-            "action": action.value,
-            "instruction": instruction.to_opa_instruction(),
-            "account": instruction.to_opa_account(),
-            "service_token": service_identity.token,
-            "service_session_id": service_identity.session_id,
-        }
-        if bearer_token and service_identity.token and not subject.delegated_by:
-            return await self.authz.evaluate_instruction(
-                **common,
-                user_token=bearer_token,
-                user_session_id=session_id,
+        """Evaluate lifecycle policy via authz with a verified user OBO token.
+
+        ``bearer_token`` is the human JWT when provided by the caller. Routes may
+        also bind :mod:`inst.evaluate_tokens` so nested OBO (payment → instruction)
+        forwards the calling service account to authz and preserves
+        ``INSTRUCTION_MARKER`` on ``delegated_by_roles``.
+        """
+        from inst.evaluate_tokens import current_evaluate_token_context
+
+        ctx = current_evaluate_token_context()
+        user_token = bearer_token or (ctx.user_token if ctx else None)
+        user_session_id = session_id or (ctx.user_session_id if ctx else None)
+        service_override = authz_service_token or (
+            ctx.authz_service_token if ctx else None
+        )
+        service_session_override = authz_service_session_id or (
+            ctx.authz_service_session_id if ctx else None
+        )
+
+        if not user_token:
+            raise PermissionError(
+                "user token required for policy evaluation "
+                "(pass the caller's JWT for X-On-Behalf-Of)"
             )
+        await service_identity.ensure_logged_in()
+        service_token = service_override or service_identity.token
+        service_session_id = (
+            service_session_override if service_override else service_identity.session_id
+        )
+        if not service_token:
+            raise PermissionError("service identity token required for policy evaluation")
         return await self.authz.evaluate_instruction(
-            **common,
+            action=action.value,
+            instruction=instruction.to_opa_instruction(),
+            account=instruction.to_opa_account(),
+            service_token=service_token,
+            service_session_id=service_session_id,
+            user_token=user_token,
+            user_session_id=user_session_id,
             subject=subject.model_dump(mode="json"),
         )
 

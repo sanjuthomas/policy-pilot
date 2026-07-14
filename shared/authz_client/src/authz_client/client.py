@@ -98,26 +98,26 @@ class AuthzClient:
         user_session_id: str | None = None,
         subject: dict[str, Any] | None = None,
     ) -> PolicyDecision:
+        if not service_token:
+            raise AuthzClientError("service_token is required for lifecycle evaluate")
+        if not user_token:
+            raise AuthzClientError(
+                "user_token (X-On-Behalf-Of) is required for lifecycle evaluate"
+            )
         payload: dict[str, Any] = {
             "action": action,
             "instruction": instruction,
             "account": account,
         }
-        if user_token and service_token:
-            headers = self._obo_headers(
-                service_token=service_token,
-                service_session_id=service_session_id,
-                user_token=user_token,
-                user_session_id=user_session_id,
-            )
-        else:
-            if subject is None:
-                raise AuthzClientError("subject is required when OBO tokens are not provided")
+        # Optional inline subject is forwarded for authz binding checks only.
+        if subject is not None:
             payload["subject"] = subject
-            headers = self._service_headers(
-                service_token=service_token,
-                service_session_id=service_session_id,
-            )
+        headers = self._obo_headers(
+            service_token=service_token,
+            service_session_id=service_session_id,
+            user_token=user_token,
+            user_session_id=user_session_id,
+        )
 
         return await self._post(
             "/api/v1/authorization/instructions/evaluate",
@@ -138,27 +138,26 @@ class AuthzClient:
         user_session_id: str | None = None,
         subject: dict[str, Any] | None = None,
     ) -> PolicyDecision:
+        if not service_token:
+            raise AuthzClientError("service_token is required for lifecycle evaluate")
+        if not user_token:
+            raise AuthzClientError(
+                "user_token (X-On-Behalf-Of) is required for lifecycle evaluate"
+            )
         payload: dict[str, Any] = {
             "action": action,
             "payment": payment,
             "instruction_end_date": instruction_end_date,
             "instruction_status": instruction_status,
         }
-        if user_token and service_token:
-            headers = self._obo_headers(
-                service_token=service_token,
-                service_session_id=service_session_id,
-                user_token=user_token,
-                user_session_id=user_session_id,
-            )
-        else:
-            if subject is None:
-                raise AuthzClientError("subject is required when OBO tokens are not provided")
+        if subject is not None:
             payload["subject"] = subject
-            headers = self._service_headers(
-                service_token=service_token,
-                service_session_id=service_session_id,
-            )
+        headers = self._obo_headers(
+            service_token=service_token,
+            service_session_id=service_session_id,
+            user_token=user_token,
+            user_session_id=user_session_id,
+        )
 
         return await self._post(
             "/api/v1/authorization/payments/evaluate",

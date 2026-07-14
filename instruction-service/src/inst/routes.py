@@ -1,6 +1,11 @@
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
 from inst.dependencies import get_compliance_subject, get_subject
+from inst.evaluate_tokens import (
+    bind_evaluate_token_context,
+    reset_evaluate_token_context,
+    resolve_evaluate_token_context,
+)
 from inst.models.api import (
     CancelInstructionRequest,
     CreateInstructionRequest,
@@ -22,10 +27,19 @@ def get_service() -> InstructionService:
     return InstructionService()
 
 
-def _bearer_token(authorization: str | None) -> str | None:
-    if authorization and authorization.lower().startswith("bearer "):
-        return authorization.split(" ", 1)[1].strip()
-    return None
+def _bind_tokens(
+    authorization: str | None,
+    x_session_id: str | None,
+    x_on_behalf_of: str | None,
+    x_on_behalf_of_session_id: str | None,
+):
+    ctx = resolve_evaluate_token_context(
+        authorization=authorization,
+        x_session_id=x_session_id,
+        x_on_behalf_of=x_on_behalf_of,
+        x_on_behalf_of_session_id=x_on_behalf_of_session_id,
+    )
+    return bind_evaluate_token_context(ctx), ctx
 
 
 @router.post("", response_model=InstructionResponse, status_code=201)
@@ -35,13 +49,20 @@ async def create_instruction(
     service: InstructionService = Depends(get_service),
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    x_on_behalf_of: str | None = Header(default=None, alias="X-On-Behalf-Of"),
+    x_on_behalf_of_session_id: str | None = Header(
+        default=None, alias="X-On-Behalf-Of-Session-Id"
+    ),
 ) -> InstructionResponse:
+    token, ctx = _bind_tokens(
+        authorization, x_session_id, x_on_behalf_of, x_on_behalf_of_session_id
+    )
     try:
         return await service.create(
             request,
             subject,
-            bearer_token=_bearer_token(authorization),
-            session_id=x_session_id,
+            bearer_token=ctx.user_token,
+            session_id=ctx.user_session_id,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
@@ -49,6 +70,8 @@ async def create_instruction(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    finally:
+        reset_evaluate_token_context(token)
 
 
 @router.get("", response_model=list[InstructionResponse])
@@ -60,15 +83,25 @@ async def list_instructions(
     service: InstructionService = Depends(get_service),
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    x_on_behalf_of: str | None = Header(default=None, alias="X-On-Behalf-Of"),
+    x_on_behalf_of_session_id: str | None = Header(
+        default=None, alias="X-On-Behalf-Of-Session-Id"
+    ),
 ) -> list[InstructionResponse]:
-    return await service.list(
-        subject,
-        owning_lob=owning_lob,
-        status=status,
-        limit=limit,
-        bearer_token=_bearer_token(authorization),
-        session_id=x_session_id,
+    token, ctx = _bind_tokens(
+        authorization, x_session_id, x_on_behalf_of, x_on_behalf_of_session_id
     )
+    try:
+        return await service.list(
+            subject,
+            owning_lob=owning_lob,
+            status=status,
+            limit=limit,
+            bearer_token=ctx.user_token,
+            session_id=ctx.user_session_id,
+        )
+    finally:
+        reset_evaluate_token_context(token)
 
 
 @router.get("/{instruction_id}/versions", response_model=list[InstructionResponse])
@@ -78,18 +111,27 @@ async def list_instruction_versions(
     service: InstructionService = Depends(get_service),
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    x_on_behalf_of: str | None = Header(default=None, alias="X-On-Behalf-Of"),
+    x_on_behalf_of_session_id: str | None = Header(
+        default=None, alias="X-On-Behalf-Of-Session-Id"
+    ),
 ) -> list[InstructionResponse]:
+    token, ctx = _bind_tokens(
+        authorization, x_session_id, x_on_behalf_of, x_on_behalf_of_session_id
+    )
     try:
         return await service.list_versions(
             instruction_id,
             subject,
-            bearer_token=_bearer_token(authorization),
-            session_id=x_session_id,
+            bearer_token=ctx.user_token,
+            session_id=ctx.user_session_id,
         )
     except InstructionNotFoundError as exc:
         raise HTTPException(status_code=404, detail="instruction not found") from exc
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
+    finally:
+        reset_evaluate_token_context(token)
 
 
 @router.put("/{instruction_id}", response_model=InstructionResponse)
@@ -100,14 +142,21 @@ async def update_instruction(
     service: InstructionService = Depends(get_service),
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    x_on_behalf_of: str | None = Header(default=None, alias="X-On-Behalf-Of"),
+    x_on_behalf_of_session_id: str | None = Header(
+        default=None, alias="X-On-Behalf-Of-Session-Id"
+    ),
 ) -> InstructionResponse:
+    token, ctx = _bind_tokens(
+        authorization, x_session_id, x_on_behalf_of, x_on_behalf_of_session_id
+    )
     try:
         return await service.update(
             instruction_id,
             request,
             subject,
-            bearer_token=_bearer_token(authorization),
-            session_id=x_session_id,
+            bearer_token=ctx.user_token,
+            session_id=ctx.user_session_id,
         )
     except InstructionNotFoundError as exc:
         raise HTTPException(status_code=404, detail="instruction not found") from exc
@@ -117,6 +166,8 @@ async def update_instruction(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ConcurrentModificationError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    finally:
+        reset_evaluate_token_context(token)
 
 
 @router.get("/{instruction_id}", response_model=InstructionResponse)
@@ -126,18 +177,27 @@ async def get_instruction(
     service: InstructionService = Depends(get_service),
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    x_on_behalf_of: str | None = Header(default=None, alias="X-On-Behalf-Of"),
+    x_on_behalf_of_session_id: str | None = Header(
+        default=None, alias="X-On-Behalf-Of-Session-Id"
+    ),
 ) -> InstructionResponse:
+    token, ctx = _bind_tokens(
+        authorization, x_session_id, x_on_behalf_of, x_on_behalf_of_session_id
+    )
     try:
         return await service.get(
             instruction_id,
             subject,
-            bearer_token=_bearer_token(authorization),
-            session_id=x_session_id,
+            bearer_token=ctx.user_token,
+            session_id=ctx.user_session_id,
         )
     except InstructionNotFoundError as exc:
         raise HTTPException(status_code=404, detail="instruction not found") from exc
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
+    finally:
+        reset_evaluate_token_context(token)
 
 
 @router.post("/{instruction_id}/eligible-approvers", response_model=InstructionEligibleApproversResponse)
@@ -160,13 +220,19 @@ async def submit_instruction(
     service: InstructionService = Depends(get_service),
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    x_on_behalf_of: str | None = Header(default=None, alias="X-On-Behalf-Of"),
+    x_on_behalf_of_session_id: str | None = Header(
+        default=None, alias="X-On-Behalf-Of-Session-Id"
+    ),
 ) -> InstructionResponse:
     return await _lifecycle_action(
         service.submit,
         instruction_id,
         subject,
-        bearer_token=_bearer_token(authorization),
-        session_id=x_session_id,
+        authorization=authorization,
+        x_session_id=x_session_id,
+        x_on_behalf_of=x_on_behalf_of,
+        x_on_behalf_of_session_id=x_on_behalf_of_session_id,
     )
 
 
@@ -177,13 +243,19 @@ async def approve_instruction(
     service: InstructionService = Depends(get_service),
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    x_on_behalf_of: str | None = Header(default=None, alias="X-On-Behalf-Of"),
+    x_on_behalf_of_session_id: str | None = Header(
+        default=None, alias="X-On-Behalf-Of-Session-Id"
+    ),
 ) -> InstructionResponse:
     return await _lifecycle_action(
         service.approve,
         instruction_id,
         subject,
-        bearer_token=_bearer_token(authorization),
-        session_id=x_session_id,
+        authorization=authorization,
+        x_session_id=x_session_id,
+        x_on_behalf_of=x_on_behalf_of,
+        x_on_behalf_of_session_id=x_on_behalf_of_session_id,
     )
 
 
@@ -195,14 +267,20 @@ async def cancel_instruction(
     service: InstructionService = Depends(get_service),
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    x_on_behalf_of: str | None = Header(default=None, alias="X-On-Behalf-Of"),
+    x_on_behalf_of_session_id: str | None = Header(
+        default=None, alias="X-On-Behalf-Of-Session-Id"
+    ),
 ) -> InstructionResponse:
     return await _lifecycle_action(
         service.cancel,
         instruction_id,
         subject,
         request,
-        bearer_token=_bearer_token(authorization),
-        session_id=x_session_id,
+        authorization=authorization,
+        x_session_id=x_session_id,
+        x_on_behalf_of=x_on_behalf_of,
+        x_on_behalf_of_session_id=x_on_behalf_of_session_id,
     )
 
 
@@ -214,14 +292,20 @@ async def reject_instruction(
     service: InstructionService = Depends(get_service),
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    x_on_behalf_of: str | None = Header(default=None, alias="X-On-Behalf-Of"),
+    x_on_behalf_of_session_id: str | None = Header(
+        default=None, alias="X-On-Behalf-Of-Session-Id"
+    ),
 ) -> InstructionResponse:
     return await _lifecycle_action(
         service.reject,
         instruction_id,
         subject,
         request,
-        bearer_token=_bearer_token(authorization),
-        session_id=x_session_id,
+        authorization=authorization,
+        x_session_id=x_session_id,
+        x_on_behalf_of=x_on_behalf_of,
+        x_on_behalf_of_session_id=x_on_behalf_of_session_id,
     )
 
 
@@ -232,13 +316,19 @@ async def suspend_instruction(
     service: InstructionService = Depends(get_service),
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    x_on_behalf_of: str | None = Header(default=None, alias="X-On-Behalf-Of"),
+    x_on_behalf_of_session_id: str | None = Header(
+        default=None, alias="X-On-Behalf-Of-Session-Id"
+    ),
 ) -> InstructionResponse:
     return await _lifecycle_action(
         service.suspend,
         instruction_id,
         subject,
-        bearer_token=_bearer_token(authorization),
-        session_id=x_session_id,
+        authorization=authorization,
+        x_session_id=x_session_id,
+        x_on_behalf_of=x_on_behalf_of,
+        x_on_behalf_of_session_id=x_on_behalf_of_session_id,
     )
 
 
@@ -249,13 +339,19 @@ async def reactivate_instruction(
     service: InstructionService = Depends(get_service),
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    x_on_behalf_of: str | None = Header(default=None, alias="X-On-Behalf-Of"),
+    x_on_behalf_of_session_id: str | None = Header(
+        default=None, alias="X-On-Behalf-Of-Session-Id"
+    ),
 ) -> InstructionResponse:
     return await _lifecycle_action(
         service.reactivate,
         instruction_id,
         subject,
-        bearer_token=_bearer_token(authorization),
-        session_id=x_session_id,
+        authorization=authorization,
+        x_session_id=x_session_id,
+        x_on_behalf_of=x_on_behalf_of,
+        x_on_behalf_of_session_id=x_on_behalf_of_session_id,
     )
 
 
@@ -267,14 +363,20 @@ async def use_instruction(
     service: InstructionService = Depends(get_service),
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    x_on_behalf_of: str | None = Header(default=None, alias="X-On-Behalf-Of"),
+    x_on_behalf_of_session_id: str | None = Header(
+        default=None, alias="X-On-Behalf-Of-Session-Id"
+    ),
 ) -> InstructionResponse:
     return await _lifecycle_action(
         service.use,
         instruction_id,
         subject,
         request,
-        bearer_token=_bearer_token(authorization),
-        session_id=x_session_id,
+        authorization=authorization,
+        x_session_id=x_session_id,
+        x_on_behalf_of=x_on_behalf_of,
+        x_on_behalf_of_session_id=x_on_behalf_of_session_id,
     )
 
 
@@ -286,14 +388,20 @@ async def release_use_instruction(
     service: InstructionService = Depends(get_service),
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    x_on_behalf_of: str | None = Header(default=None, alias="X-On-Behalf-Of"),
+    x_on_behalf_of_session_id: str | None = Header(
+        default=None, alias="X-On-Behalf-Of-Session-Id"
+    ),
 ) -> InstructionResponse:
     return await _lifecycle_action(
         service.release_use,
         instruction_id,
         subject,
         request,
-        bearer_token=_bearer_token(authorization),
-        session_id=x_session_id,
+        authorization=authorization,
+        x_session_id=x_session_id,
+        x_on_behalf_of=x_on_behalf_of,
+        x_on_behalf_of_session_id=x_on_behalf_of_session_id,
     )
 
 
@@ -302,16 +410,21 @@ async def _lifecycle_action(
     instruction_id: str,
     subject: Subject,
     *args,
-    bearer_token: str | None = None,
-    session_id: str | None = None,
+    authorization: str | None = None,
+    x_session_id: str | None = None,
+    x_on_behalf_of: str | None = None,
+    x_on_behalf_of_session_id: str | None = None,
 ):
+    token, ctx = _bind_tokens(
+        authorization, x_session_id, x_on_behalf_of, x_on_behalf_of_session_id
+    )
     try:
         return await handler(
             instruction_id,
             subject,
             *args,
-            bearer_token=bearer_token,
-            session_id=session_id,
+            bearer_token=ctx.user_token,
+            session_id=ctx.user_session_id,
         )
     except InstructionNotFoundError as exc:
         raise HTTPException(status_code=404, detail="instruction not found") from exc
@@ -321,3 +434,5 @@ async def _lifecycle_action(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ConcurrentModificationError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    finally:
+        reset_evaluate_token_context(token)

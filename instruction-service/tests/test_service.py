@@ -447,7 +447,7 @@ async def test_release_use_rejects_payment_mismatch(
 
 
 @pytest.mark.asyncio
-async def test_evaluate_policy_obo_uses_resolved_subject(
+async def test_evaluate_policy_always_forwards_user_token(
     service: InstructionService,
     mock_authz: AsyncMock,
     sample_subject: Subject,
@@ -468,15 +468,45 @@ async def test_evaluate_policy_obo_uses_resolved_subject(
             LifecycleAction.USE,
             obo_subject,
             sample_instruction,
-            bearer_token="svc-payment-token",
-            session_id="svc-payment-session",
+            bearer_token="user-token",
+            session_id="user-session",
+            authz_service_token="svc-payment-token",
+            authz_service_session_id="svc-payment-session",
         )
 
     mock_authz.evaluate_instruction.assert_awaited_once()
     kwargs = mock_authz.evaluate_instruction.await_args.kwargs
+    assert kwargs["user_token"] == "user-token"
+    assert kwargs["user_session_id"] == "user-session"
+    assert kwargs["service_token"] == "svc-payment-token"
     assert kwargs["subject"]["delegated_by"] == "svc-payment"
     assert "INSTRUCTION_MARKER" in kwargs["subject"]["delegated_by_roles"]
-    assert "user_token" not in kwargs
+
+
+@pytest.mark.asyncio
+async def test_evaluate_policy_requires_user_token(
+    service: InstructionService,
+    sample_subject: Subject,
+    sample_instruction: CashSettlementInstruction,
+) -> None:
+    from inst.evaluate_tokens import (
+        EvaluateTokenContext,
+        bind_evaluate_token_context,
+        reset_evaluate_token_context,
+    )
+
+    token = bind_evaluate_token_context(
+        EvaluateTokenContext(user_token=None, user_session_id=None)
+    )
+    try:
+        with pytest.raises(PermissionError, match="user token"):
+            await service._evaluate_policy(
+                LifecycleAction.VIEW,
+                sample_subject,
+                sample_instruction,
+            )
+    finally:
+        reset_evaluate_token_context(token)
 
 
 @pytest.mark.asyncio
