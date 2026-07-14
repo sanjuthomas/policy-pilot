@@ -1,10 +1,11 @@
-"""Backward-compatible facade over shared cypher_builder."""
+""" Backward-compatible facade over shared cypher_builder."""
 
 from __future__ import annotations
 
 from cypher_builder import (
     LOOKUP_INSTRUCTION_BY_EVENT_CYPHER,
     CypherQueryBuilder,
+    canonicalize_instruction_type,
     extract_entity_ids,
     extract_event_id,
     extract_instruction_ids,
@@ -13,6 +14,7 @@ from cypher_builder import (
     format_facet_aggregate_answer,
     instruction_count_filters_from_question,
     instruction_id_from_list_payments_question,
+    instruction_type_filter_from_question,
     is_alert_ranking_question,
     is_analytics_question,
     is_approval_denial_alert_list_question,
@@ -22,6 +24,7 @@ from cypher_builder import (
     is_instruction_count_aggregate_question,
     is_instruction_mutual_approval_question,
     is_instruction_payment_count_list_question,
+    is_instruction_type_inventory_list_question,
     is_instruction_versions_list_question,
     is_instructions_without_payments_question,
     is_largest_payment_question,
@@ -55,6 +58,7 @@ from cypher_builder import (
 __all__ = [
     "CypherQueryBuilder",
     "LOOKUP_INSTRUCTION_BY_EVENT_CYPHER",
+    "canonicalize_instruction_type",
     "extract_entity_ids",
     "extract_event_id",
     "extract_instruction_ids",
@@ -63,6 +67,7 @@ __all__ = [
     "format_facet_aggregate_answer",
     "instruction_count_filters_from_question",
     "instruction_id_from_list_payments_question",
+    "instruction_type_filter_from_question",
     "is_alert_ranking_question",
     "is_approval_denial_alert_list_question",
     "is_count_question",
@@ -72,6 +77,7 @@ __all__ = [
     "is_instruction_mutual_approval_question",
     "is_cross_entity_reciprocal_approval_question",
     "is_instruction_payment_count_list_question",
+    "is_instruction_type_inventory_list_question",
     "is_instructions_without_payments_question",
     "is_instruction_versions_list_question",
     "is_largest_payment_question",

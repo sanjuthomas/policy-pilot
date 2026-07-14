@@ -225,8 +225,8 @@ _INSTRUCTION_ID_COALESCE = (
 )
 
 _ALERT_LIST_ENTITY_ID = """CASE
-         WHEN e.payment_id IS NOT NULL THEN e.payment_id
-         ELSE coalesce(v.instruction_id, i.instruction_id, '')
+         WHEN e.payment_id IS NOT NULL THEN coalesce(e.payment_id, '')
+         ELSE coalesce(e.instruction_id, v.instruction_id, i.instruction_id, '')
        END"""
 
 
@@ -622,17 +622,81 @@ def is_security_event_group_by_lob_question(question: str, *, mode: str = "event
     return True
 
 
+_SINGLE_USE_TYPE_PATTERN = re.compile(
+    r"""
+    \b(?:
+        single[\s_-]*use
+      | singleuse
+      | one[\s_-]*time(?:[\s_-]*use)?
+      | onetime(?:[\s_-]*use)?
+    )\b
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+_STANDING_TYPE_PATTERN = re.compile(
+    r"""
+    \b(?:
+        standing
+      | recurring
+      | open[\s_-]*ended
+      | openended
+      | ever[\s_-]*green
+    )\b
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+_INVENTORY_LIST_VERB_PATTERN = re.compile(
+    r"\b(?:list|show|get|display|find|enumerate)\b",
+    re.IGNORECASE,
+)
+
+_INVENTORY_COUNT_PATTERN = re.compile(
+    r"\b(?:how\s+many|count|number\s+of)\b",
+    re.IGNORECASE,
+)
+
+
+def canonicalize_instruction_type(raw: str | None) -> str | None:
+    """Map free-text / enum-ish values onto graph instruction_type tokens."""
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    if not text:
+        return None
+    compact = text.upper().replace("-", "_").replace(" ", "_")
+    if compact in {"SINGLE_USE", "STANDING"}:
+        return compact
+    return instruction_type_filter_from_question(text)
+
+
 def instruction_type_filter_from_question(question: str) -> str | None:
-    """Return instruction_type filter for standing/single-use wording."""
-    upper = question.upper()
-    if "SINGLE_USE" in upper:
+    """Return instruction_type from a common synonym taxonomy.
+
+    Canonical graph values are ``SINGLE_USE`` and ``STANDING``. Phrases like
+    ``single use``, ``single-use``, ``one-time use``, etc. map to ``SINGLE_USE``.
+    """
+    if _SINGLE_USE_TYPE_PATTERN.search(question):
         return "SINGLE_USE"
-    q = question.lower()
-    if re.search(r"\bsingle[\s_-]?use\b", q):
-        return "SINGLE_USE"
-    if "STANDING" in upper or re.search(r"\bstanding\b", q):
+    if _STANDING_TYPE_PATTERN.search(question):
         return "STANDING"
     return None
+
+
+def is_instruction_type_inventory_list_question(
+    question: str, *, mode: str = "instructions"
+) -> bool:
+    """True for list/show inventory questions that name an instruction type."""
+    if mode not in ("instructions", "all"):
+        return False
+    if _INVENTORY_COUNT_PATTERN.search(question):
+        return False
+    if instruction_type_filter_from_question(question) is None:
+        return False
+    if not re.search(r"\binstructions?\b", question, re.IGNORECASE):
+        return False
+    return bool(_INVENTORY_LIST_VERB_PATTERN.search(question))
 
 
 def instruction_count_filters_from_question(question: str) -> tuple[str | None, str | None]:
@@ -1918,6 +1982,16 @@ def plan_graph_queries(question: str, *, mode: str) -> list[tuple[str, str]] | N
         instruction_id = instruction_id_from_versions_list_question(question)
         if instruction_id:
             return builder.instruction_versions(instruction_id)
+
+    if mode in ("instructions", "all") and is_instruction_type_inventory_list_question(
+        question, mode=mode
+    ):
+        instruction_type = instruction_type_filter_from_question(question)
+        if instruction_type:
+            return builder.instruction_list_by_type(
+                instruction_type=instruction_type,
+                lob=lob_filter_from_question(question),
+            )
 
     if mode in ("payments", "all") and is_payment_versions_list_question(
         question, mode=mode

@@ -195,11 +195,11 @@ def time_filter_from_flags(flags: dict[str, bool]) -> str:
 
 
 def _normalize_instruction_type(raw: str) -> str:
-    """Map hyphen/space variants onto graph enum tokens."""
-    normalized = raw.strip().upper().replace("-", "_").replace(" ", "_")
-    if normalized in {"SINGLE_USE", "STANDING"}:
-        return normalized
-    return raw.strip()
+    """Map hyphen/space/synonym variants onto graph enum tokens."""
+    from cypher_builder.query_engine import canonicalize_instruction_type
+
+    canonical = canonicalize_instruction_type(raw)
+    return canonical or raw.strip()
 
 
 def _plans_for_instruction_inventory(
@@ -208,6 +208,8 @@ def _plans_for_instruction_inventory(
     question: str,
 ) -> list[tuple[str, str]] | None:
     """Render inventory Cypher from status/type/creator filters (shared by inventory + remapped lookup)."""
+    from cypher_builder.query_engine import instruction_type_filter_from_question
+
     if plan.user_id:
         return builder.instructions_created_by_user(plan.user_id)
 
@@ -216,11 +218,8 @@ def _plans_for_instruction_inventory(
         if plan.instruction_type
         else None
     )
-    if instruction_type is None and "SINGLE_USE" in question.upper().replace("-", "_").replace(
-        " ", "_"
-    ):
-        # "single-use" / "single use" in the question when the plan omitted type
-        instruction_type = "SINGLE_USE"
+    if instruction_type is None:
+        instruction_type = instruction_type_filter_from_question(question)
 
     if instruction_type:
         return builder.instruction_list_by_type(

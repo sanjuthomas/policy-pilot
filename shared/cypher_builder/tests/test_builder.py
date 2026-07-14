@@ -108,6 +108,47 @@ def test_plans_from_graph_query_allows_missing_confidence() -> None:
     assert plans_from_graph_query(plan, mode="events") is not None
 
 
+def test_instruction_type_synonym_taxonomy() -> None:
+    from cypher_builder import (
+        canonicalize_instruction_type,
+        instruction_type_filter_from_question,
+        plan_graph_queries,
+    )
+
+    for phrase in (
+        "SINGLE_USE",
+        "single use",
+        "single-use",
+        "single_use",
+        "singleuse",
+        "one time use",
+        "one-time",
+        "onetime use",
+    ):
+        assert instruction_type_filter_from_question(phrase) == "SINGLE_USE"
+        assert canonicalize_instruction_type(phrase) == "SINGLE_USE"
+
+    for phrase in (
+        "STANDING",
+        "standing",
+        "recurring",
+        "open-ended",
+        "evergreen",
+        "ever green",
+        "ever-green",
+    ):
+        assert instruction_type_filter_from_question(phrase) == "STANDING"
+        assert canonicalize_instruction_type(phrase) == "STANDING"
+
+    planned = plan_graph_queries(
+        "Can you show me the approved SINGLE USE instructions in the system?",
+        mode="instructions",
+    )
+    assert planned is not None
+    assert planned[0][0] == "instruction_inventory"
+    assert "instruction_type: 'SINGLE_USE'" in planned[0][1]
+
+
 def test_plans_from_lookup_without_id_remaps_to_inventory() -> None:
     """Gemini mislabels list questions as instruction_lookup; still build inventory Cypher."""
     plan = GraphQueryPlan(
@@ -180,7 +221,18 @@ def test_plan_graph_queries_alert_list() -> None:
     assert "severity: 'ALERT'" in planned[0][1]
     assert "entity_type" in planned[0][1]
     assert "[:FOR]->(v:InstructionVersion)" in planned[0][1]
+    assert "e.instruction_id" in planned[0][1]
     assert "actor_display" in planned[0][1]
+
+
+def test_alert_list_entity_id_prefers_security_event_property() -> None:
+    """ALERT list must resolve entity id from SecurityEvent even without FOR."""
+    from cypher_builder.query_engine import _ALERT_LIST_ENTITY_ID, _security_event_alert_list_queries
+
+    assert "e.instruction_id" in _ALERT_LIST_ENTITY_ID
+    queries = _security_event_alert_list_queries(time_filter="", domain="all")
+    assert queries[0][0] == "security_event_alert_list"
+    assert "e.instruction_id" in queries[0][1]
 
 
 def test_plan_graph_queries_alert_group_by_lob() -> None:
