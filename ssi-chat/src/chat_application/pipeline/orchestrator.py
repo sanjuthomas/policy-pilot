@@ -6,12 +6,12 @@ from typing import TYPE_CHECKING, Any
 
 from chat_application.config import settings
 from chat_application.cypher import extract_entity_ids, extract_uuids
+from chat_application.formatting.response import format_chat_response
 from chat_application.models import ChatMessage, ChatResponse, SearchMode
 from chat_application.pipeline.heuristic_strategy import resolve_eligibility_target
 from chat_application.pipeline.models import RouterDecision
 from chat_application.pipeline.retrieve import execute_selective_retrieval
 from chat_application.pipeline.route import route_question
-from chat_application.response_formatter import format_chat_response
 from chat_application.routing_observability import (
     AnswerSynthesis,
     cypher_provenance_for_direct_intent,
@@ -576,7 +576,7 @@ class RagPipelineOrchestrator:
             is_payments_for_instruction_question,
             plan_graph_queries,
         )
-        from chat_application.neo4j_formatters import (
+        from chat_application.formatting.neo4j import (
             format_cross_entity_reciprocal_approval,
             format_instruction_versions_table,
             format_payment_versions_table,

@@ -10,7 +10,7 @@ from chat_application.formatting import (
     humanize_authorization_text,
     humanize_policy_basis,
 )
-from chat_application.neo4j_formatters import (
+from chat_application.formatting.neo4j import (
     FORMATTERS,
     format_alert_count_today,
     format_instruction_approver_by_id,
@@ -266,7 +266,7 @@ class TestNeo4jFormatters:
         assert FORMATTERS["alert_count_today"] is format_alert_count_today
 
     def test_instruction_versions_table(self) -> None:
-        from chat_application.neo4j_formatters import format_instruction_versions_table
+        from chat_application.formatting.neo4j import format_instruction_versions_table
 
         text = format_instruction_versions_table(
             "list all versions",

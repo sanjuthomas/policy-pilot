@@ -6,7 +6,7 @@ from typing import Any, Callable
 
 from cypher_builder.query_engine import is_approval_denial_alert_list_question
 
-from chat_application.formatting import (
+from chat_application.formatting.common import (
     format_approval_auth_lines,
     format_markdown_table,
     format_money_amount,

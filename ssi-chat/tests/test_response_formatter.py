@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from chat_application.formatting import format_markdown_table
-from chat_application.response_formatter import (
+from chat_application.formatting.response import (
     format_chat_response,
     has_markdown_table,
     parse_key_value_record,
