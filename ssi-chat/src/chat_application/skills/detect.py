@@ -1,3 +1,21 @@
+"""Create-payment slot parsing (not skill intent classification).
+
+Whether to run the create-payment skill is decided by Gemini
+(``RouterDecision.path=skill`` / ``skill=create_payment``), with a thin
+heuristic only in ``pipeline/heuristic_strategy`` when the LLM router fails.
+
+This module's job is **deterministic slot extraction** once that intent is
+known: instruction id, amount (including k/m/b suffixes), and value date
+(today/tomorrow/ISO). Those are structural fillers — the same class of
+regex the project deliberately keeps for IDs, amounts, and dates — not a
+growing phrase list for open-ended NLU.
+
+``parse_create_payment_params`` returns ``None`` when required slots are
+missing so the skill can ask for clarification or the fallback can
+decline to claim create-payment. See docs/intent-determination.md and
+docs/create-payment-skill.md.
+"""
+
 from __future__ import annotations
 
 import re
