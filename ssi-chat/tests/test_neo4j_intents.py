@@ -3,7 +3,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 import pytest
-from chat_application.neo4j_formatters import (
+from chat_application.formatting.neo4j import (
     format_instruction_creator_by_id,
     format_instruction_status_by_id,
     format_payment_creator_by_id,

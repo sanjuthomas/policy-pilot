@@ -23,11 +23,11 @@ from chat_application.feedback_observability import (
     get_feedback_distribution,
     record_chat_feedback,
 )
+from chat_application.formatting.response import format_chat_response
 from chat_application.ml_client import PolicyPilotMlClient
 from chat_application.models import ChatFeedbackRequest, ChatRequest, ChatResponse
 from chat_application.neo4j import Neo4jClient
 from chat_application.rag import RagService
-from chat_application.response_formatter import format_chat_response
 from chat_application.routing_observability import (
     finalize_chat_response,
     get_routing_distribution,

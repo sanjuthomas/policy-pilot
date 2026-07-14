@@ -44,9 +44,9 @@ from chat_application.cypher import (
     plan_graph_queries,
     validate_read_only_cypher,
 )
+from chat_application.formatting.neo4j import FORMATTERS
 from chat_application.models import SearchMode
 from chat_application.neo4j import Neo4jClient
-from chat_application.neo4j_formatters import FORMATTERS
 
 logger = logging.getLogger(__name__)
 _INTENTS_PATH = Path(__file__).resolve().parent / "intents" / "neo4j_direct.yaml"
@@ -343,7 +343,7 @@ def _format_planned_graph_answer(
     if "instruction_payment_counts" in labels and is_instruction_payment_count_list_question(
         question, mode=mode
     ):
-        from chat_application.neo4j_formatters import (
+        from chat_application.formatting.neo4j import (
             format_instruction_payment_counts_table,
         )
 
@@ -352,7 +352,7 @@ def _format_planned_graph_answer(
     if "instructions_without_payments_list" in labels and is_instructions_without_payments_question(
         question, mode=mode
     ):
-        from chat_application.neo4j_formatters import (
+        from chat_application.formatting.neo4j import (
             format_instructions_without_payments_table,
         )
 
@@ -367,14 +367,14 @@ def _format_planned_graph_answer(
     if "cross_entity_reciprocal_approval" in labels and is_cross_entity_reciprocal_approval_question(
         question
     ):
-        from chat_application.neo4j_formatters import (
+        from chat_application.formatting.neo4j import (
             format_cross_entity_reciprocal_approval,
         )
 
         return format_cross_entity_reciprocal_approval(question, rows)
 
     if "mutual_approval" in labels and is_instruction_mutual_approval_question(question):
-        from chat_application.neo4j_formatters import format_instruction_mutual_approval
+        from chat_application.formatting.neo4j import format_instruction_mutual_approval
 
         return format_instruction_mutual_approval(question, rows)
 
@@ -403,22 +403,22 @@ def _format_planned_graph_answer(
     if "instruction_versions" in labels and is_instruction_versions_list_question(
         question, mode=mode
     ):
-        from chat_application.neo4j_formatters import format_instruction_versions_table
+        from chat_application.formatting.neo4j import format_instruction_versions_table
 
         return format_instruction_versions_table(question, rows)
 
     if "payment_versions" in labels and is_payment_versions_list_question(question, mode=mode):
-        from chat_application.neo4j_formatters import format_payment_versions_table
+        from chat_application.formatting.neo4j import format_payment_versions_table
 
         return format_payment_versions_table(question, rows)
 
     if "payment_detail" in labels:
-        from chat_application.neo4j_formatters import format_payment_detail_by_id
+        from chat_application.formatting.neo4j import format_payment_detail_by_id
 
         return format_payment_detail_by_id(question, rows)
 
     if "approval_lookup" in labels or "payment_approval_lookup" in labels:
-        from chat_application.neo4j_formatters import format_approval_lookup_answer
+        from chat_application.formatting.neo4j import format_approval_lookup_answer
 
         row = rows[0] if rows else None
         if not row:
@@ -440,7 +440,7 @@ def _format_planned_graph_answer(
     if "security_event_alert_list" in labels and is_security_event_alert_list_question(
         question, mode=mode
     ):
-        from chat_application.neo4j_formatters import format_security_event_alert_list
+        from chat_application.formatting.neo4j import format_security_event_alert_list
 
         return format_security_event_alert_list(question, rows)
 
