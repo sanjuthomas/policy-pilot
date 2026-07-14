@@ -806,11 +806,6 @@ def run_payment_policy_scenario(
                 result.logs.append("  skip: no payment_id (earlier step failed)")
                 continue
             response = ps.approve_payment(session, payment_id)
-        elif operation == PaymentOperation.REJECT_PAYMENT:
-            if not payment_id:
-                result.logs.append("  skip: no payment_id")
-                continue
-            response = ps.reject_payment(session, payment_id, reason="test harness rejection")
         else:
             raise RuntimeError(f"unsupported operation: {operation}")
 

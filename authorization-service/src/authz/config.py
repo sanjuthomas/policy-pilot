@@ -20,7 +20,6 @@ class Settings(BaseSettings):
     zitadel_internal_url: str | None = None
     zitadel_service_pat: str | None = None
     zitadel_service_pat_file: Path | None = None
-    auth_mode: str = "auto"
 
     compliance_roles: str = "COMPLIANCE_ANALYST,COMPLIANCE_OFFICER,PLATFORM_ADMIN"
     authorized_service_user_ids: str = "svc-instruction,svc-payment,svc-chat"

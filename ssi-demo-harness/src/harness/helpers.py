@@ -28,7 +28,6 @@ class PaymentOperation(StrEnum):
     CREATE_PAYMENT = "create_payment"
     SUBMIT_PAYMENT = "submit_payment"
     APPROVE_PAYMENT = "approve_payment"
-    REJECT_PAYMENT = "reject_payment"
 
 
 def build_scenario() -> list[tuple[Operation, str, bool, str]]:

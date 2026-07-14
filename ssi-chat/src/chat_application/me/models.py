@@ -12,7 +12,6 @@ MeIntentKind = Literal[
     "who_covers_lob",
     "waiting_for_me",
     "users_like_me",
-    "past_similar",
 ]
 
 PaymentAction = Literal["CREATE", "APPROVE", "UPDATE", "SUBMIT", "REJECT", "CANCEL"]
