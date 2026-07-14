@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
-from chat_application.ml_client import PolicyPilotMlClient
+from chat_application.gemini.client import PolicyPilotMlClient
 from cypher_builder import GraphIntent
 
 

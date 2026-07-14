@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from datetime import date, timedelta
 
-from chat_application.cypher import extract_entity_ids, extract_instruction_ids
+from chat_application.graph.cypher import extract_entity_ids, extract_instruction_ids
 from chat_application.skills.models import CreatePaymentParams
 
 _AMOUNT = re.compile(

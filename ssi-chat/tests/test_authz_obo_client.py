@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
-from chat_application.authz_obo_client import AuthzOboClient, AuthzOboClientError
+from chat_application.authz.obo import AuthzOboClient, AuthzOboClientError
 
 
 @pytest.mark.asyncio
@@ -25,7 +25,7 @@ async def test_evaluate_payment_obo_success() -> None:
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("chat_application.authz_obo_client.httpx.AsyncClient", return_value=mock_client):
+    with patch("chat_application.authz.obo.httpx.AsyncClient", return_value=mock_client):
         decision = await client.evaluate_payment(
             action="APPROVE",
             payment={"payment_id": "p1", "amount": 1.0},
@@ -70,7 +70,7 @@ async def test_evaluate_payment_inline_subject() -> None:
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("chat_application.authz_obo_client.httpx.AsyncClient", return_value=mock_client):
+    with patch("chat_application.authz.obo.httpx.AsyncClient", return_value=mock_client):
         decision = await client.evaluate_payment(
             action="CREATE",
             payment={"amount": 10},
@@ -90,7 +90,7 @@ async def test_evaluate_payment_http_error() -> None:
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("chat_application.authz_obo_client.httpx.AsyncClient", return_value=mock_client):
+    with patch("chat_application.authz.obo.httpx.AsyncClient", return_value=mock_client):
         with pytest.raises(AuthzOboClientError, match="unreachable"):
             await client.evaluate_payment(
                 action="APPROVE",

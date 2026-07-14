@@ -5,8 +5,8 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from chat_application.config import settings
-from chat_application.cypher import extract_entity_ids, extract_uuids
 from chat_application.formatting.response import format_chat_response
+from chat_application.graph.cypher import extract_entity_ids, extract_uuids
 from chat_application.models import ChatMessage, ChatResponse, SearchMode
 from chat_application.observability.routing import (
     AnswerSynthesis,
@@ -19,8 +19,8 @@ from chat_application.pipeline.retrieve import execute_selective_retrieval
 from chat_application.pipeline.route import route_question
 
 if TYPE_CHECKING:
+    from chat_application.auth.subject import Subject
     from chat_application.rag import RagService
-    from chat_application.subject import Subject
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ class RagPipelineOrchestrator:
             if me_response is not None:
                 return me_response
 
-        from chat_application.capabilities import capabilities_for
+        from chat_application.auth.capabilities import capabilities_for
 
         allow_compliance_tools = subject is None or capabilities_for(subject).is_compliance
 
@@ -138,7 +138,7 @@ class RagPipelineOrchestrator:
                     return eligibility_response
 
             if mode == "policies":
-                from chat_application.policy_summary import policies_mode_guidance
+                from chat_application.policy.summary import policies_mode_guidance
 
                 elapsed = (time.perf_counter() - started) * 1000
                 return finalize_chat_response(
@@ -495,7 +495,7 @@ class RagPipelineOrchestrator:
         started: float,
         force: bool = False,
     ) -> ChatResponse | None:
-        from chat_application.cypher import extract_payment_ids
+        from chat_application.graph.cypher import extract_payment_ids
         from chat_application.pipeline.heuristic_strategy import (
             is_eligibility_question_heuristic,
         )
@@ -564,7 +564,13 @@ class RagPipelineOrchestrator:
         merged: list[Any],
         graph_result: dict[str, Any],
     ) -> tuple[str, AnswerSynthesis]:
-        from chat_application.cypher import (
+        from chat_application.formatting.neo4j import (
+            format_cross_entity_reciprocal_approval,
+            format_instruction_versions_table,
+            format_payment_versions_table,
+            format_security_event_alert_list,
+        )
+        from chat_application.graph.cypher import (
             format_facet_aggregate_answer,
             instruction_id_from_list_payments_question,
             is_alert_ranking_question,
@@ -576,13 +582,7 @@ class RagPipelineOrchestrator:
             is_payments_for_instruction_question,
             plan_graph_queries,
         )
-        from chat_application.formatting.neo4j import (
-            format_cross_entity_reciprocal_approval,
-            format_instruction_versions_table,
-            format_payment_versions_table,
-            format_security_event_alert_list,
-        )
-        from chat_application.neo4j_intents import _format_planned_graph_answer
+        from chat_application.graph.direct import _format_planned_graph_answer
         from chat_application.rag import (
             _format_alert_ranking_answer,
             _format_instruction_count_aggregate_answer,

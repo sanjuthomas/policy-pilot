@@ -1,4 +1,4 @@
-from chat_application.authorization_client import (
+from chat_application.authz.client import (
     format_instruction_eligible_approvers_answer,
 )
 

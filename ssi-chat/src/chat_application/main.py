@@ -15,13 +15,17 @@ from telemetry import (
 )
 
 from chat_application import __version__
-from chat_application.capabilities import audience_labels
+from chat_application.auth.capabilities import audience_labels
+from chat_application.auth.dependencies import get_chat_subject
+from chat_application.auth.service_identity import service_identity
+from chat_application.auth.subject import Subject
+from chat_application.auth.users import chat_users, compliance_users, load_users
+from chat_application.auth.zitadel import ZitadelAuthClient, login_name_for_user
 from chat_application.config import settings
-from chat_application.dependencies import get_chat_subject
 from chat_application.formatting.response import format_chat_response
-from chat_application.ml_client import PolicyPilotMlClient
+from chat_application.gemini.client import PolicyPilotMlClient
+from chat_application.graph.neo4j import Neo4jClient
 from chat_application.models import ChatFeedbackRequest, ChatRequest, ChatResponse
-from chat_application.neo4j import Neo4jClient
 from chat_application.observability.feedback import (
     ChatFeedbackContext,
     get_feedback_distribution,
@@ -32,12 +36,8 @@ from chat_application.observability.routing import (
     get_routing_distribution,
 )
 from chat_application.rag import RagService
-from chat_application.service_identity import service_identity
 from chat_application.skills import confirm_create_payment
-from chat_application.subject import Subject
-from chat_application.users import chat_users, compliance_users, load_users
-from chat_application.vector_search import VectorSearchClient
-from chat_application.zitadel_auth import ZitadelAuthClient, login_name_for_user
+from chat_application.vector.search import VectorSearchClient
 
 logger = get_logger(__name__)
 

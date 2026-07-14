@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from chat_application.config import settings
-from chat_application.cypher import extract_event_id, row_summary
+from chat_application.graph.cypher import extract_event_id, row_summary
 
 
 @dataclass

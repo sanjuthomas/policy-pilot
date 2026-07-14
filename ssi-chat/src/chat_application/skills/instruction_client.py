@@ -4,8 +4,8 @@ from typing import Any
 
 import httpx
 
+from chat_application.auth.service_identity import service_identity
 from chat_application.config import settings
-from chat_application.service_identity import service_identity
 
 
 class InstructionClientError(Exception):

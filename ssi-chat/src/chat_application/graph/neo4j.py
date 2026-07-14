@@ -6,7 +6,7 @@ from typing import Any
 from neo4j import READ_ACCESS, AsyncDriver, AsyncGraphDatabase
 
 from chat_application.config import settings
-from chat_application.cypher import (
+from chat_application.graph.cypher import (
     LOOKUP_INSTRUCTION_BY_EVENT_CYPHER,
     normalize_read_only_cypher,
     records_to_rows,

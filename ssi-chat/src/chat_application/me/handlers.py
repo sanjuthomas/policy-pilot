@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from chat_application.capabilities import capabilities_for
+from chat_application.auth.capabilities import capabilities_for
+from chat_application.auth.subject import Subject
 from chat_application.me.can_create import (
     answer_can_approve_payment,
     answer_can_create_instruction,
@@ -14,7 +15,6 @@ from chat_application.me.users_like_me import answer_users_like_me
 from chat_application.me.who_am_i import answer_who_am_i
 from chat_application.me.who_can_create import answer_who_can_create
 from chat_application.me.who_covers_lob import answer_who_covers_lob
-from chat_application.subject import Subject
 
 
 async def try_me_intent(

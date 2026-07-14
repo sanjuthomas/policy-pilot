@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from chat_application.capabilities import capabilities_for
+from chat_application.auth.capabilities import capabilities_for
+from chat_application.auth.subject import Subject
 from chat_application.me.models import MeIntentResult
-from chat_application.subject import Subject
 
 _AMOUNT_CLUBS = frozenset(
     {

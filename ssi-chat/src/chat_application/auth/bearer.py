@@ -11,8 +11,8 @@ import jwt
 from fastapi import HTTPException
 from jwt import PyJWKClient
 
+from chat_application.auth.subject import Subject
 from chat_application.config import settings
-from chat_application.subject import Subject
 
 METADATA_CLAIM = "urn:zitadel:iam:user:metadata"
 USERINFO_METADATA_SCOPE = "urn:zitadel:iam:user:metadata"

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from chat_application.cypher import (
+from chat_application.graph.cypher import (
     is_alert_ranking_question,
     is_analytics_question,
     is_count_question,
@@ -175,9 +175,9 @@ def _looks_like_create_payment_skill(message: str) -> bool:
 def heuristic_router_decision(question: str, *, mode: str) -> RouterDecision:
     """Resilience fallback when Gemini routing fails — not primary NLU."""
     from chat_application.me.detect import detect_me_intent_heuristic
-    from chat_application.person_permissions import extract_person_name_heuristic
-    from chat_application.policy_directory import is_payment_approval_directory_question
-    from chat_application.policy_summary import detect_policy_summary_question
+    from chat_application.policy.directory import is_payment_approval_directory_question
+    from chat_application.policy.person import extract_person_name_heuristic
+    from chat_application.policy.summary import detect_policy_summary_question
 
     if _looks_like_create_payment_skill(question):
         return RouterDecision(

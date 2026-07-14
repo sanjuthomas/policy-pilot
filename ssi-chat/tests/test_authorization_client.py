@@ -1,4 +1,4 @@
-from chat_application.authorization_client import format_eligible_approvers_answer
+from chat_application.authz.client import format_eligible_approvers_answer
 
 
 def test_format_eligible_approvers_answer_lists_users() -> None:

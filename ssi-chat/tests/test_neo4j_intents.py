@@ -9,7 +9,7 @@ from chat_application.formatting.neo4j import (
     format_payment_creator_by_id,
     format_payment_detail_by_id,
 )
-from chat_application.neo4j_intents import (
+from chat_application.graph.direct import (
     build_match_context,
     match_neo4j_direct_intent,
     try_neo4j_direct_answer,
@@ -98,7 +98,7 @@ class TestNeo4jDirectMatching:
         question = "How many payment ALERT events happened today?"
         match = match_neo4j_direct_intent(question, mode="events")
         assert match is None
-        from chat_application.neo4j_intents import match_planned_graph_intent
+        from chat_application.graph.direct import match_planned_graph_intent
 
         planned = match_planned_graph_intent(question, mode="events")
         assert planned is not None
@@ -108,7 +108,7 @@ class TestNeo4jDirectMatching:
         question = "How many single use instructions are there?"
         match = match_neo4j_direct_intent(question, mode="instructions")
         assert match is None
-        from chat_application.neo4j_intents import match_planned_graph_intent
+        from chat_application.graph.direct import match_planned_graph_intent
 
         planned = match_planned_graph_intent(question, mode="instructions")
         assert planned is not None
@@ -118,7 +118,7 @@ class TestNeo4jDirectMatching:
 
     def test_planned_graph_group_by_status_via_direct_path(self) -> None:
         question = "Can you group instructions by status?"
-        from chat_application.neo4j_intents import match_planned_graph_intent
+        from chat_application.graph.direct import match_planned_graph_intent
 
         planned = match_planned_graph_intent(question, mode="instructions")
         assert planned is not None

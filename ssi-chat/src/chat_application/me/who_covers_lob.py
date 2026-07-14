@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from chat_application.auth.users import SeedUser, load_users
 from chat_application.config import settings
 from chat_application.me.models import MeIntentResult
-from chat_application.users import SeedUser, load_users
 
 
 def users_covering_lob(

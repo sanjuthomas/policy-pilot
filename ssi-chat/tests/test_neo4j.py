@@ -3,8 +3,8 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from chat_application.cypher import records_to_rows
-from chat_application.neo4j import Neo4jClient
+from chat_application.graph.cypher import records_to_rows
+from chat_application.graph.neo4j import Neo4jClient
 
 
 def _make_record(data: dict) -> object:
