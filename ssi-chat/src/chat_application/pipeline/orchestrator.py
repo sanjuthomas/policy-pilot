@@ -564,50 +564,11 @@ class RagPipelineOrchestrator:
         merged: list[Any],
         graph_result: dict[str, Any],
     ) -> tuple[str, AnswerSynthesis]:
-        from chat_application.formatting.neo4j import (
-            format_cross_entity_reciprocal_approval,
-            format_instruction_versions_table,
-            format_payment_versions_table,
-            format_security_event_alert_list,
-        )
-        from chat_application.graph.cypher import (
-            format_facet_aggregate_answer,
-            instruction_id_from_list_payments_question,
-            is_alert_ranking_question,
-            is_cross_entity_reciprocal_approval_question,
-            is_instruction_versions_list_question,
-            is_max_payments_per_instruction_question,
-            is_payment_list_question,
-            is_payment_versions_list_question,
-            is_payments_for_instruction_question,
-            plan_graph_queries,
-        )
-        from chat_application.graph.direct import _format_planned_graph_answer
+        from chat_application.formatting.dispatch import format_planned_graph_answer
+        from chat_application.graph.cypher import plan_graph_queries
         from chat_application.rag import (
-            _format_alert_ranking_answer,
-            _format_instruction_count_aggregate_answer,
-            _format_largest_payment_answer,
-            _format_max_payments_per_instruction_answer,
-            _format_payment_count_aggregate_answer,
-            _format_payment_list_answer,
-            _format_payment_total_amount_answer,
-            _format_payments_above_amount_answer,
-            _format_payments_for_instruction_answer,
-            _format_security_event_alert_count_answer,
-            _format_security_event_count_aggregate_answer,
-            _format_security_event_group_by_lob_answer,
             _is_instruction_approval_question,
             _is_payment_approval_question,
-            _should_format_facet_aggregate,
-            _should_format_instruction_count_aggregate,
-            _should_format_largest_payment,
-            _should_format_payment_count_aggregate,
-            _should_format_payment_total_amount,
-            _should_format_payments_above_amount,
-            _should_format_security_event_alert_count,
-            _should_format_security_event_alert_list,
-            _should_format_security_event_count_aggregate,
-            _should_format_security_event_group_by_lob,
         )
 
         context = self._service._build_context(
@@ -634,76 +595,17 @@ class RagPipelineOrchestrator:
             )
             if answer is not None:
                 answer_synthesis = "gemini_why_only"
-        if answer is None and is_max_payments_per_instruction_question(message):
-            answer = _format_max_payments_per_instruction_answer(graph_result["rows"])
-            answer_synthesis = "formatter"
-        if answer is None and _should_format_largest_payment(message, mode):
-            answer = _format_largest_payment_answer(message, graph_result["rows"])
-            answer_synthesis = "formatter"
-        if answer is None and _should_format_payments_above_amount(message, mode):
-            answer = _format_payments_above_amount_answer(message, graph_result["rows"])
-            answer_synthesis = "formatter"
-        if answer is None and is_payments_for_instruction_question(message):
-            instruction_id = instruction_id_from_list_payments_question(message)
-            if instruction_id:
-                answer = _format_payments_for_instruction_answer(
-                    instruction_id,
-                    graph_result["rows"],
-                    question=message,
-                )
-                answer_synthesis = "formatter"
-        if answer is None and is_payment_list_question(message, mode=mode):
-            answer = _format_payment_list_answer(message, graph_result["rows"])
-            answer_synthesis = "formatter"
-        if answer is None and is_alert_ranking_question(message, mode=mode):
-            answer = _format_alert_ranking_answer(message, graph_result["rows"])
-            answer_synthesis = "formatter"
-        if answer is None and _should_format_payment_total_amount(message, mode):
-            answer = _format_payment_total_amount_answer(message, graph_result["rows"])
-            answer_synthesis = "formatter"
-        if answer is None and _should_format_payment_count_aggregate(message, mode):
-            answer = _format_payment_count_aggregate_answer(message, graph_result["rows"])
-            answer_synthesis = "formatter"
-        if answer is None and _should_format_facet_aggregate(message, mode):
-            answer = format_facet_aggregate_answer(message, graph_result["rows"], mode=mode)
-            answer_synthesis = "formatter"
-        if answer is None and _should_format_instruction_count_aggregate(message, mode):
-            answer = _format_instruction_count_aggregate_answer(message, graph_result["rows"])
-            answer_synthesis = "formatter"
-        if answer is None and _should_format_security_event_count_aggregate(message, mode):
-            answer = _format_security_event_count_aggregate_answer(message, graph_result["rows"])
-            answer_synthesis = "formatter"
-        if answer is None and _should_format_security_event_alert_count(message, mode):
-            answer = _format_security_event_alert_count_answer(message, graph_result["rows"])
-            answer_synthesis = "formatter"
-        if answer is None and _should_format_security_event_alert_list(message, mode):
-            answer = format_security_event_alert_list(message, graph_result["rows"])
-            answer_synthesis = "formatter"
-        if answer is None and _should_format_security_event_group_by_lob(message, mode):
-            answer = _format_security_event_group_by_lob_answer(
-                message, graph_result["rows"]
-            )
-            answer_synthesis = "formatter"
-        if answer is None and is_instruction_versions_list_question(message, mode=mode):
-            answer = format_instruction_versions_table(message, graph_result["rows"])
-            answer_synthesis = "formatter"
-        if answer is None and is_payment_versions_list_question(message, mode=mode):
-            answer = format_payment_versions_table(message, graph_result["rows"])
-            answer_synthesis = "formatter"
-        if answer is None and is_cross_entity_reciprocal_approval_question(message):
+        if answer is None:
             planned = plan_graph_queries(message, mode=mode)
             if planned:
-                answer = _format_planned_graph_answer(
+                answer = format_planned_graph_answer(
                     message,
                     mode=mode,
                     planned=planned,
                     rows=graph_result["rows"],
                 )
-            if answer is None:
-                answer = format_cross_entity_reciprocal_approval(
-                    message, graph_result["rows"]
-                )
-            answer_synthesis = "formatter"
+                if answer is not None:
+                    answer_synthesis = "formatter"
         if answer is None:
             answer = await self._service.ml_client.synthesize_answer(
                 message, context, chat_history, mode=mode
