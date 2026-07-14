@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from chat_application.models import SourceHit
-from chat_application.routing_observability import (
+from chat_application.observability.routing import (
     AnswerRouting,
     classify_retrieval_strategy,
     count_source_channels,

@@ -3,7 +3,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from chat_application.routing_observability import (
+from chat_application.observability.routing import (
     AnswerRouting,
     cypher_class_for_provenance,
     cypher_provenance_for_direct_intent,
@@ -58,8 +58,8 @@ class TestFormatRoutingLabel:
 
 
 class TestAnswerRoutingMetrics:
-    @patch("chat_application.routing_observability.record_histogram")
-    @patch("chat_application.routing_observability.record_counter")
+    @patch("chat_application.observability.routing.record_histogram")
+    @patch("chat_application.observability.routing.record_counter")
     def test_record_answer_routing_metrics(
         self,
         mock_record_counter,
@@ -91,7 +91,7 @@ class TestAnswerRoutingMetrics:
         assert "chat.answer.retrieval.duration" in hist_names
         assert "chat.answer.generation.duration" in hist_names
 
-    @patch("chat_application.routing_observability.record_answer_routing_metrics")
+    @patch("chat_application.observability.routing.record_answer_routing_metrics")
     def test_finalize_chat_response_records_metrics(self, mock_record_metrics) -> None:
         finalize_chat_response(
             "Who created inst-1?",

@@ -18,20 +18,20 @@ from chat_application import __version__
 from chat_application.capabilities import audience_labels
 from chat_application.config import settings
 from chat_application.dependencies import get_chat_subject
-from chat_application.feedback_observability import (
-    ChatFeedbackContext,
-    get_feedback_distribution,
-    record_chat_feedback,
-)
 from chat_application.formatting.response import format_chat_response
 from chat_application.ml_client import PolicyPilotMlClient
 from chat_application.models import ChatFeedbackRequest, ChatRequest, ChatResponse
 from chat_application.neo4j import Neo4jClient
-from chat_application.rag import RagService
-from chat_application.routing_observability import (
+from chat_application.observability.feedback import (
+    ChatFeedbackContext,
+    get_feedback_distribution,
+    record_chat_feedback,
+)
+from chat_application.observability.routing import (
     finalize_chat_response,
     get_routing_distribution,
 )
+from chat_application.rag import RagService
 from chat_application.service_identity import service_identity
 from chat_application.skills import confirm_create_payment
 from chat_application.subject import Subject

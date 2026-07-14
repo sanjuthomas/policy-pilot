@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 from telemetry import get_logger, get_meter, record_counter
 
-from chat_application.routing_observability import (
+from chat_application.observability.routing import (
     RetrievalStrategy,
     classify_retrieval_strategy,
     cypher_class_for_provenance,

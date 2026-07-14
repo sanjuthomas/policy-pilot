@@ -8,15 +8,15 @@ from chat_application.config import settings
 from chat_application.cypher import extract_entity_ids, extract_uuids
 from chat_application.formatting.response import format_chat_response
 from chat_application.models import ChatMessage, ChatResponse, SearchMode
-from chat_application.pipeline.heuristic_strategy import resolve_eligibility_target
-from chat_application.pipeline.models import RouterDecision
-from chat_application.pipeline.retrieve import execute_selective_retrieval
-from chat_application.pipeline.route import route_question
-from chat_application.routing_observability import (
+from chat_application.observability.routing import (
     AnswerSynthesis,
     cypher_provenance_for_direct_intent,
     finalize_chat_response,
 )
+from chat_application.pipeline.heuristic_strategy import resolve_eligibility_target
+from chat_application.pipeline.models import RouterDecision
+from chat_application.pipeline.retrieve import execute_selective_retrieval
+from chat_application.pipeline.route import route_question
 
 if TYPE_CHECKING:
     from chat_application.rag import RagService
