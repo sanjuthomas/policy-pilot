@@ -341,6 +341,12 @@ services:
         condition: service_completed_successfully
       sequence-service:
         condition: service_started
+      # PAT is written during ZITADEL first-instance bootstrap; wait so Settings
+      # does not load with an empty /zitadel/bootstrap/login-client.pat.
+      zitadel-api:
+        condition: service_healthy
+      zitadel-login:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - security-event-net

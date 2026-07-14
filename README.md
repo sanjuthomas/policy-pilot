@@ -177,20 +177,20 @@ cp .env.example .env
 
 python scripts/vertex_smoke_test.py   # optional but recommended
 
-docker compose up -d
-
-# Seed demo users (~30 s after ZITADEL starts)
-PAT=$(docker exec zitadel-login cat /zitadel/bootstrap/login-client.pat | tr -d '\n')
-cd zitadel-seed && ZITADEL_PAT="$PAT" python3 seed.py
+# Preferred: wipe volumes, rebuild, start infra → wait for ZITADEL PAT → apps
+./scripts/clean-slate.sh
 
 open http://localhost:8091   # harness — run policy scenarios
 open http://localhost:8092   # Policy Pilot — start asking questions
 ```
 
+`scripts/clean-slate.sh` removes Docker volumes (Mongo, Neo4j graph + vectors, Kafka, ZITADEL), rebuilds images, brings services up in order so app processes see `login-client.pat`, and seeds ZITADEL demo users. Domain data stays empty so you can drive the harness yourself. Use `--with-demo-seed` for sample instructions/payments/alerts, or `--no-build` for a faster restart.
+
 **Full demo seed** (instructions, payments, dozens of policy-denial ALERTs):
 
 ```bash
-./ssi-demo-harness/seed-demo-data.sh          # reset volumes + seed
+./scripts/clean-slate.sh --with-demo-seed     # clean slate + harness seed
+./ssi-demo-harness/seed-demo-data.sh          # reset volumes + seed (legacy)
 ./ssi-demo-harness/seed-demo-data.sh --seed-only   # stack already up
 ```
 
@@ -207,7 +207,7 @@ Allow **ssi-indexer** to catch up after seeding before ALERT counts in chat look
 | http://localhost:8095 | Sequence service |
 | http://localhost:7474/browser/ | Neo4j (`neo4j` / `devpassword`) |
 
-**Reset:** `docker compose down -v --remove-orphans && docker compose up -d` — then re-seed ZITADEL users and run the harness seed script.
+**Reset:** prefer `./scripts/clean-slate.sh`. Manual equivalent: `docker compose down -v --remove-orphans && docker compose up -d`, then re-seed ZITADEL users (and optionally run the harness seed script).
 
 **Neo4j graph only** (keep Mongo/Kafka data, replay ETL): see [ssi-indexer/README.md](ssi-indexer/README.md#reset-consumer-offsets) and [neo4j-graph-model/README.md](neo4j-graph-model/README.md#wipe-and-reload-demo-graph).
 
