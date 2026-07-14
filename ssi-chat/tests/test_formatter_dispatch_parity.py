@@ -110,3 +110,26 @@ def test_payment_count_label_formats_on_direct_path() -> None:
     assert answer is not None
     assert "5" in answer
     assert "payment" in answer.lower()
+
+
+def test_instruction_inventory_label_formats_without_phrase_match() -> None:
+    """LLM graph plans attach instruction_inventory even when wording misses direct YAML."""
+    question = "Can you show me the single use instructions in the system?"
+    planned = [("instruction_inventory", "MATCH (i:Instruction) RETURN i LIMIT 1")]
+    rows = [
+        {
+            "instruction_id": "20260714-FICC-I-1",
+            "status": "APPROVED",
+            "owning_lob": "FICC",
+            "currency": "USD",
+            "creator_display": "Chen, Sarah (mo-100)",
+            "approver_display": "Vasquez, Elena (ficc-300)",
+        }
+    ]
+    answer = format_planned_graph_answer(
+        question, mode="instructions", planned=planned, rows=rows
+    )
+    assert answer is not None
+    assert "20260714-FICC-I-1" in answer
+    assert "|" in answer  # markdown table
+    assert "Instruction ID" in answer

@@ -105,6 +105,9 @@ def _subject_from_metadata(
     groups_raw = metadata.get("groups")
     groups = _parse_json_list(groups_raw) if groups_raw else []
 
+    covering_lobs_raw = metadata.get("covering_lobs")
+    covering_lobs = _parse_json_list(covering_lobs_raw) if covering_lobs_raw else []
+
     lob = metadata.get("lob")
     if lob is not None and not is_valid_owning_lob(lob):
         raise ValueError(f"invalid lob metadata: {lob}")
@@ -118,6 +121,7 @@ def _subject_from_metadata(
         lob=lob,
         roles=roles,
         groups=groups,
+        covering_lobs=covering_lobs,
         supervisor_id=supervisor_id,
     )
 

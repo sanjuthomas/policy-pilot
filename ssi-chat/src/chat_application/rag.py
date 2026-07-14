@@ -26,21 +26,11 @@ from chat_application.graph.cypher import (
     extract_entity_ids,
     extract_payment_ids,
     instruction_count_filters_from_question,
-    is_analytics_question,
     is_count_question,
     is_instruction_approver_via_payment_question,
-    is_instruction_count_aggregate_question,
-    is_largest_payment_question,
-    is_payment_amount_threshold_question,
-    is_payment_count_aggregate_question,
     is_payment_id_lookup_for_instruction_question,
     is_payment_list_by_status_question,
-    is_payment_total_amount_question,
     is_payments_for_instruction_question,
-    is_security_event_alert_count_question,
-    is_security_event_alert_list_question,
-    is_security_event_count_aggregate_question,
-    is_security_event_group_by_lob_question,
     lob_filter_from_question,
     normalize_read_only_cypher,
     payment_aggregate_period_label,
@@ -228,14 +218,6 @@ def _format_payments_above_amount_answer(message: str, graph_rows: list[dict[str
         summary = f"Found {count} payment(s) above {threshold_text} ({scope}, {period})."
 
     return f"{summary}\n\n{_format_payment_list_table(payment_rows)}"
-
-
-def _should_format_payments_above_amount(message: str, mode: SearchMode) -> bool:
-    return mode in ("payments", "all") and is_payment_amount_threshold_question(message)
-
-
-def _should_format_largest_payment(message: str, mode: SearchMode) -> bool:
-    return mode in ("payments", "all") and is_largest_payment_question(message)
 
 
 def _format_max_payments_per_instruction_answer(
@@ -431,14 +413,6 @@ def _format_instruction_count_aggregate_answer(
     return f"There are {total} instructions in the store{qualifier}."
 
 
-def _should_format_instruction_count_aggregate(message: str, mode: SearchMode) -> bool:
-    return mode == "instructions" and is_instruction_count_aggregate_question(message)
-
-
-def _should_format_facet_aggregate(message: str, mode: SearchMode) -> bool:
-    return is_analytics_question(message, mode=mode)
-
-
 def _format_security_event_count_aggregate_answer(
     message: str, graph_rows: list[dict[str, Any]]
 ) -> str:
@@ -497,24 +471,6 @@ def _format_security_event_alert_count_answer(
     return f"There were {total} {scope_prefix}ALERT events{suffix}.".replace("  ", " ")
 
 
-def _should_format_security_event_count_aggregate(message: str, mode: SearchMode) -> bool:
-    return mode in ("events", "all") and is_security_event_count_aggregate_question(
-        message, mode=mode
-    )
-
-
-def _should_format_security_event_alert_count(message: str, mode: SearchMode) -> bool:
-    return mode in ("events", "all") and is_security_event_alert_count_question(
-        message, mode=mode
-    )
-
-
-def _should_format_security_event_alert_list(message: str, mode: SearchMode) -> bool:
-    return mode in ("events", "all") and is_security_event_alert_list_question(
-        message, mode=mode
-    )
-
-
 def _format_security_event_group_by_lob_answer(
     message: str, graph_rows: list[dict[str, Any]]
 ) -> str:
@@ -565,12 +521,6 @@ def _format_security_event_group_by_lob_answer(
     ).replace("  ", " ")
 
 
-def _should_format_security_event_group_by_lob(message: str, mode: SearchMode) -> bool:
-    return mode in ("events", "all") and is_security_event_group_by_lob_question(
-        message, mode=mode
-    )
-
-
 def _format_payment_count_aggregate_answer(message: str, graph_rows: list[dict[str, Any]]) -> str:
     if graph_rows and graph_rows[0].get("status") is not None:
         table_rows = [
@@ -619,14 +569,6 @@ def _format_payment_total_amount_answer(message: str, graph_rows: list[dict[str,
             lines.append(f"- Total: {amount_text} across {count} payments.")
 
     return "\n".join(lines)
-
-
-def _should_format_payment_count_aggregate(message: str, mode: SearchMode) -> bool:
-    return mode in ("payments", "all") and is_payment_count_aggregate_question(message)
-
-
-def _should_format_payment_total_amount(message: str, mode: SearchMode) -> bool:
-    return mode in ("payments", "all") and is_payment_total_amount_question(message)
 
 
 def _should_lookup_payment_ids(message: str, uuids: list[str], mode: SearchMode) -> bool:
@@ -835,11 +777,15 @@ class RagService:
                     cypher_provenance = "llm_graph_plan"
             except Exception as exc:
                 logger.warning("graph plan extraction failed: %s", exc)
+                from chat_application.gemini.errors import is_gemini_rate_limit_error
+
                 return {
                     "cypher": None,
                     "rows": [],
                     "cypher_provenance": "none",
                     "graph_unavailable": True,
+                    "planned": None,
+                    "llm_rate_limited": is_gemini_rate_limit_error(exc),
                 }
 
         if planned is not None:
@@ -857,6 +803,7 @@ class RagService:
                     "rows": [],
                     "cypher_provenance": cypher_provenance,
                     "graph_unavailable": True,
+                    "planned": planned,
                 }
 
         # Graph was attempted but no executable plan was produced.
@@ -865,6 +812,7 @@ class RagService:
             "rows": [],
             "cypher_provenance": "none",
             "graph_unavailable": True,
+            "planned": None,
         }
 
     async def _run_planned_graph_queries(
@@ -877,7 +825,7 @@ class RagService:
             validate_read_only_cypher(normalized)
             cyphers.append(normalized)
             rows.extend(await self.neo4j.run_cypher(normalized))
-        return {"cypher": "\n\n".join(cyphers), "rows": rows}
+        return {"cypher": "\n\n".join(cyphers), "rows": rows, "planned": planned}
 
     async def _answer_payment_eligible_approvers(
         self,

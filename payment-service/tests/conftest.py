@@ -36,23 +36,22 @@ def mock_service_identity():
 
 
 @pytest.fixture(autouse=True)
-def default_evaluate_user_token():
-    from ps.evaluate_tokens import (
-        EvaluateTokenContext,
-        bind_evaluate_token_context,
-        reset_evaluate_token_context,
-    )
+def default_evaluate_user_token(monkeypatch: pytest.MonkeyPatch):
+    """Unit tests often omit bearer_token; inject a test JWT for evaluate OBO."""
+    from ps.service import PaymentService
 
-    token = bind_evaluate_token_context(
-        EvaluateTokenContext(
-            user_token="test-user-token",
-            user_session_id="test-user-session",
+    original = PaymentService._evaluate_policy
+
+    async def _with_default_token(self, *args, bearer_token=None, session_id=None, **kwargs):
+        return await original(
+            self,
+            *args,
+            bearer_token=bearer_token or "test-user-token",
+            session_id=session_id or "test-user-session",
+            **kwargs,
         )
-    )
-    try:
-        yield
-    finally:
-        reset_evaluate_token_context(token)
+
+    monkeypatch.setattr(PaymentService, "_evaluate_policy", _with_default_token)
 
 
 @pytest.fixture

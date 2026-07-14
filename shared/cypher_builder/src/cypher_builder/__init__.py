@@ -15,6 +15,7 @@ from cypher_builder.facets import (
 from cypher_builder.models import GraphIntent, GraphQueryPlan
 from cypher_builder.query_engine import (
     LOOKUP_INSTRUCTION_BY_EVENT_CYPHER,
+    canonicalize_instruction_type,
     extract_entity_ids,
     extract_event_id,
     extract_instruction_ids,
@@ -22,6 +23,7 @@ from cypher_builder.query_engine import (
     extract_uuids,
     instruction_count_filters_from_question,
     instruction_id_from_list_payments_question,
+    instruction_type_filter_from_question,
     is_alert_ranking_question,
     is_approval_denial_alert_list_question,
     is_count_question,
@@ -30,6 +32,7 @@ from cypher_builder.query_engine import (
     is_instruction_count_aggregate_question,
     is_instruction_mutual_approval_question,
     is_instruction_payment_count_list_question,
+    is_instruction_type_inventory_list_question,
     is_instruction_versions_list_question,
     is_instructions_without_payments_question,
     is_largest_payment_question,
@@ -55,7 +58,9 @@ from cypher_builder.query_engine import (
     ranking_period_label,
     records_to_rows,
     row_summary,
+    security_event_domain_from_question,
     security_event_group_by_lob_scope,
+    security_event_time_filter_from_question,
     validate_read_only_cypher,
 )
 
@@ -67,6 +72,7 @@ __all__ = [
     "LOOKUP_INSTRUCTION_BY_EVENT_CYPHER",
     "MIN_GRAPH_QUERY_PLAN_CONFIDENCE",
     "build_extraction_user_prompt",
+    "canonicalize_instruction_type",
     "extract_entity_ids",
     "extract_event_id",
     "extract_instruction_ids",
@@ -75,6 +81,7 @@ __all__ = [
     "format_facet_aggregate_answer",
     "instruction_count_filters_from_question",
     "instruction_id_from_list_payments_question",
+    "instruction_type_filter_from_question",
     "is_alert_ranking_question",
     "is_approval_denial_alert_list_question",
     "is_count_question",
@@ -84,6 +91,7 @@ __all__ = [
     "is_instruction_mutual_approval_question",
     "is_cross_entity_reciprocal_approval_question",
     "is_instruction_payment_count_list_question",
+    "is_instruction_type_inventory_list_question",
     "is_instructions_without_payments_question",
     "is_instruction_versions_list_question",
     "is_largest_payment_question",
@@ -111,6 +119,8 @@ __all__ = [
     "ranking_period_label",
     "records_to_rows",
     "row_summary",
+    "security_event_domain_from_question",
     "security_event_group_by_lob_scope",
+    "security_event_time_filter_from_question",
     "validate_read_only_cypher",
 ]

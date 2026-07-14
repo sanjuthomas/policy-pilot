@@ -175,3 +175,108 @@ class TestGraphUnavailableShortCircuit:
         assert response.routing is not None
         assert response.routing.answer_synthesis == "formatter"
         assert response.routing.intent_id == "graph.unavailable"
+
+    @pytest.mark.asyncio
+    async def test_ask_returns_rate_limit_when_graph_plan_exhausted(
+        self, rag_service, mock_ml_client, mock_neo4j
+    ) -> None:
+        mock_ml_client.route_query = AsyncMock(
+            return_value=RouterDecision(strategy="graph", reasoning="list instructions")
+        )
+        mock_ml_client.extract_graph_query_plan = AsyncMock(
+            side_effect=RuntimeError(
+                "429 RESOURCE_EXHAUSTED. Resource exhausted. Please try again later."
+            )
+        )
+
+        response = await rag_service.ask(
+            "Can you enumerate the unusual inventory widgets in FICC?",
+            [],
+            mode="instructions",
+        )
+
+        mock_ml_client.synthesize_answer.assert_not_awaited()
+        assert response.retry_after_seconds == 30
+        assert response.routing is not None
+        assert response.routing.intent_id == "llm.rate_limited"
+        assert "under stress" in response.answer.lower()
+        assert "429" in response.answer
+
+    @pytest.mark.asyncio
+    async def test_ask_returns_rate_limit_when_synthesis_exhausted(
+        self, rag_service, mock_ml_client, mock_neo4j, mock_vector_search
+    ) -> None:
+        mock_ml_client.route_query = AsyncMock(
+            return_value=RouterDecision(strategy="vector", reasoning="semantic")
+        )
+        mock_vector_search.search_vector = AsyncMock(
+            return_value=[
+                {
+                    "event_id": None,
+                    "instruction_id": "20260714-FICC-I-1",
+                    "score": 0.1,
+                    "sources": ["vector"],
+                    "summary": "hit",
+                    "merged": {"instruction_id": "20260714-FICC-I-1"},
+                }
+            ]
+        )
+        mock_ml_client.synthesize_answer = AsyncMock(
+            side_effect=RuntimeError("429 RESOURCE_EXHAUSTED")
+        )
+
+        response = await rag_service.ask(
+            "Why was this instruction approved?",
+            [],
+            mode="instructions",
+        )
+
+        assert response.retry_after_seconds == 30
+        assert response.routing is not None
+        assert response.routing.intent_id == "llm.rate_limited"
+
+    @pytest.mark.asyncio
+    async def test_ask_formats_llm_inventory_plan_without_gemini(
+        self, rag_service, mock_ml_client, mock_neo4j
+    ) -> None:
+        from cypher_builder import GraphIntent, GraphQueryPlan
+
+        mock_ml_client.route_query = AsyncMock(
+            return_value=RouterDecision(strategy="graph", reasoning="list instructions")
+        )
+        mock_ml_client.extract_graph_query_plan = AsyncMock(
+            return_value=GraphQueryPlan(
+                intent=GraphIntent.INSTRUCTION_INVENTORY,
+                operation="list",
+                domain="instructions",
+                instruction_type="SINGLE_USE",
+                confidence=1.0,
+            )
+        )
+        mock_neo4j.run_cypher = AsyncMock(
+            return_value=[
+                {
+                    "instruction_id": "20260714-FICC-I-1",
+                    "status": "APPROVED",
+                    "instruction_type": "SINGLE_USE",
+                    "owning_lob": "FICC",
+                    "currency": "USD",
+                    "wire_scope": "DOMESTIC",
+                    "creator_display": "Chen, Sarah (mo-100)",
+                    "approver_display": "Vasquez, Elena (ficc-300)",
+                    "approved_at": "2026-07-14T16:34:19.704273",
+                }
+            ]
+        )
+
+        response = await rag_service.ask(
+            "Can you show me the single use instructions in the system?",
+            [],
+            mode="instructions",
+        )
+
+        mock_ml_client.synthesize_answer.assert_not_awaited()
+        assert response.routing is not None
+        assert response.routing.answer_synthesis == "formatter"
+        assert "20260714-FICC-I-1" in response.answer
+        assert "Instruction ID" in response.answer

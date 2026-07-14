@@ -130,10 +130,18 @@ def enrich_document(
     instruction: dict[str, Any] | None,
 ) -> EnrichedSecurityEventDocument:
     resource = security_event.get("resource") or {}
-    instruction_id = resource.get("id", "")
+    snap = security_event.get("instruction_snapshot") or instruction or {}
+    instruction_id = (
+        resource.get("id")
+        or snap.get("instruction_id")
+        or (instruction or {}).get("instruction_id")
+        or ""
+    )
     version_number = resource.get("version_number")
-    if instruction:
-        version_number = instruction.get("version_number", version_number)
+    if version_number is None:
+        version_number = snap.get("version_number")
+    if version_number is None and instruction:
+        version_number = instruction.get("version_number")
 
     merged = build_merged_context(security_event, instruction)
 

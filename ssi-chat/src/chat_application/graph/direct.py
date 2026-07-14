@@ -69,9 +69,17 @@ def _build_instruction_approval_lookup(context: dict[str, Any], _question: str, 
     return _GRAPH_BUILDER.instruction_approval_lookup(instruction_id)
 
 
-def _build_instruction_list_single_use(context: dict[str, Any], question: str, _mode: SearchMode):
+def _build_instruction_list_by_type(context: dict[str, Any], question: str, _mode: SearchMode):
+    from chat_application.graph.cypher import instruction_type_filter_from_question
+
+    instruction_type = instruction_type_filter_from_question(question)
+    if not instruction_type:
+        return []
     lob = lob_filter_from_question(question)
-    return _GRAPH_BUILDER.instruction_list_by_type(instruction_type="SINGLE_USE", lob=lob)
+    return _GRAPH_BUILDER.instruction_list_by_type(
+        instruction_type=instruction_type,
+        lob=lob,
+    )
 
 
 def _build_instructions_created_by_user(context: dict[str, Any], _question: str, _mode: SearchMode):
@@ -132,10 +140,15 @@ def _build_payment_versions(context: dict[str, Any], _question: str, _mode: Sear
 
 
 def _build_security_event_alert_list(context: dict[str, Any], question: str, _mode: SearchMode):
+    from chat_application.graph.cypher import (
+        security_event_domain_from_question,
+        security_event_time_filter_from_question,
+    )
+
     approval_only = is_approval_denial_alert_list_question(question)
     return _GRAPH_BUILDER.security_event_alert_list(
-        time_filter="",
-        domain="all",
+        time_filter=security_event_time_filter_from_question(question),
+        domain=security_event_domain_from_question(question),
         approval_only=approval_only,
     )
 
@@ -146,7 +159,8 @@ QUERY_BUILDERS: dict[str, QueryBuilder] = {
     "payment_detail_by_id": _build_payment_detail,
     "payment_versions_by_id": _build_payment_versions,
     "instruction_approval_lookup": _build_instruction_approval_lookup,
-    "instruction_list_by_status": _build_instruction_list_single_use,
+    "instruction_list_by_type": _build_instruction_list_by_type,
+    "instruction_list_by_status": _build_instruction_list_by_type,  # legacy YAML key
     "instructions_created_by_user": _build_instructions_created_by_user,
     "instruction_mutual_approval": _build_instruction_mutual_approval,
     "cross_entity_reciprocal_approval": _build_cross_entity_reciprocal_approval,
@@ -289,10 +303,6 @@ def match_neo4j_direct_intent(question: str, *, mode: SearchMode) -> Neo4jDirect
         formatter_name=str(intent["formatter"]),
         source="yaml",
     )
-
-
-# Re-export for callers/tests that imported the private helper from this module.
-_format_planned_graph_answer = format_planned_graph_answer
 
 
 def match_planned_graph_intent(question: str, *, mode: SearchMode) -> Neo4jDirectMatch | None:

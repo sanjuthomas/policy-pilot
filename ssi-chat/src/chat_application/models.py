@@ -62,3 +62,5 @@ class ChatResponse(BaseModel):
     routing: AnswerRoutingInfo | None = None
     skill_activities: list[str] = Field(default_factory=list)
     skill_confirmation: SkillConfirmationInfo | None = None
+    # Soft 200 rate-limit UX (Gemini 429). Client shows countdown then Retry.
+    retry_after_seconds: int | None = None

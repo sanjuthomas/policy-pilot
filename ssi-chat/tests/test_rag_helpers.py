@@ -7,7 +7,10 @@ from chat_application.formatting import (
     humanize_policy_basis_point,
     parse_authorization_basis,
 )
-from chat_application.graph.cypher import format_facet_aggregate_answer
+from chat_application.graph.cypher import (
+    format_facet_aggregate_answer,
+    is_security_event_group_by_lob_question,
+)
 from chat_application.rag import (
     RagService,
     _display_from_snap_user,
@@ -22,7 +25,6 @@ from chat_application.rag import (
     _format_security_event_count_aggregate_answer,
     _format_security_event_group_by_lob_answer,
     _instruction_lifecycle_party_lines,
-    _should_format_security_event_group_by_lob,
 )
 from chat_application.vector.reranker import RankedHit
 
@@ -428,17 +430,17 @@ class TestPaymentAggregateAnswers:
         assert "19 total" in answer
 
     def test_should_format_security_event_group_by_lob(self) -> None:
-        assert _should_format_security_event_group_by_lob(
-            "Can you group alerts by LOB?", "events"
+        assert is_security_event_group_by_lob_question(
+            "Can you group alerts by LOB?", mode="events"
         )
-        assert _should_format_security_event_group_by_lob(
-            "Group security events by LOB", "all"
+        assert is_security_event_group_by_lob_question(
+            "Group security events by LOB", mode="all"
         )
-        assert not _should_format_security_event_group_by_lob(
-            "How many payments were approved?", "events"
+        assert not is_security_event_group_by_lob_question(
+            "How many payments were approved?", mode="events"
         )
-        assert not _should_format_security_event_group_by_lob(
-            "Can you group alerts by LOB?", "payments"
+        assert not is_security_event_group_by_lob_question(
+            "Can you group alerts by LOB?", mode="payments"
         )
 
     def test_formats_security_event_group_by_lob_empty_rows(self) -> None:

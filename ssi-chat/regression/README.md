@@ -8,9 +8,9 @@ Each case also declares a **`retrieval`** tag — the primary engine the answer 
 
 | `retrieval` | Meaning | Count in bank |
 |-------------|---------|---------------|
-| `deterministic` | Neo4j planned query + formatter; skips LLM synthesis | 18 |
-| `graph` | Neo4j planned or LLM Cypher is authoritative | 36 |
-| `vector` | Neo4j dense vector hits drive open-ended security-event answers | 5 |
+| `deterministic` | Neo4j planned query + formatter; skips LLM synthesis | 23 |
+| `graph` | Neo4j planned or LLM Cypher is authoritative | 30 |
+| `vector` | Neo4j dense vector hits drive open-ended security-event answers | 3 |
 | `eligibility` | Live OPA via authorization-service (no vector search) | 0 (supported in chat, not in this bank) |
 
 PolicyPilot still runs dense vector search **in parallel** for every case except `eligibility` — the tag documents where the answer should actually come from.
@@ -81,7 +81,7 @@ Before chat cases, the runner executes **API smoke checks** across services (hea
 # Smoke only (fast, skips Vertex-dependent indexer checks)
 PYTHONPATH=. python -m regression.runner --api-smoke-only
 
-# Full run: smoke + ~60 chat cases
+# Full run: smoke + 56 chat cases
 PYTHONPATH=. python -m regression.runner --seed
 
 # Chat only (skip smoke)
@@ -104,7 +104,7 @@ RUN_API_SMOKE=1 pytest tests/test_api_smoke.py -v
 | **instruction-service** | UI list (admin), REST auth gate; lifecycle via harness seed |
 | **payment-service** | UI list (admin), REST auth gate; lifecycle via harness seed |
 | **ssi-indexer** | Stats, vector search, graph events, intent extract, cypher run, auth gates |
-| **PolicyPilot** (`ssi-chat`) | Compliance login, `/api/chat` (~60 YAML cases), compliance-users |
+| **PolicyPilot** (`ssi-chat`) | Compliance login, `/api/chat` (56 YAML cases), compliance-users |
 | **authorization-service** | Health, service-auth gate on evaluate endpoints |
 | **payment-service** / **instruction-service** | Payment/instruction eligible-approvers (compliance JWT), auth gate |
 

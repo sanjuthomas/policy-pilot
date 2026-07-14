@@ -425,6 +425,7 @@ def finalize_chat_response(
     intent_id: str | None = None,
     skill_activities: list[str] | None = None,
     skill_confirmation: Any | None = None,
+    retry_after_seconds: int | None = None,
 ) -> ChatResponse:
     from chat_application.models import SkillConfirmationInfo
 
@@ -469,4 +470,5 @@ def finalize_chat_response(
         routing=routing.to_api(),
         skill_activities=list(skill_activities or []),
         skill_confirmation=confirmation,
+        retry_after_seconds=retry_after_seconds,
     )

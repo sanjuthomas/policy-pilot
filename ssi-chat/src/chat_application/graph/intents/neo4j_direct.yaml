@@ -108,11 +108,22 @@ intents:
     formatter: payment_versions_table
 
   # ── Instruction inventory / compliance ─────────────────────────────────────
+  # Synonyms (single use / single-use / one-time / …) are handled by the shared
+  # instruction_type taxonomy in cypher_builder — keep match verbs broad.
   - id: instruction.list_single_use
     priority: 80
     modes: [instructions, all]
-    match: '\blist\b.*\bSINGLE_USE\b|\bSINGLE_USE\b.*\binstruction'
-    query: instruction_list_by_status
+    match: '\b(list|show|get|display|find|enumerate)\b.*\b(single[\s_-]*use|singleuse|one[\s_-]*time(?:[\s_-]*use)?|onetime(?:[\s_-]*use)?)\b|\b(single[\s_-]*use|singleuse|one[\s_-]*time(?:[\s_-]*use)?|onetime(?:[\s_-]*use)?)\b.*\b(list|show|get|display|find|enumerate)\b.*\binstructions?\b'
+    exclude: '\bhow\s+many\b|\bcount\b|\bnumber\s+of\b'
+    query: instruction_list_by_type
+    formatter: instruction_inventory_table
+
+  - id: instruction.list_standing
+    priority: 80
+    modes: [instructions, all]
+    match: '\b(list|show|get|display|find|enumerate)\b.*\b(standing|recurring|open[\s_-]*ended|openended|ever[\s_-]*green)\b.*\binstructions?\b|\b(standing|recurring|open[\s_-]*ended|openended|ever[\s_-]*green)\b.*\binstructions?\b.*\b(list|show|get|display|find|enumerate)\b'
+    exclude: '\bhow\s+many\b|\bcount\b|\bnumber\s+of\b'
+    query: instruction_list_by_type
     formatter: instruction_inventory_table
 
   - id: instruction.created_by_user
@@ -179,7 +190,8 @@ intents:
 
   - id: events.alert_list
     priority: 65
-    modes: [events, all]
-    match: '\b(list|show|summarize|summarise|all)\b.*\balerts?\b|\balerts?\b.*\b(actor|action)\b'
+    modes: [events, all, instructions, payments]
+    match: '\b(list|show|summarize|summarise|enumerate|display|all)\b.*\b(alerts?|policy\s+denials?|denials?|denied)\b|\b(alerts?|denials?)\b.*\b(list|show|summarize|summarise|enumerate|display|actor|action|events?)\b|\b(list|show|enumerate|display|all)\b.*\b(denial|denied)\b.*\bevents?\b'
+    exclude: '\bhow\s+many\b|\bcount\b|\bnumber\s+of\b|\bgroup\b.*\bby\b'
     query: security_event_alert_list
     formatter: security_event_alert_list

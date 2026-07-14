@@ -50,6 +50,7 @@ def test_subject_from_metadata_success() -> None:
         "title": "VP",
         "roles": '["INSTRUCTION_CREATOR"]',
         "groups": '["MIDDLE_OFFICE"]',
+        "covering_lobs": '["FICC", "FX"]',
         "lob": "FICC",
         "supervisor_id": "mgr.ficc",
     }
@@ -57,6 +58,7 @@ def test_subject_from_metadata_success() -> None:
     assert subject.user_id == "alice.ficc"
     assert subject.roles == ["INSTRUCTION_CREATOR"]
     assert subject.groups == ["MIDDLE_OFFICE"]
+    assert subject.covering_lobs == ["FICC", "FX"]
 
 
 def test_subject_from_metadata_missing_user_id() -> None:

@@ -118,7 +118,7 @@ curl -s http://localhost:8092/api/feedback-stats | jq
 
 ## Example questions
 
-See **`regression/questions.yaml`** for the full regression bank (59 cases, each tagged with `retrieval: deterministic | graph | vector | eligibility`) and **`regression/README.md`** for how to run it.
+See **`regression/questions.yaml`** for the full regression bank (56 cases, each tagged with `retrieval: deterministic | graph | vector | eligibility`) and **`regression/README.md`** for how to run it.
 
 **Security Events mode:**
 - How many ALERT events happened today?

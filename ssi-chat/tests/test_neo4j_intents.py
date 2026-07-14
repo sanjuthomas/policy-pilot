@@ -77,6 +77,41 @@ class TestNeo4jDirectMatching:
         assert match is not None
         assert match.intent_id == "instruction.mutual_approval"
 
+    def test_list_single_use_spaced_synonym(self) -> None:
+        question = "Can you show me the approved SINGLE USE instructions in the system?"
+        match = match_neo4j_direct_intent(question, mode="instructions")
+        assert match is not None
+        assert match.intent_id == "instruction.list_single_use"
+        assert match.formatter_name == "instruction_inventory_table"
+        assert "instruction_type: 'SINGLE_USE'" in match.planned[0][1]
+
+    def test_list_single_use_underscore_token(self) -> None:
+        question = "Can you show me the approved SINGLE_USE instructions in the system?"
+        match = match_neo4j_direct_intent(question, mode="instructions")
+        assert match is not None
+        assert match.intent_id == "instruction.list_single_use"
+        assert "instruction_type: 'SINGLE_USE'" in match.planned[0][1]
+
+    def test_list_single_use_one_time_synonym(self) -> None:
+        question = "List one-time use instructions"
+        match = match_neo4j_direct_intent(question, mode="instructions")
+        assert match is not None
+        assert match.intent_id == "instruction.list_single_use"
+
+    def test_list_standing_instructions(self) -> None:
+        question = "Can you show me the standing instructions in the system?"
+        match = match_neo4j_direct_intent(question, mode="instructions")
+        assert match is not None
+        assert match.intent_id == "instruction.list_standing"
+        assert "instruction_type: 'STANDING'" in match.planned[0][1]
+
+    def test_list_evergreen_instructions(self) -> None:
+        question = "Can you show me the evergreen instructions in the system?"
+        match = match_neo4j_direct_intent(question, mode="instructions")
+        assert match is not None
+        assert match.intent_id == "instruction.list_standing"
+        assert "instruction_type: 'STANDING'" in match.planned[0][1]
+
     def test_cross_entity_reciprocal_approval_events_mode(self) -> None:
         question = (
             "Are there cases where one user approved another user's instruction, "
@@ -94,6 +129,29 @@ class TestNeo4jDirectMatching:
         match = match_neo4j_direct_intent(question, mode="events")
         assert match is not None
         assert match.intent_id == "events.alerts_today_count"
+
+    def test_alert_list_payments_domain_filter(self) -> None:
+        question = "can you list all alerts for payments?"
+        match = match_neo4j_direct_intent(question, mode="events")
+        assert match is not None
+        assert match.intent_id == "events.alert_list"
+        assert "AND e.payment_id IS NOT NULL" in match.planned[0][1]
+        assert "AND e.payment_id IS NULL" not in match.planned[0][1]
+
+    def test_alert_list_instructions_domain_filter(self) -> None:
+        question = "can you list all alerts for instructions?"
+        match = match_neo4j_direct_intent(question, mode="events")
+        assert match is not None
+        assert match.intent_id == "events.alert_list"
+        assert "AND e.payment_id IS NULL" in match.planned[0][1]
+
+    def test_instruction_denial_events_direct_in_instructions_mode(self) -> None:
+        question = "Can you list all instruction denial events for this week?"
+        match = match_neo4j_direct_intent(question, mode="instructions")
+        assert match is not None
+        assert match.intent_id == "events.alert_list"
+        assert "AND e.payment_id IS NULL" in match.planned[0][1]
+        assert "P7D" in match.planned[0][1]
 
     def test_payment_alerts_today_uses_planned_graph_not_yaml(self) -> None:
         question = "How many payment ALERT events happened today?"

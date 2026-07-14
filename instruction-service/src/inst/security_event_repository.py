@@ -78,6 +78,7 @@ class SecurityEventRepository:
         *,
         reason: str,
         details: dict[str, Any] | None = None,
+        version_number: int | None = None,
     ) -> SecurityEvent:
         document_id = await self.allocate_event_id(instruction.instruction_id)
         event = SecurityEvent.policy_denial(
@@ -86,6 +87,7 @@ class SecurityEventRepository:
             instruction,
             reason=reason,
             details=details,
+            version_number=version_number,
         )
         document = security_event_to_document(event, document_id=document_id)
         await self.insert_document(document)

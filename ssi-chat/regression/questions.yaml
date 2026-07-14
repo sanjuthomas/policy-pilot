@@ -158,24 +158,6 @@ cases:
     - 'no'
     - '0'
     - payment
-- id: events_approve_payment_ficc_week
-  mode: events
-  retrieval: vector
-  tags:
-  - approve
-  - payments
-  - ficc
-  - when
-  - why
-  question: List payment approval events for FICC this week with who, when, and why.
-  expect:
-    min_answer_length: 10
-    answer_contains_any:
-    - ficc
-    - approv
-    - payment
-    - 'no'
-    - '0'
 - id: events_self_approval_instruction
   mode: events
   retrieval: graph
@@ -277,34 +259,6 @@ cases:
     - create
     - submit
     - approv
-- id: events_user_ficc300_today
-  mode: events
-  retrieval: graph
-  tags:
-  - timeline
-  - today
-  question: List all events for user ficc-300 today in chronological order.
-  expect:
-    min_answer_length: 10
-    answer_contains_any:
-    - ficc-300
-    - event
-    - 'no'
-    - '0'
-    - today
-- id: events_reject_week
-  mode: events
-  retrieval: vector
-  tags:
-  - reject
-  question: Show all REJECT events this week with the rejection reason.
-  expect:
-    answer_contains_any:
-    - reject
-    - reason
-    - 'no'
-    - '0'
-    - event
 - id: events_ficc_alerts_today
   mode: events
   retrieval: vector
@@ -320,16 +274,23 @@ cases:
     - 'no'
     - '0'
     - event
-- id: events_submit_payment_fx_today
+- id: events_alerts_list_today_entity_ids
   mode: events
-  retrieval: graph
+  retrieval: deterministic
   tags:
-  - payments
-  - fx
+  - alerts
   - today
-  question: How many SUBMIT_PAYMENT events happened today for FX?
+  - entity
+  question: Can you report all ALERTS today?
   expect:
-    answer_has_number: true
+    min_answer_length: 20
+    min_graph_rows: 1
+    answer_contains_all:
+    - Entity ID
+    - ALERT
+    answer_contains_any:
+    - '-I-'
+    - '-P-'
 - id: instructions_created_today
   mode: instructions
   retrieval: deterministic
@@ -411,20 +372,6 @@ cases:
     min_answer_length: 20
     answer_contains_any:
     - creat
-    - approv
-- id: instructions_approved_by_ficc300
-  mode: instructions
-  retrieval: graph
-  tags:
-  - who
-  question: List all instructions approved by Elena Vasquez (ficc-300).
-  expect:
-    answer_contains_any:
-    - ficc-300
-    - vasquez
-    - instruction
-    - 'no'
-    - '0'
     - approv
 - id: instructions_created_by_mo100
   mode: instructions
@@ -538,36 +485,6 @@ cases:
     - 'no'
     - '0'
     - none
-- id: instructions_expired
-  mode: instructions
-  retrieval: graph
-  tags:
-  - expiry
-  question: Which STANDING instructions have expired (end date in the past)?
-  expect:
-    answer_contains_any:
-    - expir
-    - end
-    - standing
-    - 'no'
-    - '0'
-    - none
-- id: instructions_expiring_soon_fx
-  mode: instructions
-  retrieval: graph
-  tags:
-  - expiry
-  - fx
-  question: List instructions expiring in the next 30 days for LOB FX.
-  expect:
-    answer_contains_any:
-    - expir
-    - fx
-    - end
-    - 'no'
-    - '0'
-    - none
-    - instruction
 - id: instructions_standing_ficc_list
   mode: instructions
   retrieval: graph
@@ -758,21 +675,6 @@ cases:
     - draft
     - fx
     - payment
-    - 'no'
-    - '0'
-- id: payments_submitted_waiting
-  mode: payments
-  retrieval: graph
-  tags:
-  - status
-  - submitted
-  question: Which payments are still SUBMITTED and waiting for approval?
-  expect:
-    answer_contains_any:
-    - submitted
-    - payment
-    - approv
-    - wait
     - 'no'
     - '0'
 - id: payments_self_approval

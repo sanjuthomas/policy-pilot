@@ -241,13 +241,6 @@ class PaymentService:
         session_id: str | None = None,
     ):
         if not bearer_token:
-            from ps.evaluate_tokens import current_evaluate_token_context
-
-            ctx = current_evaluate_token_context()
-            if ctx:
-                bearer_token = ctx.user_token
-                session_id = session_id or ctx.user_session_id
-        if not bearer_token:
             raise PermissionError(
                 "user token required for policy evaluation "
                 "(pass the caller's JWT for X-On-Behalf-Of)"

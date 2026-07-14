@@ -174,9 +174,12 @@ class SecurityEvent(BaseModel):
         reason: str,
         details: dict[str, Any] | None = None,
         severity: SecurityEventSeverity | None = None,
+        version_number: int | None = None,
     ) -> "SecurityEvent":
         actor = cls._actor_from_subject(subject)
-        resource = cls._resource_from_instruction(instruction)
+        resource = cls._resource_from_instruction(
+            instruction, version_number=version_number
+        )
         event_details = {
             **cls._delegation_details(subject),
             **(details or {}),

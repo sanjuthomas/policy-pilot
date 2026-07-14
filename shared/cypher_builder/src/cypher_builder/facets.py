@@ -143,7 +143,7 @@ def _instruction_dimensions() -> dict[str, FacetDimension]:
             key="instruction_type",
             label="Instruction type",
             bucket_expr="coalesce(v.instruction_type, 'unknown')",
-            aliases=("instruction type", "type", "single use", "standing"),
+            aliases=("instruction type", "type", "single use", "standing", "evergreen"),
         ),
         "currency": FacetDimension(
             key="currency",
@@ -208,7 +208,7 @@ def _payment_dimensions() -> dict[str, FacetDimension]:
             key="instruction_type",
             label="Instruction type",
             bucket_expr="coalesce(p.instruction_type, 'unknown')",
-            aliases=("instruction type", "type", "single use", "standing"),
+            aliases=("instruction type", "type", "single use", "standing", "evergreen"),
         ),
         "currency": FacetDimension(
             key="currency",

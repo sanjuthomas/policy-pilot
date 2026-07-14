@@ -49,6 +49,7 @@ def subject_at_decision(subject: Subject) -> dict[str, Any]:
         "title": subject.title,
         "roles": list(subject.roles),
         "groups": list(subject.groups),
+        "covering_lobs": list(subject.covering_lobs),
         "lob": subject.lob,
         "supervisor_id": subject.supervisor_id,
         "delegated_by": subject.delegated_by,

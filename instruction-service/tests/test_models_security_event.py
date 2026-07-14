@@ -47,7 +47,21 @@ def test_policy_denial(sample_subject: Subject, sample_instruction: CashSettleme
     assert event.event.type == ["access", "denied"]
     assert event.details["policy_engine"] == "opa"
     assert "Policy denied APPROVE" in event.message
+    assert event.resource.version_number is None
 
+
+def test_policy_denial_includes_version_when_provided(
+    sample_subject: Subject, sample_instruction: CashSettlementInstruction
+) -> None:
+    event = SecurityEvent.policy_denial(
+        LifecycleAction.APPROVE,
+        sample_subject,
+        sample_instruction,
+        reason="denied",
+        version_number=2,
+    )
+    assert event.resource.id == sample_instruction.instruction_id
+    assert event.resource.version_number == 2
 
 def test_policy_denial_preserves_is_alert_in_details(
     sample_subject: Subject,

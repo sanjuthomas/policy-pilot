@@ -200,3 +200,52 @@ async def test_apply_schema_applies_statements(tmp_path):
     assert writer._schema_applied is True
     # comment-only chunk skipped; one schema statement applied
     assert session.run.await_count == 1
+
+
+async def test_upsert_sets_instruction_id_even_without_version(
+    writer_with_driver: Neo4jGraphWriter,
+):
+    """ALERT denials may lack version_number; still denormalize instruction_id."""
+    from etl.enrichment import enrich_document
+    from helpers import sample_event
+
+    captured: list[tuple[str, dict]] = []
+
+    tx = AsyncMock()
+
+    async def _run(query, **params):
+        captured.append((query, params))
+        return MagicMock()
+
+    tx.run = _run
+    tx.commit = AsyncMock()
+    tx.rollback = AsyncMock()
+
+    session = AsyncMock()
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock(return_value=False)
+    session.begin_transaction = AsyncMock(return_value=tx)
+    writer_with_driver._driver.session = MagicMock(return_value=session)
+
+    event = sample_event()
+    event["resource"] = {
+        "id": "20260714-FICC-I-1",
+        "version_number": None,
+        "owning_lob": "FICC",
+        "status": "SUBMITTED",
+        "instruction_type": "SINGLE_USE",
+    }
+    event["severity"] = "ALERT"
+    event["event"] = {"action": "APPROVE", "outcome": "FAILURE", "reason": "denied"}
+    document = enrich_document(event, None)
+    assert document.instruction_id == "20260714-FICC-I-1"
+    assert document.version_number is None
+
+    await writer_with_driver.upsert(document)
+
+    merge_queries = [item for item in captured if "MERGE (e:SecurityEvent" in item[0]]
+    assert merge_queries
+    query, params = merge_queries[0]
+    assert "e.instruction_id" in query
+    assert params.get("instruction_id") == "20260714-FICC-I-1"
+    assert not any("MERGE (e)-[:FOR]->(v)" in q for q, _ in captured)

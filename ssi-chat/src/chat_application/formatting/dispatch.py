@@ -143,6 +143,12 @@ def format_planned_graph_answer(
 
         return format_instruction_versions_table(question, rows)
 
+    # Inventory lists from LLM or predefined plans — format by label, not wording.
+    if "instruction_inventory" in labels or "instructions_by_creator" in labels:
+        from chat_application.formatting.neo4j import format_instruction_inventory_table
+
+        return format_instruction_inventory_table(question, rows)
+
     if "payment_versions" in labels and is_payment_versions_list_question(question, mode=mode):
         from chat_application.formatting.neo4j import format_payment_versions_table
 

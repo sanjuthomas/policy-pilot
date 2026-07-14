@@ -5,8 +5,8 @@ import pytest
 from inst.authorization import PolicyDecision
 from inst.config import settings
 from inst.models.api import (
-    CreateInstructionRequest,
     CancelInstructionRequest,
+    CreateInstructionRequest,
     RejectInstructionRequest,
     Subject,
     UseInstructionRequest,

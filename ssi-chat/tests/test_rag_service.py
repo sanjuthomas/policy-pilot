@@ -332,6 +332,8 @@ class TestRagServiceAsk:
         assert {"total": 5} in result["rows"]
         assert result.get("cypher")
         assert "count(e)" in result["cypher"]
+        assert result.get("planned")
+        assert result["planned"][0][0]  # label preserved for synthesize formatters
 
     @pytest.mark.asyncio
     async def test_search_graph_uses_vertex_plan_when_unmatched(

@@ -226,6 +226,10 @@ function appendMessage(role, content, chatMeta = null) {
   `;
   const body = wrap.querySelector(".message-body");
   if (role === "assistant") {
+    const isRateLimited =
+      Boolean(chatMeta?.retry_after_seconds) ||
+      chatMeta?.routing?.intent_id === "llm.rate_limited";
+
     if (chatMeta?.skill_activities?.length) {
       const activityList = document.createElement("ul");
       activityList.className = "skill-activities";
@@ -237,13 +241,22 @@ function appendMessage(role, content, chatMeta = null) {
       body.appendChild(activityList);
     }
     const answerDiv = document.createElement("div");
-    answerDiv.className = "skill-answer";
+    answerDiv.className = isRateLimited ? "skill-answer rate-limit-copy" : "skill-answer";
     answerDiv.innerHTML = renderAssistantMarkdown(content);
     body.appendChild(answerDiv);
+    if (isRateLimited) {
+      body.appendChild(
+        createRateLimitPanel({
+          question: chatMeta.retry_question || "",
+          retryAfterSeconds: Number(chatMeta.retry_after_seconds) || 30,
+        })
+      );
+      wrap.classList.add("rate-limited");
+    }
     if (chatMeta?.skill_confirmation) {
       body.appendChild(createSkillConfirmation(chatMeta.skill_confirmation, chatMeta));
     }
-    if (chatMeta?.routing) {
+    if (chatMeta?.routing && !isRateLimited) {
       wrap.appendChild(createFeedbackBar(chatMeta));
     }
   } else {
@@ -251,6 +264,89 @@ function appendMessage(role, content, chatMeta = null) {
   }
   thread.appendChild(wrap);
   thread.scrollTop = thread.scrollHeight;
+}
+
+function createRateLimitPanel({ question, retryAfterSeconds }) {
+  const panel = document.createElement("div");
+  panel.className = "rate-limit-panel";
+  panel.setAttribute("role", "status");
+  panel.setAttribute("aria-live", "polite");
+
+  const echoed = question.trim() || "(same question)";
+  const total = Math.max(1, Math.floor(retryAfterSeconds));
+
+  panel.innerHTML = `
+    <div class="rate-limit-banner">
+      <span class="rate-limit-pulse" aria-hidden="true"></span>
+      <div>
+        <div class="rate-limit-title">Vendor under stress</div>
+        <p class="rate-limit-sub muted">
+          Google Gemini returned <span class="mono">429 RESOURCE_EXHAUSTED</span>.
+          Capacity usually recovers in about half a minute.
+        </p>
+      </div>
+    </div>
+    <div class="rate-limit-question">
+      <div class="rate-limit-question-label">Question to retry</div>
+      <blockquote class="rate-limit-quote">${escapeHtml(echoed)}</blockquote>
+    </div>
+    <div class="rate-limit-actions">
+      <button type="button" class="rate-limit-timer" disabled aria-label="Cooldowning until retry">
+        <svg class="rate-limit-ring" viewBox="0 0 64 64" aria-hidden="true">
+          <circle class="rate-limit-ring-track" cx="32" cy="32" r="26"></circle>
+          <circle class="rate-limit-ring-progress" cx="32" cy="32" r="26"></circle>
+        </svg>
+        <span class="rate-limit-count">${total}</span>
+      </button>
+      <div class="rate-limit-hint muted">
+        Countdown arms the retry control. Stay on this turn — your question is preserved.
+      </div>
+    </div>
+  `;
+
+  const timerBtn = panel.querySelector(".rate-limit-timer");
+  const countEl = panel.querySelector(".rate-limit-count");
+  const progress = panel.querySelector(".rate-limit-ring-progress");
+  const circumference = 2 * Math.PI * 26;
+  progress.style.strokeDasharray = String(circumference);
+  progress.style.strokeDashoffset = "0";
+
+  let remaining = total;
+  const startedAt = Date.now();
+
+  function paint(secondsLeft) {
+    countEl.textContent = String(secondsLeft);
+    const ratio = secondsLeft / total;
+    progress.style.strokeDashoffset = String(circumference * (1 - ratio));
+  }
+
+  paint(remaining);
+
+  const tick = window.setInterval(() => {
+    const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+    remaining = Math.max(0, total - elapsed);
+    paint(remaining);
+    if (remaining <= 0) {
+      window.clearInterval(tick);
+      timerBtn.disabled = false;
+      timerBtn.classList.add("ready");
+      timerBtn.setAttribute("aria-label", "Retry the same question");
+      countEl.textContent = "Retry";
+      progress.style.strokeDashoffset = String(circumference);
+      panel.classList.add("ready");
+    }
+  }, 250);
+
+  timerBtn.addEventListener("click", () => {
+    if (timerBtn.disabled || !question.trim()) {
+      return;
+    }
+    timerBtn.disabled = true;
+    panel.classList.add("resolved");
+    sendMessage(question.trim());
+  });
+
+  return panel;
 }
 
 function createSkillConfirmation(confirmation, chatMeta) {
@@ -513,6 +609,8 @@ async function sendMessage(text) {
       routing: payload.routing,
       skill_activities: payload.skill_activities,
       skill_confirmation: payload.skill_confirmation,
+      retry_after_seconds: payload.retry_after_seconds,
+      retry_question: text,
     });
     history.push({ role: "assistant", content: payload.answer });
     if (history.length > 40) {
@@ -520,7 +618,32 @@ async function sendMessage(text) {
     }
     renderMeta(payload);
   } catch (error) {
-    appendMessage("assistant", `${ASSISTANT_NAME} hit an error: ${error.message}`);
+    const detail = String(error.message || error);
+    const looksRateLimited =
+      /RESOURCE_EXHAUSTED/i.test(detail) ||
+      /\b429\b/.test(detail) ||
+      /rate.?limit/i.test(detail);
+    if (looksRateLimited) {
+      appendMessage(
+        "assistant",
+        "Google Gemini (our answer model) is temporarily under stress (HTTP 429 · Resource Exhausted). Vendor capacity recovered slowly — please wait about 30 seconds, then retry the same question.",
+        {
+          mode,
+          routing: {
+            path: "full_rag",
+            cypher_provenance: "none",
+            answer_synthesis: "formatter",
+            label: "Gemini rate limited",
+            intent_id: "llm.rate_limited",
+            retrieval_strategy: "graph",
+          },
+          retry_after_seconds: 30,
+          retry_question: text,
+        }
+      );
+    } else {
+      appendMessage("assistant", `${ASSISTANT_NAME} hit an error: ${error.message}`);
+    }
   } finally {
     sendBtn.disabled = false;
     sendBtn.textContent = "Send";
