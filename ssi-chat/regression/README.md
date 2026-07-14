@@ -81,7 +81,7 @@ Before chat cases, the runner executes **API smoke checks** across services (hea
 # Smoke only (fast, skips Vertex-dependent indexer checks)
 PYTHONPATH=. python -m regression.runner --api-smoke-only
 
-# Full run: smoke + ~60 chat cases
+# Full run: smoke + 55 chat cases
 PYTHONPATH=. python -m regression.runner --seed
 
 # Chat only (skip smoke)
@@ -104,7 +104,7 @@ RUN_API_SMOKE=1 pytest tests/test_api_smoke.py -v
 | **instruction-service** | UI list (admin), REST auth gate; lifecycle via harness seed |
 | **payment-service** | UI list (admin), REST auth gate; lifecycle via harness seed |
 | **ssi-indexer** | Stats, vector search, graph events, intent extract, cypher run, auth gates |
-| **PolicyPilot** (`ssi-chat`) | Compliance login, `/api/chat` (~60 YAML cases), compliance-users |
+| **PolicyPilot** (`ssi-chat`) | Compliance login, `/api/chat` (55 YAML cases), compliance-users |
 | **authorization-service** | Health, service-auth gate on evaluate endpoints |
 | **payment-service** / **instruction-service** | Payment/instruction eligible-approvers (compliance JWT), auth gate |
 
