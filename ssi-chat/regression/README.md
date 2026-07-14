@@ -127,7 +127,7 @@ Metrics are printed after the case summary and written to `--report` JSON under 
 
 ### Golden labeled set
 
-`eval_golden.yaml` is a smaller hand-labeled set with explicit routing and quality gates (`require_routing`, `require_entity_recall`, `min_faithfulness`, …):
+`eval_golden.yaml` is a smaller hand-labeled set with explicit routing and quality gates (`require_routing`, `require_entity_recall`, `min_faithfulness`, …). Case-by-case catalog: **[GOLDEN_EVAL.md](GOLDEN_EVAL.md)**.
 
 ```bash
 PYTHONPATH=. python -m regression.runner --eval-golden --report golden-eval.json
@@ -168,6 +168,7 @@ No live stack required — validates metric math and golden YAML schema.
 | `assertions.py` | Expectation evaluation |
 | `eval_metrics.py` | Routing accuracy, recall, precision@k, faithfulness proxies |
 | `eval_golden.yaml` | Labeled golden eval set with strict quality gates |
+| `GOLDEN_EVAL.md` | Human-readable catalog of golden cases and gates |
 | `models.py` | Pydantic schemas |
 
 ## Adding cases
