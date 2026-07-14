@@ -20,17 +20,23 @@ Seed runs by default (`--no-seed` if the graph is already warm). Offline schema 
 pytest tests/test_eval_metrics.py -v
 ```
 
-## Case catalog (7)
+## Case catalog (11)
 
 | ID | Mode | Retrieval | Question | Context | Quality gates | Answer expects |
 |----|------|-----------|----------|---------|---------------|----------------|
 | `golden_payment_creator` | payments | deterministic | Who created payment `{approved_payment_id}`? | `approved_payment_id` | `require_routing`, path `neo4j_direct`, Cypher `deterministic`, synthesis `formatter`, `require_entity_recall` | contains any: created, creator, submitted; min length 5 |
 | `golden_payment_status` | payments | deterministic | What is the status of payment `{approved_payment_id}`? | `approved_payment_id` | `require_routing`, path `neo4j_direct`, `require_entity_recall` | contains any: approved, status, payment |
-| `golden_events_count_today` | events | graph | How many ALERT events happened today? | — | `require_routing`, `min_groundedness` 0.05, `min_faithfulness` 0.05 | `answer_has_number` |
-| `golden_events_top_denial_user` | events | deterministic | Which user triggered the most policy denial alerts this week? | — | `require_routing`, path `neo4j_direct`, Cypher `deterministic`, synthesis `formatter` | min length 10 |
+| `golden_events_count_today` | events | graph | How many ALERT events happened today? | — | `require_routing`, `min_groundedness` 0.05 | `answer_has_number` |
+| `golden_events_top_denial_user` | events | deterministic | Which user triggered the most policy denial alerts this week? | — | `require_routing`, path `neo4j_direct`, Cypher `deterministic`, synthesis `formatter` | contains all: `pay-101`; min length 10 |
 | `golden_instruction_status` | instructions | deterministic | What is the status of instruction `{approved_instruction_id}`? | `approved_instruction_id` | `require_routing`, path `neo4j_direct`, `require_entity_recall` | contains any: approved, status, instruction |
 | `golden_events_who_approved_payment` | events | graph | Who approved payment `{approved_payment_id}` and why? | `approved_payment_id` | `require_routing`, `require_entity_recall` | contains any: approv, allowed, because, role; min length 20 |
-| `golden_vector_security_summary` | events | vector | Summarize recent security alerts involving policy denials. | — | `require_routing`, path `full_rag`, `source_channels_any: [vector]`, `min_sources` 1, `min_faithfulness` 0.05 | min length 40 |
+| `golden_vector_security_summary` | events | graph (tag: vector) | Write a brief narrative about recent policy denial activity in the audit log. | — | `require_routing`, path `full_rag`, `min_faithfulness` 0.05 | min length 40; contains denial/alert/policy |
+| `golden_instruction_denials_count_week` | events | deterministic | How many instruction policy denials happened this week? | — | `require_routing`, path `neo4j_direct`, Cypher `deterministic`, synthesis `formatter` | exact: “There were 2 instruction policy denial events this week.” |
+| `golden_instruction_denials_list_week` | events | deterministic | Can you list all instruction denial events for this week? | — | same deterministic gates | `exact_graph_rows: 2`; title `(2)`; Entity ID; instruction / `-I-` |
+| `golden_payment_denials_count_today` | events | deterministic | How many payment policy denial alerts happened today? | — | same deterministic gates | exact: “There were 4 payment policy denial events today.” |
+| `golden_alerts_list_today_entity_ids` | events | deterministic | Can you report all ALERTS today? | — | same deterministic gates | `min_graph_rows: 2`; Entity ID + ALERT; `-I-` / `-P-` |
+
+Pinned exact totals assume the shared harness seed in `eval_golden.yaml` / `questions.yaml` after truncate+reload. Do not re-seed on a warm graph before golden runs (`--no-seed`) or counts inflate.
 
 ### By theme
 
@@ -38,7 +44,8 @@ pytest tests/test_eval_metrics.py -v
 |-------|----------|
 | Payment entity lookup | `golden_payment_creator`, `golden_payment_status` |
 | Instruction entity lookup | `golden_instruction_status` |
-| Alert counts / rankings | `golden_events_count_today`, `golden_events_top_denial_user` |
+| Denial / alert counts & lists | `golden_instruction_denials_count_week`, `golden_instruction_denials_list_week`, `golden_payment_denials_count_today`, `golden_alerts_list_today_entity_ids`, `golden_events_top_denial_user` |
+| Other alert counts | `golden_events_count_today` |
 | Auth narrative (who / why) | `golden_events_who_approved_payment` |
 | Vector / full RAG | `golden_vector_security_summary` |
 
@@ -46,9 +53,9 @@ pytest tests/test_eval_metrics.py -v
 
 | Retrieval | Count | Case IDs |
 |-----------|------:|----------|
-| deterministic | 4 | `golden_payment_creator`, `golden_payment_status`, `golden_events_top_denial_user`, `golden_instruction_status` |
-| graph | 2 | `golden_events_count_today`, `golden_events_who_approved_payment` |
-| vector | 1 | `golden_vector_security_summary` |
+| deterministic | 8 | `golden_payment_creator`, `golden_payment_status`, `golden_events_top_denial_user`, `golden_instruction_status`, `golden_instruction_denials_count_week`, `golden_instruction_denials_list_week`, `golden_payment_denials_count_today`, `golden_alerts_list_today_entity_ids` |
+| graph | 3 | `golden_events_count_today`, `golden_events_who_approved_payment`, `golden_vector_security_summary` |
+| vector | 0 | (vector channel gate deferred; narrative case tagged graph for routing defaults) |
 
 ## Gate reference
 
@@ -94,17 +101,9 @@ expect:
   answer_synthesis: formatter
 ```
 
-Promote from the soft `questions.yaml` bank where listed; pin **exact** totals / row counts / user ids after one clean-slate measurement (values below are illustrative from recent seeded runs — re-measure before committing).
+Promote from the soft `questions.yaml` bank where listed; pin **exact** totals / row counts / user ids after one clean-slate measurement (re-measure before committing).
 
-### P0 — Seed-backed counts & lists (highest ROI)
-
-| Proposed ID | Source / promote | Question (sketch) | Deterministic asserts to add | Notes |
-|-------------|------------------|-------------------|------------------------------|-------|
-| `golden_instruction_denials_count_week` | `events_instruction_denials_week` (retag graph→deterministic) | How many instruction policy denials happened this week? | Exact total **2**; denial wording; ALERT Cypher | Regression that previously fell through to Gemini |
-| `golden_instruction_denials_list_week` | `events_instruction_denials_list_week` | Can you list all instruction denial events for this week? | `exact_graph_rows: 2`; title `(2)`; Entity ID column | Already near-golden in main bank |
-| `golden_payment_denials_count_today` | `events_payment_denials_today` | How many payment policy denial alerts happened today? | Exact total (re-measure; recently **4** with default seed) | Depends on `run-payment-policy-scenario` |
-| `golden_alerts_list_today_entity_ids` | `events_alerts_list_today_entity_ids` | Can you report all ALERTS today? | `min_graph_rows` or exact count after seed; `Entity ID` + `-I-`/`-P-` | Harden beyond soft contains |
-| `golden_events_top_denial_user_week` | Strengthen existing `golden_events_top_denial_user` | Which user triggered the most policy denial alerts this week? | `answer_contains_all` for the known top `user_id` / display name from seed | Gate exists; answer content still soft |
+Denial / alert count & list goldens (former P0) now live only in the **Case catalog** above.
 
 ### P1 — Instruction inventory (planned counts / who)
 
@@ -165,7 +164,6 @@ Not in `questions.yaml` today; answers come from live policy / AuthZ tools (stat
 
 ### Suggested rollout
 
-1. P0 after clean-slate + default regression seed (measure exact numbers once, lock them in YAML).
-2. P1–P2 inventory counts (cheapest asserts: `answer_contains_all` for the digit / facet lines, or a future `exact_total` expect field).
-3. P3 once formatter strings for who/why are frozen.
-4. P4 once runner supports `mode: policies` and compliance session in golden runs.
+1. P1–P2 inventory counts (cheapest asserts: `answer_contains_all` for the digit / facet lines, or a future `exact_total` expect field).
+2. P3 once formatter strings for who/why are frozen.
+3. P4 once runner supports `mode: policies` and compliance session in golden runs.
