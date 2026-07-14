@@ -240,26 +240,33 @@ class PaymentService:
         bearer_token: str | None = None,
         session_id: str | None = None,
     ):
+        if not bearer_token:
+            from ps.evaluate_tokens import current_evaluate_token_context
+
+            ctx = current_evaluate_token_context()
+            if ctx:
+                bearer_token = ctx.user_token
+                session_id = session_id or ctx.user_session_id
+        if not bearer_token:
+            raise PermissionError(
+                "user token required for policy evaluation "
+                "(pass the caller's JWT for X-On-Behalf-Of)"
+            )
         await service_identity.ensure_logged_in()
-        common = {
-            "action": action.value,
-            "payment": payment.to_opa_payment(
+        if not service_identity.token:
+            raise PermissionError("service identity token required for policy evaluation")
+        return await self.authz.evaluate_payment(
+            action=action.value,
+            payment=payment.to_opa_payment(
                 instruction_end_date=instruction_end_date,
                 instruction_status=instruction_status,
             ),
-            "instruction_end_date": instruction_end_date,
-            "instruction_status": instruction_status,
-            "service_token": service_identity.token,
-            "service_session_id": service_identity.session_id,
-        }
-        if bearer_token and service_identity.token:
-            return await self.authz.evaluate_payment(
-                **common,
-                user_token=bearer_token,
-                user_session_id=session_id,
-            )
-        return await self.authz.evaluate_payment(
-            **common,
+            instruction_end_date=instruction_end_date,
+            instruction_status=instruction_status,
+            service_token=service_identity.token,
+            service_session_id=service_identity.session_id,
+            user_token=bearer_token,
+            user_session_id=session_id,
             subject=subject.model_dump(mode="json"),
         )
 

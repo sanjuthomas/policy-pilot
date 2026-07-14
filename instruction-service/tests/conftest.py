@@ -26,6 +26,27 @@ def mock_service_identity():
         yield identity
 
 
+@pytest.fixture(autouse=True)
+def default_evaluate_user_token():
+    """Unit tests often call service methods without route-bound OBO headers."""
+    from inst.evaluate_tokens import (
+        EvaluateTokenContext,
+        bind_evaluate_token_context,
+        reset_evaluate_token_context,
+    )
+
+    token = bind_evaluate_token_context(
+        EvaluateTokenContext(
+            user_token="test-user-token",
+            user_session_id="test-user-session",
+        )
+    )
+    try:
+        yield
+    finally:
+        reset_evaluate_token_context(token)
+
+
 @pytest.fixture
 def sample_subject() -> Subject:
     return Subject(

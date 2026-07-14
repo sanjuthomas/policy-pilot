@@ -24,9 +24,9 @@ class AuthzOboClient:
     """Call authorization-service evaluate with service identity + user OBO.
 
     Authorization header must be an authorized service account (``svc-chat``).
-    The logged-in user's session travels in ``X-On-Behalf-Of`` / session id, or
-    the caller may pass an inline ``subject`` when OBO tokens are unavailable
-    (tests / service-token-only evaluate).
+    The logged-in user's session travels in ``X-On-Behalf-Of`` / session id.
+    An optional inline ``subject`` may be sent for binding checks against the
+    OBO-derived identity; it is never accepted alone.
     """
 
     def __init__(self, base_url: str | None = None, *, timeout: float = 15.0) -> None:
@@ -51,6 +51,10 @@ class AuthzOboClient:
                 "service token required for payment policy evaluation "
                 "(chat service identity not logged in)"
             )
+        if not user_token:
+            raise AuthzOboClientError(
+                "user token (X-On-Behalf-Of) is required for lifecycle evaluate"
+            )
 
         payload: dict[str, Any] = {
             "action": action,
@@ -58,24 +62,18 @@ class AuthzOboClient:
             "instruction_status": instruction_status,
             "instruction_end_date": instruction_end_date,
         }
+        if subject is not None:
+            payload["subject"] = subject
         headers = {
             "Authorization": f"Bearer {service_token}",
             "Accept": "application/json",
             "Content-Type": "application/json",
+            "X-On-Behalf-Of": user_token,
         }
         if service_session_id:
             headers["X-Session-Id"] = service_session_id
-
-        if user_token:
-            headers["X-On-Behalf-Of"] = user_token
-            if user_session_id:
-                headers["X-On-Behalf-Of-Session-Id"] = user_session_id
-        elif subject is not None:
-            payload["subject"] = subject
-        else:
-            raise AuthzOboClientError(
-                "user token (X-On-Behalf-Of) or inline subject is required"
-            )
+        if user_session_id:
+            headers["X-On-Behalf-Of-Session-Id"] = user_session_id
 
         url = f"{self._base}/api/v1/authorization/payments/evaluate"
         try:

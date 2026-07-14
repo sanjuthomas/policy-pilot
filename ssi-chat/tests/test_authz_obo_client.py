@@ -54,7 +54,19 @@ async def test_evaluate_payment_requires_service_token() -> None:
 
 
 @pytest.mark.asyncio
-async def test_evaluate_payment_inline_subject() -> None:
+async def test_evaluate_payment_requires_user_token() -> None:
+    client = AuthzOboClient(base_url="http://authz.test")
+    with pytest.raises(AuthzOboClientError, match="user token"):
+        await client.evaluate_payment(
+            action="CREATE",
+            payment={},
+            service_token="svc-token",
+            subject={"user_id": "pay-101", "roles": ["PAYMENT_CREATOR"]},
+        )
+
+
+@pytest.mark.asyncio
+async def test_evaluate_payment_obo_with_inline_subject_binding() -> None:
     client = AuthzOboClient(base_url="http://authz.test")
     response = MagicMock()
     response.status_code = 200
@@ -75,11 +87,14 @@ async def test_evaluate_payment_inline_subject() -> None:
             action="CREATE",
             payment={"amount": 10},
             service_token="svc-token",
+            user_token="user-token",
             subject={"user_id": "pay-101", "roles": ["PAYMENT_CREATOR"]},
         )
 
     assert decision.allowed is False
-    assert mock_client.post.await_args.kwargs["json"]["subject"]["user_id"] == "pay-101"
+    kwargs = mock_client.post.await_args.kwargs
+    assert kwargs["headers"]["X-On-Behalf-Of"] == "user-token"
+    assert kwargs["json"]["subject"]["user_id"] == "pay-101"
 
 
 @pytest.mark.asyncio

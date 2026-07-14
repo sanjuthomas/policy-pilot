@@ -173,29 +173,15 @@ async def run_create_payment_phase1(
             service_session_id=service_identity.session_id,
             user_token=user_token,
             user_session_id=user_session_id,
-            subject=subject.model_dump() if not service_identity.token else None,
+            subject=subject.model_dump(),
         )
     except AuthzOboClientError as exc:
-        # Fall back to inline subject when service identity is unavailable (tests / misconfig).
-        try:
-            decision = await authz.evaluate_payment(
-                action="CREATE",
-                payment=_synthetic_payment_payload(
-                    params=params, instruction=instruction, subject=subject
-                ),
-                instruction_status=status,
-                instruction_end_date=str(instruction.get("end_date") or ""),
-                service_token=service_identity.token,
-                service_session_id=service_identity.session_id,
-                subject=subject.model_dump(),
-            )
-        except AuthzOboClientError:
-            activities.append(f"Policy evaluate failed: {exc}")
-            return SkillRunResult(
-                answer=f"**Stopped** — could not evaluate CREATE permission ({exc}).",
-                activities=activities,
-                intent_id="skill.create_payment.evaluate_error",
-            )
+        activities.append(f"Policy evaluate failed: {exc}")
+        return SkillRunResult(
+            answer=f"**Stopped** — could not evaluate CREATE permission ({exc}).",
+            activities=activities,
+            intent_id="skill.create_payment.evaluate_error",
+        )
 
     if not decision.allowed:
         reasons = "; ".join(decision.violations) or "policy denied"
@@ -338,7 +324,7 @@ async def confirm_create_payment(
             service_session_id=service_identity.session_id,
             user_token=user_token,
             user_session_id=user_session_id,
-            subject=subject.model_dump() if not service_identity.token else None,
+            subject=subject.model_dump(),
         )
         if not decision_result.allowed:
             reasons = "; ".join(decision_result.violations) or "policy denied"

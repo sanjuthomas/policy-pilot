@@ -140,6 +140,7 @@ def test_put_update_draft_instruction_via_api(
         response = update_api_client.put(
             "/api/v1/instructions/instr-001",
             json=domestic_payload(owning_lob="FX"),
+            headers={"Authorization": "Bearer test-user-token"},
         )
 
     assert response.status_code == 200

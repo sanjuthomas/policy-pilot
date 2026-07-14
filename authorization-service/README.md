@@ -45,11 +45,11 @@ X-On-Behalf-Of-Session-Id: <user session>   # optional
 | POST | `/instructions/evaluate` | Instruction lifecycle allow/deny |
 | POST | `/payments/evaluate` | Payment lifecycle allow/deny |
 
-Without `X-On-Behalf-Of`, the request body must include an inline `subject` (used only for non-interactive paths).
+Lifecycle evaluate **requires** `X-On-Behalf-Of` (verified user JWT). An optional inline `subject` may also be sent; when present, identity fields must match the OBO-derived subject. Inline subject alone is rejected (see issue #14).
 
 ### Eligible approvers (service-only)
 
-Batch OPA evaluation over candidates from `users.yaml`. No user OBO — compliance auth is enforced on the domain service before it calls authz.
+Batch OPA evaluation over candidates from `users.yaml` ("who can approve?"). No user OBO — service account auth only; compliance auth is enforced on the domain service before it calls authz. This is discovery/reporting, not an approval action.
 
 | Method | Path | Purpose |
 |--------|------|---------|
