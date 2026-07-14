@@ -291,10 +291,6 @@ def match_neo4j_direct_intent(question: str, *, mode: SearchMode) -> Neo4jDirect
     )
 
 
-# Re-export for callers/tests that imported the private helper from this module.
-_format_planned_graph_answer = format_planned_graph_answer
-
-
 def match_planned_graph_intent(question: str, *, mode: SearchMode) -> Neo4jDirectMatch | None:
     planned = plan_graph_queries(question, mode=mode)
     if not planned:

@@ -1,11 +1,9 @@
 """Answer and table formatting helpers for chat responses."""
 
 from chat_application.formatting.common import (
-    basis_redundant_with_summary,
     coerce_numeric_amount,
     escape_markdown_cell,
     format_approval_auth_lines,
-    format_approval_basis_line,
     format_eligible_approvers_section,
     format_markdown_table,
     format_money_amount,
@@ -18,11 +16,9 @@ from chat_application.formatting.common import (
 )
 
 __all__ = [
-    "basis_redundant_with_summary",
     "coerce_numeric_amount",
     "escape_markdown_cell",
     "format_approval_auth_lines",
-    "format_approval_basis_line",
     "format_eligible_approvers_section",
     "format_markdown_table",
     "format_money_amount",
