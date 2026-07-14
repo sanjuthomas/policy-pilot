@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -9,7 +9,6 @@ class CreatePaymentParams:
     instruction_id: str
     amount: float
     value_date: str
-    raw_message: str
 
 
 @dataclass
@@ -57,9 +56,6 @@ class PendingCreatePayment:
     instruction_version: int
     card: ConfirmationCard
     expires_at: float
-
-
-SkillDecision = Literal["go", "no_go"]
 
 
 @dataclass

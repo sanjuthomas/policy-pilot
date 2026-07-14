@@ -13,8 +13,7 @@ _DEFAULT_TTL_SECONDS = 600.0
 class PendingSkillStore:
     """In-process TTL store for awaiting-confirmation skill runs."""
 
-    def __init__(self, *, ttl_seconds: float = _DEFAULT_TTL_SECONDS) -> None:
-        self._ttl = ttl_seconds
+    def __init__(self) -> None:
         self._lock = threading.Lock()
         self._items: dict[str, PendingCreatePayment] = {}
 

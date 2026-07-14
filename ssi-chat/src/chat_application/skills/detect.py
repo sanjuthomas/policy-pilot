@@ -119,5 +119,4 @@ def parse_create_payment_params(message: str) -> CreatePaymentParams | None:
         instruction_id=instruction_id,
         amount=amount,
         value_date=value_date,
-        raw_message=text,
     )

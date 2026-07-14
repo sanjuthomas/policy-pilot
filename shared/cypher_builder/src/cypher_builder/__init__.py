@@ -1,8 +1,6 @@
 from cypher_builder.builder import (
     CypherQueryBuilder,
-    flags_from_plan,
     plans_from_graph_query,
-    time_filter_from_flags,
 )
 from cypher_builder.extraction import (
     GRAPH_QUERY_EXTRACTION_SYSTEM,
@@ -82,7 +80,6 @@ __all__ = [
     "extract_instruction_ids",
     "extract_payment_ids",
     "extract_uuids",
-    "flags_from_plan",
     "format_facet_aggregate_answer",
     "instruction_count_filters_from_question",
     "instruction_id_from_list_payments_question",
@@ -133,6 +130,5 @@ __all__ = [
     "records_to_rows",
     "row_summary",
     "security_event_group_by_lob_scope",
-    "time_filter_from_flags",
     "validate_read_only_cypher",
 ]

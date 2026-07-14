@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from cypher_gen import validate_read_only_cypher
+from cypher_builder import validate_read_only_cypher
 
 
 def test_valid_read_query():

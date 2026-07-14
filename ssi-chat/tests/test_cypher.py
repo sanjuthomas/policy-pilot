@@ -3,6 +3,11 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from cypher_builder import (
+    is_instruction_group_by_status_question,
+    is_payment_group_by_status_question,
+    load_graph_schema,
+)
 from chat_application.cypher import (
     extract_entity_ids,
     extract_uuids,
@@ -12,18 +17,15 @@ from chat_application.cypher import (
     is_approval_denial_alert_list_question,
     is_count_question,
     is_cross_entity_reciprocal_approval_question,
-    is_instruction_group_by_status_question,
     is_instruction_mutual_approval_question,
     is_instruction_payment_count_list_question,
     is_instructions_without_payments_question,
     is_largest_payment_question,
     is_max_payments_per_instruction_question,
     is_payment_amount_threshold_question,
-    is_payment_group_by_status_question,
     is_payment_id_lookup_for_instruction_question,
     is_payment_list_by_status_question,
     is_payments_for_instruction_question,
-    load_graph_schema,
     lob_filter_from_question,
     normalize_read_only_cypher,
     payment_amount_threshold_from_question,
@@ -752,22 +754,10 @@ class TestDownvoteRegressionQueries:
 
 
 class TestLoadGraphSchema:
-    def test_returns_empty_when_missing(self, tmp_path, monkeypatch) -> None:
-        monkeypatch.setenv("GRAPH_MODEL_DIR", str(tmp_path))
-        from chat_application.config import Settings
+    def test_returns_empty_when_missing(self, tmp_path) -> None:
+        assert load_graph_schema(tmp_path / "missing.cypher") == ""
 
-        settings = Settings()
-        monkeypatch.setattr("chat_application.cypher.settings", settings)
-        assert load_graph_schema() == ""
-
-    def test_reads_schema_file(self, tmp_path, monkeypatch) -> None:
-        schema_dir = tmp_path / "model"
-        schema_dir.mkdir()
-        schema_file = schema_dir / "relationships.cypher"
+    def test_reads_schema_file(self, tmp_path) -> None:
+        schema_file = tmp_path / "relationships.cypher"
         schema_file.write_text("MATCH (n) RETURN n LIMIT 1", encoding="utf-8")
-        monkeypatch.setenv("GRAPH_MODEL_DIR", str(schema_dir))
-        from chat_application.config import Settings
-
-        settings = Settings()
-        monkeypatch.setattr("chat_application.cypher.settings", settings)
-        assert load_graph_schema() == "MATCH (n) RETURN n LIMIT 1"
+        assert load_graph_schema(schema_file) == "MATCH (n) RETURN n LIMIT 1"

@@ -31,7 +31,6 @@ class Settings(BaseSettings):
     retrieval_limit: int = 15
     rrf_k: int = 60
     max_context_hits: int = 10
-    max_conversation_turns: int = 20
 
     authorization_service_url: str = "http://authorization-service:8094"
     payment_service_url: str = "http://payment-service:8093"
@@ -49,7 +48,6 @@ class Settings(BaseSettings):
     operational_roles: str = "PAYMENT_CREATOR,FUNDING_APPROVER"
     service_user_id: str = "svc-chat"
     service_user_password: str = "Password1!"
-    default_user_password: str = "Password1!"
 
     @property
     def compliance_role_set(self) -> set[str]:
