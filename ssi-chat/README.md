@@ -190,10 +190,12 @@ Ensure `GCP_SA_KEY_PATH` in `.env` points to a valid service account key (same a
 
 ## Regression suite
 
+Harness seed from `questions.yaml` runs **by default** (use `--no-seed` to skip):
+
 ```bash
 cd ssi-chat
 pip install -e ".[regression]"
-PYTHONPATH=. python -m regression.runner --seed --report regression-report.json
+PYTHONPATH=. python -m regression.runner --report regression-report.json
 ```
 
 See `regression/README.md` for filters (`--mode`, `--tags`, `--retrieval`, `--ids`) and CI usage via `RUN_CHAT_REGRESSION=1 pytest`.

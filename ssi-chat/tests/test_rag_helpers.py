@@ -415,6 +415,15 @@ class TestPaymentAggregateAnswers:
         assert "10 ALERT" in answer
         assert "32 INFO" in answer
 
+    def test_formats_instruction_policy_denial_count(self) -> None:
+        from chat_application.rag import _format_security_event_alert_count_answer
+
+        answer = _format_security_event_alert_count_answer(
+            "How many instruction policy denials happened this week?",
+            [{"total": 2}],
+        )
+        assert answer == "There were 2 instruction policy denial events this week."
+
     def test_formats_security_event_alert_group_by_lob(self) -> None:
         answer = _format_security_event_group_by_lob_answer(
             "Can you group alerts by LOB?",

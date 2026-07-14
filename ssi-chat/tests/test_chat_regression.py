@@ -27,8 +27,9 @@ def test_chat_regression_suite() -> None:
         str(ROOT / "regression-report.json"),
     ]
 
-    if os.environ.get("CHAT_REGRESSION_SEED") == "1":
-        cmd.append("--seed")
+    # Seed is on by default in the runner; opt out with CHAT_REGRESSION_SEED=0.
+    if os.environ.get("CHAT_REGRESSION_SEED", "1") == "0":
+        cmd.append("--no-seed")
 
     mode = os.environ.get("CHAT_REGRESSION_MODE")
     if mode:

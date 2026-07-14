@@ -260,6 +260,19 @@ def test_alert_list_filters_domain_and_time_from_question() -> None:
     assert "P7D" in denials[0][1]
 
 
+def test_instruction_policy_denial_count_plans_alert_cypher() -> None:
+    """'denials' without the word 'alert' must still plan instruction ALERT counts."""
+    planned = plan_graph_queries(
+        "How many instruction policy denials happened this week?",
+        mode="events",
+    )
+    assert planned is not None
+    assert planned[0][0] == "count"
+    assert "e.severity = 'ALERT'" in planned[0][1]
+    assert "e.payment_id IS NULL" in planned[0][1]
+    assert "P7D" in planned[0][1]
+
+
 def test_alert_list_entity_id_prefers_security_event_property() -> None:
     """ALERT list must resolve entity id from SecurityEvent even without FOR."""
     from cypher_builder.query_engine import _ALERT_LIST_ENTITY_ID, _security_event_alert_list_queries

@@ -54,6 +54,13 @@ def format_planned_graph_answer(
     if "facet_aggregate" in labels and is_analytics_question(question, mode=mode):
         return format_facet_aggregate_answer(question, rows, mode=mode)
 
+    # Alert / denial counts before instruction inventory — both share label "count".
+    if "count" in labels and is_security_event_alert_count_question(question, mode=mode):
+        from chat_application.rag import _format_security_event_alert_count_answer
+
+        count_rows = [row for row in rows if row.get("total") is not None]
+        return _format_security_event_alert_count_answer(question, count_rows or rows)
+
     if "count" in labels and is_instruction_count_aggregate_question(question):
         from chat_application.rag import _format_instruction_count_aggregate_answer
 
@@ -196,12 +203,6 @@ def format_planned_graph_answer(
         from chat_application.rag import _format_security_event_group_by_lob_answer
 
         return _format_security_event_group_by_lob_answer(question, rows)
-
-    if "count" in labels and is_security_event_alert_count_question(question, mode=mode):
-        from chat_application.rag import _format_security_event_alert_count_answer
-
-        count_rows = [row for row in rows if row.get("total") is not None]
-        return _format_security_event_alert_count_answer(question, count_rows or rows)
 
     if "count" in labels and is_count_question(question):
         total = int(rows[0].get("total") or 0) if rows else 0

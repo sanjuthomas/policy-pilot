@@ -290,7 +290,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Comma-separated retrieval filter: deterministic, graph, vector, eligibility",
     )
     parser.add_argument("--ids", default="", help="Comma-separated case id filter")
-    parser.add_argument("--seed", action="store_true", help="Run harness seed steps before tests")
+    parser.add_argument(
+        "--seed",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Run harness seed steps from questions.yaml before tests (default: on; use --no-seed to skip)",
+    )
     parser.add_argument("--no-wait", action="store_true", help="Skip waiting for ETL index after seed")
     parser.add_argument(
         "--skip-api-smoke",

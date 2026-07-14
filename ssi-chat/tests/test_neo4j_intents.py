@@ -153,6 +153,18 @@ class TestNeo4jDirectMatching:
         assert "AND e.payment_id IS NULL" in match.planned[0][1]
         assert "P7D" in match.planned[0][1]
 
+    def test_instruction_policy_denial_count_via_planned_direct(self) -> None:
+        question = "How many instruction policy denials happened this week?"
+        match = match_neo4j_direct_intent(question, mode="events")
+        assert match is None
+        from chat_application.graph.direct import match_planned_graph_intent
+
+        planned = match_planned_graph_intent(question, mode="events")
+        assert planned is not None
+        assert "e.payment_id IS NULL" in planned.planned[0][1]
+        assert "e.severity = 'ALERT'" in planned.planned[0][1]
+        assert "P7D" in planned.planned[0][1]
+
     def test_payment_alerts_today_uses_planned_graph_not_yaml(self) -> None:
         question = "How many payment ALERT events happened today?"
         match = match_neo4j_direct_intent(question, mode="events")
