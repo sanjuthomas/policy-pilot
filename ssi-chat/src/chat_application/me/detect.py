@@ -1,3 +1,23 @@
+"""Me-intent detection: LLM-mapped fields plus regex fallback / slot parsing.
+
+Primary classification for "who am I / what can I do / can I approve …" lives in
+the Gemini ``RouterDecision`` (``path=me`` plus ``me_*`` slots). This module
+still carries phrase patterns for two narrower reasons:
+
+1. **Resilience fallback** — ``detect_me_intent_heuristic()`` is invoked from
+   ``heuristic_router_decision()`` only when the LLM router fails. Without it,
+   me-path questions would fall through to generic retrieval on Gemini outages.
+2. **Slot / structural parsing** — entity ids (``-P-`` / UUID extractors) and LOB
+   filters from ``cypher_builder`` when building a ``MeIntent`` from already-
+   decided router fields (``me_intent_from_router``) or when the fallback must
+   attach an id/LOB to a matched pattern.
+
+Do not grow the regex lists for synonym coverage on the happy path — that
+belongs to the LLM router. Prefer ``me_intent_from_router`` once a
+``RouterDecision`` exists; keep heuristic matches for fallback and tests.
+See docs/intent-determination.md and ``pipeline/heuristic_strategy.py``.
+"""
+
 from __future__ import annotations
 
 import re

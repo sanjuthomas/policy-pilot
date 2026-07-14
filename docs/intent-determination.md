@@ -6,7 +6,7 @@ This document describes how **ssi-chat** decides what to do with a natural-langu
 
 | Layer | Mechanism | Purpose |
 |-------|-----------|---------|
-| **Route** | Gemini Flash + structured `RouterDecision` JSON | Pick retrieval strategy from question intent |
+| **Route** | Gemini Flash + structured `RouterDecision` JSON (**9** paths; **4** retrieval strategies) | Pick intent / backends from question meaning |
 | **Fast paths** | Neo4j direct YAML intents, live OPA eligibility API | Skip full RAG when a specialized handler applies |
 | **Retrieve** | Selective backends (graph, vector, or both) | Avoid merging unrelated search results |
 | **Synthesize** | Deterministic formatters or Gemini | Produce the final answer from retrieved context |
@@ -91,7 +91,23 @@ Implementation entry point: `RagService.ask()` delegates to `RagPipelineOrchestr
 
 ## Step 1 — Semantic routing (LLM)
 
-Every question is sent to **Gemini Flash** with a fixed system prompt and **structured JSON output** validated against `RouterDecision`:
+Every question is sent to **Gemini Flash** (`PolicyPilotMlClient.route_query`) with:
+
+1. A fixed system prompt (`pipeline/prompts.py` → `ROUTER_SYSTEM_PROMPT`)
+2. The user question (plus UI search mode) as the user turn
+3. **Structured JSON output** constrained by `RouterDecision.model_json_schema()` (Vertex `response_schema`)
+
+Pydantic validates the model reply before the orchestrator dispatches. There is **no free-form agent loop** — one route call, then deterministic handlers.
+
+### How many paths and strategies?
+
+| Layer | Count | Values |
+|-------|------:|--------|
+| **Intent paths** (`RouterDecision.path`) | **9** | `skill`, `me`, `policy_summary`, `policy_directory`, `person_permissions`, `eligibility`, `graph`, `vector`, `hybrid` |
+| **Retrieval strategies** (`RouterDecision.strategy` / selective retrieve) | **4** | `eligibility`, `graph`, `vector`, `hybrid` |
+| **Post-hoc observability** (`AnswerRoutingInfo.retrieval_strategy`) | **6** | `eligibility`, `policy_directory`, `deterministic`, `graph`, `vector`, `skill` |
+
+The four retrieval strategies drive backends in step 3. Tool-style paths (`skill`, `me`, `policy_*`, …) do not use `strategy` for backend selection. Observability may later label an answer `deterministic` (Neo4j direct YAML) or `policy_directory` / `skill` after execution.
 
 ```python
 class RouterDecision(BaseModel):
@@ -130,6 +146,103 @@ class RouterDecision(BaseModel):
 | **SearchPolicyDocuments** | `vector` | Why was this payment denied? |
 | **Hybrid** | `hybrid` | Needs structured facts **and** semantic policy text |
 
+### Example Gemini Flash → `RouterDecision` JSON
+
+Illustrative structured replies (field set matches `RouterDecision`; `null` omitted fields are allowed and normalized in the model validator):
+
+**Eligibility (live OPA — who can approve this payment):**
+
+```json
+{
+  "path": "eligibility",
+  "strategy": "eligibility",
+  "eligibility_target": "payment",
+  "reasoning": "Forward-looking who-can for a specific payment id"
+}
+```
+
+**Graph (structured Neo4j audit — who already approved):**
+
+```json
+{
+  "path": "graph",
+  "strategy": "graph",
+  "reasoning": "Past-tense approval lookup; answer from the knowledge graph"
+}
+```
+
+**Vector (semantic why / policy prose):**
+
+```json
+{
+  "path": "vector",
+  "strategy": "vector",
+  "reasoning": "Open-ended why-denied; needs semantic retrieval over audit text"
+}
+```
+
+**Hybrid (structured facts + semantic context):**
+
+```json
+{
+  "path": "hybrid",
+  "strategy": "hybrid",
+  "reasoning": "Needs both graph facts and policy narrative"
+}
+```
+
+**Policy directory (amount club / LOB funding-approver list — no payment id):**
+
+```json
+{
+  "path": "policy_directory",
+  "reasoning": "Who may approve by amount threshold; directory lookup, not live payment eligibility"
+}
+```
+
+**Policy summary (normative OPA catalog):**
+
+```json
+{
+  "path": "policy_summary",
+  "policy_domain": "payment",
+  "policy_action": "APPROVE",
+  "reasoning": "User asked what the funding approval policy is"
+}
+```
+
+**Me intent (logged-in user capabilities):**
+
+```json
+{
+  "path": "me",
+  "me_kind": "can_act_on_entity",
+  "me_action": "CREATE",
+  "me_entity_type": "payment",
+  "reasoning": "Can I create a payment — self capability, not mutation skill"
+}
+```
+
+**Create-payment skill (mutation):**
+
+```json
+{
+  "path": "skill",
+  "skill": "create_payment",
+  "reasoning": "User asks the assistant to create a payment for an instruction"
+}
+```
+
+**Person permissions:**
+
+```json
+{
+  "path": "person_permissions",
+  "person_query": "Kowalski, Anna",
+  "reasoning": "Permissions of a named person, not the logged-in user"
+}
+```
+
 ### Eligibility vs audit (critical distinction)
 
 The router must separate **forward-looking** from **past-tense** approval language:
@@ -161,14 +274,14 @@ Observability path: `neo4j_direct` → `retrieval_strategy: deterministic`.
 
 ## Step 3 — Selective retrieval (no blind merge)
 
-`execute_selective_retrieval()` runs only the backends the router chose — graph, vector, or both:
+`execute_selective_retrieval()` runs only the backends the router chose — one of the **four** retrieval strategies:
 
 | Strategy | Neo4j / exact lookup | Dense vector |
 |----------|----------------------|--------------|
 | `graph` | Yes | No |
 | `vector` | No | Yes |
 | `hybrid` | Yes | Yes (RRF with graph) |
-| `eligibility` | N/A (handled in step 1) | N/A |
+| `eligibility` | N/A (handled via live OPA fast path, not this merge) | N/A |
 
 Graph retrieval still uses the existing stack: planned Cypher from `cypher_builder`, LLM `GraphQueryPlan` extraction when needed, and exact UUID/sequence ID lookups.
 

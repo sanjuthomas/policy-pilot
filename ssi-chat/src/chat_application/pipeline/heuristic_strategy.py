@@ -1,3 +1,23 @@
+"""Heuristic / regex helpers used beside LLM semantic routing.
+
+Open-ended intent is decided by Gemini structured output (``RouterDecision``).
+This module is *not* primary NLU — it exists for three narrower reasons:
+
+1. **Resilience fallback** — ``route_question()`` calls ``heuristic_router_decision()``
+   only when the LLM router fails (network, schema error, etc.). Chat should
+   degrade to coarse routing rather than hard-fail.
+2. **Slot / structural parsing** — ID shape (``-P-`` / ``-I-``), UI search mode, and
+   shared graph detectors from ``cypher_builder`` (counts, lists, rankings). These
+   fill fields the LLM may omit (e.g. ``eligibility_target``) and classify
+   structured graph questions; they are not synonym dictionaries for intent.
+3. **Policies-mode guardrails** — cheap eligibility-pattern checks so Policies does
+   not always hit live OPA when the router path is loose.
+
+Keep phrase-list growth out of the happy path. Synonyms like "green-light" belong
+to the LLM router; extend this file only for fallback resilience and slot parsing.
+See docs/intent-determination.md.
+"""
+
 from __future__ import annotations
 
 import re
