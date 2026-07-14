@@ -33,8 +33,6 @@ def mock_multimodal() -> MagicMock:
     store = MagicMock()
     store.ensure_indexes = AsyncMock()
     store.get_instruction_state_payload = AsyncMock(return_value=None)
-    store.upsert_instruction_state = AsyncMock()
-    store.upsert_payment_point = AsyncMock()
     return store
 
 

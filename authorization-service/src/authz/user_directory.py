@@ -30,11 +30,7 @@ class UserDirectory:
     """Loads approver candidates from the ZITADEL seed file."""
 
     def __init__(self, path: Path) -> None:
-        self._path = path
         self._seed = load_users(path)
-
-    def reload(self) -> None:
-        self._seed = load_users(self._path)
 
     @property
     def email_domain(self) -> str:

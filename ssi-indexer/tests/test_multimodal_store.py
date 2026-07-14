@@ -102,7 +102,6 @@ async def test_document_count(store: MultimodalNeo4jStore, neo4j_session: AsyncM
     neo4j_session.run = AsyncMock(return_value=result)
 
     assert await store.document_count() == 12
-    assert await store.has_documents() is True
 
 
 async def test_ensure_indexes_runs_once(store: MultimodalNeo4jStore, neo4j_session: AsyncMock) -> None:
@@ -110,21 +109,6 @@ async def test_ensure_indexes_runs_once(store: MultimodalNeo4jStore, neo4j_sessi
     await store.ensure_indexes(1024)
     await store.ensure_indexes(1024)
     neo4j_session.run.assert_awaited_once()
-
-
-async def test_upsert_instruction_state(store: MultimodalNeo4jStore, neo4j_session: AsyncMock) -> None:
-    tx = await neo4j_session.begin_transaction()
-    await store.upsert_instruction_state(
-        "instr-1",
-        "pending wire",
-        {"status": "PENDING"},
-        dense_vector=[0.1, 0.2],
-    )
-    tx.run.assert_awaited_once()
-    call_kwargs = tx.run.call_args.kwargs
-    assert call_kwargs["instruction_id"] == "instr-1"
-    assert call_kwargs["source"] == "instruction_state"
-    tx.commit.assert_awaited_once()
 
 
 async def test_get_instruction_state_payload_missing(

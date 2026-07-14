@@ -96,26 +96,6 @@ class PaymentRecord(BaseModel):
             },
         }
 
-    @classmethod
-    def from_mongo(cls, doc: dict) -> PaymentRecord:
-        doc = dict(doc)
-        doc.pop("_id", None)
-        created_by = doc.get("created_by") or {}
-        return cls(
-            payment_id=doc["payment_id"],
-            instruction_id=doc["instruction_id"],
-            instruction_version=doc["instruction_version"],
-            status=doc["status"],
-            amount=doc["amount"],
-            currency=doc["currency"],
-            owning_lob=doc["owning_lob"],
-            instruction_type=doc.get("instruction_type") or "",
-            created_by=UserReference(
-                user_id=created_by.get("user_id", ""),
-                supervisor_id=created_by.get("supervisor_id"),
-            ),
-        )
-
 
 class EligibleApprover(BaseModel):
     user_id: str

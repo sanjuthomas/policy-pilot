@@ -50,12 +50,6 @@ CYPHER_LABELS: dict[str, str] = {
     "none": "No Cypher",
 }
 
-CYPHER_CLASS_LABELS: dict[str, str] = {
-    "deterministic": "Predefined deterministic Cypher",
-    "llm": "LLM-derived Cypher",
-    "none": "No Cypher",
-}
-
 SYNTHESIS_LABELS: dict[str, str] = {
     "formatter": "Deterministic formatter",
     "gemini_full": "Gemini (full answer)",

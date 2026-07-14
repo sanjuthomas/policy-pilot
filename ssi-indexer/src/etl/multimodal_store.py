@@ -7,11 +7,6 @@ import uuid
 from typing import Any
 
 from etl.config import settings
-from etl.enrichment import EnrichedSecurityEventDocument
-from etl.multimodal_write import (
-    MultimodalWrite,
-    upsert_multimodal_in_tx,
-)
 from etl.neo4j_client import Neo4jGraphWriter
 
 logger = logging.getLogger(__name__)
@@ -143,10 +138,6 @@ class MultimodalNeo4jStore:
             dense_dimension,
         )
 
-    async def has_documents(self) -> bool:
-        count = await self.document_count()
-        return count > 0
-
     async def document_count(self) -> int:
         async with self._driver.session() as session:
             result = await session.run(
@@ -154,77 +145,6 @@ class MultimodalNeo4jStore:
             )
             record = await result.single()
         return int(record["count"]) if record else 0
-
-    async def _upsert(
-        self,
-        *,
-        document_id: str,
-        search_text: str,
-        payload: dict[str, Any],
-        dense_vector: list[float],
-    ) -> None:
-        write = MultimodalWrite(
-            document_id=document_id,
-            search_text=search_text,
-            payload=dict(payload),
-            dense_vector=dense_vector,
-        )
-        async with self._driver.session() as session:
-            tx = await session.begin_transaction()
-            try:
-                await upsert_multimodal_in_tx(tx, write)
-                await tx.commit()
-            except Exception:
-                await tx.rollback()
-                raise
-
-    async def upsert(
-        self,
-        document: EnrichedSecurityEventDocument,
-        *,
-        dense_vector: list[float],
-    ) -> None:
-        payload = document.model_dump(mode="json")
-        payload["source"] = "instruction_security_event"
-        await self._upsert(
-            document_id=event_document_id(document.event_id),
-            search_text=document.search_text,
-            payload=payload,
-            dense_vector=dense_vector,
-        )
-
-    async def upsert_payment_point(
-        self,
-        point_id: str,
-        search_text: str,
-        payload: dict,
-        *,
-        dense_vector: list[float],
-    ) -> None:
-        await self._upsert(
-            document_id=point_id,
-            search_text=search_text,
-            payload=dict(payload),
-            dense_vector=dense_vector,
-        )
-
-    async def upsert_instruction_state(
-        self,
-        instruction_id: str,
-        search_text: str,
-        payload: dict,
-        *,
-        dense_vector: list[float],
-    ) -> None:
-        payload = dict(payload)
-        payload["source"] = "instruction_state"
-        payload["instruction_id"] = instruction_id
-        await self._upsert(
-            document_id=instruction_document_id(instruction_id),
-            search_text=search_text,
-            payload=payload,
-            dense_vector=dense_vector,
-        )
 
     async def get_instruction_state_payload(self, instruction_id: str) -> dict[str, Any] | None:
         async with self._driver.session() as session:

@@ -666,19 +666,6 @@ def instruction_type_filter_from_question(question: str) -> str | None:
     return None
 
 
-def _instruction_count_type_cue(question: str) -> bool:
-    q = question.lower()
-    type_cues = (
-        r"\bcreated\s+as\b",
-        r"\b(of|with)\s+type\b",
-        r"\binstruction\s+type\b",
-        r"\b(standing|single[\s_-]?use)\s+type\b",
-        r"\btype\s+(standing|single[\s_-]?use)\b",
-        r"\b(were|was)\s+created\b",
-    )
-    return any(re.search(pattern, q) for pattern in type_cues)
-
-
 def instruction_count_filters_from_question(question: str) -> tuple[str | None, str | None]:
     """Return (status_filter, type_filter) for instruction count queries.
 
