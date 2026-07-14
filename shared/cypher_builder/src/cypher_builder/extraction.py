@@ -57,6 +57,7 @@ Rules:
 - For instruction counts use instruction_aggregate with operation count.
 - compliance_pattern only for instruction_compliance intent.
 - If the question cannot be mapped, set intent to security_event_aggregate, confidence to 0.1, and leave filters null.
+- Confidence below 0.5 will not execute Cypher — use low confidence when unsure.
 """
 
 

@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+import logging
 from typing import Literal
 
 from cypher_builder import query_engine as qe
 from cypher_builder.models import GraphIntent, GraphQueryPlan
+
+logger = logging.getLogger(__name__)
+
+# LLM extraction may emit low confidence (e.g. 0.1) when mapping fails; do not
+# materialize Cypher from those plans.
+MIN_GRAPH_QUERY_PLAN_CONFIDENCE = 0.5
 
 
 class CypherQueryBuilder:
@@ -193,7 +200,23 @@ def plans_from_graph_query(
     mode: str,
     question: str = "",
 ) -> list[tuple[str, str]] | None:
-    """Map a structured GraphQueryPlan to rendered Cypher query pairs."""
+    """Map a structured GraphQueryPlan to rendered Cypher query pairs.
+
+    Returns ``None`` when the plan cannot be mapped, or when ``plan.confidence``
+    is set and falls below :data:`MIN_GRAPH_QUERY_PLAN_CONFIDENCE`.
+    """
+    if (
+        plan.confidence is not None
+        and plan.confidence < MIN_GRAPH_QUERY_PLAN_CONFIDENCE
+    ):
+        logger.info(
+            "skipping graph plan intent=%s confidence=%.3f (threshold=%.2f)",
+            plan.intent.value,
+            plan.confidence,
+            MIN_GRAPH_QUERY_PLAN_CONFIDENCE,
+        )
+        return None
+
     builder = CypherQueryBuilder()
     flags = flags_from_plan(plan)
     time_filter = time_filter_from_flags(flags)
