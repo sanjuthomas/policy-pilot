@@ -166,9 +166,13 @@ def test_summarize_suite_quality():
 def test_golden_eval_yaml_loads():
     raw = yaml.safe_load(GOLDEN.read_text(encoding="utf-8"))
     suite = RegressionSuite.model_validate({"seed": {}, **raw})
-    assert len(suite.cases) >= 7
+    assert len(suite.cases) >= 11
     for case in suite.cases:
         assert case.expect.require_routing is True
+    p0 = {c.id for c in suite.cases if "p0" in c.tags}
+    assert "golden_instruction_denials_count_week" in p0
+    assert "golden_payment_denials_count_today" in p0
+    assert suite.seed.steps, "golden suite must carry the harness seed plan"
 
 
 @pytest.mark.parametrize(
