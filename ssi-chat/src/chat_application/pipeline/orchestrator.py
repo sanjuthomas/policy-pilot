@@ -447,9 +447,9 @@ class RagPipelineOrchestrator:
             answer=answer,
             retrieval_ms=0.0,
             generation_ms=elapsed,
-            path="eligibility",
+            path="policy_directory",
             cypher_provenance="none",
-            answer_synthesis="eligibility_api",
+            answer_synthesis="policy_directory_api",
         )
 
     async def _try_person_permissions(

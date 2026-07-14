@@ -24,6 +24,16 @@ class TestRetrievalStrategyClassification:
             == "eligibility"
         )
 
+    def test_policy_directory_path(self) -> None:
+        assert (
+            classify_retrieval_strategy(
+                path="policy_directory",
+                cypher_provenance="none",
+                answer_synthesis="policy_directory_api",
+            )
+            == "policy_directory"
+        )
+
     def test_neo4j_direct_is_deterministic(self) -> None:
         assert (
             classify_retrieval_strategy(

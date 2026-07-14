@@ -165,3 +165,46 @@ async def test_ask_short_circuits_instruction_eligibility_question(
 
     assert instruction_id in response.answer
     assert response.sources == []
+
+
+@pytest.mark.asyncio
+async def test_ask_policy_directory_uses_distinct_routing_labels(
+    rag_service: RagService,
+) -> None:
+    from chat_application.pipeline.models import RouterDecision
+
+    rag_service.ml_client.route_query = AsyncMock(
+        return_value=RouterDecision(
+            path="policy_directory",
+            reasoning="amount club directory",
+        )
+    )
+    rag_service._eligibility = AsyncMock()
+    rag_service._eligibility.group_members.return_value = {
+        "group": "UP_TO_100_BILLION_CLUB",
+        "members": [
+            {
+                "user_id": "pay-301",
+                "display_name": "Chen, Wei (pay-301)",
+                "title": "Managing Director",
+                "groups": ["UP_TO_100_BILLION_CLUB"],
+                "covering_lobs": ["FICC"],
+            }
+        ],
+        "count": 1,
+    }
+
+    response = await rag_service.ask(
+        "Who has permission to approve payments worth more than $25 billion?",
+        [],
+        mode="policies",
+        bearer_token="token",
+        session_id="sess",
+    )
+
+    assert "Chen, Wei" in response.answer
+    assert response.routing is not None
+    assert response.routing.path == "policy_directory"
+    assert response.routing.answer_synthesis == "policy_directory_api"
+    assert response.routing.retrieval_strategy == "policy_directory"
+    rag_service._eligibility.group_members.assert_awaited()

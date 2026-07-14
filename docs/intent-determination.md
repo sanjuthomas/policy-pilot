@@ -197,10 +197,10 @@ Each answer records routing metadata (`AnswerRoutingInfo`):
 
 | Field | Values |
 |-------|--------|
-| `path` | `eligibility`, `neo4j_direct`, `full_rag` |
-| `retrieval_strategy` | `eligibility`, `deterministic`, `graph`, `vector` (derived post-hoc) |
+| `path` | `eligibility`, `policy_directory`, `neo4j_direct`, `full_rag`, `skill` |
+| `retrieval_strategy` | `eligibility`, `policy_directory`, `deterministic`, `graph`, `vector`, `skill` (derived post-hoc) |
 | `cypher_provenance` | `predefined_yaml`, `predefined_planned`, `llm_graph_plan`, `none` |
-| `answer_synthesis` | `eligibility_api`, `formatter`, `gemini_why_only`, `gemini_full` |
+| `answer_synthesis` | `eligibility_api`, `policy_directory_api`, `formatter`, `gemini_why_only`, `gemini_full` |
 
 Structured log line: `chat.answer.completed strategy=… path=… cypher=… synthesis=…`
 

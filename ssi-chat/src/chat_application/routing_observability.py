@@ -30,16 +30,25 @@ AnswerSynthesis = Literal[
     "gemini_full",
     "gemini_why_only",
     "eligibility_api",
+    "policy_directory_api",
 ]
 
 RetrievalPath = Literal[
     "neo4j_direct",
     "eligibility",
+    "policy_directory",
     "full_rag",
     "skill",
 ]
 
-RetrievalStrategy = Literal["deterministic", "graph", "vector", "eligibility", "skill"]
+RetrievalStrategy = Literal[
+    "deterministic",
+    "graph",
+    "vector",
+    "eligibility",
+    "policy_directory",
+    "skill",
+]
 
 SOURCE_CHANNELS = ("vector", "neo4j", "exact")
 
@@ -55,11 +64,13 @@ SYNTHESIS_LABELS: dict[str, str] = {
     "gemini_full": "Gemini (full answer)",
     "gemini_why_only": "Gemini (WHY rewrite only)",
     "eligibility_api": "Eligibility API (OPA)",
+    "policy_directory_api": "Policy directory API",
 }
 
 PATH_LABELS: dict[str, str] = {
     "neo4j_direct": "Neo4j direct (early exit)",
     "eligibility": "Eligibility shortcut",
+    "policy_directory": "Policy directory",
     "full_rag": "Full RAG (vector + graph)",
     "skill": "Mutation skill",
 }
@@ -122,6 +133,8 @@ def classify_retrieval_strategy(
 ) -> RetrievalStrategy:
     if path == "eligibility":
         return "eligibility"
+    if path == "policy_directory":
+        return "policy_directory"
     if path == "skill":
         return "skill"
     if path == "neo4j_direct":
