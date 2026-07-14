@@ -69,6 +69,45 @@ def test_plans_from_graph_query_security_event_total_count() -> None:
     assert "severity: 'ALERT'" not in planned[0][1]
 
 
+def test_plans_from_graph_query_rejects_low_confidence() -> None:
+    from cypher_builder import MIN_GRAPH_QUERY_PLAN_CONFIDENCE
+
+    plan = GraphQueryPlan(
+        intent=GraphIntent.SECURITY_EVENT_AGGREGATE,
+        operation="count",
+        time_window="today",
+        confidence=0.1,
+    )
+    assert plan.confidence < MIN_GRAPH_QUERY_PLAN_CONFIDENCE
+    assert plans_from_graph_query(plan, mode="events", question="???") is None
+
+
+def test_plans_from_graph_query_accepts_high_confidence() -> None:
+    plan = GraphQueryPlan(
+        intent=GraphIntent.SECURITY_EVENT_AGGREGATE,
+        operation="count",
+        time_window="today",
+        domain="payments",
+        severity="ALERT",
+        denial=True,
+        confidence=0.95,
+    )
+    planned = plans_from_graph_query(plan, mode="events", question="payment alerts today")
+    assert planned is not None
+    assert "count(e)" in planned[0][1]
+
+
+def test_plans_from_graph_query_allows_missing_confidence() -> None:
+    """Legacy/manual plans without confidence still render Cypher."""
+    plan = GraphQueryPlan(
+        intent=GraphIntent.SECURITY_EVENT_AGGREGATE,
+        operation="count",
+        domain="all",
+        confidence=None,
+    )
+    assert plans_from_graph_query(plan, mode="events") is not None
+
+
 def test_plan_graph_queries_total_security_events() -> None:
     planned = plan_graph_queries(
         "How many security events are there in the system?",

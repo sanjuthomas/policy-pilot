@@ -1,4 +1,5 @@
 from cypher_builder.builder import (
+    MIN_GRAPH_QUERY_PLAN_CONFIDENCE,
     CypherQueryBuilder,
     plans_from_graph_query,
 )
@@ -64,6 +65,7 @@ __all__ = [
     "GraphIntent",
     "GraphQueryPlan",
     "LOOKUP_INSTRUCTION_BY_EVENT_CYPHER",
+    "MIN_GRAPH_QUERY_PLAN_CONFIDENCE",
     "build_extraction_user_prompt",
     "extract_entity_ids",
     "extract_event_id",
