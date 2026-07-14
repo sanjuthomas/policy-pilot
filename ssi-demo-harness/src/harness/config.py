@@ -18,7 +18,6 @@ class Settings(BaseSettings):
     zitadel_host_header: str = ""
     zitadel_service_pat: str = ""
     zitadel_service_pat_file: Path | None = None
-    admin_user_id: str = "admin-001"
     instruction_service_url: str = Field(
         default="http://localhost:8000",
         validation_alias=AliasChoices("instruction_service_url", "INSTRUCTION_SERVICE_URL"),

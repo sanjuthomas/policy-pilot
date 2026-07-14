@@ -10,10 +10,6 @@ COPY shared/cypher_builder/pyproject.toml shared/cypher_builder/pyproject.toml
 COPY shared/cypher_builder/src shared/cypher_builder/src
 RUN pip install --no-cache-dir ./shared/cypher_builder
 
-COPY shared/cypher_gen/pyproject.toml shared/cypher_gen/pyproject.toml
-COPY shared/cypher_gen/src shared/cypher_gen/src
-RUN pip install --no-cache-dir ./shared/cypher_gen
-
 COPY shared/platform_auth/pyproject.toml shared/platform_auth/pyproject.toml
 COPY shared/platform_auth/src shared/platform_auth/src
 RUN pip install --no-cache-dir ./shared/platform_auth

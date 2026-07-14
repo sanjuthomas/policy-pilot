@@ -7,8 +7,6 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Literal
 
-FacetEntityName = Literal["instruction", "payment"]
-AnalyticsMetric = Literal["count", "sum_amount", "avg_approval_time"]
 ReturnMode = Literal["table", "single_winner"]
 
 _ISO_DATE = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")

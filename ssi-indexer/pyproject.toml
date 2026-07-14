@@ -14,7 +14,6 @@ dependencies = [
     "PyJWT[crypto]>=2.10.0",
     "PyYAML>=6.0.2",
     "cypher-builder",
-    "cypher-gen",
     "ssi-telemetry",
     "vertex-client",
 ]
@@ -39,7 +38,7 @@ packages = ["src/etl"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-pythonpath = ["src", "tests", "../shared/platform_auth/src", "../shared/cypher_builder/src", "../shared/cypher_gen/src", "../shared/vertex_client/src"]
+pythonpath = ["src", "tests", "../shared/platform_auth/src", "../shared/cypher_builder/src", "../shared/vertex_client/src"]
 
 [tool.coverage.run]
 source = ["etl"]

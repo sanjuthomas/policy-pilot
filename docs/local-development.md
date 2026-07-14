@@ -41,7 +41,6 @@ pip install -q \
   ./shared/sequence_client \
   ./shared/authz_client \
   ./shared/cypher_builder \
-  ./shared/cypher_gen \
   ./shared/vertex_client
 ```
 

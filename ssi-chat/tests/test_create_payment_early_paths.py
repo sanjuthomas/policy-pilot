@@ -26,7 +26,6 @@ def _params() -> CreatePaymentParams:
         instruction_id="instruction-1",
         amount=10.0,
         value_date="2026-07-12",
-        raw_message="create a payment",
     )
 
 
