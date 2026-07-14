@@ -25,7 +25,6 @@ class InstructionStatus(StrEnum):
     SUSPENDED = "SUSPENDED"
     REJECTED = "REJECTED"
     USED = "USED"
-    EXPIRED = "EXPIRED"
     CANCELLED = "CANCELLED"
 
 

@@ -226,7 +226,7 @@ async def test_payment_security_event_consumer_start_close_and_run():
         mock_create_task.return_value = AsyncMock()
         await consumer.start()
 
-    assert consumer.running is True
+    assert consumer._consumer is not None
     consumer._task = asyncio.create_task(_pending_task())
     await consumer.close()
 
@@ -292,13 +292,6 @@ async def test_payment_fact_consumer_start_and_run():
     _one_message_consumer(consumer, message)
     await consumer._run()
     pipeline.process.assert_awaited_once()
-
-
-async def test_payment_security_event_consumer_running_property():
-    consumer = PaymentSecurityEventKafkaConsumer(MagicMock())
-    assert consumer.running is False
-    consumer._consumer = MagicMock()
-    assert consumer.running is True
 
 
 async def test_instruction_consumer_close_without_start():

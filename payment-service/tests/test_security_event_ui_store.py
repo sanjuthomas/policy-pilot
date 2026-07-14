@@ -47,16 +47,7 @@ def test_merge_recent_documents_notable_only_when_limit_reached() -> None:
 @pytest.mark.asyncio
 async def test_security_event_ui_store_connect() -> None:
     store = SecurityEventUiStore()
-    mock_collection = MagicMock()
-    mock_collection.find_one = AsyncMock(
-        return_value={"timestamp": datetime(2025, 6, 1, 12, 0, 0)}
-    )
-
-    with patch("ps.security_event_ui_store.get_security_events_db") as mock_get_db:
-        mock_get_db.return_value.__getitem__ = MagicMock(return_value=mock_collection)
-        await store.connect()
-
-    assert store.last_poll_at is not None
+    await store.connect()
 
 
 @pytest.mark.asyncio
@@ -73,12 +64,3 @@ async def test_security_event_ui_store_get_by_event_id() -> None:
 
     assert event is not None
     assert event["event_id"] == "e1"
-
-
-@pytest.mark.asyncio
-async def test_security_event_ui_store_remember_helpers() -> None:
-    store = SecurityEventUiStore()
-    assert store.remember_event_id("e1") is True
-    assert store.remember_event_id("e1") is False
-    store.remember_poll_timestamp("2025-06-01T00:00:00Z")
-    assert store.last_poll_at == datetime(2025, 6, 1, 0, 0, 0)

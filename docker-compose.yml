@@ -558,7 +558,6 @@ services:
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: neo4j
       NEO4J_PASSWORD: devpassword
-      GRAPH_MODEL_DIR: /app/neo4j-graph-model
       PAYMENT_SERVICE_URL: http://payment-service:8093
       INSTRUCTION_SERVICE_URL: http://instruction-service:8000
       AUTHORIZATION_SERVICE_URL: http://authorization-service:8094
@@ -572,7 +571,6 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ./neo4j-graph-model:/app/neo4j-graph-model:ro
       - zitadel-bootstrap:/zitadel/bootstrap:ro
       - ./zitadel-seed:/app/zitadel-seed:ro
       - ./ssi-chat/src/chat_application/static:/usr/local/lib/python3.12/site-packages/chat_application/static:ro

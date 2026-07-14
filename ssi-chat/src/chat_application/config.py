@@ -19,14 +19,12 @@ class Settings(BaseSettings):
     vertex_embedding_model: str = "text-embedding-004"
     vertex_gemini_model: str = "gemini-2.5-flash"
     embedding_dimension: int = 768
-    vertex_timeout_seconds: float = 120.0
 
     multimodal_vector_index: str = "multimodal_embedding"
 
     neo4j_uri: str = "bolt://neo4j:7687"
     neo4j_user: str = "neo4j"
     neo4j_password: str = "devpassword"
-    graph_model_dir: str = "/app/neo4j-graph-model"
 
     retrieval_limit: int = 15
     rrf_k: int = 60
@@ -60,10 +58,6 @@ class Settings(BaseSettings):
     @property
     def chat_role_set(self) -> set[str]:
         return self.compliance_role_set | self.operational_role_set
-
-    @property
-    def graph_schema_path(self) -> Path:
-        return Path(self.graph_model_dir) / "relationships.cypher"
 
     @model_validator(mode="after")
     def load_service_pat_from_file(self) -> "Settings":

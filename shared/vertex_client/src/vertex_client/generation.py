@@ -31,12 +31,10 @@ class VertexGenerativeClient:
         project_id: str,
         region: str,
         model: str,
-        timeout_seconds: float = 120.0,
     ) -> None:
         self._project_id = project_id
         self._region = region
         self._model = model
-        self._timeout_seconds = timeout_seconds
         self._client: genai.Client | None = None
 
     @property

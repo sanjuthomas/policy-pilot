@@ -44,15 +44,10 @@ class Settings(BaseSettings):
     gcp_region: str = "us-central1"
     vertex_embedding_model: str = "text-embedding-004"
     vertex_gemini_model: str = "gemini-2.5-flash"
-    vertex_timeout_seconds: float = 120.0
     embedding_dimension: int = 768
 
     search_default_limit: int = 10
     search_profiles_dir: str | None = None
-
-    @property
-    def graph_schema_path(self):
-        return self.graph_model_dir_path / "relationships.cypher"
 
     @model_validator(mode="after")
     def load_service_pat_from_file(self) -> "Settings":
@@ -62,10 +57,6 @@ class Settings(BaseSettings):
         if path.is_file():
             self.zitadel_service_pat = path.read_text(encoding="utf-8").strip()
         return self
-
-    @property
-    def graph_model_dir_path(self) -> Path:
-        return Path(self.graph_model_dir)
 
 
 settings = Settings()

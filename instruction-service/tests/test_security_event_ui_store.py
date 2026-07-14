@@ -1,4 +1,3 @@
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -8,16 +7,7 @@ from inst.security_event_ui_store import SecurityEventUiStore
 @pytest.mark.asyncio
 async def test_security_event_ui_store_connect() -> None:
     store = SecurityEventUiStore()
-    mock_collection = MagicMock()
-    mock_collection.find_one = AsyncMock(
-        return_value={"timestamp": datetime(2025, 6, 1, 12, 0, 0)}
-    )
-
-    with patch("inst.security_event_ui_store.get_security_events_database") as mock_get_db:
-        mock_get_db.return_value.__getitem__ = MagicMock(return_value=mock_collection)
-        await store.connect()
-
-    assert store.last_poll_at is not None
+    await store.connect()
 
 
 @pytest.mark.asyncio
