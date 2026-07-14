@@ -185,7 +185,7 @@ main() {
     mongodb mongo-init \
     neo4j \
     kafka kafka-init \
-    opa-server opa-policy-seed \
+    opa opa-policy-seed \
     opensearch opensearch-dashboards otel-collector \
     zitadel-postgres zitadel-api zitadel-login zitadel-proxy \
     sequence-service

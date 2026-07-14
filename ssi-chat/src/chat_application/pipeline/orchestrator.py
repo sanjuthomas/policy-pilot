@@ -38,6 +38,37 @@ class RagPipelineOrchestrator:
     def __init__(self, service: RagService) -> None:
         self._service = service
 
+    def _rate_limited_response(
+        self,
+        message: str,
+        mode: SearchMode,
+        *,
+        retrieval_ms: float,
+        cypher_provenance: str = "none",
+        path: str = "full_rag",
+    ) -> ChatResponse:
+        from chat_application.gemini.errors import (
+            GEMINI_RATE_LIMIT_ANSWER,
+            GEMINI_RATE_LIMIT_RETRY_SECONDS,
+            gemini_rate_limit_intent_id,
+        )
+
+        return finalize_chat_response(
+            message,
+            mode,
+            answer=format_chat_response(GEMINI_RATE_LIMIT_ANSWER),
+            sources=[],
+            cypher=None,
+            graph_rows=[],
+            retrieval_ms=retrieval_ms,
+            generation_ms=0.0,
+            path=path,  # type: ignore[arg-type]
+            cypher_provenance=cypher_provenance,  # type: ignore[arg-type]
+            answer_synthesis="formatter",
+            intent_id=gemini_rate_limit_intent_id(),
+            retry_after_seconds=GEMINI_RATE_LIMIT_RETRY_SECONDS,
+        )
+
     async def ask(
         self,
         message: str,
@@ -220,6 +251,23 @@ class RagPipelineOrchestrator:
 
         graph_result = retrieval.graph_result
         graph_provenance = graph_result.get("cypher_provenance") or "none"
+        if (
+            execution_strategy == "graph"
+            and graph_result.get("llm_rate_limited")
+            and not graph_result.get("cypher")
+            and not graph_result.get("rows")
+        ):
+            logger.warning(
+                "short-circuiting for Gemini rate limit during graph planning "
+                "(provenance=%s)",
+                graph_provenance,
+            )
+            return self._rate_limited_response(
+                message,
+                mode,
+                retrieval_ms=retrieval_ms,
+                cypher_provenance=graph_provenance,
+            )
         if self._should_short_circuit_graph_unavailable(
             execution_strategy, graph_result
         ):
@@ -244,14 +292,27 @@ class RagPipelineOrchestrator:
             )
 
         gen_started = time.perf_counter()
-        answer, answer_synthesis = await self._synthesize(
-            message,
-            history,
-            mode=mode,
-            entity_ids=entity_ids,
-            merged=retrieval.merged,
-            graph_result=graph_result,
-        )
+        try:
+            answer, answer_synthesis = await self._synthesize(
+                message,
+                history,
+                mode=mode,
+                entity_ids=entity_ids,
+                merged=retrieval.merged,
+                graph_result=graph_result,
+            )
+        except Exception as exc:
+            from chat_application.gemini.errors import is_gemini_rate_limit_error
+
+            if is_gemini_rate_limit_error(exc):
+                logger.warning("Gemini rate-limited during answer synthesis: %s", exc)
+                return self._rate_limited_response(
+                    message,
+                    mode,
+                    retrieval_ms=retrieval_ms,
+                    cypher_provenance=graph_provenance,
+                )
+            raise
         generation_ms = (time.perf_counter() - gen_started) * 1000
 
         return finalize_chat_response(

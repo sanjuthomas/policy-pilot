@@ -247,6 +247,7 @@ class InstructionService:
         session_id: str | None = None,
         record_security_event: bool = False,
         security_event_details: dict | None = None,
+        version_number: int | None = None,
     ) -> dict:
         decision = await self._evaluate_policy(
             action,
@@ -263,6 +264,16 @@ class InstructionService:
         )
         if not decision.allowed:
             if record_security_event and self._should_record_security_event(subject):
+                denial_version = version_number
+                if denial_version is None and instruction.instruction_id:
+                    try:
+                        current = await self.repository.get_current(
+                            instruction.instruction_id
+                        )
+                    except Exception:
+                        current = None
+                    if current is not None:
+                        denial_version = current.version_number
                 await self.security_events.record_policy_denial(
                     action,
                     subject,
@@ -271,6 +282,7 @@ class InstructionService:
                     details=details_with_authorization(
                         security_event_details, authorization
                     ),
+                    version_number=denial_version,
                 )
             raise PermissionError(authorization["summary"])
         return authorization

@@ -26,6 +26,7 @@ class Subject(BaseModel):
     lob: str | None = None
     roles: list[str] = Field(min_length=1)
     groups: list[str] = Field(default_factory=list)
+    covering_lobs: list[str] = Field(default_factory=list)
     supervisor_id: str | None = None
     # Populated when the request arrives via an On-Behalf-Of delegation
     # (e.g. payment-service calling instruction-service on behalf of a human user).
@@ -41,6 +42,7 @@ class Subject(BaseModel):
             "title": self.title,
             "roles": self.roles,
             "groups": self.groups,
+            "covering_lobs": self.covering_lobs,
         }
         if self.lob is not None:
             payload["lob"] = self.lob

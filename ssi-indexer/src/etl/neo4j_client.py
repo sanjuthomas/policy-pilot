@@ -160,6 +160,7 @@ class Neo4jGraphWriter:
                         e.wire_scope       = $wire_scope,
                         e.instruction_type = $instruction_type,
                         e.owning_lob       = $owning_lob,
+                        e.instruction_id   = $instruction_id,
                         e.authorization_summary = $authorization_summary,
                         e.authorization_decision = $authorization_decision,
                         e.authorization_basis = $authorization_basis,
@@ -178,6 +179,7 @@ class Neo4jGraphWriter:
                     wire_scope=wire_scope,
                     instruction_type=instruction_type,
                     owning_lob=owning_lob,
+                    instruction_id=document.instruction_id or None,
                     **auth_params,
                 )
 

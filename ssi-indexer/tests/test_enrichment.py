@@ -76,7 +76,8 @@ def test_enrich_document():
     assert isinstance(doc, EnrichedSecurityEventDocument)
     assert doc.event_id == "evt-1"
     assert doc.instruction_id == "instr-1"
-    assert doc.version_number == 3  # instruction overrides resource
+    # Prefer resource.version_number (event-time version) when present.
+    assert doc.version_number == 2
     assert doc.instruction == instruction
     assert doc.merged
     assert doc.search_text
@@ -88,3 +89,19 @@ def test_enrich_document_without_instruction():
     doc = enrich_document(event, None)
     assert doc.version_number == 2
     assert doc.instruction is None
+
+
+def test_enrich_document_alert_denial_without_resource_version():
+    """Approve ALERT denials historically omitted version_number — still keep entity id."""
+    event = _sample_event()
+    event["resource"]["version_number"] = None
+    event["resource"]["id"] = "20260714-FICC-I-1"
+    event["severity"] = "ALERT"
+    event["event"] = {"action": "APPROVE", "outcome": "FAILURE", "reason": "denied"}
+    event["instruction_snapshot"] = {
+        "instruction_id": "20260714-FICC-I-1",
+        "status": "SUBMITTED",
+    }
+    doc = enrich_document(event, None)
+    assert doc.instruction_id == "20260714-FICC-I-1"
+    assert doc.version_number is None

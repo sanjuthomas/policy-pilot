@@ -130,6 +130,29 @@ class TestNeo4jDirectMatching:
         assert match is not None
         assert match.intent_id == "events.alerts_today_count"
 
+    def test_alert_list_payments_domain_filter(self) -> None:
+        question = "can you list all alerts for payments?"
+        match = match_neo4j_direct_intent(question, mode="events")
+        assert match is not None
+        assert match.intent_id == "events.alert_list"
+        assert "AND e.payment_id IS NOT NULL" in match.planned[0][1]
+        assert "AND e.payment_id IS NULL" not in match.planned[0][1]
+
+    def test_alert_list_instructions_domain_filter(self) -> None:
+        question = "can you list all alerts for instructions?"
+        match = match_neo4j_direct_intent(question, mode="events")
+        assert match is not None
+        assert match.intent_id == "events.alert_list"
+        assert "AND e.payment_id IS NULL" in match.planned[0][1]
+
+    def test_instruction_denial_events_direct_in_instructions_mode(self) -> None:
+        question = "Can you list all instruction denial events for this week?"
+        match = match_neo4j_direct_intent(question, mode="instructions")
+        assert match is not None
+        assert match.intent_id == "events.alert_list"
+        assert "AND e.payment_id IS NULL" in match.planned[0][1]
+        assert "P7D" in match.planned[0][1]
+
     def test_payment_alerts_today_uses_planned_graph_not_yaml(self) -> None:
         question = "How many payment ALERT events happened today?"
         match = match_neo4j_direct_intent(question, mode="events")

@@ -51,7 +51,9 @@ from cypher_builder import (
     ranking_period_label,
     records_to_rows,
     row_summary,
+    security_event_domain_from_question,
     security_event_group_by_lob_scope,
+    security_event_time_filter_from_question,
     validate_read_only_cypher,
 )
 
@@ -104,6 +106,8 @@ __all__ = [
     "ranking_period_label",
     "records_to_rows",
     "row_summary",
+    "security_event_domain_from_question",
     "security_event_group_by_lob_scope",
+    "security_event_time_filter_from_question",
     "validate_read_only_cypher",
 ]

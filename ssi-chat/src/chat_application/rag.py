@@ -777,12 +777,15 @@ class RagService:
                     cypher_provenance = "llm_graph_plan"
             except Exception as exc:
                 logger.warning("graph plan extraction failed: %s", exc)
+                from chat_application.gemini.errors import is_gemini_rate_limit_error
+
                 return {
                     "cypher": None,
                     "rows": [],
                     "cypher_provenance": "none",
                     "graph_unavailable": True,
                     "planned": None,
+                    "llm_rate_limited": is_gemini_rate_limit_error(exc),
                 }
 
         if planned is not None:

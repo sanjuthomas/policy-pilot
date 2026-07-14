@@ -108,11 +108,14 @@ async def test_record_policy_denial(
             sample_subject,
             sample_instruction,
             reason="denied",
+            version_number=2,
         )
     assert event.severity.value == "ALERT"
+    assert event.resource.version_number == 2
     stored = mock_collection.insert_one.call_args[0][0]
     assert stored["_id"] == "20260628-FICC-I-1-SE-2"
-
+    assert stored["resource"]["version_number"] == 2
+    assert stored["resource"]["id"] == sample_instruction.instruction_id
 
 @pytest.mark.asyncio
 async def test_allocate_event_id_failure(repo: SecurityEventRepository) -> None:

@@ -10,12 +10,14 @@ def test_subject_to_opa_subject_includes_optional_fields() -> None:
         lob="FX",
         roles=["INSTRUCTION_APPROVER"],
         groups=["MIDDLE_OFFICE"],
+        covering_lobs=["FX", "FICC"],
         supervisor_id="mgr.fx",
         delegated_by_roles=["INSTRUCTION_MARKER"],
     )
     payload = subject.to_opa_subject()
     assert payload["user_id"] == "bob.fx"
     assert payload["lob"] == "FX"
+    assert payload["covering_lobs"] == ["FX", "FICC"]
     assert payload["supervisor_id"] == "mgr.fx"
     assert payload["delegated_by_roles"] == ["INSTRUCTION_MARKER"]
 
@@ -24,6 +26,7 @@ def test_subject_to_opa_subject_omits_none_lob() -> None:
     subject = Subject(user_id="u", title="VP", roles=["INSTRUCTION_CREATOR"])
     payload = subject.to_opa_subject()
     assert "lob" not in payload
+    assert payload["covering_lobs"] == []
     assert payload["delegated_by_roles"] == []
 
 

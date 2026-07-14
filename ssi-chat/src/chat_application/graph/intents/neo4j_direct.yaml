@@ -190,7 +190,8 @@ intents:
 
   - id: events.alert_list
     priority: 65
-    modes: [events, all]
-    match: '\b(list|show|summarize|summarise|all)\b.*\balerts?\b|\balerts?\b.*\b(actor|action)\b'
+    modes: [events, all, instructions, payments]
+    match: '\b(list|show|summarize|summarise|enumerate|display|all)\b.*\b(alerts?|policy\s+denials?|denials?|denied)\b|\b(alerts?|denials?)\b.*\b(list|show|summarize|summarise|enumerate|display|actor|action|events?)\b|\b(list|show|enumerate|display|all)\b.*\b(denial|denied)\b.*\bevents?\b'
+    exclude: '\bhow\s+many\b|\bcount\b|\bnumber\s+of\b|\bgroup\b.*\bby\b'
     query: security_event_alert_list
     formatter: security_event_alert_list

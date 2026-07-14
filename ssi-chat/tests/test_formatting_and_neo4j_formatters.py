@@ -258,8 +258,26 @@ class TestNeo4jFormatters:
         assert "evt-1" in text
         assert "Event ID" in text
         assert "Entity Type" in text
+        assert "Entity ID" in text
+        assert "20260704-FICC-I-1" in text
         assert "mo-100" in text
 
+    def test_security_event_alert_list_missing_entity_id_shows_em_dash(self) -> None:
+        text = format_security_event_alert_list(
+            "report all alerts today",
+            [
+                {
+                    "event_id": "evt-missing",
+                    "timestamp": "2026-07-14T10:00:00Z",
+                    "entity_type": "instruction",
+                    "entity_id": "",
+                    "actor_display": "Torres, Michael (ficc-201)",
+                    "action": "CREATE",
+                }
+            ],
+        )
+        assert "evt-missing" in text
+        assert "| — |" in text or " — " in text
     def test_formatters_registry(self) -> None:
         assert "instruction_creator_by_id" in FORMATTERS
         assert "instruction_versions_table" in FORMATTERS

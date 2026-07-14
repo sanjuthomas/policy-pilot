@@ -177,6 +177,65 @@ class TestGraphUnavailableShortCircuit:
         assert response.routing.intent_id == "graph.unavailable"
 
     @pytest.mark.asyncio
+    async def test_ask_returns_rate_limit_when_graph_plan_exhausted(
+        self, rag_service, mock_ml_client, mock_neo4j
+    ) -> None:
+        mock_ml_client.route_query = AsyncMock(
+            return_value=RouterDecision(strategy="graph", reasoning="list instructions")
+        )
+        mock_ml_client.extract_graph_query_plan = AsyncMock(
+            side_effect=RuntimeError(
+                "429 RESOURCE_EXHAUSTED. Resource exhausted. Please try again later."
+            )
+        )
+
+        response = await rag_service.ask(
+            "Can you enumerate the unusual inventory widgets in FICC?",
+            [],
+            mode="instructions",
+        )
+
+        mock_ml_client.synthesize_answer.assert_not_awaited()
+        assert response.retry_after_seconds == 30
+        assert response.routing is not None
+        assert response.routing.intent_id == "llm.rate_limited"
+        assert "under stress" in response.answer.lower()
+        assert "429" in response.answer
+
+    @pytest.mark.asyncio
+    async def test_ask_returns_rate_limit_when_synthesis_exhausted(
+        self, rag_service, mock_ml_client, mock_neo4j, mock_vector_search
+    ) -> None:
+        mock_ml_client.route_query = AsyncMock(
+            return_value=RouterDecision(strategy="vector", reasoning="semantic")
+        )
+        mock_vector_search.search_vector = AsyncMock(
+            return_value=[
+                {
+                    "event_id": None,
+                    "instruction_id": "20260714-FICC-I-1",
+                    "score": 0.1,
+                    "sources": ["vector"],
+                    "summary": "hit",
+                    "merged": {"instruction_id": "20260714-FICC-I-1"},
+                }
+            ]
+        )
+        mock_ml_client.synthesize_answer = AsyncMock(
+            side_effect=RuntimeError("429 RESOURCE_EXHAUSTED")
+        )
+
+        response = await rag_service.ask(
+            "Why was this instruction approved?",
+            [],
+            mode="instructions",
+        )
+
+        assert response.retry_after_seconds == 30
+        assert response.routing is not None
+        assert response.routing.intent_id == "llm.rate_limited"
+
+    @pytest.mark.asyncio
     async def test_ask_formats_llm_inventory_plan_without_gemini(
         self, rag_service, mock_ml_client, mock_neo4j
     ) -> None:

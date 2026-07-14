@@ -140,10 +140,15 @@ def _build_payment_versions(context: dict[str, Any], _question: str, _mode: Sear
 
 
 def _build_security_event_alert_list(context: dict[str, Any], question: str, _mode: SearchMode):
+    from chat_application.graph.cypher import (
+        security_event_domain_from_question,
+        security_event_time_filter_from_question,
+    )
+
     approval_only = is_approval_denial_alert_list_question(question)
     return _GRAPH_BUILDER.security_event_alert_list(
-        time_filter="",
-        domain="all",
+        time_filter=security_event_time_filter_from_question(question),
+        domain=security_event_domain_from_question(question),
         approval_only=approval_only,
     )
 

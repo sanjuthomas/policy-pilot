@@ -225,6 +225,41 @@ def test_plan_graph_queries_alert_list() -> None:
     assert "actor_display" in planned[0][1]
 
 
+def test_alert_list_filters_domain_and_time_from_question() -> None:
+    from cypher_builder import (
+        security_event_domain_from_question,
+        security_event_time_filter_from_question,
+    )
+
+    assert security_event_domain_from_question("alerts for payments") == "payments"
+    assert security_event_domain_from_question("alerts for instructions") == "instructions"
+    assert "P7D" in security_event_time_filter_from_question("denial events this week")
+
+    payments = plan_graph_queries(
+        "can you list all alerts for payments?",
+        mode="events",
+    )
+    assert payments is not None
+    assert "AND e.payment_id IS NOT NULL" in payments[0][1]
+    assert "AND e.payment_id IS NULL" not in payments[0][1]
+
+    instructions = plan_graph_queries(
+        "can you list all alerts for instructions?",
+        mode="events",
+    )
+    assert instructions is not None
+    assert "AND e.payment_id IS NULL" in instructions[0][1]
+
+    denials = plan_graph_queries(
+        "Can you list all instruction denial events for this week?",
+        mode="instructions",
+    )
+    assert denials is not None
+    assert denials[0][0] == "security_event_alert_list"
+    assert "AND e.payment_id IS NULL" in denials[0][1]
+    assert "P7D" in denials[0][1]
+
+
 def test_alert_list_entity_id_prefers_security_event_property() -> None:
     """ALERT list must resolve entity id from SecurityEvent even without FOR."""
     from cypher_builder.query_engine import _ALERT_LIST_ENTITY_ID, _security_event_alert_list_queries

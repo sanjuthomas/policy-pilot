@@ -26,6 +26,7 @@ def _empty_graph_result() -> dict[str, Any]:
         "cypher_provenance": "none",
         "graph_unavailable": False,
         "planned": None,
+        "llm_rate_limited": False,
     }
 
 

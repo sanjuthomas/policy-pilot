@@ -274,6 +274,23 @@ cases:
     - 'no'
     - '0'
     - event
+- id: events_alerts_list_today_entity_ids
+  mode: events
+  retrieval: deterministic
+  tags:
+  - alerts
+  - today
+  - entity
+  question: Can you report all ALERTS today?
+  expect:
+    min_answer_length: 20
+    min_graph_rows: 1
+    answer_contains_all:
+    - Entity ID
+    - ALERT
+    answer_contains_any:
+    - '-I-'
+    - '-P-'
 - id: instructions_created_today
   mode: instructions
   retrieval: deterministic

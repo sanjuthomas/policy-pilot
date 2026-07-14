@@ -22,7 +22,7 @@ def test_regression_cases_have_unique_ids():
 
 def test_regression_cases_all_have_retrieval():
     suite = load_suite()
-    assert len(suite.cases) >= 55
+    assert len(suite.cases) >= 56
     for case in suite.cases:
         assert case.retrieval in {"deterministic", "graph", "vector", "eligibility"}
 
@@ -30,11 +30,18 @@ def test_regression_cases_all_have_retrieval():
 def test_regression_retrieval_distribution():
     suite = load_suite()
     counts = Counter(case.retrieval for case in suite.cases)
-    assert counts["deterministic"] == 22
+    assert counts["deterministic"] == 23
     assert counts["graph"] == 30
     assert counts["vector"] == 3
     assert counts.get("eligibility", 0) == 0
 
+
+def test_regression_alert_entity_id_case_present():
+    suite = load_suite()
+    case = next(c for c in suite.cases if c.id == "events_alerts_list_today_entity_ids")
+    assert case.retrieval == "deterministic"
+    assert "Entity ID" in case.expect.answer_contains_all
+    assert any("-I-" in token or "-P-" in token for token in case.expect.answer_contains_any)
 
 def test_regression_case_model_accepts_retrieval():
     case = RegressionCase.model_validate(
