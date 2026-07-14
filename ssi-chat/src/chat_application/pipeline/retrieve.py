@@ -25,6 +25,7 @@ def _empty_graph_result() -> dict[str, Any]:
         "rows": [],
         "cypher_provenance": "none",
         "graph_unavailable": False,
+        "planned": None,
     }
 
 

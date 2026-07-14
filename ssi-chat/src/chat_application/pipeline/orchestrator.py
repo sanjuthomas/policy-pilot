@@ -596,7 +596,10 @@ class RagPipelineOrchestrator:
             if answer is not None:
                 answer_synthesis = "gemini_why_only"
         if answer is None:
-            planned = plan_graph_queries(message, mode=mode)
+            # Prefer labels from the Cypher that actually ran (LLM or predefined).
+            # Re-planning from the question is only a fallback when retrieval did not
+            # attach a plan (e.g. exact-id merges with empty planned).
+            planned = graph_result.get("planned") or plan_graph_queries(message, mode=mode)
             if planned:
                 answer = format_planned_graph_answer(
                     message,

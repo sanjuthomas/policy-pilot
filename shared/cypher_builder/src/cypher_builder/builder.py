@@ -194,6 +194,47 @@ def time_filter_from_flags(flags: dict[str, bool]) -> str:
     return qe._time_filter_cypher(flags)
 
 
+def _normalize_instruction_type(raw: str) -> str:
+    """Map hyphen/space variants onto graph enum tokens."""
+    normalized = raw.strip().upper().replace("-", "_").replace(" ", "_")
+    if normalized in {"SINGLE_USE", "STANDING"}:
+        return normalized
+    return raw.strip()
+
+
+def _plans_for_instruction_inventory(
+    builder: CypherQueryBuilder,
+    plan: GraphQueryPlan,
+    question: str,
+) -> list[tuple[str, str]] | None:
+    """Render inventory Cypher from status/type/creator filters (shared by inventory + remapped lookup)."""
+    if plan.user_id:
+        return builder.instructions_created_by_user(plan.user_id)
+
+    instruction_type = (
+        _normalize_instruction_type(plan.instruction_type)
+        if plan.instruction_type
+        else None
+    )
+    if instruction_type is None and "SINGLE_USE" in question.upper().replace("-", "_").replace(
+        " ", "_"
+    ):
+        # "single-use" / "single use" in the question when the plan omitted type
+        instruction_type = "SINGLE_USE"
+
+    if instruction_type:
+        return builder.instruction_list_by_type(
+            instruction_type=instruction_type,
+            lob=plan.owning_lob,
+        )
+    if plan.status:
+        return builder.instruction_list_by_status(
+            status=plan.status,
+            lob=plan.owning_lob,
+        )
+    return None
+
+
 def plans_from_graph_query(
     plan: GraphQueryPlan,
     *,
@@ -240,9 +281,11 @@ def plans_from_graph_query(
         return builder.payment_approval_lookup(plan.payment_id)
 
     if plan.intent == GraphIntent.INSTRUCTION_LOOKUP:
-        if not plan.instruction_id:
-            return None
-        return builder.instruction_detail(plan.instruction_id)
+        if plan.instruction_id:
+            return builder.instruction_detail(plan.instruction_id)
+        # Gemini sometimes labels inventory/list questions as lookup with no id.
+        # Remap those to inventory Cypher instead of failing closed.
+        return _plans_for_instruction_inventory(builder, plan, question)
 
     if plan.intent == GraphIntent.PAYMENTS_FOR_INSTRUCTION:
         if not plan.instruction_id:
@@ -265,24 +308,7 @@ def plans_from_graph_query(
         return None
 
     if plan.intent == GraphIntent.INSTRUCTION_INVENTORY:
-        if plan.user_id:
-            return builder.instructions_created_by_user(plan.user_id)
-        if plan.instruction_type:
-            return builder.instruction_list_by_type(
-                instruction_type=plan.instruction_type,
-                lob=plan.owning_lob,
-            )
-        if plan.status:
-            return builder.instruction_list_by_status(
-                status=plan.status,
-                lob=plan.owning_lob,
-            )
-        if plan.instruction_type is None and "SINGLE_USE" in question.upper():
-            return builder.instruction_list_by_type(
-                instruction_type="SINGLE_USE",
-                lob=plan.owning_lob,
-            )
-        return None
+        return _plans_for_instruction_inventory(builder, plan, question)
 
     if plan.intent == GraphIntent.SECURITY_EVENT_RANK:
         if mode != "events":

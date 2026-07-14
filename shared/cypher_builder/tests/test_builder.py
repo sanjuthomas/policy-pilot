@@ -108,6 +108,35 @@ def test_plans_from_graph_query_allows_missing_confidence() -> None:
     assert plans_from_graph_query(plan, mode="events") is not None
 
 
+def test_plans_from_lookup_without_id_remaps_to_inventory() -> None:
+    """Gemini mislabels list questions as instruction_lookup; still build inventory Cypher."""
+    plan = GraphQueryPlan(
+        intent=GraphIntent.INSTRUCTION_LOOKUP,
+        operation="list",
+        domain="instructions",
+        status="APPROVED",
+        instruction_type="SINGLE_USE",
+        confidence=1.0,
+    )
+    planned = plans_from_graph_query(
+        plan,
+        mode="instructions",
+        question="Can you show me the approved single-use instructions in the system?",
+    )
+    assert planned is not None
+    assert planned[0][0] == "instruction_inventory"
+    assert "instruction_type: 'SINGLE_USE'" in planned[0][1]
+
+
+def test_plans_from_lookup_without_filters_still_none() -> None:
+    plan = GraphQueryPlan(
+        intent=GraphIntent.INSTRUCTION_LOOKUP,
+        operation="list",
+        domain="instructions",
+    )
+    assert plans_from_graph_query(plan, mode="instructions", question="show me something") is None
+
+
 def test_plan_graph_queries_total_security_events() -> None:
     planned = plan_graph_queries(
         "How many security events are there in the system?",

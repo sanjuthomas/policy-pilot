@@ -782,6 +782,7 @@ class RagService:
                     "rows": [],
                     "cypher_provenance": "none",
                     "graph_unavailable": True,
+                    "planned": None,
                 }
 
         if planned is not None:
@@ -799,6 +800,7 @@ class RagService:
                     "rows": [],
                     "cypher_provenance": cypher_provenance,
                     "graph_unavailable": True,
+                    "planned": planned,
                 }
 
         # Graph was attempted but no executable plan was produced.
@@ -807,6 +809,7 @@ class RagService:
             "rows": [],
             "cypher_provenance": "none",
             "graph_unavailable": True,
+            "planned": None,
         }
 
     async def _run_planned_graph_queries(
@@ -819,7 +822,7 @@ class RagService:
             validate_read_only_cypher(normalized)
             cyphers.append(normalized)
             rows.extend(await self.neo4j.run_cypher(normalized))
-        return {"cypher": "\n\n".join(cyphers), "rows": rows}
+        return {"cypher": "\n\n".join(cyphers), "rows": rows, "planned": planned}
 
     async def _answer_payment_eligible_approvers(
         self,
