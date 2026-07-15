@@ -1,0 +1,13 @@
+---
+description: Prefer Claude Opus for architecture reviews; avoid GPT assumption-heavy peers
+alwaysApply: true
+---
+
+# Architecture review model preference
+
+When the user asks for an **architecture review**, **critical architecture review**, or similar system-level peer review:
+
+1. **Prefer Claude Opus** (`claude-opus-4-8-thinking-high` or current Opus thinking slug) via Task — grounded, adversarial, fewer false-positive “holes.”
+2. **Do not use GPT-5.6 / Terra** (or similar GPT peer models) for that role. A prior pass over-flagged intentional product/policy design as P1s (corpus investigation, integrity banner contract, malformed CDC early-return, approve→_cancel), burning review cycle on assumptions.
+3. Re-validate prior closures from code; treat demo/product intent as first-class — when uncertain whether a behavior is a bug vs design, **ask or label as question**, do not invent P0/P1s from preference alone.
+4. Deliver the review on a canvas; update score only with evidence and owner-confirmed findings.
