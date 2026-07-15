@@ -12,7 +12,8 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
 
     opa_url: str = "http://localhost:8181"
-    users_file: Path = Path("/app/zitadel-seed/users.yaml")
+    email_domain: str = "ssi.local"
+    user_directory_cache_ttl_seconds: float = 60.0
 
     oidc_issuer_url: str | None = None
     oidc_internal_url: str | None = None

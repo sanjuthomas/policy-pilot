@@ -2,6 +2,8 @@
 
 Loads demo users from `users.yaml` into ZITADEL via the v2 User Management API.
 
+**`users.yaml` is seed-only.** Authz, chat, and the demo harness read the live directory from ZITADEL at runtime (via `shared/zitadel_directory`).
+
 Used after a fresh Docker Compose start (or volume reset) when only bootstrap users exist.
 
 ## Users

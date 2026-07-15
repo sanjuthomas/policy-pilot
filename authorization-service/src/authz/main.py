@@ -32,7 +32,10 @@ eligibility_service: EligibilityService | None = None
 async def lifespan(app: FastAPI):
     global user_directory, eligibility_service
 
-    user_directory = UserDirectory(settings.users_file)
+    user_directory = UserDirectory.from_zitadel(
+        email_domain=settings.email_domain,
+        cache_ttl_seconds=settings.user_directory_cache_ttl_seconds,
+    )
     eligibility_service = EligibilityService(
         users=user_directory,
         opa=OpaClient(),

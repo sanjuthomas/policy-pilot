@@ -29,7 +29,6 @@ class Settings(BaseSettings):
             "INSTRUCTION_SERVICE_API_PREFIX",
         ),
     )
-    users_file: Path = Path(__file__).resolve().parents[3] / "zitadel-seed" / "users.yaml"
     default_password: str = "Password1!"
     email_domain: str = "ssi.local"
     security_events_database: str = "security_events"

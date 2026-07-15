@@ -12,6 +12,7 @@ dependencies = [
     "PyJWT[crypto]>=2.10.0",
     "pyyaml>=6.0.0",
     "ssi-telemetry",
+    "zitadel-directory",
 ]
 
 [project.scripts]
@@ -35,7 +36,7 @@ packages = ["src/authz"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
-pythonpath = ["src", "../shared/platform_auth/src"]
+pythonpath = ["src", "../shared/platform_auth/src", "../shared/zitadel_directory/src"]
 
 [tool.coverage.run]
 omit = ["src/authz/auth.py"]

@@ -69,7 +69,7 @@ Requires at least one approved FICC instruction (run instruction create + approv
 
 ## Authentication
 
-Uses ZITADEL **Session API** with the login-client PAT from bootstrap volume. Demo users are in `zitadel-seed/users.yaml` (password `Password1!`).
+Uses ZITADEL **Session API** with the login-client PAT from bootstrap volume. Demo users are seeded into ZITADEL from `zitadel-seed/users.yaml` (password `Password1!`). Runtime directory queries hit ZITADEL, not the YAML file.
 
 Seed users after a fresh stack:
 
@@ -108,7 +108,8 @@ Fixtures build the **SSI route template** schema (`currency` field, no payment a
 | `PAYMENT_SERVICE_URL` | `http://payment-service:8093` |
 | `ZITADEL_URL` | `http://zitadel-proxy` |
 | `ZITADEL_HOST_HEADER` | `localhost` |
-| `USERS_FILE` | `/app/zitadel-seed/users.yaml` |
+| `EMAIL_DOMAIN` | `ssi.local` |
+| `DEFAULT_PASSWORD` | `Password1!` |
 | `MONGODB_URI` | `mongodb://mongodb:27017/?replicaSet=rs0` |
 | `SECURITY_EVENTS_COLLECTION` | `instruction_service` |
 | `PAYMENT_SECURITY_EVENTS_COLLECTION` | `payment_service` |

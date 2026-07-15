@@ -39,7 +39,7 @@ def _require_pat(settings: Settings) -> str | None:
 
 
 def _clients(settings: Settings) -> tuple[SeedFile, ZitadelAuthClient, InstructionServiceClient]:
-    seed = load_users(settings.users_file)
+    seed = load_users(settings)
     auth = auth_client(settings)
     instruction_service = instruction_service_client(settings)
     return seed, auth, instruction_service
@@ -379,7 +379,7 @@ def run_policy_scenario(
 def _payment_clients(
     settings: Settings,
 ) -> tuple[SeedFile, ZitadelAuthClient, PaymentServiceClient]:
-    seed = load_users(settings.users_file)
+    seed = load_users(settings)
     auth = auth_client(settings)
     ps = payment_client(settings)
     return seed, auth, ps

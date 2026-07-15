@@ -5,7 +5,7 @@ from harness.fixtures import (
     SeedFile,
     SeedUser,
     build_instruction_payload,
-    load_users,
+    load_users_from_yaml,
     user_by_id,
 )
 
@@ -46,6 +46,6 @@ def test_load_users_from_repo_seed() -> None:
     )
     if not users_file.is_file():
         pytest.skip("zitadel-seed/users.yaml not available")
-    seed = load_users(users_file)
+    seed = load_users_from_yaml(users_file)
     assert seed.users
     assert seed.defaults.get("password")

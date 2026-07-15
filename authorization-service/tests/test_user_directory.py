@@ -33,7 +33,7 @@ users:
         encoding="utf-8",
     )
 
-    directory = UserDirectory(users_yaml)
+    directory = UserDirectory.from_yaml(users_yaml)
     candidates = directory.funding_approver_candidates("FICC")
 
     assert [subject.user_id for subject in candidates] == ["pay-201"]
@@ -70,7 +70,7 @@ users:
         encoding="utf-8",
     )
 
-    directory = UserDirectory(users_yaml)
+    directory = UserDirectory.from_yaml(users_yaml)
     members = directory.members_of_group("UP_TO_100_BILLION_CLUB")
 
     assert [user.user_id for user in members] == ["pay-204"]

@@ -23,12 +23,11 @@ users:
 """,
         encoding="utf-8",
     )
-    monkeypatch.setattr("authz.config.settings.users_file", users_file)
 
     from authz import main as main_module
     from authz.user_directory import UserDirectory
 
-    main_module.user_directory = UserDirectory(users_file)
+    main_module.user_directory = UserDirectory.from_yaml(users_file)
 
     response = test_client.get("/api/ui/users")
     assert response.status_code == 200
@@ -56,12 +55,11 @@ users:
 """,
         encoding="utf-8",
     )
-    monkeypatch.setattr("authz.config.settings.users_file", users_file)
 
     from authz import main as main_module
     from authz.user_directory import UserDirectory
 
-    main_module.user_directory = UserDirectory(users_file)
+    main_module.user_directory = UserDirectory.from_yaml(users_file)
 
     response = test_client.get("/api/ui/users", params={"role": "COMPLIANCE_ANALYST"})
     assert response.status_code == 200

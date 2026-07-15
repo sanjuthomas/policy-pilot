@@ -56,6 +56,6 @@ All passwords are `Password1!`. Login names follow `{user_id}@ssi.local`.
 
 Service accounts: `svc-instruction`, `svc-payment` (OBO to authorization-service).
 
-Full roster, payment amount clubs, and metadata keys: `zitadel-seed/users.yaml` and [zitadel-seed/README.md](../zitadel-seed/README.md).
+Full roster, payment amount clubs, and metadata keys: `zitadel-seed/users.yaml` and [zitadel-seed/README.md](../zitadel-seed/README.md). That YAML is **seed-only**; runtime directory and eligibility use ZITADEL.
 
 After changing `users.yaml`, re-seed ZITADEL (`zitadel-seed` container or manual seed script).

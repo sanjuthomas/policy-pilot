@@ -78,7 +78,8 @@ jobs:
             ./shared/sequence_client \
             ./shared/authz_client \
             ./shared/cypher_builder \
-            ./shared/vertex_client
+            ./shared/vertex_client \
+            ./shared/zitadel_directory
 
       - name: Install and run tests with coverage
         working-directory: ${{ matrix.service }}

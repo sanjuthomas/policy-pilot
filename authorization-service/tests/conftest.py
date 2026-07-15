@@ -5,6 +5,7 @@ import os
 import pytest
 from authz.admin import get_admin_subject
 from authz.models import Subject
+from authz.user_directory import UserDirectory
 from fastapi.testclient import TestClient
 
 
@@ -14,16 +15,12 @@ def disable_open_telemetry_for_tests() -> None:
 
 
 @pytest.fixture
-def users_file(tmp_path):
-    path = tmp_path / "users.yaml"
-    path.write_text("users: []\n", encoding="utf-8")
-    return path
-
-
-@pytest.fixture
-def test_client(users_file, monkeypatch):
-    monkeypatch.setattr("authz.config.settings.users_file", users_file)
+def test_client(monkeypatch):
     monkeypatch.setattr("authz.config.settings.oidc_issuer_url", "http://localhost:8080")
+    monkeypatch.setattr(
+        "authz.user_directory.UserDirectory.from_zitadel",
+        classmethod(lambda cls, **kwargs: UserDirectory.from_users([])),
+    )
 
     from authz import main as main_module
 

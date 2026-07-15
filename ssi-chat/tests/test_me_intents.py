@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 from chat_application.auth.capabilities import audience_labels, capabilities_for
 from chat_application.auth.subject import Subject
+from chat_application.auth.users import SeedFile, SeedUser
 from chat_application.me.can_create import (
     answer_can_approve_payment,
     answer_can_create_instruction,
@@ -143,37 +142,15 @@ def test_me_intent_from_router_remaps_covers_when_create() -> None:
     assert intent.covering_lob == "DESK_RATES"
 
 
-def test_answer_who_covers_lob(tmp_path: Path) -> None:
+def test_answer_who_covers_lob() -> None:
     from chat_application.me.who_covers_lob import answer_who_covers_lob
 
-    users_file = tmp_path / "users.yaml"
-    users_file.write_text(
-        """
-users:
-  - user_id: pay-101
-    given_name: Emily
-    family_name: Rodriguez
-    title: Analyst
-    roles: [PAYMENT_CREATOR]
-    groups: [MIDDLE_OFFICE]
-    covering_lobs: [FICC, FX]
-  - user_id: fo-ficc-101
-    given_name: Ava
-    family_name: Chen
-    title: Trader
-    roles: [INSTRUCTION_SUBMITTER]
-    covering_lobs: [FICC]
-  - user_id: pay-fx-only
-    given_name: Sam
-    family_name: Ortiz
-    title: Analyst
-    roles: [PAYMENT_CREATOR]
-    groups: [MIDDLE_OFFICE]
-    covering_lobs: [FX]
-""",
-        encoding="utf-8",
-    )
-    result = answer_who_covers_lob(covering_lob="FICC", users_file=users_file)
+    seed = SeedFile(defaults={"email_domain": "ssi.local"}, users=[
+        SeedUser(user_id='pay-101', given_name='Emily', family_name='Rodriguez', title='Analyst', roles=['PAYMENT_CREATOR'], groups=['MIDDLE_OFFICE'], covering_lobs=['FICC', 'FX']),
+        SeedUser(user_id='fo-ficc-101', given_name='Ava', family_name='Chen', title='Trader', roles=['INSTRUCTION_SUBMITTER'], covering_lobs=['FICC']),
+        SeedUser(user_id='pay-fx-only', given_name='Sam', family_name='Ortiz', title='Analyst', roles=['PAYMENT_CREATOR'], groups=['MIDDLE_OFFICE'], covering_lobs=['FX']),
+    ])
+    result = answer_who_covers_lob(covering_lob="FICC", seed=seed)
     assert result.intent_id == "me.who_covers_lob"
     assert "FICC" in result.answer
     assert "pay-101" in result.answer
@@ -181,44 +158,17 @@ users:
     assert "pay-fx-only" not in result.answer
 
 
-def test_answer_who_can_create_for_fx(tmp_path: Path) -> None:
-    users_file = tmp_path / "users.yaml"
-    users_file.write_text(
-        """
-users:
-  - user_id: pay-101
-    given_name: Emily
-    family_name: Rodriguez
-    title: Analyst
-    roles: [PAYMENT_CREATOR]
-    groups: [MIDDLE_OFFICE, UP_TO_100_MILLION_CLUB]
-    covering_lobs: [FICC, FX]
-  - user_id: fo-fx-101
-    given_name: Jordan
-    family_name: Blake
-    title: Analyst
-    roles: [PAYMENT_CREATOR]
-    lob: FX
-  - user_id: pay-201
-    given_name: Sophie
-    family_name: Laurent
-    title: VP
-    roles: [FUNDING_APPROVER]
-    groups: [MIDDLE_OFFICE, UP_TO_1_BILLION_CLUB]
-    covering_lobs: [FICC, FX]
-  - user_id: mo-100
-    given_name: Sarah
-    family_name: Chen
-    title: Analyst
-    roles: [INSTRUCTION_CREATOR]
-    groups: [MIDDLE_OFFICE]
-""",
-        encoding="utf-8",
-    )
+def test_answer_who_can_create_for_fx() -> None:
+    seed = SeedFile(defaults={"email_domain": "ssi.local"}, users=[
+        SeedUser(user_id='pay-101', given_name='Emily', family_name='Rodriguez', title='Analyst', roles=['PAYMENT_CREATOR'], groups=['MIDDLE_OFFICE', 'UP_TO_100_MILLION_CLUB'], covering_lobs=['FICC', 'FX']),
+        SeedUser(user_id='fo-fx-101', given_name='Jordan', family_name='Blake', title='Analyst', lob='FX', roles=['PAYMENT_CREATOR']),
+        SeedUser(user_id='pay-201', given_name='Sophie', family_name='Laurent', title='VP', roles=['FUNDING_APPROVER'], groups=['MIDDLE_OFFICE', 'UP_TO_1_BILLION_CLUB'], covering_lobs=['FICC', 'FX']),
+        SeedUser(user_id='mo-100', given_name='Sarah', family_name='Chen', title='Analyst', roles=['INSTRUCTION_CREATOR'], groups=['MIDDLE_OFFICE']),
+    ])
     result = answer_who_can_create(
         entity_type="payment",
         covering_lob="FX",
-        users_file=users_file,
+        seed=seed,
     )
     assert result.intent_id == "me.who_can_create.payment"
     assert "`pay-101`" in result.answer
@@ -227,32 +177,15 @@ users:
     assert "`mo-100`" not in result.answer
 
 
-def test_answer_who_can_create_instruction(tmp_path: Path) -> None:
-    users_file = tmp_path / "users.yaml"
-    users_file.write_text(
-        """
-users:
-  - user_id: mo-100
-    given_name: Sarah
-    family_name: Chen
-    title: Analyst
-    roles: [INSTRUCTION_CREATOR]
-    groups: [MIDDLE_OFFICE]
-    supervisor_id: mo-050
-  - user_id: pay-101
-    given_name: Emily
-    family_name: Rodriguez
-    title: Analyst
-    roles: [PAYMENT_CREATOR]
-    groups: [MIDDLE_OFFICE, UP_TO_100_MILLION_CLUB]
-    covering_lobs: [FICC, FX]
-""",
-        encoding="utf-8",
-    )
+def test_answer_who_can_create_instruction() -> None:
+    seed = SeedFile(defaults={"email_domain": "ssi.local"}, users=[
+        SeedUser(user_id='mo-100', given_name='Sarah', family_name='Chen', title='Analyst', supervisor_id='mo-050', roles=['INSTRUCTION_CREATOR'], groups=['MIDDLE_OFFICE']),
+        SeedUser(user_id='pay-101', given_name='Emily', family_name='Rodriguez', title='Analyst', roles=['PAYMENT_CREATOR'], groups=['MIDDLE_OFFICE', 'UP_TO_100_MILLION_CLUB'], covering_lobs=['FICC', 'FX']),
+    ])
     result = answer_who_can_create(
         entity_type="instruction",
         covering_lob="FICC",
-        users_file=users_file,
+        seed=seed,
     )
     assert result.intent_id == "me.who_can_create.instruction"
     assert "`mo-100`" in result.answer
@@ -388,35 +321,12 @@ def test_detect_waiting_for_me() -> None:
 
 
 @pytest.mark.asyncio
-async def test_users_like_me_answer(tmp_path: Path) -> None:
-    users_file = tmp_path / "users.yaml"
-    users_file.write_text(
-        """
-users:
-  - user_id: pay-101
-    given_name: Mina
-    family_name: Okonkwo
-    title: Payment Ops
-    roles: [PAYMENT_CREATOR]
-    groups: [MIDDLE_OFFICE]
-    covering_lobs: [FICC, FX]
-  - user_id: pay-102
-    given_name: Luca
-    family_name: Bianchi
-    title: Payment Ops
-    roles: [PAYMENT_CREATOR]
-    groups: [MIDDLE_OFFICE]
-    covering_lobs: [FICC]
-  - user_id: pay-201
-    given_name: Sophie
-    family_name: Laurent
-    title: VP
-    roles: [FUNDING_APPROVER]
-    groups: [MIDDLE_OFFICE, UP_TO_1_BILLION_CLUB]
-    covering_lobs: [FICC]
-""",
-        encoding="utf-8",
-    )
+async def test_users_like_me_answer() -> None:
+    seed = SeedFile(defaults={"email_domain": "ssi.local"}, users=[
+        SeedUser(user_id='pay-101', given_name='Mina', family_name='Okonkwo', title='Payment Ops', roles=['PAYMENT_CREATOR'], groups=['MIDDLE_OFFICE'], covering_lobs=['FICC', 'FX']),
+        SeedUser(user_id='pay-102', given_name='Luca', family_name='Bianchi', title='Payment Ops', roles=['PAYMENT_CREATOR'], groups=['MIDDLE_OFFICE'], covering_lobs=['FICC']),
+        SeedUser(user_id='pay-201', given_name='Sophie', family_name='Laurent', title='VP', roles=['FUNDING_APPROVER'], groups=['MIDDLE_OFFICE', 'UP_TO_1_BILLION_CLUB'], covering_lobs=['FICC']),
+    ])
     subject = Subject(
         user_id="pay-101",
         given_name="Mina",
@@ -426,34 +336,19 @@ users:
         groups=["MIDDLE_OFFICE"],
         covering_lobs=["FICC", "FX"],
     )
-    result = answer_users_like_me(subject, users_file=users_file)
+    result = answer_users_like_me(subject, seed=seed)
     assert result.intent_id == "me.users_like_me"
     assert "pay-102" in result.answer
     assert "pay-101" not in result.answer.split("Closest matches:")[-1]
 
 
 @pytest.mark.asyncio
-async def test_try_me_intent_users_like_me(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    users_file = tmp_path / "users.yaml"
-    users_file.write_text(
-        """
-users:
-  - user_id: pay-101
-    given_name: Mina
-    family_name: Okonkwo
-    title: Payment Ops
-    roles: [PAYMENT_CREATOR]
-    groups: [MIDDLE_OFFICE]
-  - user_id: pay-102
-    given_name: Luca
-    family_name: Bianchi
-    title: Payment Ops
-    roles: [PAYMENT_CREATOR]
-    groups: [MIDDLE_OFFICE]
-""",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr("chat_application.me.users_like_me.settings.users_file", users_file)
+async def test_try_me_intent_users_like_me(monkeypatch: pytest.MonkeyPatch) -> None:
+    seed = SeedFile(defaults={"email_domain": "ssi.local"}, users=[
+        SeedUser(user_id='pay-101', given_name='Mina', family_name='Okonkwo', title='Payment Ops', roles=['PAYMENT_CREATOR'], groups=['MIDDLE_OFFICE']),
+        SeedUser(user_id='pay-102', given_name='Luca', family_name='Bianchi', title='Payment Ops', roles=['PAYMENT_CREATOR'], groups=['MIDDLE_OFFICE']),
+    ])
+    monkeypatch.setattr("chat_application.me.users_like_me.load_users", lambda **kwargs: seed)
     subject = Subject(
         user_id="pay-101",
         given_name="Mina",

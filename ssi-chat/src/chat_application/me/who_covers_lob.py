@@ -1,22 +1,19 @@
 from __future__ import annotations
 
-from pathlib import Path
-
-from chat_application.auth.users import SeedUser, load_users
-from chat_application.config import settings
+from chat_application.auth.users import SeedFile, SeedUser, load_users
 from chat_application.me.models import MeIntentResult
 
 
 def users_covering_lob(
     covering_lob: str,
     *,
-    users_file: Path | None = None,
+    seed: SeedFile | None = None,
 ) -> list[SeedUser]:
     """All non-service users whose covering_lobs include ``covering_lob``."""
-    seed = load_users(users_file or settings.users_file)
+    roster = seed or load_users()
     lob = covering_lob.strip().upper()
     matches: list[SeedUser] = []
-    for user in seed.users:
+    for user in roster.users:
         if user.user_id.startswith("svc-"):
             continue
         if lob not in {item.upper() for item in user.covering_lobs}:
@@ -29,7 +26,7 @@ def users_covering_lob(
 def answer_who_covers_lob(
     *,
     covering_lob: str | None,
-    users_file: Path | None = None,
+    seed: SeedFile | None = None,
 ) -> MeIntentResult:
     if not covering_lob or not covering_lob.strip():
         return MeIntentResult(
@@ -41,7 +38,7 @@ def answer_who_covers_lob(
         )
 
     lob = covering_lob.strip().upper()
-    matches = users_covering_lob(lob, users_file=users_file)
+    matches = users_covering_lob(lob, seed=seed)
     if not matches:
         return MeIntentResult(
             answer=f"No users in the directory list **{lob}** in their covering LOBs.",

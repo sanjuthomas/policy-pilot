@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from pathlib import Path
 
-from harness.fixtures import load_users
+from harness.fixtures import load_users_from_yaml as load_users
 from harness.helpers import (
     _approver_for_payment,
     _eligible_payment_approvers,

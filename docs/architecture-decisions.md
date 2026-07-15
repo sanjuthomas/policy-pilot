@@ -19,7 +19,7 @@ Every request to the instruction and payment services carries a ZITADEL-issued J
 | `lob` | Owning profit center (FICC, FX, DESK_*) | OPA LOB ownership check |
 | `supervisor_id` | Direct manager's user ID | Inversion-of-control detection in graph |
 
-This metadata is stored in ZITADEL via the `zitadel-seed/seed.py` script, which reads `users.yaml` and calls the ZITADEL admin API to create users and attach metadata. Domain services decode and validate this metadata on every authenticated request.
+This metadata is stored in ZITADEL via the `zitadel-seed/seed.py` script, which reads `users.yaml` and calls the ZITADEL admin API to create users and attach metadata. Domain services decode and validate this metadata on every authenticated request. Authorization-service, chat, and the demo harness also **list** ZITADEL users at runtime for directory / eligibility / me-intent answers — `users.yaml` is seed-only after bootstrap.
 
 **Service accounts** (`svc-instruction`, `svc-payment`) authenticate to authorization-service and (for payment) instruction-service using machine tokens. On user-initiated lifecycle calls, the domain service forwards the user's JWT in `X-On-Behalf-Of` so OPA evaluates policy for the real actor, not the service account.
 

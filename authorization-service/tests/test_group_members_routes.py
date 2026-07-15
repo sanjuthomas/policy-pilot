@@ -14,6 +14,10 @@ from fastapi.testclient import TestClient
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setattr("authz.config.settings.oidc_issuer_url", "http://localhost:8080")
+    monkeypatch.setattr(
+        "authz.user_directory.UserDirectory.from_zitadel",
+        classmethod(lambda cls, **kwargs: UserDirectory.from_users([])),
+    )
     return TestClient(app)
 
 
@@ -57,8 +61,7 @@ def test_group_members_returns_groups_and_covering_lobs(
     client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     users_file = _seed_users(tmp_path)
-    monkeypatch.setattr("authz.config.settings.users_file", users_file)
-    directory = UserDirectory(users_file)
+    directory = UserDirectory.from_yaml(users_file)
 
     compliance = Subject(user_id="comp-001", title="Compliance Analyst", roles=["COMPLIANCE_ANALYST"])
     app.dependency_overrides[get_compliance_subject] = lambda: compliance
@@ -86,8 +89,7 @@ def test_group_members_covering_lob_filter(
     client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     users_file = _seed_users(tmp_path)
-    monkeypatch.setattr("authz.config.settings.users_file", users_file)
-    directory = UserDirectory(users_file)
+    directory = UserDirectory.from_yaml(users_file)
 
     compliance = Subject(user_id="comp-001", title="Compliance Analyst", roles=["COMPLIANCE_ANALYST"])
     app.dependency_overrides[get_compliance_subject] = lambda: compliance

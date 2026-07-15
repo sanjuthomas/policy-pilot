@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 
-from harness.fixtures import load_users
+from harness.fixtures import load_users_from_yaml as load_users
 from harness.helpers import (
     _approver_for_instruction,
     _eligible_instruction_approvers,

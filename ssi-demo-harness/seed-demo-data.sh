@@ -180,7 +180,7 @@ try:
         _fetch_api_payments,
     )
     settings = Settings()
-    seed = load_users(settings.users_file)
+    seed = load_users(settings)
     auth = auth_client(settings)
     instruction_service = instruction_service_client(settings)
     ps = payment_client(settings)

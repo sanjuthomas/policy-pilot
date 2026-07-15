@@ -2,7 +2,7 @@
 
 Stateless **OPA gateway** for the demo stack. Only this service talks to OPA at runtime.
 
-Domain services (instruction-service, payment-service) call authz for lifecycle allow/deny and batch eligible-approvers evaluation. Authz reads candidate users from `zitadel-seed/users.yaml` — it has **no MongoDB** and does not call instruction-service or payment APIs.
+Domain services (instruction-service, payment-service) call authz for lifecycle allow/deny and batch eligible-approvers evaluation. Authz loads the user directory from **ZITADEL** (seeded from `zitadel-seed/users.yaml`) — it has **no MongoDB** and does not call instruction-service or payment APIs.
 
 ## URLs (Docker)
 
@@ -49,7 +49,7 @@ Lifecycle evaluate **requires** `X-On-Behalf-Of` (verified user JWT). An optiona
 
 ### Eligible approvers (service-only)
 
-Batch OPA evaluation over candidates from `users.yaml` ("who can approve?"). No user OBO — service account auth only; compliance auth is enforced on the domain service before it calls authz. This is discovery/reporting, not an approval action.
+Batch OPA evaluation over candidates from the live ZITADEL directory ("who can approve?"). No user OBO — service account auth only; compliance auth is enforced on the domain service before it calls authz. This is discovery/reporting, not an approval action.
 
 | Method | Path | Purpose |
 |--------|------|---------|
@@ -76,7 +76,8 @@ OPA itself is **unauthenticated** in this demo — see root README for productio
 
 | Variable | Default |
 |----------|---------|
-| `USERS_FILE` | `/app/zitadel-seed/users.yaml` |
+| `EMAIL_DOMAIN` | `ssi.local` (login name suffix for directory UI) |
+| `USER_DIRECTORY_CACHE_TTL_SECONDS` | `60` |
 | `AUTHORIZED_SERVICE_USER_IDS` | `svc-instruction,svc-payment` |
 | `OIDC_ISSUER_URL` | `http://localhost:8080` |
 | `ZITADEL_SERVICE_PAT_FILE` | `/zitadel/bootstrap/login-client.pat` |
@@ -89,7 +90,7 @@ pip install -e .
 authorization-service   # :8094
 ```
 
-Requires OPA (with policies seeded), ZITADEL, and `users.yaml` mounted or on disk.
+Requires OPA (with policies seeded) and ZITADEL with demo users seeded (`zitadel-seed`).
 
 ## Docker
 

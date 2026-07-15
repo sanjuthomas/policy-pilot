@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from harness.fixtures import load_users
+from harness.fixtures import load_users_from_yaml as load_users
 from harness.helpers import (
     PaymentOperation,
     _count_payment_security_events,
