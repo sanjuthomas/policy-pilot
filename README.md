@@ -66,6 +66,7 @@ Policy Pilot sits at the end of an event-driven pipeline: domain services enforc
 | **[Sample questions](docs/sample-questions.md)** | Curated demo questions by retrieval path (`graph`, `tools`, `skill`, `vector`), including Policies-mode and create-payment skill examples. |
 | **[Intent determination](docs/intent-determination.md)** | Gemini returns a strict `RouterDecision` (eligibility, graph, vector, or hybrid). Selective retrieval — no blind merge of graph and vector on every question. |
 | **[Data flow](docs/data-flow.md)** | Mongo transactions → Kafka CDC → four ETL pipelines → Neo4j graph + vector store → chat. |
+| **[ETL resilience](ssi-indexer/src/etl/dlq/README.md)** | Mongo DLQ, DLQ-before-commit, pause when quarantine fails, replay scheduler, chat integrity banner. |
 | **[Architecture decisions](docs/architecture-decisions.md)** | Why ZITADEL, OPA, MongoDB, Kafka, Neo4j graph and vector search, Vertex AI, and `cypher_builder`. |
 | **[Authorization audit trail](docs/authorization-audit-trail.md)** | Who / When / Why on past approvals; live *who can approve?* via eligible-approvers APIs. |
 | **[Local development](docs/local-development.md)** | Run services locally, observability, regression evaluation, component map. |
@@ -167,6 +168,14 @@ Full specification, diagrams, example queries, and reload procedure: **[neo4j-gr
 
 ---
 
+## ETL resilience
+
+Kafka consumers in **ssi-indexer** must not silently advance past failed Neo4j / embedding writes. Failures after retries are quarantined in a dedicated Mongo dead-letter store **before** the Kafka offset commits; if the DLQ itself is unavailable, consumers **pause** rather than skip. A scheduler (and admin **Retry Now**) replays stored payloads; chat surfaces lag / pause / active DLQ depth via an integrity banner.
+
+Full design, configuration, ops UI, and data flow: **[Indexer Mongo DLQ](ssi-indexer/src/etl/dlq/README.md)** ([GitHub](https://github.com/sanjuthomas/policy-pilot/blob/main/ssi-indexer/src/etl/dlq/README.md)).
+
+---
+
 ## Quick start
 
 **Prerequisites:** Docker + Docker Compose; GCP project with Vertex AI enabled and a service account key — **[GCP setup](docs/gcp-setup.md)**.
@@ -222,6 +231,7 @@ Demo logins (password `Password1!`): see **[Domain models and demo users](docs/d
 | [docs/opa-controls.md](docs/opa-controls.md) | OPA checks and balances — four-eyes, reporting lines, LOB scope, amount clubs |
 | [docs/intent-determination.md](docs/intent-determination.md) | Route → Retrieve → Synthesize pipeline, `RouterDecision`, observability |
 | [docs/data-flow.md](docs/data-flow.md) | End-to-end pipeline, transactions, storage and Kafka topics |
+| [ssi-indexer/src/etl/dlq/README.md](ssi-indexer/src/etl/dlq/README.md) | ETL resilience — Mongo DLQ, pause-on-failure, replay, integrity banner |
 | [docs/architecture-decisions.md](docs/architecture-decisions.md) | ZITADEL, OPA, MongoDB, Kafka, Neo4j, Vertex, models |
 | [docs/authorization-audit-trail.md](docs/authorization-audit-trail.md) | Who / When / Why, live eligibility |
 | [docs/domain-models.md](docs/domain-models.md) | Instruction and payment models, demo users |
