@@ -47,4 +47,5 @@ class Neo4jDirectHandler:
             ),
             answer_synthesis="formatter",
             intent_id=direct.intent_id,
+            requested_path=ctx.path,
         )

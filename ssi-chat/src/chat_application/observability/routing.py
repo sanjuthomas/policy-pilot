@@ -194,6 +194,7 @@ class AnswerRouting:
     source_channels: dict[str, int] = field(default_factory=dict)
     question_length: int = 0
     question_hash: str = ""
+    requested_path: str | None = None
 
     def to_api(self) -> AnswerRoutingInfo:
         return AnswerRoutingInfo(
@@ -202,6 +203,7 @@ class AnswerRouting:
             answer_synthesis=self.answer_synthesis,
             intent_id=self.intent_id,
             retrieval_strategy=self.retrieval_strategy,
+            requested_path=self.requested_path,
             label=format_routing_label(
                 path=self.path,
                 cypher_provenance=self.cypher_provenance,
@@ -227,6 +229,8 @@ class AnswerRouting:
             "chat.question_length": self.question_length,
             "chat.question_hash": self.question_hash,
         }
+        if self.requested_path and self.requested_path != self.path:
+            fields["chat.requested_path"] = self.requested_path
         for channel, count in self.source_channels.items():
             if count:
                 fields[f"chat.source_{channel}"] = count
@@ -426,6 +430,7 @@ def finalize_chat_response(
     skill_activities: list[str] | None = None,
     skill_confirmation: Any | None = None,
     retry_after_seconds: int | None = None,
+    requested_path: str | None = None,
 ) -> ChatResponse:
     from chat_application.models import SkillConfirmationInfo
 
@@ -438,6 +443,9 @@ def finalize_chat_response(
         source_channels=source_channels,
         graph_row_count=len(graph_rows or []),
     )
+    effective_requested = requested_path
+    if effective_requested == path:
+        effective_requested = None
     routing = AnswerRouting(
         path=path,
         cypher_provenance=cypher_provenance,
@@ -452,6 +460,7 @@ def finalize_chat_response(
         source_channels=source_channels,
         question_length=question_length,
         question_hash=question_hash,
+        requested_path=effective_requested,
     )
     log_answer_routing(routing)
     confirmation: SkillConfirmationInfo | None = None

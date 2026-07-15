@@ -44,6 +44,9 @@ class AnswerRoutingInfo(BaseModel):
     label: str
     intent_id: str | None = None
     retrieval_strategy: str | None = None
+    # RouterDecision.path/strategy before a handler rewrites executed path
+    # (e.g. graph → neo4j_direct). None when they match or were never set.
+    requested_path: str | None = None
 
 
 class SkillConfirmationInfo(BaseModel):
