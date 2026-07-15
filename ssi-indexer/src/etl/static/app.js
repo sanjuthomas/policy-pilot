@@ -320,11 +320,90 @@ function startComponentsPolling() {
   void refreshComponents();
   void refreshChunkStats();
   void refreshSearchProfiles();
+  void refreshDlq();
   componentsTimer = setInterval(() => {
     void refreshComponents();
     void refreshChunkStats();
     void refreshSearchProfiles();
+    void refreshDlq();
   }, 20000);
+}
+
+const dlqSummary = document.getElementById("dlq-summary");
+const dlqBody = document.getElementById("dlq-body");
+const dlqRefreshBtn = document.getElementById("dlq-refresh-btn");
+const dlqRetryBtn = document.getElementById("dlq-retry-btn");
+const dlqResumeBtn = document.getElementById("dlq-resume-btn");
+
+async function refreshDlq() {
+  if (!AdminAuth.getToken()) {
+    if (dlqSummary) dlqSummary.textContent = "Sign in to load DLQ stats.";
+    if (dlqBody) dlqBody.innerHTML = "";
+    return;
+  }
+  try {
+    const [stats, entries] = await Promise.all([
+      AdminAuth.adminFetch("/api/dlq/stats").then((r) => r.json()),
+      AdminAuth.adminFetch("/api/dlq/entries?limit=25").then((r) => r.json()),
+    ]);
+    const by = stats.by_status || {};
+    const paused = stats.any_paused
+      ? ` · consumers paused: ${JSON.stringify(stats.consumers || {})}`
+      : "";
+    if (dlqSummary) {
+      dlqSummary.textContent =
+        `depth=${stats.depth || 0} · pending=${by.pending || 0} · ` +
+        `processing=${by.processing || 0} · exhausted=${by.exhausted || 0} · ` +
+        `processed=${by.processed || 0} · poison=${by.poison || 0}` +
+        paused;
+    }
+    if (dlqBody) {
+      const rows = entries.entries || [];
+      dlqBody.innerHTML = rows
+        .map((e) => {
+          const k = e.kafka || {};
+          return `<tr>
+            <td>${e.status || ""}</td>
+            <td>${e.pipeline_kind || ""}</td>
+            <td>${e.event_id || e.entity_id || "—"}</td>
+            <td>${e.attempts ?? 0}/${e.max_attempts ?? "?"}</td>
+            <td title="${(e.last_error || e.error_message || "").replaceAll('"', "'")}">${
+              (e.last_error || e.error_message || "").slice(0, 80)
+            }</td>
+            <td>${k.topic || ""}:${k.partition ?? ""}:${k.offset ?? ""}</td>
+          </tr>`;
+        })
+        .join("");
+    }
+  } catch (error) {
+    if (dlqSummary) dlqSummary.textContent = `DLQ load failed: ${error.message}`;
+  }
+}
+
+if (dlqRefreshBtn) {
+  dlqRefreshBtn.addEventListener("click", () => void refreshDlq());
+}
+if (dlqRetryBtn) {
+  dlqRetryBtn.addEventListener("click", async () => {
+    if (!AdminAuth.getToken()) return;
+    await AdminAuth.adminFetch("/api/dlq/reset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: "ops_ui_retry_now" }),
+    });
+    await refreshDlq();
+  });
+}
+if (dlqResumeBtn) {
+  dlqResumeBtn.addEventListener("click", async () => {
+    if (!AdminAuth.getToken()) return;
+    await AdminAuth.adminFetch("/api/dlq/resume-consumers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    await refreshDlq();
+  });
 }
 
 // ── Indexed text size monitor ─────────────────────────────────────────────

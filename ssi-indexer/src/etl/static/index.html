@@ -33,6 +33,39 @@
       </div>
     </section>
 
+    <section class="panel chunk-stats-panel" aria-label="Dead letter queue">
+      <div class="chunk-stats-header">
+        <div>
+          <h2>Dead letter queue</h2>
+          <p class="panel-intro">
+            Failed Kafka index writes are quarantined here with full payloads for replay.
+            Scheduler reprocesses pending rows; use <strong>Retry now</strong> after infra recovery.
+          </p>
+        </div>
+        <div>
+          <button type="button" id="dlq-refresh-btn" class="btn btn-ghost">Refresh</button>
+          <button type="button" id="dlq-retry-btn" class="btn-primary">Retry now</button>
+          <button type="button" id="dlq-resume-btn" class="btn btn-ghost">Resume consumers</button>
+        </div>
+      </div>
+      <div id="dlq-summary" class="chunk-stats-summary muted">Sign in to load DLQ stats.</div>
+      <div class="chunk-stats-table-wrap" style="margin-top:1rem;">
+        <table class="chunk-stats-table" aria-label="DLQ entries">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Pipeline</th>
+              <th>Event</th>
+              <th>Attempts</th>
+              <th>Error</th>
+              <th>Kafka</th>
+            </tr>
+          </thead>
+          <tbody id="dlq-body"></tbody>
+        </table>
+      </div>
+    </section>
+
     <section class="panel chunk-stats-panel" aria-label="Vector index text size monitor">
       <div class="chunk-stats-header">
         <div>
@@ -201,6 +234,6 @@
     </section>
 
     <script src="/static/admin-auth.js?v=1"></script>
-    <script src="/static/app.js?v=9"></script>
+    <script src="/static/app.js?v=10"></script>
   </body>
 </html>

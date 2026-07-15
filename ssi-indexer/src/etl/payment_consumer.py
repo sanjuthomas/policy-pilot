@@ -5,27 +5,36 @@ import logging
 from typing import Any
 
 from aiokafka import AIOKafkaConsumer
-from neo4j.exceptions import TransientError
 from telemetry.redaction import redact_value
 
 from etl.config import settings
+from etl.dlq.models import PipelineKind
+from etl.dlq.pause import pause_registry
+from etl.dlq.runtime import process_kafka_message
+from etl.dlq.store import DlqStore
+from etl.instruction_consumer import _estimated_lag
 from etl.kafka_deserialize import deserialize_kafka_json
 from etl.mongo_cdc import normalize_payment_message, normalize_security_event
 from etl.payment_pipeline import PaymentFactPipeline, PaymentSecurityEventPipeline
 
 logger = logging.getLogger(__name__)
 
-_MAX_RETRIES = 5
-_RETRY_BASE_DELAY = 0.2
-
 
 class PaymentSecurityEventKafkaConsumer:
     """Consumes PaymentSecurityEvent messages from the payment_security_events topic."""
 
-    def __init__(self, pipeline: PaymentSecurityEventPipeline) -> None:
+    def __init__(self, pipeline: PaymentSecurityEventPipeline, dlq: DlqStore) -> None:
         self.pipeline = pipeline
+        self.dlq = dlq
         self._consumer: AIOKafkaConsumer | None = None
         self._task: asyncio.Task | None = None
+        pause_registry.register_replay(
+            PipelineKind.PAYMENT_SECURITY_EVENT,
+            self._replay,
+        )
+
+    async def _replay(self, payload: dict[str, Any]) -> None:
+        await self._handle_message(payload)
 
     async def start(self) -> None:
         if not settings.kafka_enabled:
@@ -60,44 +69,37 @@ class PaymentSecurityEventKafkaConsumer:
             await self._consumer.stop()
             self._consumer = None
 
+    async def estimated_lag(self) -> int:
+        return await _estimated_lag(self._consumer)
+
     async def _run(self) -> None:
         assert self._consumer is not None
         try:
             async for message in self._consumer:
-                for attempt in range(1, _MAX_RETRIES + 1):
-                    try:
-                        await self._handle_message(message.value)
-                        await self._consumer.commit()
-                        break
-                    except TransientError as exc:
-                        if attempt < _MAX_RETRIES:
-                            delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
-                            logger.warning(
-                                "Neo4j transient error offset=%s attempt=%s/%s — retrying in %.2fs: %s",
-                                message.offset, attempt, _MAX_RETRIES, delay, exc,
-                            )
-                            await asyncio.sleep(delay)
-                        else:
-                            logger.exception(
-                                "Neo4j transient error persists offset=%s — skipping",
-                                message.offset,
-                            )
-                    except Exception:
-                        logger.exception(
-                            "failed to process payment security event offset=%s — skipping",
-                            message.offset,
-                        )
-                        break
+                await process_kafka_message(
+                    message=message,
+                    consumer=self._consumer,
+                    consumer_name="payment_security_event",
+                    pipeline_kind=PipelineKind.PAYMENT_SECURITY_EVENT,
+                    consumer_group=settings.kafka_payment_security_events_consumer_group,
+                    topic=settings.kafka_payment_security_events_topic,
+                    handler=self._handle_message,
+                    dlq=self.dlq,
+                )
         except asyncio.CancelledError:
             raise
 
     async def _handle_message(self, payload: dict[str, Any]) -> None:
         if not isinstance(payload, dict):
-            logger.warning("skipping invalid payment security event payload: %s", redact_value(payload))
+            logger.warning(
+                "skipping invalid payment security event payload: %s", redact_value(payload)
+            )
             return
         event = normalize_security_event(payload)
         if "event_id" not in event:
-            logger.warning("skipping invalid payment security event payload: %s", redact_value(payload))
+            logger.warning(
+                "skipping invalid payment security event payload: %s", redact_value(payload)
+            )
             return
         await self.pipeline.process(event)
 
@@ -105,10 +107,18 @@ class PaymentSecurityEventKafkaConsumer:
 class PaymentFactKafkaConsumer:
     """Consumes payment fact snapshots from the payments topic."""
 
-    def __init__(self, pipeline: PaymentFactPipeline) -> None:
+    def __init__(self, pipeline: PaymentFactPipeline, dlq: DlqStore) -> None:
         self.pipeline = pipeline
+        self.dlq = dlq
         self._consumer: AIOKafkaConsumer | None = None
         self._task: asyncio.Task | None = None
+        pause_registry.register_replay(
+            PipelineKind.PAYMENT_FACT,
+            self._replay,
+        )
+
+    async def _replay(self, payload: dict[str, Any]) -> None:
+        await self._handle_message(payload)
 
     async def start(self) -> None:
         if not settings.kafka_enabled:
@@ -143,34 +153,23 @@ class PaymentFactKafkaConsumer:
             await self._consumer.stop()
             self._consumer = None
 
+    async def estimated_lag(self) -> int:
+        return await _estimated_lag(self._consumer)
+
     async def _run(self) -> None:
         assert self._consumer is not None
         try:
             async for message in self._consumer:
-                for attempt in range(1, _MAX_RETRIES + 1):
-                    try:
-                        await self._handle_message(message.value)
-                        await self._consumer.commit()
-                        break
-                    except TransientError as exc:
-                        if attempt < _MAX_RETRIES:
-                            delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
-                            logger.warning(
-                                "Neo4j transient error offset=%s attempt=%s/%s — retrying in %.2fs: %s",
-                                message.offset, attempt, _MAX_RETRIES, delay, exc,
-                            )
-                            await asyncio.sleep(delay)
-                        else:
-                            logger.exception(
-                                "Neo4j transient error persists offset=%s — skipping",
-                                message.offset,
-                            )
-                    except Exception:
-                        logger.exception(
-                            "failed to process payment fact offset=%s — skipping",
-                            message.offset,
-                        )
-                        break
+                await process_kafka_message(
+                    message=message,
+                    consumer=self._consumer,
+                    consumer_name="payment_fact",
+                    pipeline_kind=PipelineKind.PAYMENT_FACT,
+                    consumer_group=settings.kafka_payments_consumer_group,
+                    topic=settings.kafka_payments_topic,
+                    handler=self._handle_message,
+                    dlq=self.dlq,
+                )
         except asyncio.CancelledError:
             raise
 

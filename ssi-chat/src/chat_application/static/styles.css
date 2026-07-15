@@ -647,6 +647,20 @@ body {
   margin-bottom: 0.85rem;
 }
 
+.index-integrity-banner {
+  margin: 0;
+  padding: 0.65rem 1.25rem;
+  border-bottom: 1px solid var(--border, #d6d3d1);
+  background: color-mix(in srgb, #b45309 12%, transparent);
+  color: #44403c;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.index-integrity-banner.hidden {
+  display: none;
+}
+
 .rate-limit-pulse {
   flex: 0 0 auto;
   width: 0.7rem;

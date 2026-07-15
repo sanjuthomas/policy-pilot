@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     authorization_service_url: str = "http://authorization-service:8094"
     payment_service_url: str = "http://payment-service:8093"
     instruction_service_url: str = "http://instruction-service:8000"
+    indexer_url: str = "http://ssi-indexer:8090"
     email_domain: str = "ssi.local"
     user_directory_cache_ttl_seconds: float = 60.0
     zitadel_url: str = "http://zitadel-proxy"

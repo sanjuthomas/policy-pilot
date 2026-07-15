@@ -16,6 +16,18 @@ from etl.payment_consumer import (
 from neo4j.exceptions import TransientError
 
 
+def _mock_dlq(*, insert_ok: bool = True) -> AsyncMock:
+    dlq = AsyncMock()
+    dlq.enabled = True
+    dlq._col = MagicMock()
+    if insert_ok:
+        dlq.insert_failure = AsyncMock(return_value="dlq-1")
+    else:
+        dlq.insert_failure = AsyncMock(side_effect=RuntimeError("mongo down"))
+    dlq.ping = AsyncMock(return_value=True)
+    return dlq
+
+
 def _one_message_consumer(consumer, message):
     async def one_message():
         yield message
@@ -28,7 +40,7 @@ def _one_message_consumer(consumer, message):
 
 async def test_instruction_consumer_kafka_disabled():
     pipeline = MagicMock()
-    consumer = InstructionKafkaConsumer(pipeline)
+    consumer = InstructionKafkaConsumer(pipeline, _mock_dlq())
     with patch("etl.instruction_consumer.settings") as mock_settings:
         mock_settings.kafka_enabled = False
         await consumer.start()
@@ -41,7 +53,7 @@ async def _pending_task() -> None:
 
 async def test_instruction_consumer_start_and_close():
     pipeline = MagicMock()
-    consumer = InstructionKafkaConsumer(pipeline)
+    consumer = InstructionKafkaConsumer(pipeline, _mock_dlq())
     mock_kafka = AsyncMock()
     mock_kafka.start = AsyncMock()
     mock_kafka.stop = AsyncMock()
@@ -70,7 +82,7 @@ async def test_instruction_consumer_start_and_close():
 
 async def test_instruction_consumer_handle_invalid_payload():
     pipeline = AsyncMock()
-    consumer = InstructionKafkaConsumer(pipeline)
+    consumer = InstructionKafkaConsumer(pipeline, _mock_dlq())
     await consumer._handle_message("not-a-dict")
     await consumer._handle_message({"missing": "instruction_id"})
     pipeline.process_instruction_fact.assert_not_called()
@@ -78,7 +90,7 @@ async def test_instruction_consumer_handle_invalid_payload():
 
 async def test_instruction_consumer_handle_versioned_mongo_payload():
     pipeline = AsyncMock()
-    consumer = InstructionKafkaConsumer(pipeline)
+    consumer = InstructionKafkaConsumer(pipeline, _mock_dlq())
     mongo_doc = {
         "_id": "instr-1|2",
         "version_number": 2,
@@ -99,7 +111,7 @@ async def test_instruction_consumer_handle_versioned_mongo_payload():
 
 async def test_instruction_consumer_handle_valid_payload():
     pipeline = AsyncMock()
-    consumer = InstructionKafkaConsumer(pipeline)
+    consumer = InstructionKafkaConsumer(pipeline, _mock_dlq())
     fact = {"instruction_id": "i1"}
     await consumer._handle_message(fact)
     pipeline.process_instruction_fact.assert_awaited_once_with(fact)
@@ -107,7 +119,7 @@ async def test_instruction_consumer_handle_valid_payload():
 
 async def test_instruction_security_event_consumer_handle():
     pipeline = AsyncMock()
-    consumer = InstructionSecurityEventKafkaConsumer(pipeline)
+    consumer = InstructionSecurityEventKafkaConsumer(pipeline, _mock_dlq())
     await consumer._handle_message({})
     pipeline.process_instruction_security_event.assert_not_called()
 
@@ -125,7 +137,7 @@ async def test_instruction_security_event_consumer_handle():
 
 async def test_instruction_security_event_consumer_start_and_run():
     pipeline = AsyncMock()
-    consumer = InstructionSecurityEventKafkaConsumer(pipeline)
+    consumer = InstructionSecurityEventKafkaConsumer(pipeline, _mock_dlq())
     mock_kafka = AsyncMock()
     mock_kafka.start = AsyncMock()
     mock_kafka.stop = AsyncMock()
@@ -155,7 +167,7 @@ async def test_instruction_security_event_consumer_start_and_run():
 
 
 async def test_instruction_security_event_consumer_close_stops_task_and_consumer():
-    consumer = InstructionSecurityEventKafkaConsumer(AsyncMock())
+    consumer = InstructionSecurityEventKafkaConsumer(AsyncMock(), _mock_dlq())
     kafka = AsyncMock()
     consumer._consumer = kafka
     consumer._task = asyncio.create_task(_pending_task())
@@ -173,32 +185,80 @@ async def test_instruction_security_event_consumer_run_retries_transient_error()
         TransientError("deadlock"),
         None,
     ]
-    consumer = InstructionSecurityEventKafkaConsumer(pipeline)
+    consumer = InstructionSecurityEventKafkaConsumer(pipeline, _mock_dlq())
     message = MagicMock(value={"event_id": "evt-1"}, offset=0, partition=0)
     _one_message_consumer(consumer, message)
 
-    with patch("etl.instruction_security_event_consumer.asyncio.sleep", AsyncMock()):
+    with (
+        patch("etl.dlq.runtime.asyncio.sleep", AsyncMock()),
+        patch("etl.dlq.runtime.settings") as mock_settings,
+    ):
+        mock_settings.kafka_retry_max_attempts = 5
+        mock_settings.kafka_retry_base_delay_seconds = 0.01
+        mock_settings.kafka_retry_max_delay_seconds = 1.0
+        mock_settings.dlq_pause_poll_seconds = 0.01
         await consumer._run()
 
     assert pipeline.process_instruction_security_event.await_count == 2
     consumer._consumer.commit.assert_awaited_once()
 
 
-async def test_instruction_security_event_consumer_run_skips_generic_error():
+async def test_instruction_security_event_consumer_run_quarantines_generic_error():
     pipeline = AsyncMock()
     pipeline.process_instruction_security_event.side_effect = RuntimeError("bad event")
-    consumer = InstructionSecurityEventKafkaConsumer(pipeline)
+    dlq = _mock_dlq()
+    consumer = InstructionSecurityEventKafkaConsumer(pipeline, dlq)
     message = MagicMock(value={"event_id": "evt-1"}, offset=0, partition=0)
     _one_message_consumer(consumer, message)
 
-    await consumer._run()
+    with patch("etl.dlq.runtime.settings") as mock_settings:
+        mock_settings.kafka_retry_max_attempts = 2
+        mock_settings.kafka_retry_base_delay_seconds = 0.01
+        mock_settings.kafka_retry_max_delay_seconds = 1.0
+        mock_settings.dlq_pause_poll_seconds = 0.01
+        await consumer._run()
+
+    dlq.insert_failure.assert_awaited_once()
+    consumer._consumer.commit.assert_awaited_once()
+
+
+async def test_consumer_pauses_when_dlq_write_fails():
+    from etl.dlq.pause import pause_registry
+
+    pipeline = AsyncMock()
+    pipeline.process_instruction_security_event.side_effect = RuntimeError("bad event")
+    dlq = _mock_dlq(insert_ok=False)
+    consumer = InstructionSecurityEventKafkaConsumer(pipeline, dlq)
+    message = MagicMock(value={"event_id": "evt-1"}, offset=0, partition=0)
+    _one_message_consumer(consumer, message)
+
+    async def _stop_pause(*_args, **_kwargs):
+        pause_registry.clear_paused("instruction_security_event")
+        # After clear, next loop would retry forever — cancel by raising CancelledError
+        # once pause cleared on next sleep. Use side_effect list instead.
+
+    with (
+        patch("etl.dlq.runtime.settings") as mock_settings,
+        patch("etl.dlq.runtime.asyncio.sleep", AsyncMock(side_effect=[None, asyncio.CancelledError()])),
+    ):
+        mock_settings.kafka_retry_max_attempts = 1
+        mock_settings.kafka_retry_base_delay_seconds = 0.01
+        mock_settings.kafka_retry_max_delay_seconds = 1.0
+        mock_settings.dlq_pause_poll_seconds = 0.01
+        pause_registry.clear_paused("instruction_security_event")
+        try:
+            await consumer._run()
+        except asyncio.CancelledError:
+            pass
 
     consumer._consumer.commit.assert_not_awaited()
+    assert pause_registry.is_paused("instruction_security_event")
+    pause_registry.clear_paused("instruction_security_event")
 
 
 async def test_payment_security_event_consumer_handle():
     pipeline = AsyncMock()
-    consumer = PaymentSecurityEventKafkaConsumer(pipeline)
+    consumer = PaymentSecurityEventKafkaConsumer(pipeline, _mock_dlq())
     await consumer._handle_message("bad")
     pipeline.process.assert_not_called()
 
@@ -209,7 +269,7 @@ async def test_payment_security_event_consumer_handle():
 
 async def test_payment_security_event_consumer_start_close_and_run():
     pipeline = AsyncMock()
-    consumer = PaymentSecurityEventKafkaConsumer(pipeline)
+    consumer = PaymentSecurityEventKafkaConsumer(pipeline, _mock_dlq())
     mock_kafka = AsyncMock()
     mock_kafka.start = AsyncMock()
     mock_kafka.stop = AsyncMock()
@@ -241,7 +301,7 @@ async def test_payment_security_event_consumer_start_close_and_run():
 
 async def test_payment_fact_consumer_handle():
     pipeline = AsyncMock()
-    consumer = PaymentFactKafkaConsumer(pipeline)
+    consumer = PaymentFactKafkaConsumer(pipeline, _mock_dlq())
     await consumer._handle_message({})
     pipeline.process.assert_not_called()
 
@@ -252,7 +312,7 @@ async def test_payment_fact_consumer_handle():
 
 async def test_payment_fact_consumer_versioned_mongo_payload():
     pipeline = AsyncMock()
-    consumer = PaymentFactKafkaConsumer(pipeline)
+    consumer = PaymentFactKafkaConsumer(pipeline, _mock_dlq())
     mongo_doc = {
         "_id": "pay-1|2",
         "version_number": 2,
@@ -268,7 +328,7 @@ async def test_payment_fact_consumer_versioned_mongo_payload():
 
 async def test_payment_fact_consumer_start_and_run():
     pipeline = AsyncMock()
-    consumer = PaymentFactKafkaConsumer(pipeline)
+    consumer = PaymentFactKafkaConsumer(pipeline, _mock_dlq())
     mock_kafka = AsyncMock()
     mock_kafka.start = AsyncMock()
     mock_kafka.stop = AsyncMock()
@@ -295,13 +355,13 @@ async def test_payment_fact_consumer_start_and_run():
 
 
 async def test_instruction_consumer_close_without_start():
-    consumer = InstructionKafkaConsumer(MagicMock())
+    consumer = InstructionKafkaConsumer(MagicMock(), _mock_dlq())
     await consumer.close()
     assert consumer._consumer is None
 
 
 async def test_instruction_security_event_consumer_kafka_disabled():
-    consumer = InstructionSecurityEventKafkaConsumer(AsyncMock())
+    consumer = InstructionSecurityEventKafkaConsumer(AsyncMock(), _mock_dlq())
     with patch("etl.instruction_security_event_consumer.settings") as mock_settings:
         mock_settings.kafka_enabled = False
         await consumer.start()
@@ -309,7 +369,7 @@ async def test_instruction_security_event_consumer_kafka_disabled():
 
 
 async def test_payment_security_event_consumer_kafka_disabled():
-    consumer = PaymentSecurityEventKafkaConsumer(AsyncMock())
+    consumer = PaymentSecurityEventKafkaConsumer(AsyncMock(), _mock_dlq())
     with patch("etl.payment_consumer.settings") as mock_settings:
         mock_settings.kafka_enabled = False
         await consumer.start()
@@ -317,7 +377,7 @@ async def test_payment_security_event_consumer_kafka_disabled():
 
 
 async def test_payment_fact_consumer_kafka_disabled():
-    consumer = PaymentFactKafkaConsumer(AsyncMock())
+    consumer = PaymentFactKafkaConsumer(AsyncMock(), _mock_dlq())
     with patch("etl.payment_consumer.settings") as mock_settings:
         mock_settings.kafka_enabled = False
         await consumer.start()
@@ -330,66 +390,96 @@ async def test_instruction_consumer_run_retries_transient_error():
         TransientError("deadlock"),
         None,
     ]
-    consumer = InstructionKafkaConsumer(pipeline)
+    consumer = InstructionKafkaConsumer(pipeline, _mock_dlq())
     message = MagicMock()
     message.value = {"instruction_id": "i1"}
     message.offset = 0
     message.partition = 0
     _one_message_consumer(consumer, message)
 
-    with patch("etl.instruction_consumer.asyncio.sleep", AsyncMock()):
+    with (
+        patch("etl.dlq.runtime.asyncio.sleep", AsyncMock()),
+        patch("etl.dlq.runtime.settings") as mock_settings,
+    ):
+        mock_settings.kafka_retry_max_attempts = 5
+        mock_settings.kafka_retry_base_delay_seconds = 0.01
+        mock_settings.kafka_retry_max_delay_seconds = 1.0
+        mock_settings.dlq_pause_poll_seconds = 0.01
         await consumer._run()
 
     assert pipeline.process_instruction_fact.await_count == 2
     consumer._consumer.commit.assert_awaited_once()
 
 
-async def test_instruction_consumer_run_skips_after_generic_error():
+async def test_instruction_consumer_run_quarantines_after_generic_error():
     pipeline = AsyncMock()
     pipeline.process_instruction_fact.side_effect = RuntimeError("boom")
-    consumer = InstructionKafkaConsumer(pipeline)
+    dlq = _mock_dlq()
+    consumer = InstructionKafkaConsumer(pipeline, dlq)
     message = MagicMock()
     message.value = {"instruction_id": "i1"}
     message.offset = 0
     message.partition = 0
     _one_message_consumer(consumer, message)
-    await consumer._run()
+    with patch("etl.dlq.runtime.settings") as mock_settings:
+        mock_settings.kafka_retry_max_attempts = 1
+        mock_settings.kafka_retry_base_delay_seconds = 0.01
+        mock_settings.kafka_retry_max_delay_seconds = 1.0
+        mock_settings.dlq_pause_poll_seconds = 0.01
+        await consumer._run()
     pipeline.process_instruction_fact.assert_awaited_once()
-    consumer._consumer.commit.assert_not_awaited()
+    dlq.insert_failure.assert_awaited_once()
+    consumer._consumer.commit.assert_awaited_once()
 
 
 async def test_payment_fact_consumer_run_exhausts_transient_retries():
     pipeline = AsyncMock()
     pipeline.process.side_effect = TransientError("deadlock")
-    consumer = PaymentFactKafkaConsumer(pipeline)
+    dlq = _mock_dlq()
+    consumer = PaymentFactKafkaConsumer(pipeline, dlq)
     message = MagicMock()
     message.value = {"payment_id": "p1"}
     message.offset = 0
     message.partition = 0
     _one_message_consumer(consumer, message)
 
-    with patch("etl.payment_consumer.asyncio.sleep", AsyncMock()):
+    with (
+        patch("etl.dlq.runtime.asyncio.sleep", AsyncMock()),
+        patch("etl.dlq.runtime.settings") as mock_settings,
+    ):
+        mock_settings.kafka_retry_max_attempts = 5
+        mock_settings.kafka_retry_base_delay_seconds = 0.01
+        mock_settings.kafka_retry_max_delay_seconds = 1.0
+        mock_settings.dlq_pause_poll_seconds = 0.01
         await consumer._run()
 
     assert pipeline.process.await_count == 5
-    consumer._consumer.commit.assert_not_awaited()
+    dlq.insert_failure.assert_awaited_once()
+    consumer._consumer.commit.assert_awaited_once()
 
 
 async def test_payment_security_event_consumer_run_generic_error():
     pipeline = AsyncMock()
     pipeline.process.side_effect = ValueError("bad event")
-    consumer = PaymentSecurityEventKafkaConsumer(pipeline)
+    dlq = _mock_dlq()
+    consumer = PaymentSecurityEventKafkaConsumer(pipeline, dlq)
     message = MagicMock()
     message.value = {"event_id": "e1"}
     message.offset = 0
     message.partition = 0
     _one_message_consumer(consumer, message)
-    await consumer._run()
-    consumer._consumer.commit.assert_not_awaited()
+    with patch("etl.dlq.runtime.settings") as mock_settings:
+        mock_settings.kafka_retry_max_attempts = 1
+        mock_settings.kafka_retry_base_delay_seconds = 0.01
+        mock_settings.kafka_retry_max_delay_seconds = 1.0
+        mock_settings.dlq_pause_poll_seconds = 0.01
+        await consumer._run()
+    dlq.insert_failure.assert_awaited_once()
+    consumer._consumer.commit.assert_awaited_once()
 
 
 async def test_instruction_security_event_consumer_invalid_payload_type():
     pipeline = AsyncMock()
-    consumer = InstructionSecurityEventKafkaConsumer(pipeline)
+    consumer = InstructionSecurityEventKafkaConsumer(pipeline, _mock_dlq())
     await consumer._handle_message("not-json")
     pipeline.process_instruction_security_event.assert_not_called()
