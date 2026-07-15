@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from chat_application.observability.routing import (
@@ -150,6 +150,75 @@ class TestFinalizeChatResponse:
         assert getattr(record, "chat.path", None) == "full_rag"
         assert getattr(record, "chat.retrieval_strategy", None) == "graph"
         assert getattr(record, "chat.cypher_provenance", None) == "llm_graph_plan"
+
+
+class TestRequestedVsExecutedPath:
+    def test_finalize_preserves_requested_path_when_overridden(self) -> None:
+        response = finalize_chat_response(
+            "Who created 20260703-FICC-I-1?",
+            "events",
+            answer="Walsh created it.",
+            retrieval_ms=5.0,
+            generation_ms=0.0,
+            path="neo4j_direct",
+            cypher_provenance="predefined_yaml",
+            answer_synthesis="formatter",
+            intent_id="instruction.creator_by_id",
+            requested_path="graph",
+        )
+        assert response.routing is not None
+        assert response.routing.path == "neo4j_direct"
+        assert response.routing.requested_path == "graph"
+        assert response.routing.retrieval_strategy == "deterministic"
+
+    def test_finalize_clears_requested_path_when_same_as_executed(self) -> None:
+        response = finalize_chat_response(
+            "Who created 20260703-FICC-I-1?",
+            "events",
+            answer="Walsh created it.",
+            retrieval_ms=5.0,
+            generation_ms=0.0,
+            path="neo4j_direct",
+            cypher_provenance="predefined_yaml",
+            answer_synthesis="formatter",
+            requested_path="neo4j_direct",
+        )
+        assert response.routing is not None
+        assert response.routing.path == "neo4j_direct"
+        assert response.routing.requested_path is None
+
+    @pytest.mark.asyncio
+    async def test_neo4j_direct_handler_records_requested_path(self) -> None:
+        from chat_application.pipeline.handlers.base import HandlerContext
+        from chat_application.pipeline.handlers.neo4j_direct import Neo4jDirectHandler
+        from chat_application.pipeline.models import RouterDecision
+
+        direct = MagicMock()
+        direct.answer = "creator: Walsh"
+        direct.cypher = "MATCH ..."
+        direct.graph_rows = [{"instruction_id": "i1"}]
+        direct.intent_id = "instruction.creator_by_id"
+        direct.source = "yaml"
+
+        service = MagicMock()
+        service._try_neo4j_direct_answer = AsyncMock(return_value=direct)
+        ctx = HandlerContext(
+            service=service,
+            message="Who created i1?",
+            history=[],
+            mode="events",
+            decision=RouterDecision(path="graph", strategy="graph"),
+            subject=None,
+            capabilities=MagicMock(),
+            bearer_token=None,
+            session_id=None,
+            started=0.0,
+        )
+        response = await Neo4jDirectHandler().handle(ctx)
+        assert response is not None
+        assert response.routing is not None
+        assert response.routing.path == "neo4j_direct"
+        assert response.routing.requested_path == "graph"
 
 
 class TestRagRoutingIntegration:

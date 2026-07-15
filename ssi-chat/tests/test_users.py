@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from chat_application.auth.users import SeedFile, SeedUser, chat_users, clear_directory_cache, compliance_users
+from chat_application.auth.users import (
+    SeedFile,
+    SeedUser,
+    chat_users,
+    clear_directory_cache,
+    compliance_users,
+)
 
 
 def _seed(*users: SeedUser, email_domain: str = "ssi.local") -> SeedFile:

@@ -144,13 +144,14 @@ ruff check src/ --select E,F,W,I --ignore E501
 inside each service directory listed in the lint matrix:
 
 - `instruction-service`
+- `payment-service`
 - `authorization-service`
 - `sequence-service`
 - `ssi-chat`
 - `ssi-indexer`
 - `ssi-demo-harness`
 
-It also builds Docker images for the application services. Keep `payment-service` lint-clean even though it is not in the Docker build matrix yet.
+It also builds Docker images for those application services (including `payment-service`) and runs Rego unit tests under `opa-policy-seed/policies` via the official OPA image.
 
 The same workflow runs **unit test coverage** (≥ 80% line coverage) for:
 

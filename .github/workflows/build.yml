@@ -16,6 +16,7 @@ jobs:
       matrix:
         service:
           - instruction-service
+          - payment-service
           - authorization-service
           - sequence-service
           - ssi-chat
@@ -120,6 +121,9 @@ jobs:
           - service: instruction-service
             context: .
             dockerfile: instruction-service/Dockerfile
+          - service: payment-service
+            context: .
+            dockerfile: payment-service/Dockerfile
           - service: authorization-service
             context: .
             dockerfile: authorization-service/Dockerfile
@@ -151,3 +155,17 @@ jobs:
           tags: ${{ matrix.service }}:ci
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,scope=${{ matrix.service }},mode=max
+
+  # ── OPA policy unit tests (SoD / approval rules) ───────────────────────────
+  opa-test:
+    name: OPA policy tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Rego unit tests
+        run: |
+          docker run --rm --platform linux/amd64 \
+            -v "${{ github.workspace }}/opa-policy-seed/policies:/policies:ro" \
+            openpolicyagent/opa:1.4.2 \
+            test /policies -v
