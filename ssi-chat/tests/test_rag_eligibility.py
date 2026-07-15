@@ -71,7 +71,18 @@ async def test_answer_payment_eligible_approvers_calls_authorization_client(
 
 @pytest.mark.asyncio
 async def test_ask_short_circuits_eligibility_question(rag_service: RagService) -> None:
+    from chat_application.auth.subject import Subject
+    from chat_application.pipeline.models import RouterDecision
+
     payment_id = "22222222-2222-2222-2222-222222222222"
+    rag_service.ml_client.route_query = AsyncMock(
+        return_value=RouterDecision(
+            path="eligibility",
+            strategy="eligibility",
+            eligibility_target="payment",
+            reasoning="who can approve payment",
+        )
+    )
     rag_service._eligibility = AsyncMock()
     rag_service._eligibility.eligible_approvers_for_payment.return_value = {
         "payment_id": payment_id,
@@ -94,9 +105,14 @@ async def test_ask_short_circuits_eligibility_question(rag_service: RagService) 
     response = await rag_service.ask(
         f"Who can approve payment {payment_id}?",
         [],
-        mode="payments",
+        mode="policies",
         bearer_token="token",
         session_id="sess",
+        subject=Subject(
+            user_id="comp-001",
+            title="Compliance Analyst",
+            roles=["COMPLIANCE_ANALYST"],
+        ),
     )
 
     assert "Laurent, Sophie" in response.answer
@@ -142,7 +158,18 @@ async def test_answer_instruction_eligible_approvers_calls_authorization_client(
 async def test_ask_short_circuits_instruction_eligibility_question(
     rag_service: RagService,
 ) -> None:
+    from chat_application.auth.subject import Subject
+    from chat_application.pipeline.models import RouterDecision
+
     instruction_id = "22222222-2222-2222-2222-222222222222"
+    rag_service.ml_client.route_query = AsyncMock(
+        return_value=RouterDecision(
+            path="eligibility",
+            strategy="eligibility",
+            eligibility_target="instruction",
+            reasoning="who can approve instruction",
+        )
+    )
     rag_service._eligibility = AsyncMock()
     rag_service._eligibility.eligible_approvers_for_instruction.return_value = {
         "instruction_id": instruction_id,
@@ -158,9 +185,14 @@ async def test_ask_short_circuits_instruction_eligibility_question(
     response = await rag_service.ask(
         f"Who can approve this instruction {instruction_id}?",
         [],
-        mode="instructions",
+        mode="policies",
         bearer_token="token",
         session_id="sess",
+        subject=Subject(
+            user_id="comp-001",
+            title="Compliance Analyst",
+            roles=["COMPLIANCE_ANALYST"],
+        ),
     )
 
     assert instruction_id in response.answer
@@ -171,6 +203,7 @@ async def test_ask_short_circuits_instruction_eligibility_question(
 async def test_ask_policy_directory_uses_distinct_routing_labels(
     rag_service: RagService,
 ) -> None:
+    from chat_application.auth.subject import Subject
     from chat_application.pipeline.models import RouterDecision
 
     rag_service.ml_client.route_query = AsyncMock(
@@ -200,6 +233,11 @@ async def test_ask_policy_directory_uses_distinct_routing_labels(
         mode="policies",
         bearer_token="token",
         session_id="sess",
+        subject=Subject(
+            user_id="comp-001",
+            title="Compliance Analyst",
+            roles=["COMPLIANCE_ANALYST"],
+        ),
     )
 
     assert "Chen, Wei" in response.answer
