@@ -46,4 +46,4 @@ source = ["ps"]
 omit = ["src/ps/main.py"]
 
 [tool.coverage.report]
-fail_under = 70
+fail_under = 80

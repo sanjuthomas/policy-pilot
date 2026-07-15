@@ -1,19 +1,14 @@
 from __future__ import annotations
 
-import logging
-import time
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
-from zitadel_directory import DirectoryUser, ZitadelDirectoryClient
+from zitadel_directory import DirectoryCache, DirectoryUser, build_directory_client
 
 from chat_application.auth.capabilities import audience_labels
 from chat_application.config import settings
 
-logger = logging.getLogger(__name__)
-
-_CACHE: list[SeedUser] | None = None
-_CACHE_AT = 0.0
+_CACHE: DirectoryCache | None = None
 
 
 class SeedUser(BaseModel):
@@ -34,65 +29,47 @@ class SeedFile(BaseModel):
 
 
 def _to_seed_user(user: DirectoryUser) -> SeedUser:
-    return SeedUser(
-        user_id=user.user_id,
-        given_name=user.given_name,
-        family_name=user.family_name,
-        title=user.title,
-        roles=list(user.roles),
-        lob=user.lob,
-        groups=list(user.groups),
-        covering_lobs=list(user.covering_lobs),
-        supervisor_id=user.supervisor_id,
-    )
+    return SeedUser(**user.seed_fields())
 
 
-def _directory_client() -> ZitadelDirectoryClient:
-    if not settings.zitadel_service_pat:
-        raise RuntimeError("ZITADEL service PAT is not configured")
-    base_url = (
-        settings.zitadel_internal_url
-        or settings.oidc_internal_url
-        or settings.zitadel_url
-    ).rstrip("/")
-    host = settings.zitadel_host_header or (
-        urlparse(settings.oidc_issuer_url).netloc if settings.oidc_issuer_url else None
-    )
-    client = ZitadelDirectoryClient(
-        base_url=base_url,
-        pat=settings.zitadel_service_pat,
-        host_header=host,
-    )
-    try:
-        return client.with_org()
-    except Exception:
-        logger.warning("directory client continuing without org header", exc_info=True)
-        return client
+def _directory_cache() -> DirectoryCache:
+    global _CACHE
+    if _CACHE is None:
+        if not settings.zitadel_service_pat:
+            raise RuntimeError("ZITADEL service PAT is not configured")
+        base_url = (
+            settings.zitadel_internal_url
+            or settings.oidc_internal_url
+            or settings.zitadel_url
+        ).rstrip("/")
+        host = settings.zitadel_host_header or (
+            urlparse(settings.oidc_issuer_url).netloc if settings.oidc_issuer_url else None
+        )
+        pat = settings.zitadel_service_pat
+
+        def _client():
+            return build_directory_client(
+                base_url=base_url,
+                pat=pat or "",
+                host_header=host,
+            )
+
+        _CACHE = DirectoryCache(
+            _client,
+            ttl_seconds=settings.user_directory_cache_ttl_seconds,
+        )
+    return _CACHE
 
 
 def load_users(*, force_refresh: bool = False) -> SeedFile:
-    """Load the live user directory from ZITADEL (cached)."""
-    global _CACHE, _CACHE_AT
-
-    ttl = max(0.0, float(settings.user_directory_cache_ttl_seconds))
-    now = time.monotonic()
-    if (
-        not force_refresh
-        and _CACHE is not None
-        and ttl > 0
-        and (now - _CACHE_AT) < ttl
-    ):
-        return SeedFile(
-            defaults={"email_domain": settings.email_domain},
-            users=list(_CACHE),
-        )
-
-    users = [_to_seed_user(user) for user in _directory_client().list_directory_users()]
-    _CACHE = users
-    _CACHE_AT = now
+    """Load the live user directory from ZITADEL (shared DirectoryCache)."""
+    users = [
+        _to_seed_user(user)
+        for user in _directory_cache().list_users(force_refresh=force_refresh)
+    ]
     return SeedFile(
         defaults={"email_domain": settings.email_domain},
-        users=list(users),
+        users=users,
     )
 
 
@@ -135,6 +112,6 @@ def chat_users(
 
 
 def clear_directory_cache() -> None:
-    global _CACHE, _CACHE_AT
-    _CACHE = None
-    _CACHE_AT = 0.0
+    global _CACHE
+    if _CACHE is not None:
+        _CACHE.clear()

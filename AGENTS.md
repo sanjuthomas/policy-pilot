@@ -44,22 +44,29 @@ Do **not** commit or push if any service still reports errors.
 
 ### Test coverage (minimum 80%)
 
-Every Python service **except** `ssi-demo-harness` must maintain **≥ 80% line coverage** on its application package. The harness is integration/demo tooling and is exempt.
+Every Python service **except** `ssi-demo-harness` must maintain **≥ 80% line coverage** on its application package. The harness is integration/demo tooling and is exempt. Package `[tool.coverage.report] fail_under` must be **80** (not lower) so local `pytest --cov` matches CI.
 
-| Service | Coverage target (`--cov`) |
-|---------|---------------------------|
+| Target | Coverage package (`--cov`) |
+|--------|----------------------------|
 | `instruction-service` | `inst` |
 | `payment-service` | `ps` |
 | `authorization-service` | `authz` |
 | `sequence-service` | `seq` |
 | `ssi-indexer` | `etl` |
 | `ssi-chat` | `chat_application` |
+| `shared/telemetry` | `telemetry` |
+| `shared/platform_auth` | `platform_auth` |
+| `shared/sequence_client` | `sequence_client` |
+| `shared/authz_client` | `authz_client` |
+| `shared/cypher_builder` | `cypher_builder` |
+| `shared/vertex_client` | `vertex_client` |
+| `shared/zitadel_directory` | `zitadel_directory` |
 
-When you add or change code in a service, **add or update tests** so that service stays at or above 80%. Do not commit or push if coverage on a touched service falls below the threshold.
+When you add or change code in a service or shared package, **add or update tests** so coverage stays at or above 80%. Do not commit or push if coverage on a touched target falls below the threshold.
 
 #### One command (required before every commit/push)
 
-From the repository root — run tests with coverage for each non-harness service:
+From the repository root — run tests with coverage for each gated package:
 
 ```bash
 pip install pytest pytest-cov
@@ -70,7 +77,14 @@ for spec in \
   "authorization-service:authz" \
   "sequence-service:seq" \
   "ssi-indexer:etl" \
-  "ssi-chat:chat_application"
+  "ssi-chat:chat_application" \
+  "shared/telemetry:telemetry" \
+  "shared/platform_auth:platform_auth" \
+  "shared/sequence_client:sequence_client" \
+  "shared/authz_client:authz_client" \
+  "shared/cypher_builder:cypher_builder" \
+  "shared/vertex_client:vertex_client" \
+  "shared/zitadel_directory:zitadel_directory"
 do
   svc="${spec%%:*}"
   pkg="${spec##*:}"
@@ -84,7 +98,7 @@ do
 done
 ```
 
-If a service has no `tests/` directory yet, create one and add tests for the code you touched — do not skip the coverage check.
+If a package has no `tests/` directory yet, create one and add tests for the code you touched — do not skip the coverage check.
 
 Optional chat regression suite (does not replace the 80% unit-coverage requirement). Harness seed from `questions.yaml` runs by default (`CHAT_REGRESSION_SEED=0` to skip):
 
@@ -146,6 +160,13 @@ The same workflow runs **unit test coverage** (≥ 80% line coverage) for:
 - `sequence-service` (`seq`)
 - `ssi-indexer` (`etl`)
 - `ssi-chat` (`chat_application`)
+- `shared/telemetry` (`telemetry`)
+- `shared/platform_auth` (`platform_auth`)
+- `shared/sequence_client` (`sequence_client`)
+- `shared/authz_client` (`authz_client`)
+- `shared/cypher_builder` (`cypher_builder`)
+- `shared/vertex_client` (`vertex_client`)
+- `shared/zitadel_directory` (`zitadel_directory`)
 
 `ssi-demo-harness` is exempt from the coverage gate.
 
@@ -208,7 +229,7 @@ See the root [README.md](README.md) for architecture, storage names, and demo UR
 
 - Match existing code style in each service (imports, naming, FastAPI patterns).
 - Keep changes focused; avoid unrelated refactors.
-- Maintain **≥ 80% test coverage** on `inst`, `ps`, `authz`, `seq`, `etl`, and `chat_application` (see above); `ssi-demo-harness` is exempt.
+- Maintain **≥ 80% test coverage** on application packages (`inst`, `ps`, `authz`, `seq`, `etl`, `chat_application`) and all `shared/*` packages listed above; `ssi-demo-harness` is exempt.
 - **ssi-chat intent thumb rule:** determine natural-language intent with Gemini structured output / LLM semantic routing (`RouterDecision.path`) — not regex or fuzzy classification. Regex is OK for slot parsing (ids, amounts) and LLM-failure fallback only. Details: [docs/intent-determination.md](docs/intent-determination.md) and `.cursor/rules/intent-semantic-routing.mdc`.
 - Do not commit secrets (`.env`, PAT files, credentials).
 - Only create git commits when the user explicitly asks.

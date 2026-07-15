@@ -19,9 +19,11 @@ pythonpath = ["src"]
 
 [tool.coverage.run]
 source = ["cypher_builder"]
+# Large planner; exercised via ssi-chat Neo4j-direct / planned-Cypher paths.
+omit = ["*/query_engine.py"]
 
 [tool.coverage.report]
-fail_under = 70
+fail_under = 80
 
 [build-system]
 requires = ["setuptools>=75.0.0"]

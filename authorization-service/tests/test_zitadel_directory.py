@@ -18,11 +18,13 @@ def test_to_seed_user_maps_directory_user() -> None:
             covering_lobs=["FICC"],
             lob=None,
             supervisor_id="mo-050",
+            zitadel_user_id="zid-1",
         )
     )
     assert seed.user_id == "mo-100"
     assert seed.roles == ["INSTRUCTION_CREATOR"]
     assert seed.supervisor_id == "mo-050"
+    assert not hasattr(seed, "zitadel_user_id") or "zid-1" not in seed.model_dump()
 
 
 def test_user_directory_provider_cache() -> None:
@@ -52,3 +54,9 @@ def test_user_directory_provider_cache() -> None:
     assert calls["n"] == 1
     assert directory.users_with_role("FUNDING_APPROVER")[0].user_id == "pay-201"
     assert directory.users_covering_lob("FICC")[0].user_id == "pay-201"
+
+
+def test_from_zitadel_default_provider_disables_local_cache() -> None:
+    directory = UserDirectory.from_zitadel(email_domain="ssi.local")
+    assert directory._cache_ttl_seconds == 0.0
+    assert directory._provider is not None
