@@ -65,10 +65,20 @@ _CREATE_PAYMENT_SKILL = re.compile(
     re.IGNORECASE,
 )
 
+_SUBMIT_PAYMENT_SKILL = re.compile(
+    r"\b("
+    r"(please\s+)?submit\s+(a\s+|the\s+|this\s+)?payment|"
+    r"can\s+you\s+submit\s+(a\s+|the\s+|this\s+)?payment|"
+    r"submit\s+(it\s+)?for\s+approval|"
+    r"send\s+(the\s+|this\s+)?payment\s+for\s+approval"
+    r")\b",
+    re.IGNORECASE,
+)
+
 _CAPABILITY_ONLY = re.compile(
     r"^\s*(can|may|do)\s+i\b|"
     r"^\s*am\s+i\s+(allowed|able|permitted)\b|"
-    r"\b(permission|allowed)\s+to\s+create\b",
+    r"\b(permission|allowed)\s+to\s+(create|submit)\b",
     re.IGNORECASE,
 )
 
@@ -180,6 +190,17 @@ def infer_execution_strategy_heuristic(question: str, *, mode: str) -> Execution
     return "hybrid"
 
 
+def _looks_like_submit_payment_skill(message: str) -> bool:
+    text = message.strip()
+    if not text or not _SUBMIT_PAYMENT_SKILL.search(text):
+        return False
+    if _CAPABILITY_ONLY.search(text) and "you" not in text.lower()[:40]:
+        return False
+    from chat_application.skills.detect import parse_submit_payment_params
+
+    return parse_submit_payment_params(text) is not None
+
+
 def _looks_like_create_payment_skill(message: str) -> bool:
     text = message.strip()
     if not text or not _CREATE_PAYMENT_SKILL.search(text):
@@ -198,6 +219,13 @@ def heuristic_router_decision(question: str, *, mode: str) -> RouterDecision:
     from chat_application.policy.directory import is_payment_approval_directory_question
     from chat_application.policy.person import extract_person_name_heuristic
     from chat_application.policy.summary import detect_policy_summary_question
+
+    if _looks_like_submit_payment_skill(question):
+        return RouterDecision(
+            path="skill",
+            skill="submit_payment",
+            reasoning="heuristic fallback: submit_payment skill",
+        )
 
     if _looks_like_create_payment_skill(question):
         return RouterDecision(

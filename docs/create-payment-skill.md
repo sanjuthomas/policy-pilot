@@ -4,6 +4,8 @@ Policy Pilot’s first **mutation skill**: a scripted multi-step flow that creat
 
 Skills are **not** free-form LLM tool loops. Steps are fixed; authorization always goes through **authorization-service → OPA**, the same path payment-service uses for `CREATE`.
 
+Related: **[Submit-payment skill](submit-payment-skill.md)** (desk submits the DRAFT for funding approval).
+
 | | |
 |--|--|
 | **Package** | [`ssi-chat/src/chat_application/skills/`](../ssi-chat/src/chat_application/skills/) |

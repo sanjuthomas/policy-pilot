@@ -37,7 +37,7 @@ from chat_application.observability.routing import (
     get_routing_distribution,
 )
 from chat_application.rag import RagService
-from chat_application.skills import confirm_create_payment
+from chat_application.skills import confirm_create_payment, confirm_submit_payment
 from chat_application.vector.search import VectorSearchClient
 
 logger = get_logger(__name__)
@@ -229,6 +229,9 @@ class CreatePaymentConfirmRequest(BaseModel):
     decision: str = Field(min_length=1, pattern="^(go|no_go)$")
 
 
+SubmitPaymentConfirmRequest = CreatePaymentConfirmRequest
+
+
 @app.post("/api/chat/skills/create-payment/confirm", response_model=ChatResponse)
 async def confirm_create_payment_skill(
     request: CreatePaymentConfirmRequest,
@@ -251,6 +254,40 @@ async def confirm_create_payment_skill(
     elapsed = (time.perf_counter() - started) * 1000
     return finalize_chat_response(
         f"confirm create-payment {request.pending_id} {request.decision}",
+        "payments",
+        answer=format_chat_response(result.answer),
+        retrieval_ms=0.0,
+        generation_ms=elapsed,
+        path="skill",
+        cypher_provenance="none",
+        answer_synthesis="formatter",
+        intent_id=result.intent_id,
+        skill_activities=result.activities,
+    )
+
+
+@app.post("/api/chat/skills/submit-payment/confirm", response_model=ChatResponse)
+async def confirm_submit_payment_skill(
+    request: SubmitPaymentConfirmRequest,
+    subject: Subject = Depends(get_chat_subject),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+) -> ChatResponse:
+    bearer_token = authorization.split(" ", 1)[1].strip() if authorization else None
+    if not bearer_token:
+        raise HTTPException(status_code=401, detail="Bearer token required")
+
+    started = time.perf_counter()
+    result = await confirm_submit_payment(
+        pending_id=request.pending_id,
+        decision=request.decision,
+        subject=subject,
+        user_token=bearer_token,
+        user_session_id=x_session_id,
+    )
+    elapsed = (time.perf_counter() - started) * 1000
+    return finalize_chat_response(
+        f"confirm submit-payment {request.pending_id} {request.decision}",
         "payments",
         answer=format_chat_response(result.answer),
         retrieval_ms=0.0,

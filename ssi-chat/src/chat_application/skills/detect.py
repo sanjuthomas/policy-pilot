@@ -22,7 +22,7 @@ import re
 from datetime import date, timedelta
 
 from chat_application.graph.cypher import extract_entity_ids, extract_instruction_ids
-from chat_application.skills.models import CreatePaymentParams
+from chat_application.skills.models import CreatePaymentParams, SubmitPaymentParams
 
 _AMOUNT = re.compile(
     r"(?:"
@@ -138,3 +138,30 @@ def parse_create_payment_params(message: str) -> CreatePaymentParams | None:
         amount=amount,
         value_date=value_date,
     )
+
+
+_PAYMENT_ID = re.compile(
+    r"\b(\d{8}-[A-Za-z0-9_]+-P-\d+)\b",
+)
+
+
+def _pick_payment_id(message: str) -> str | None:
+    match = _PAYMENT_ID.search(message)
+    if match:
+        return match.group(1)
+    for entity_id in extract_entity_ids(message):
+        if re.search(r"-P-\d+$", entity_id, re.IGNORECASE):
+            return entity_id
+    return None
+
+
+def parse_submit_payment_params(message: str) -> SubmitPaymentParams | None:
+    """Parse submit-payment slot once intent is known (payment id)."""
+    text = message.strip()
+    if not text:
+        return None
+    payment_id = _pick_payment_id(text)
+    if not payment_id:
+        return None
+    return SubmitPaymentParams(payment_id=payment_id)
+

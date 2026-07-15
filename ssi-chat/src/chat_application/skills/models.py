@@ -11,6 +11,11 @@ class CreatePaymentParams:
     value_date: str
 
 
+@dataclass(frozen=True)
+class SubmitPaymentParams:
+    payment_id: str
+
+
 @dataclass
 class ConfirmationCard:
     instruction_id: str
@@ -24,9 +29,11 @@ class ConfirmationCard:
     creditor_name: str
     creditor_account: str
     intermediaries: list[str] = field(default_factory=list)
+    payment_id: str | None = None
+    payment_status: str | None = None
 
     def to_api(self) -> dict[str, Any]:
-        return {
+        payload = {
             "instruction_id": self.instruction_id,
             "amount": self.amount,
             "currency": self.currency,
@@ -39,6 +46,11 @@ class ConfirmationCard:
             "creditor_account": self.creditor_account,
             "intermediaries": list(self.intermediaries),
         }
+        if self.payment_id:
+            payload["payment_id"] = self.payment_id
+        if self.payment_status:
+            payload["payment_status"] = self.payment_status
+        return payload
 
 
 @dataclass
@@ -59,6 +71,27 @@ class PendingCreatePayment:
 
 
 @dataclass
+class PendingSubmitPayment:
+    pending_id: str
+    user_id: str
+    payment_id: str
+    instruction_id: str
+    amount: float
+    value_date: str
+    currency: str
+    owning_lob: str
+    payment_status: str
+    instruction_status: str
+    instruction_end_date: str
+    instruction_type: str
+    instruction_version: int
+    created_by_user_id: str
+    created_by_supervisor_id: str | None
+    card: ConfirmationCard
+    expires_at: float
+
+
+@dataclass
 class SkillRunResult:
     """Outcome of a skill phase ready for the chat UI."""
 
@@ -66,4 +99,5 @@ class SkillRunResult:
     activities: list[str] = field(default_factory=list)
     pending_id: str | None = None
     confirmation: ConfirmationCard | None = None
-    intent_id: str = "skill.create_payment"
+    intent_id: str = "skill"
+    skill: str = "create_payment"
