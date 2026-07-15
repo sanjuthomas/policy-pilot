@@ -40,6 +40,9 @@ packages = ["src/etl"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["src", "tests", "../shared/platform_auth/src", "../shared/cypher_builder/src", "../shared/vertex_client/src"]
+markers = [
+    "integration: live-stack tests (require RUN_DLQ_INTEGRATION=1 or similar)",
+]
 
 [tool.coverage.run]
 source = ["etl"]

@@ -216,6 +216,31 @@ Consumers pause; lag climbs; chat banner appears. Fix Mongo → auto-resume on p
 **Poison messages**  
 Status `poison`. Investigate payload; do not bulk-reset poison unless intentional. Prefer fixing producer / CDC shape.
 
+## Live integration tests (Neo4j outage → drain)
+
+Env-gated suite mirrors the manual DLQ verification flow. Skipped unless `RUN_DLQ_INTEGRATION=1`.
+
+| Case | Steps | Assert |
+|------|-------|--------|
+| `test_01_quarantine_when_neo4j_down` | `docker compose stop neo4j` → harness `create-instructions` → poll | DLQ depth increases; integrity `show_banner=true`; Kafka lag settles |
+| `test_02_drain_after_neo4j_recovery` | `docker compose start neo4j` (healthy) → loop `POST /api/dlq/retry-now` | depth=0; banner off; active entries empty |
+
+```bash
+# Stack must already be up (mongodb, kafka, indexer, harness, instruction-service, zitadel, …).
+cd ssi-indexer
+RUN_DLQ_INTEGRATION=1 \
+  INDEXER_URL=http://localhost:8090 \
+  HARNESS_URL=http://localhost:8091 \
+  pytest tests/integration/test_dlq_neo4j_outage.py -v
+```
+
+Notes:
+
+- Realtime Kafka retries run before quarantine — allow several minutes (`DLQ_IT_QUARANTINE_TIMEOUT_SECONDS`, default 420).
+- Drain uses **Retry Now** in a loop because each call processes up to `DLQ_SCHEDULER_BATCH_SIZE` (20).
+- Module fixture always restarts Neo4j afterward so the local stack is not left down.
+- Not run in CI by default (same pattern as `RUN_CHAT_REGRESSION` / `RUN_SEQUENCE_INTEGRATION`).
+
 ## Boundaries (what DLQ is not)
 
 - Not a Kafka DLQ topic; Kafka coords are audit metadata only.
