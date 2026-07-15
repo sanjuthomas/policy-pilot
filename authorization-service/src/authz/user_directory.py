@@ -83,9 +83,17 @@ class UserDirectory:
     ) -> UserDirectory:
         from authz.zitadel_directory import load_seed_users_from_zitadel
 
+        # Shared DirectoryCache owns TTL for the default ZITADEL provider;
+        # avoid a second cache layer in UserDirectory for that path.
+        if provider is None:
+            return cls(
+                email_domain=email_domain,
+                provider=load_seed_users_from_zitadel,
+                cache_ttl_seconds=0.0,
+            )
         return cls(
             email_domain=email_domain,
-            provider=provider or load_seed_users_from_zitadel,
+            provider=provider,
             cache_ttl_seconds=cache_ttl_seconds,
         )
 

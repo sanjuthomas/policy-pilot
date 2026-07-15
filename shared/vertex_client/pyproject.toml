@@ -23,7 +23,7 @@ pythonpath = ["src"]
 source = ["vertex_client"]
 
 [tool.coverage.report]
-fail_under = 70
+fail_under = 80
 
 [build-system]
 requires = ["setuptools>=75.0.0"]

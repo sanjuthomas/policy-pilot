@@ -78,11 +78,11 @@ compose() {
 }
 
 compose_up() {
-  local build_flag=()
   if [[ "${COMPOSE_UP_BUILD}" == "1" ]]; then
-    build_flag=(--build)
+    compose up -d --build "$@"
+  else
+    compose up -d "$@"
   fi
-  compose up -d "${build_flag[@]}" "$@"
 }
 
 wait_for_pat() {

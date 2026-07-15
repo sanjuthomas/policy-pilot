@@ -41,6 +41,36 @@ def _decode_metadata_values(raw: dict[str, Any]) -> dict[str, str]:
     return decoded
 
 
+def build_directory_client(
+    *,
+    base_url: str,
+    pat: str,
+    host_header: str | None = None,
+    org_id: str | None = None,
+    timeout: float = 30.0,
+    attach_org: bool = True,
+) -> ZitadelDirectoryClient:
+    """Construct a directory client; optionally attach ``x-zitadel-orgid``.
+
+    When ``attach_org`` is true and org resolution fails, falls back to the
+    unscoped client (org header is optional for some deployments).
+    """
+    client = ZitadelDirectoryClient(
+        base_url=base_url,
+        pat=pat,
+        host_header=host_header,
+        org_id=org_id,
+        timeout=timeout,
+    )
+    if not attach_org or org_id:
+        return client
+    try:
+        return client.with_org()
+    except Exception:
+        logger.warning("directory client continuing without org header", exc_info=True)
+        return client
+
+
 class ZitadelDirectoryClient:
     """List human users and hydrate custom metadata for directory queries."""
 

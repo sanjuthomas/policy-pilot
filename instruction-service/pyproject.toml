@@ -36,7 +36,7 @@ pythonpath = [".", "src", "../shared/platform_auth/src", "../shared/sequence_cli
 source = ["inst"]
 
 [tool.coverage.report]
-fail_under = 70
+fail_under = 80
 
 [build-system]
 requires = ["hatchling"]

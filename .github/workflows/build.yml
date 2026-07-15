@@ -62,6 +62,27 @@ jobs:
           - service: ssi-chat
             package: chat_application
             extra: regression
+          - service: shared/telemetry
+            package: telemetry
+            extra: dev
+          - service: shared/platform_auth
+            package: platform_auth
+            extra: dev
+          - service: shared/sequence_client
+            package: sequence_client
+            extra: dev
+          - service: shared/authz_client
+            package: authz_client
+            extra: dev
+          - service: shared/cypher_builder
+            package: cypher_builder
+            extra: dev
+          - service: shared/vertex_client
+            package: vertex_client
+            extra: dev
+          - service: shared/zitadel_directory
+            package: zitadel_directory
+            extra: dev
 
     steps:
       - uses: actions/checkout@v4
@@ -71,6 +92,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install shared packages
+        # Application services depend on these; for shared/* matrix rows this is a no-op install of siblings.
         run: |
           pip install --quiet \
             ./shared/telemetry \
