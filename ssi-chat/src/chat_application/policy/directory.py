@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from typing import Any
 
 from chat_application.graph.cypher import (
@@ -23,14 +24,6 @@ _INCLUSIVE_AMOUNT_COMPARISON = re.compile(
     r"\bat\s+least\b",
     re.IGNORECASE,
 )
-
-_CLUB_CEILINGS: tuple[tuple[str, float], ...] = (
-    ("UP_TO_100_MILLION_CLUB", 100_000_000.0),
-    ("UP_TO_1_BILLION_CLUB", 1_000_000_000.0),
-    ("UP_TO_100_BILLION_CLUB", 100_000_000_000.0),
-)
-
-ABSOLUTE_PAYMENT_LIMIT = 100_000_000_000.0
 
 
 def is_payment_approval_directory_question(message: str) -> bool:
@@ -63,9 +56,18 @@ def is_payment_approval_directory_question(message: str) -> bool:
 FUNDING_APPROVER_ORG_GROUP = "MIDDLE_OFFICE"
 
 
-def directory_groups_for_question(message: str) -> tuple[list[str], float | None, bool]:
+def directory_groups_for_question(
+    message: str,
+    *,
+    club_limits: Mapping[str, float],
+    absolute_limit: float,
+) -> tuple[list[str], float | None, bool]:
     """Resolve directory lookup groups: amount clubs and/or MIDDLE_OFFICE for LOB-only."""
-    clubs, amount, strict = payment_approval_clubs_from_question(message)
+    clubs, amount, strict = payment_approval_clubs_from_question(
+        message,
+        club_limits=club_limits,
+        absolute_limit=absolute_limit,
+    )
     if clubs:
         return clubs, amount, strict
     if covering_lob_filter_from_question(message):
@@ -82,12 +84,23 @@ def is_strict_payment_amount_threshold(message: str) -> bool:
     return bool(re.search(r"\bworth\s+more\s+than\b", message, re.IGNORECASE))
 
 
-def payment_approval_clubs_for_amount(amount: float, *, strict: bool) -> list[str]:
-    """Return amount-limit clubs whose members may approve payments at the given threshold."""
-    if amount <= 0 or amount > ABSOLUTE_PAYMENT_LIMIT:
+def payment_approval_clubs_for_amount(
+    amount: float,
+    *,
+    club_limits: Mapping[str, float],
+    absolute_limit: float,
+    strict: bool,
+) -> list[str]:
+    """Return amount-limit clubs whose members may approve payments at the given threshold.
+
+    ``club_limits`` / ``absolute_limit`` must come from authorization-service → OPA
+    (`amount_limits_catalog`); do not hardcode ceilings in chat.
+    """
+    if amount <= 0 or amount > absolute_limit:
         return []
+    ordered = sorted(club_limits.items(), key=lambda item: (item[1], item[0]))
     clubs: list[str] = []
-    for club, ceiling in _CLUB_CEILINGS:
+    for club, ceiling in ordered:
         if strict:
             if ceiling > amount:
                 clubs.append(club)
@@ -98,6 +111,9 @@ def payment_approval_clubs_for_amount(amount: float, *, strict: bool) -> list[st
 
 def payment_approval_clubs_from_question(
     message: str,
+    *,
+    club_limits: Mapping[str, float],
+    absolute_limit: float,
 ) -> tuple[list[str], float | None, bool]:
     """Resolve amount-limit clubs, threshold amount, and comparison strictness."""
     club_match = _AMOUNT_CLUB_PATTERN.search(message)
@@ -107,7 +123,16 @@ def payment_approval_clubs_from_question(
     if amount is None:
         return [], None, True
     strict = is_strict_payment_amount_threshold(message)
-    return payment_approval_clubs_for_amount(amount, strict=strict), amount, strict
+    return (
+        payment_approval_clubs_for_amount(
+            amount,
+            club_limits=club_limits,
+            absolute_limit=absolute_limit,
+            strict=strict,
+        ),
+        amount,
+        strict,
+    )
 
 
 def merge_group_member_rows(members: list[dict[str, Any]]) -> list[dict[str, Any]]:

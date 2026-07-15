@@ -8,6 +8,7 @@ from authz.models import (
     InstructionEligibleApproversEvaluateRequest,
     InstructionEligibleApproversResponse,
     InstructionEvaluateRequest,
+    PaymentAmountLimitsResponse,
     PaymentEligibleApproversEvaluateRequest,
     PaymentEligibleApproversResponse,
     PaymentEvaluateRequest,
@@ -141,6 +142,58 @@ async def get_policy_summary(
         title=str(entry.get("title") or normalized_action),
         narrative=str(entry.get("narrative") or ""),
         requires=requirements,
+        source="opa",
+    )
+
+
+@router.get("/payment-amount-limits", response_model=PaymentAmountLimitsResponse)
+async def get_payment_amount_limits(
+    _subject: Subject = Depends(get_compliance_subject),
+    opa: OpaClient = Depends(_opa_client),
+) -> PaymentAmountLimitsResponse:
+    """Return OPA club ceilings + absolute payment limit (policy metadata)."""
+    try:
+        catalog = await opa.fetch_payment_amount_limits()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"opa amount_limits_catalog failed: {exc}",
+        ) from exc
+
+    absolute_raw = catalog.get("absolute_limit")
+    clubs_raw = catalog.get("club_limits")
+    if absolute_raw is None or not isinstance(clubs_raw, dict) or not clubs_raw:
+        raise HTTPException(
+            status_code=503,
+            detail="OPA amount_limits_catalog missing absolute_limit or club_limits",
+        )
+
+    club_limits: dict[str, float] = {}
+    for key, value in clubs_raw.items():
+        name = str(key).strip()
+        if not name:
+            continue
+        try:
+            club_limits[name] = float(value)
+        except (TypeError, ValueError):
+            continue
+    if not club_limits:
+        raise HTTPException(
+            status_code=503,
+            detail="OPA amount_limits_catalog has no usable club_limits",
+        )
+
+    try:
+        absolute_limit = float(absolute_raw)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="OPA amount_limits_catalog absolute_limit is not numeric",
+        ) from exc
+
+    return PaymentAmountLimitsResponse(
+        absolute_limit=absolute_limit,
+        club_limits=club_limits,
         source="opa",
     )
 

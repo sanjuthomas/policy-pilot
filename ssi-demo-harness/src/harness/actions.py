@@ -21,6 +21,7 @@ from harness.helpers import (
     build_payment_seed_plan,
     build_scenario,
     build_seed_plan,
+    fetch_payment_amount_club_limits,
     instruction_service_client,
     payment_client,
     payment_submitter_for_lob,
@@ -411,13 +412,20 @@ def create_payments(
         result.ok = False
         return result
 
+    try:
+        club_limits = fetch_payment_amount_club_limits(settings, admin_session)
+    except Exception as exc:
+        result.logs.append(f"error: could not load OPA amount club limits: {exc}")
+        result.ok = False
+        return result
+
     value_date = (date.today() + timedelta(days=1)).isoformat()
     result.logs.append(
         f"Creating {count} payment(s) against {len(pool)} approved instruction(s)"
     )
 
     for index, (user_id, amount) in enumerate(
-        build_payment_seed_plan(count, seed=seed), start=1
+        build_payment_seed_plan(count, seed=seed, club_limits=club_limits), start=1
     ):
         try:
             creator = user_by_id(seed, user_id)
@@ -547,6 +555,13 @@ def update_payments(
     amount_note = f"amount={amount:,.0f}" if amount else "auto amount bump"
     result.logs.append(f"Updating up to {len(to_process)} DRAFT payment(s) ({amount_note})")
 
+    try:
+        club_limits = fetch_payment_amount_club_limits(settings, admin_session)
+    except Exception as exc:
+        result.logs.append(f"error: could not load OPA amount club limits: {exc}")
+        result.ok = False
+        return result
+
     for index, payment in enumerate(to_process, start=1):
         payment_id = payment["payment_id"]
         instruction_id = payment.get("instruction_id", "")
@@ -563,6 +578,7 @@ def update_payments(
             current_amount,
             creator_id,
             seed=seed,
+            club_limits=club_limits,
             override=amount,
         )
         if new_amount == current_amount:
@@ -624,8 +640,15 @@ def approve_payments(
         result.logs.append("No SUBMITTED payments available to approve.")
         return result
 
+    try:
+        club_limits = fetch_payment_amount_club_limits(settings, admin_session)
+    except Exception as exc:
+        result.logs.append(f"error: could not load OPA amount club limits: {exc}")
+        result.ok = False
+        return result
+
     def _sort_key(payment: dict) -> tuple[int, str]:
-        approvable = _approver_for_payment(seed, payment)
+        approvable = _approver_for_payment(seed, payment, club_limits=club_limits)
         return (0 if approvable else 1, payment["payment_id"])
 
     to_process = sorted(submitted, key=_sort_key)[:count]
@@ -637,7 +660,7 @@ def approve_payments(
         owning_lob = payment.get("owning_lob", "?")
         created_by = payment.get("created_by") or {}
         creator_id = created_by.get("user_id", "?")
-        approver_id = _approver_for_payment(seed, payment)
+        approver_id = _approver_for_payment(seed, payment, club_limits=club_limits)
         if not approver_id:
             result.skipped += 1
             result.failed += 1

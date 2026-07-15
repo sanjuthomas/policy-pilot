@@ -105,6 +105,21 @@ async def test_fetch_policy_summary_payment() -> None:
 
 
 @pytest.mark.asyncio
+async def test_fetch_payment_amount_limits() -> None:
+    client = OpaClient(base_url="http://opa.test")
+    catalog = {
+        "absolute_limit": 100_000_000_000,
+        "club_limits": {"UP_TO_100_MILLION_CLUB": 100_000_000},
+    }
+
+    with patch.object(client, "_get_data", new_callable=AsyncMock, return_value=catalog) as get_data:
+        result = await client.fetch_payment_amount_limits()
+
+    assert result["absolute_limit"] == 100_000_000_000
+    get_data.assert_awaited_once_with("payment/lifecycle/amount_limits_catalog")
+
+
+@pytest.mark.asyncio
 async def test_fetch_policy_summary_rejects_unknown_domain() -> None:
     client = OpaClient(base_url="http://opa.test")
     with pytest.raises(ValueError, match="unsupported policy domain"):

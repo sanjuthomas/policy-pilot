@@ -157,3 +157,44 @@ def test_policy_summary_unknown_action(client: TestClient) -> None:
         app.dependency_overrides.clear()
 
     assert response.status_code == 404
+
+
+_AMOUNT_LIMITS = {
+    "absolute_limit": 100_000_000_000,
+    "club_limits": {
+        "UP_TO_100_MILLION_CLUB": 100_000_000,
+        "UP_TO_1_BILLION_CLUB": 1_000_000_000,
+        "UP_TO_100_BILLION_CLUB": 100_000_000_000,
+    },
+}
+
+
+def test_payment_amount_limits_requires_auth(client: TestClient) -> None:
+    response = client.get("/api/v1/authorization/payment-amount-limits")
+    assert response.status_code == 401
+
+
+def test_payment_amount_limits_success(client: TestClient) -> None:
+    compliance = Subject(
+        user_id="comp-001",
+        title="Compliance Analyst",
+        roles=["COMPLIANCE_ANALYST"],
+    )
+    opa = AsyncMock()
+    opa.fetch_payment_amount_limits = AsyncMock(return_value=_AMOUNT_LIMITS)
+    app.dependency_overrides[get_compliance_subject] = lambda: compliance
+    app.dependency_overrides[_opa_client] = lambda: opa
+    try:
+        response = client.get(
+            "/api/v1/authorization/payment-amount-limits",
+            headers={"Authorization": "Bearer comp-token"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["source"] == "opa"
+    assert body["absolute_limit"] == 100_000_000_000.0
+    assert body["club_limits"]["UP_TO_1_BILLION_CLUB"] == 1_000_000_000.0
+    opa.fetch_payment_amount_limits.assert_awaited_once()

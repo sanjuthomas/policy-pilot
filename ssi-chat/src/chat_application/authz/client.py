@@ -165,6 +165,34 @@ class EligibilityClient:
 
         return response.json()
 
+    async def payment_amount_limits(
+        self,
+        *,
+        bearer_token: str,
+        session_id: str | None = None,
+    ) -> dict[str, Any]:
+        """OPA club ceilings + absolute limit via authorization-service."""
+        url = f"{self._authorization_base}/api/v1/authorization/payment-amount-limits"
+        headers = {
+            "Authorization": f"Bearer {bearer_token}",
+            "Accept": "application/json",
+        }
+        if session_id:
+            headers["X-Session-Id"] = session_id
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=headers)
+
+        if response.status_code == 401:
+            raise EligibilityClientError("authentication required — log in as a compliance analyst")
+        if response.status_code == 403:
+            raise EligibilityClientError("COMPLIANCE_ANALYST role required for this question")
+        if not response.is_success:
+            detail = response.json().get("detail", response.text)
+            raise EligibilityClientError(f"authorization service error: {detail}")
+
+        return response.json()
+
     async def policy_summary(
         self,
         *,

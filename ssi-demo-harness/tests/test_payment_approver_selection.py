@@ -10,6 +10,13 @@ from harness.helpers import (
     build_payment_seed_plan,
 )
 
+# Mirror of opa-policy-seed/policies/payment/amount_limits.rego — test fixture only.
+_OPA_CLUB_LIMITS = {
+    "UP_TO_100_MILLION_CLUB": 100_000_000.0,
+    "UP_TO_1_BILLION_CLUB": 1_000_000_000.0,
+    "UP_TO_100_BILLION_CLUB": 100_000_000_000.0,
+}
+
 
 def _users_file() -> Path:
     return Path(__file__).resolve().parents[2] / "zitadel-seed" / "users.yaml"
@@ -24,6 +31,7 @@ def test_eligible_payment_approvers_exclude_creator_and_subordinates() -> None:
         amount=1_000_000.0,
         creator_user_id="pay-101",
         creator_supervisor_id="pay-201",
+        club_limits=_OPA_CLUB_LIMITS,
     )
 
     assert "pay-101" not in eligible
@@ -40,11 +48,15 @@ def test_approver_for_payment_randomizes_within_eligible_set() -> None:
     }
 
     first = {
-        _approver_for_payment(seed, payment, rng=random.Random(1))
+        _approver_for_payment(
+            seed, payment, club_limits=_OPA_CLUB_LIMITS, rng=random.Random(1)
+        )
         for _ in range(8)
     }
     second = {
-        _approver_for_payment(seed, payment, rng=random.Random(2))
+        _approver_for_payment(
+            seed, payment, club_limits=_OPA_CLUB_LIMITS, rng=random.Random(2)
+        )
         for _ in range(8)
     }
 
@@ -57,7 +69,9 @@ def test_build_payment_seed_plan_randomizes_creators_and_amounts() -> None:
     seed = load_users(_users_file())
     rng = random.Random(42)
 
-    plan = build_payment_seed_plan(10, seed=seed, rng=rng)
+    plan = build_payment_seed_plan(
+        10, seed=seed, club_limits=_OPA_CLUB_LIMITS, rng=rng
+    )
     creators = {row[0] for row in plan}
     amounts = {row[1] for row in plan}
 
@@ -65,5 +79,7 @@ def test_build_payment_seed_plan_randomizes_creators_and_amounts() -> None:
     assert creators <= {"pay-101", "pay-102", "pay-103", "pay-203", "pay-205", "pay-300"}
     assert len(amounts) > 1
 
-    other = build_payment_seed_plan(10, seed=seed, rng=random.Random(99))
+    other = build_payment_seed_plan(
+        10, seed=seed, club_limits=_OPA_CLUB_LIMITS, rng=random.Random(99)
+    )
     assert plan != other

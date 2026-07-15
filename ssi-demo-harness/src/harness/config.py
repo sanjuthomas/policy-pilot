@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     payment_service_url: str = "http://localhost:8093"
     payment_service_api_prefix: str = "/api/v1"
     payment_security_events_collection: str = "payment_service"
+    authorization_service_url: str = "http://localhost:8094"
     mongodb_uri: str = "mongodb://localhost:27017"
     verify_security_events: bool = True
 

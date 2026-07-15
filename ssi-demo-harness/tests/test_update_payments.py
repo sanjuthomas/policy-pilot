@@ -21,6 +21,11 @@ def test_resolve_payment_update_amount_override() -> None:
         1_000_000.0,
         "pay-101",
         seed=seed,
+        club_limits={
+            "UP_TO_100_MILLION_CLUB": 100_000_000.0,
+            "UP_TO_1_BILLION_CLUB": 1_000_000_000.0,
+            "UP_TO_100_BILLION_CLUB": 100_000_000_000.0,
+        },
         override=2_000_000.0,
     )
     assert amount == 2_000_000.0
@@ -32,6 +37,11 @@ def test_resolve_payment_update_amount_auto_bump() -> None:
         500_000.0,
         "pay-101",
         seed=seed,
+        club_limits={
+            "UP_TO_100_MILLION_CLUB": 100_000_000.0,
+            "UP_TO_1_BILLION_CLUB": 1_000_000_000.0,
+            "UP_TO_100_BILLION_CLUB": 100_000_000_000.0,
+        },
         rng=random.Random(0),
     )
     assert amount > 500_000.0
@@ -101,6 +111,15 @@ def test_update_payments_action(monkeypatch) -> None:
     monkeypatch.setattr(actions, "_payment_clients", lambda _settings: (MagicMock(), MagicMock(), fake_ps))
     monkeypatch.setattr(actions, "_fetch_api_payments", lambda *args, **kwargs: drafts)
     monkeypatch.setattr(actions, "_session_for_user", lambda *args, **kwargs: MagicMock())
+    monkeypatch.setattr(
+        actions,
+        "fetch_payment_amount_club_limits",
+        lambda *_args, **_kwargs: {
+            "UP_TO_100_MILLION_CLUB": 100_000_000.0,
+            "UP_TO_1_BILLION_CLUB": 1_000_000_000.0,
+            "UP_TO_100_BILLION_CLUB": 100_000_000_000.0,
+        },
+    )
     monkeypatch.setattr(
         "harness.actions.resolve_payment_update_amount",
         lambda current, creator, **kwargs: 2_000_000.0,
