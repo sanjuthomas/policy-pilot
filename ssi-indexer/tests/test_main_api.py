@@ -82,21 +82,35 @@ def test_index(client):
 
 def test_health_endpoint(client):
     test_client, _, _, _ = client
-    with patch(
-        "etl.main.component_status",
-        AsyncMock(
-            return_value={
-                "kafka": {"ok": True, "status": "up"},
-                "vertex_embeddings": {"ok": True, "status": "up"},
-                "multimodal_vector": {"ok": True, "status": "up"},
-                "neo4j": {"ok": True, "status": "up"},
-            }
+    with (
+        patch(
+            "etl.main.component_status",
+            AsyncMock(
+                return_value={
+                    "kafka": {"ok": True, "status": "up"},
+                    "vertex_embeddings": {"ok": True, "status": "up"},
+                    "multimodal_vector": {"ok": True, "status": "up"},
+                    "neo4j": {"ok": True, "status": "up"},
+                }
+            ),
+        ),
+        patch(
+            "etl.main.index_integrity_status",
+            AsyncMock(
+                return_value={
+                    "show_banner": False,
+                    "consumer_paused": False,
+                    "kafka_lag_total": 0,
+                    "dlq": {"depth": 0},
+                }
+            ),
         ),
     ):
         response = test_client.get("/health")
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "UP"
+    assert "integrity" in body
 
 
 def test_stats_endpoint(client):
@@ -107,7 +121,13 @@ def test_stats_endpoint(client):
         "multimodal_vector": {"ok": True, "status": "up"},
         "neo4j": {"ok": True, "status": "up"},
     }
-    with patch("etl.main.component_status", AsyncMock(return_value=status)):
+    with (
+        patch("etl.main.component_status", AsyncMock(return_value=status)),
+        patch(
+            "etl.main.index_integrity_status",
+            AsyncMock(return_value={"show_banner": False, "kafka_lag_total": 0}),
+        ),
+    ):
         stats = test_client.get("/api/stats").json()
     assert stats["all_ok"] is False
     assert stats["components"]["kafka"]["ok"] is False

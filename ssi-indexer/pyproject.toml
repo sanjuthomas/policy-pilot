@@ -10,6 +10,7 @@ dependencies = [
     "pydantic-settings>=2.6.0",
     "aiokafka>=0.12.0",
     "neo4j>=5.26.0",
+    "motor>=3.6.0",
     "httpx>=0.28.0",
     "PyJWT[crypto]>=2.10.0",
     "PyYAML>=6.0.2",
@@ -39,6 +40,9 @@ packages = ["src/etl"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["src", "tests", "../shared/platform_auth/src", "../shared/cypher_builder/src", "../shared/vertex_client/src"]
+markers = [
+    "integration: live-stack tests (require RUN_DLQ_INTEGRATION=1 or similar)",
+]
 
 [tool.coverage.run]
 source = ["etl"]

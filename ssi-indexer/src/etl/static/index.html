@@ -33,6 +33,74 @@
       </div>
     </section>
 
+    <section class="panel chunk-stats-panel" aria-label="Kafka consumers">
+      <div class="chunk-stats-header">
+        <div>
+          <h2>Kafka consumers</h2>
+          <p class="panel-intro">
+            Consumer-group metadata: topic, group, committed / fetch position, log end (latest), and lag.
+          </p>
+        </div>
+        <button type="button" id="kafka-consumers-refresh-btn" class="btn btn-ghost">Refresh</button>
+      </div>
+      <div id="kafka-consumers-summary" class="chunk-stats-summary muted">Sign in to load consumer offsets.</div>
+      <div class="chunk-stats-table-wrap" style="margin-top:1rem;">
+        <table class="chunk-stats-table" aria-label="Kafka consumer groups">
+          <thead>
+            <tr>
+              <th>Consumer</th>
+              <th>Topic</th>
+              <th>Group</th>
+              <th>P</th>
+              <th>Committed</th>
+              <th>Position</th>
+              <th>Latest</th>
+              <th>Lag</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="kafka-consumers-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel chunk-stats-panel" aria-label="Dead letter queue">
+      <div class="chunk-stats-header">
+        <div>
+          <h2>Dead letter queue</h2>
+          <p class="panel-intro">
+            Failed Kafka index writes are quarantined here with full payloads for replay.
+            The scheduler automatically retries <strong>pending</strong> rows every
+            <code>DLQ_SCHEDULER_INTERVAL_SECONDS</code> (default 5 minutes) until
+            <code>DLQ_SCHEDULER_MAX_ATTEMPTS</code> is exhausted.
+            <strong>Retry Now</strong> (when depth &gt; 0) immediately schedules active rows
+            and runs a drain cycle — without waiting for the next scheduler tick.
+          </p>
+        </div>
+        <div>
+          <button type="button" id="dlq-refresh-btn" class="btn btn-ghost">Refresh</button>
+          <button type="button" id="dlq-retry-btn" class="btn-primary" disabled>Retry Now</button>
+          <button type="button" id="dlq-resume-btn" class="btn btn-ghost">Resume consumers</button>
+        </div>
+      </div>
+      <div id="dlq-summary" class="chunk-stats-summary muted">Sign in to load DLQ stats.</div>
+      <div class="chunk-stats-table-wrap" style="margin-top:1rem;">
+        <table class="chunk-stats-table" aria-label="DLQ entries">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Pipeline</th>
+              <th>Event</th>
+              <th>Attempts</th>
+              <th>Error</th>
+              <th>Kafka</th>
+            </tr>
+          </thead>
+          <tbody id="dlq-body"></tbody>
+        </table>
+      </div>
+    </section>
+
     <section class="panel chunk-stats-panel" aria-label="Vector index text size monitor">
       <div class="chunk-stats-header">
         <div>
@@ -201,6 +269,6 @@
     </section>
 
     <script src="/static/admin-auth.js?v=1"></script>
-    <script src="/static/app.js?v=9"></script>
+    <script src="/static/app.js?v=15"></script>
   </body>
 </html>

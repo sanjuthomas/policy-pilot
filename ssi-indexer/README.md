@@ -4,6 +4,14 @@ Kafka consumers that index instruction and payment facts into **Neo4j** — both
 
 Also exposes a **Search Console** UI for manual vector / Neo4j queries.
 
+**Kafka failure quarantine:** [Mongo DLQ design, configs, and data flow](src/etl/dlq/README.md).
+
+Live DLQ outage/drain checks (opt-in):
+
+```bash
+RUN_DLQ_INTEGRATION=1 pytest tests/integration/test_dlq_neo4j_outage.py -v
+```
+
 ## URL
 
 http://localhost:8090

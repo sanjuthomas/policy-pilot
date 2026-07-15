@@ -25,6 +25,8 @@ async def test_lifespan_starts_and_stops_consumers() -> None:
         patch("etl.main.instruction_consumer") as mock_ic,
         patch("etl.main.payment_security_event_consumer") as mock_pse,
         patch("etl.main.payment_fact_consumer") as mock_pfc,
+        patch("etl.main.dlq_store") as mock_dlq,
+        patch("etl.main.dlq_scheduler") as mock_sched,
     ):
         mock_neo4j.connect = AsyncMock()
         mock_neo4j.close = AsyncMock()
@@ -33,6 +35,10 @@ async def test_lifespan_starts_and_stops_consumers() -> None:
         mock_embedding.dimension = 768
         mock_generation.close = AsyncMock()
         mock_multimodal.ensure_indexes = AsyncMock()
+        mock_dlq.connect = AsyncMock()
+        mock_dlq.close = AsyncMock()
+        mock_sched.start = AsyncMock()
+        mock_sched.close = AsyncMock()
         for consumer in (mock_ise, mock_ic, mock_pse, mock_pfc):
             consumer.start = AsyncMock()
             consumer.close = AsyncMock()
@@ -44,15 +50,19 @@ async def test_lifespan_starts_and_stops_consumers() -> None:
 
         async with run_lifespan():
             mock_neo4j.connect.assert_awaited_once()
+            mock_dlq.connect.assert_awaited_once()
             mock_ise.start.assert_awaited_once()
             mock_ic.start.assert_awaited_once()
             mock_pse.start.assert_awaited_once()
             mock_pfc.start.assert_awaited_once()
+            mock_sched.start.assert_awaited_once()
             mock_embedding.warmup.assert_awaited_once()
             mock_multimodal.ensure_indexes.assert_awaited_once()
 
+        mock_sched.close.assert_awaited_once()
         for consumer in (mock_ise, mock_ic, mock_pse, mock_pfc):
             consumer.close.assert_awaited_once()
+        mock_dlq.close.assert_awaited_once()
         mock_neo4j.close.assert_awaited_once()
         mock_embedding.close.assert_awaited_once()
         mock_generation.close.assert_awaited_once()
@@ -75,6 +85,8 @@ async def test_lifespan_continues_when_warmup_fails() -> None:
         patch("etl.main.instruction_consumer") as mock_ic,
         patch("etl.main.payment_security_event_consumer") as mock_pse,
         patch("etl.main.payment_fact_consumer") as mock_pfc,
+        patch("etl.main.dlq_store") as mock_dlq,
+        patch("etl.main.dlq_scheduler") as mock_sched,
     ):
         mock_neo4j.connect = AsyncMock()
         mock_neo4j.close = AsyncMock()
@@ -82,6 +94,10 @@ async def test_lifespan_continues_when_warmup_fails() -> None:
         mock_embedding.close = AsyncMock()
         mock_generation.close = AsyncMock()
         mock_multimodal.ensure_indexes = AsyncMock()
+        mock_dlq.connect = AsyncMock()
+        mock_dlq.close = AsyncMock()
+        mock_sched.start = AsyncMock()
+        mock_sched.close = AsyncMock()
         for consumer in (mock_ise, mock_ic, mock_pse, mock_pfc):
             consumer.start = AsyncMock()
             consumer.close = AsyncMock()

@@ -2,6 +2,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import httpx
 import uvicorn
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
@@ -94,6 +95,28 @@ async def index() -> FileResponse:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "UP"}
+
+
+@app.get("/api/index-integrity")
+async def index_integrity() -> dict:
+    """Proxy indexer lag/DLQ honesty signal for the chat integrity banner."""
+    url = f"{settings.indexer_url.rstrip('/')}/api/index-integrity"
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(url)
+        if not response.is_success:
+            return {
+                "show_banner": False,
+                "banner_message": None,
+                "error": f"indexer status {response.status_code}",
+            }
+        return response.json()
+    except Exception as exc:
+        return {
+            "show_banner": False,
+            "banner_message": None,
+            "error": str(exc),
+        }
 
 
 @app.get("/api/routing-stats")

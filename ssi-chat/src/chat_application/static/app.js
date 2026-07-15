@@ -696,3 +696,29 @@ authPassword.addEventListener("keydown", (event) => {
 loadSession();
 loadChatUsers();
 input.focus();
+
+const integrityBanner = document.getElementById("index-integrity-banner");
+
+async function refreshIndexIntegrityBanner() {
+  if (!integrityBanner) return;
+  try {
+    const response = await fetch("/api/index-integrity");
+    if (!response.ok) {
+      integrityBanner.classList.add("hidden");
+      return;
+    }
+    const data = await response.json();
+    if (data.show_banner && data.banner_message) {
+      integrityBanner.textContent = data.banner_message;
+      integrityBanner.classList.remove("hidden");
+    } else {
+      integrityBanner.classList.add("hidden");
+      integrityBanner.textContent = "";
+    }
+  } catch (_error) {
+    integrityBanner.classList.add("hidden");
+  }
+}
+
+void refreshIndexIntegrityBanner();
+setInterval(() => void refreshIndexIntegrityBanner(), 15000);

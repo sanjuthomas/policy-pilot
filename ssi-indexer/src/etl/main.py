@@ -24,6 +24,9 @@ from vertex_client import VertexEmbeddingClient, VertexGenerativeClient
 from etl.admin import get_admin_subject
 from etl.auth_routes import router as auth_router
 from etl.config import settings
+from etl.dlq.routes import build_dlq_router
+from etl.dlq.scheduler import DlqScheduler
+from etl.dlq.store import DlqStore
 from etl.health import component_status
 from etl.instruction_consumer import InstructionKafkaConsumer
 from etl.instruction_pipeline import InstructionPipeline
@@ -31,6 +34,7 @@ from etl.instruction_security_event_consumer import (
     InstructionSecurityEventKafkaConsumer,
 )
 from etl.instruction_security_event_pipeline import InstructionSecurityEventPipeline
+from etl.integrity import index_integrity_status
 from etl.multimodal_store import MultimodalNeo4jStore
 from etl.neo4j_client import Neo4jGraphWriter
 from etl.payment_consumer import (
@@ -59,6 +63,8 @@ generation_client = VertexGenerativeClient(
     model=settings.vertex_gemini_model,
 )
 multimodal_store = MultimodalNeo4jStore(neo4j_writer)
+dlq_store = DlqStore()
+dlq_scheduler = DlqScheduler(dlq_store)
 
 instruction_security_event_pipeline = InstructionSecurityEventPipeline(
     neo4j_writer=neo4j_writer,
@@ -83,11 +89,15 @@ payment_fact_pipeline = PaymentFactPipeline(
 )
 
 instruction_security_event_consumer = InstructionSecurityEventKafkaConsumer(
-    instruction_security_event_pipeline
+    instruction_security_event_pipeline,
+    dlq_store,
 )
-instruction_consumer = InstructionKafkaConsumer(instruction_pipeline)
-payment_security_event_consumer = PaymentSecurityEventKafkaConsumer(payment_security_event_pipeline)
-payment_fact_consumer = PaymentFactKafkaConsumer(payment_fact_pipeline)
+instruction_consumer = InstructionKafkaConsumer(instruction_pipeline, dlq_store)
+payment_security_event_consumer = PaymentSecurityEventKafkaConsumer(
+    payment_security_event_pipeline,
+    dlq_store,
+)
+payment_fact_consumer = PaymentFactKafkaConsumer(payment_fact_pipeline, dlq_store)
 
 
 class SearchRequest(BaseModel):
@@ -98,11 +108,16 @@ class SearchRequest(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await neo4j_writer.connect()
+    try:
+        await dlq_store.connect()
+    except Exception as exc:
+        logger.error("DLQ Mongo connect failed — consumers will pause on failures: %s", exc)
 
     await instruction_security_event_consumer.start()
     await instruction_consumer.start()
     await payment_security_event_consumer.start()
     await payment_fact_consumer.start()
+    await dlq_scheduler.start()
 
     try:
         await embedding_client.warmup()
@@ -110,13 +125,17 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("search backends not fully warmed up yet: %s", exc)
 
-    logger.info("ssi-indexer started (quad consumers: instruction events, instruction facts, payment events, payment facts)")
+    logger.info(
+        "ssi-indexer started (quad consumers + DLQ scheduler)"
+    )
     yield
 
+    await dlq_scheduler.close()
     await instruction_security_event_consumer.close()
     await instruction_consumer.close()
     await payment_security_event_consumer.close()
     await payment_fact_consumer.close()
+    await dlq_store.close()
     await neo4j_writer.close()
     await embedding_client.close()
     await generation_client.close()
@@ -151,8 +170,29 @@ async def health() -> dict:
         neo4j_writer=neo4j_writer,
         embedding_client=embedding_client,
     )
+    integrity = await index_integrity_status(
+        dlq=dlq_store,
+        instruction_security_event_consumer=instruction_security_event_consumer,
+        instruction_consumer=instruction_consumer,
+        payment_security_event_consumer=payment_security_event_consumer,
+        payment_fact_consumer=payment_fact_consumer,
+    )
     overall = "UP" if all(c["ok"] for c in components.values()) else "DEGRADED"
-    return {"status": overall, "components": components}
+    if integrity.get("consumer_paused") or integrity.get("show_banner"):
+        overall = "DEGRADED"
+    return {"status": overall, "components": components, "integrity": integrity}
+
+
+@app.get("/api/index-integrity")
+async def public_index_integrity() -> dict:
+    """Unauthenticated lag/DLQ signal for chat banner."""
+    return await index_integrity_status(
+        dlq=dlq_store,
+        instruction_security_event_consumer=instruction_security_event_consumer,
+        instruction_consumer=instruction_consumer,
+        payment_security_event_consumer=payment_security_event_consumer,
+        payment_fact_consumer=payment_fact_consumer,
+    )
 
 
 @api_router.get("/search-profiles")
@@ -208,9 +248,18 @@ async def stats() -> dict:
         neo4j_writer=neo4j_writer,
         embedding_client=embedding_client,
     )
+    integrity = await index_integrity_status(
+        dlq=dlq_store,
+        instruction_security_event_consumer=instruction_security_event_consumer,
+        instruction_consumer=instruction_consumer,
+        payment_security_event_consumer=payment_security_event_consumer,
+        payment_fact_consumer=payment_fact_consumer,
+    )
     return {
         "components": components,
         "all_ok": all(component["ok"] for component in components.values()),
+        "integrity": integrity,
+        "consumer_groups": integrity.get("consumer_groups") or [],
     }
 
 
@@ -306,6 +355,11 @@ async def cypher_run(request: CypherRunRequest) -> dict:
 
 app.include_router(auth_router)
 app.include_router(api_router, prefix="/api")
+app.include_router(
+    build_dlq_router(dlq_store, dlq_scheduler),
+    prefix="/api",
+    dependencies=[Depends(get_admin_subject)],
+)
 
 
 def run() -> None:
