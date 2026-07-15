@@ -14,6 +14,10 @@ COPY shared/telemetry/pyproject.toml shared/telemetry/pyproject.toml
 COPY shared/telemetry/src shared/telemetry/src
 RUN pip install --no-cache-dir ./shared/telemetry
 
+COPY shared/zitadel_directory/pyproject.toml shared/zitadel_directory/pyproject.toml
+COPY shared/zitadel_directory/src shared/zitadel_directory/src
+RUN pip install --no-cache-dir ./shared/zitadel_directory
+
 COPY ssi-chat/pyproject.toml .
 COPY ssi-chat/src ./src
 

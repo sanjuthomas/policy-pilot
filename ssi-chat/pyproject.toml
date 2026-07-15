@@ -15,6 +15,7 @@ dependencies = [
     "cypher-builder",
     "ssi-telemetry",
     "vertex-client",
+    "zitadel-directory",
 ]
 
 [project.optional-dependencies]
@@ -26,7 +27,7 @@ regression = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src", "../shared/cypher_builder/src", "../shared/vertex_client/src"]
+pythonpath = ["src", "../shared/cypher_builder/src", "../shared/vertex_client/src", "../shared/zitadel_directory/src"]
 asyncio_mode = "auto"
 markers = [
     "regression: integration regression suite (requires RUN_CHAT_REGRESSION=1)",

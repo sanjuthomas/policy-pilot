@@ -13,6 +13,7 @@ dependencies = [
     "uvicorn[standard]>=0.32.0",
     "PyJWT[crypto]>=2.10.0",
     "platform-auth",
+    "zitadel-directory",
 ]
 
 [tool.hatch.metadata]
@@ -32,7 +33,7 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-pythonpath = ["src", "../shared/platform_auth/src"]
+pythonpath = ["src", "../shared/platform_auth/src", "../shared/zitadel_directory/src"]
 
 [tool.coverage.run]
 source = ["harness"]

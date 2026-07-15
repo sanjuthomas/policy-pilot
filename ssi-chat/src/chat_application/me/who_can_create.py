@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from chat_application.auth.subject import Subject
-from chat_application.auth.users import SeedUser, load_users
-from chat_application.config import settings
+from chat_application.auth.users import SeedFile, SeedUser, load_users
 from chat_application.me.models import MeIntentResult
 
 _AMOUNT_CLUBS = frozenset(
@@ -19,13 +16,13 @@ _AMOUNT_CLUBS = frozenset(
 def payment_creators_for_lob(
     covering_lob: str | None,
     *,
-    users_file: Path | None = None,
+    seed: SeedFile | None = None,
 ) -> list[SeedUser]:
     """Middle-office PAYMENT_CREATORs who may draft payments (optionally for a LOB)."""
-    seed = load_users(users_file or settings.users_file)
+    roster = seed or load_users()
     lob = covering_lob.strip().upper() if covering_lob else None
     matches: list[SeedUser] = []
-    for user in seed.users:
+    for user in roster.users:
         if user.user_id.startswith("svc-"):
             continue
         if "PAYMENT_CREATOR" not in user.roles:
@@ -41,12 +38,12 @@ def payment_creators_for_lob(
 
 def instruction_creators(
     *,
-    users_file: Path | None = None,
+    seed: SeedFile | None = None,
 ) -> list[SeedUser]:
     """Middle-office INSTRUCTION_CREATORs who may draft instructions."""
-    seed = load_users(users_file or settings.users_file)
+    roster = seed or load_users()
     matches: list[SeedUser] = []
-    for user in seed.users:
+    for user in roster.users:
         if user.user_id.startswith("svc-"):
             continue
         if "INSTRUCTION_CREATOR" not in user.roles:
@@ -62,9 +59,9 @@ def answer_who_can_create_payment(
     *,
     covering_lob: str | None,
     subject: Subject | None = None,
-    users_file: Path | None = None,
+    seed: SeedFile | None = None,
 ) -> MeIntentResult:
-    creators = payment_creators_for_lob(covering_lob, users_file=users_file)
+    creators = payment_creators_for_lob(covering_lob, seed=seed)
     lob_label = covering_lob.upper() if covering_lob else None
 
     if lob_label:
@@ -118,9 +115,9 @@ def answer_who_can_create_instruction(
     *,
     covering_lob: str | None = None,
     subject: Subject | None = None,
-    users_file: Path | None = None,
+    seed: SeedFile | None = None,
 ) -> MeIntentResult:
-    creators = instruction_creators(users_file=users_file)
+    creators = instruction_creators(seed=seed)
     lob_label = covering_lob.upper() if covering_lob else None
 
     header = (
@@ -166,16 +163,16 @@ def answer_who_can_create(
     entity_type: str | None,
     covering_lob: str | None,
     subject: Subject | None = None,
-    users_file: Path | None = None,
+    seed: SeedFile | None = None,
 ) -> MeIntentResult:
     if entity_type == "instruction":
         return answer_who_can_create_instruction(
             covering_lob=covering_lob,
             subject=subject,
-            users_file=users_file,
+            seed=seed,
         )
     return answer_who_can_create_payment(
         covering_lob=covering_lob,
         subject=subject,
-        users_file=users_file,
+        seed=seed,
     )

@@ -10,7 +10,7 @@ How an instruction or payment mutation becomes queryable in Policy Pilot — fro
 
 3. **Kafka Connect** — four MongoDB source connectors watch those collections and publish **verbatim full documents** to `instruction_security_events`, `instructions`, `payment_security_events`, and `payments`. **ssi-indexer** normalizes versioned `_id` values and security-event ids in `mongo_cdc.py` at consume time.
 
-4. **Authorization service** — sole runtime caller of OPA. Exposes evaluate and eligible-approvers APIs to domain services only (no MongoDB). Reads candidate approvers from `users.yaml` for batch eligibility checks.
+4. **Authorization service** — sole runtime caller of OPA. Exposes evaluate and eligible-approvers APIs to domain services only (no MongoDB). Loads candidate approvers from the live **ZITADEL** user directory (seeded from `users.yaml`) for batch eligibility checks.
 
 5. **SSI indexer** — runs four independent Kafka consumers, all **self-contained** (full snapshots embedded — no API callbacks). Denormalizes `authorization_summary`, `approved_at`, and related fields onto Neo4j `MultimodalDocument` nodes and the graph for chat retrieval.
    - **InstructionSecurityEventPipeline** (`instruction_security_events`) → Neo4j graph + vector doc `source=instruction_security_event`

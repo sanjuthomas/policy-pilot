@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from chat_application.auth.capabilities import OPERATIONAL_ROLES, capabilities_for
 from chat_application.auth.subject import Subject
-from chat_application.auth.users import SeedUser, load_users
-from chat_application.config import settings
+from chat_application.auth.users import SeedFile, SeedUser, load_users
 from chat_application.me.models import MeIntentResult
 
 _AMOUNT_CLUBS = frozenset(
@@ -69,13 +66,12 @@ def _similarity_score(subject: Subject, other: SeedUser) -> tuple[int, list[str]
 def find_users_like_me(
     subject: Subject,
     *,
-    users_file: Path | None = None,
+    seed: SeedFile | None = None,
     limit: int = 12,
 ) -> list[tuple[SeedUser, int, list[str]]]:
-    path = users_file or settings.users_file
-    seed = load_users(path)
+    roster = seed or load_users()
     scored: list[tuple[SeedUser, int, list[str]]] = []
-    for user in seed.users:
+    for user in roster.users:
         if user.user_id == subject.user_id:
             continue
         if user.user_id.startswith("svc-"):
@@ -91,10 +87,10 @@ def find_users_like_me(
 def answer_users_like_me(
     subject: Subject,
     *,
-    users_file: Path | None = None,
+    seed: SeedFile | None = None,
 ) -> MeIntentResult:
     caps = capabilities_for(subject)
-    matches = find_users_like_me(subject, users_file=users_file)
+    matches = find_users_like_me(subject, seed=seed)
     display = (
         f"{subject.family_name}, {subject.given_name}"
         if subject.family_name and subject.given_name

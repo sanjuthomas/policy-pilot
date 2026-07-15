@@ -1,28 +1,60 @@
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from chat_application.auth.users import SeedFile, SeedUser
 from chat_application.auth.zitadel import SessionCredentials
 from fastapi.testclient import TestClient
 
 
-@pytest.fixture
-def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, test_client: TestClient) -> TestClient:
-    users_file = tmp_path / "users.yaml"
-    users_file.write_text(
-        """
-users:
-  - user_id: comp-001
-    given_name: Alex
-    family_name: Morgan
-    title: Compliance Analyst
-    roles: [COMPLIANCE_ANALYST]
-""",
-        encoding="utf-8",
+def _comp_seed() -> SeedFile:
+    return SeedFile(
+        defaults={"email_domain": "ssi.local"},
+        users=[
+            SeedUser(
+                user_id="comp-001",
+                given_name="Alex",
+                family_name="Morgan",
+                title="Compliance Analyst",
+                roles=["COMPLIANCE_ANALYST"],
+            )
+        ],
     )
-    monkeypatch.setattr("chat_application.main.settings.users_file", users_file)
+
+
+def _chat_seed() -> SeedFile:
+    return SeedFile(
+        defaults={"email_domain": "ssi.local"},
+        users=[
+            SeedUser(
+                user_id="comp-001",
+                given_name="Alex",
+                family_name="Morgan",
+                title="Compliance Analyst",
+                roles=["COMPLIANCE_ANALYST"],
+            ),
+            SeedUser(
+                user_id="pay-101",
+                given_name="Mina",
+                family_name="Okonkwo",
+                title="Payment Ops",
+                roles=["PAYMENT_CREATOR"],
+            ),
+        ],
+    )
+
+
+@pytest.fixture
+def client(monkeypatch: pytest.MonkeyPatch, test_client: TestClient) -> TestClient:
+    monkeypatch.setattr(
+        "chat_application.main.load_users",
+        lambda **kwargs: _comp_seed(),
+    )
+    monkeypatch.setattr(
+        "chat_application.auth.users.load_users",
+        lambda **kwargs: _comp_seed(),
+    )
     monkeypatch.setattr("chat_application.main.settings.zitadel_service_pat", "pat")
     return test_client
 
@@ -35,25 +67,17 @@ def test_list_compliance_users(client: TestClient) -> None:
     assert users[0]["user_id"] == "comp-001"
 
 
-def test_list_chat_users_includes_operational(client: TestClient, tmp_path, monkeypatch) -> None:
-    users_file = tmp_path / "users.yaml"
-    users_file.write_text(
-        """
-users:
-  - user_id: comp-001
-    given_name: Alex
-    family_name: Morgan
-    title: Compliance Analyst
-    roles: [COMPLIANCE_ANALYST]
-  - user_id: pay-101
-    given_name: Mina
-    family_name: Okonkwo
-    title: Payment Ops
-    roles: [PAYMENT_CREATOR]
-""",
-        encoding="utf-8",
+def test_list_chat_users_includes_operational(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "chat_application.main.load_users",
+        lambda **kwargs: _chat_seed(),
     )
-    monkeypatch.setattr("chat_application.main.settings.users_file", users_file)
+    monkeypatch.setattr(
+        "chat_application.auth.users.load_users",
+        lambda **kwargs: _chat_seed(),
+    )
     response = client.get("/api/chat-users")
     assert response.status_code == 200
     ids = {user["user_id"] for user in response.json()["users"]}

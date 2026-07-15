@@ -33,7 +33,8 @@ class Settings(BaseSettings):
     authorization_service_url: str = "http://authorization-service:8094"
     payment_service_url: str = "http://payment-service:8093"
     instruction_service_url: str = "http://instruction-service:8000"
-    users_file: Path = Path("/app/zitadel-seed/users.yaml")
+    email_domain: str = "ssi.local"
+    user_directory_cache_ttl_seconds: float = 60.0
     zitadel_url: str = "http://zitadel-proxy"
     zitadel_host_header: str = "localhost"
     zitadel_internal_url: str | None = None

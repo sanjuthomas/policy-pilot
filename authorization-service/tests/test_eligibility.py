@@ -65,7 +65,7 @@ users:
     ]
 
     service = EligibilityService(
-        users=UserDirectory(users_yaml),
+        users=UserDirectory.from_yaml(users_yaml),
         opa=opa,
     )
 
@@ -115,7 +115,7 @@ users:
     ]
 
     service = EligibilityService(
-        users=UserDirectory(users_yaml),
+        users=UserDirectory.from_yaml(users_yaml),
         opa=opa,
     )
 
@@ -163,7 +163,7 @@ users:
     opa.can_approve_payment.return_value = (False, [])
 
     service = EligibilityService(
-        users=UserDirectory(users_yaml),
+        users=UserDirectory.from_yaml(users_yaml),
         opa=opa,
     )
 

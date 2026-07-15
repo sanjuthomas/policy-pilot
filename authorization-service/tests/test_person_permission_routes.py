@@ -12,6 +12,10 @@ from fastapi.testclient import TestClient
 
 def test_person_permission_summary_for_kowalski(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr("authz.config.settings.oidc_issuer_url", "http://localhost:8080")
+    monkeypatch.setattr(
+        "authz.user_directory.UserDirectory.from_zitadel",
+        classmethod(lambda cls, **kwargs: UserDirectory.from_users([])),
+    )
     users_file = tmp_path / "users.yaml"
     users_file.write_text(
         """
@@ -26,7 +30,7 @@ users:
 """,
         encoding="utf-8",
     )
-    directory = UserDirectory(users_file)
+    directory = UserDirectory.from_yaml(users_file)
     compliance = Subject(
         user_id="comp-001",
         title="Compliance Analyst",

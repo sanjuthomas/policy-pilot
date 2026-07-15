@@ -30,7 +30,7 @@ users:
         encoding="utf-8",
     )
 
-    directory = UserDirectory(users_file)
+    directory = UserDirectory.from_yaml(users_file)
     rows = build_user_directory_rows(directory)
 
     assert len(rows) == 2
@@ -61,5 +61,5 @@ users:
         encoding="utf-8",
     )
 
-    directory = UserDirectory(users_file)
+    directory = UserDirectory.from_yaml(users_file)
     assert [user.user_id for user in directory.all_users()] == ["a-user", "z-user"]

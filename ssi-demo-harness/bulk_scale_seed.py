@@ -684,7 +684,7 @@ def main() -> int:
     started = time.time()
     args = parse_args()
     settings = Settings()
-    seed = load_users(settings.users_file)
+    seed = load_users(settings)
     if not settings.zitadel_service_pat:
         _log("error: ZITADEL service PAT required")
         return 1

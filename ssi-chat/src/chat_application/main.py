@@ -116,7 +116,10 @@ class LoginRequest(BaseModel):
 @app.get("/api/compliance-users")
 async def list_compliance_users() -> dict:
     """Legacy endpoint — compliance-only users. Prefer ``/api/chat-users``."""
-    users = compliance_users(settings.users_file, allowed_roles=settings.compliance_role_set)
+    try:
+        users = compliance_users(allowed_roles=settings.compliance_role_set)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"directory unavailable: {exc}") from exc
     return {
         "users": [
             {
@@ -134,7 +137,10 @@ async def list_compliance_users() -> dict:
 @app.get("/api/chat-users")
 async def list_chat_users() -> dict:
     """Users allowed to sign in to Policy Pilot (compliance + operational)."""
-    return {"users": chat_users(settings.users_file, allowed_roles=settings.chat_role_set)}
+    try:
+        return {"users": chat_users(allowed_roles=settings.chat_role_set)}
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"directory unavailable: {exc}") from exc
 
 
 @app.post("/api/auth/login")
@@ -151,7 +157,7 @@ async def auth_login(request: LoginRequest) -> dict:
     audiences: list[str] = []
     roles: list[str] = []
     try:
-        seed = load_users(settings.users_file)
+        seed = load_users()
         for user in seed.users:
             if user.user_id == session.user_id:
                 roles = list(user.roles)

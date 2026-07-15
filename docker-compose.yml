@@ -477,10 +477,8 @@ services:
       ZITADEL_INTERNAL_URL: http://zitadel-proxy
       ZITADEL_HOST_HEADER: localhost
       ZITADEL_SERVICE_PAT_FILE: /zitadel/bootstrap/login-client.pat
-      USERS_FILE: /app/zitadel-seed/users.yaml
     volumes:
       - zitadel-bootstrap:/zitadel/bootstrap:ro
-      - ./zitadel-seed:/app/zitadel-seed:ro
       - ./ssi-demo-harness/src/harness/static:/usr/local/lib/python3.12/site-packages/harness/static:ro
     depends_on:
       instruction-service:
@@ -504,7 +502,7 @@ services:
       <<: *otel-environment
       OTEL_SERVICE_NAME: authorization-service
       OPA_URL: http://opa:8181
-      USERS_FILE: /app/zitadel-seed/users.yaml
+      EMAIL_DOMAIN: ssi.local
       OIDC_ISSUER_URL: http://localhost:8080
       OIDC_INTERNAL_URL: http://zitadel-proxy
       ZITADEL_INTERNAL_URL: http://zitadel-proxy
@@ -512,7 +510,6 @@ services:
       AUTH_MODE: jwt
     volumes:
       - zitadel-bootstrap:/zitadel/bootstrap:ro
-      - ./zitadel-seed:/app/zitadel-seed:ro
       - ./authorization-service/src/authz/static:/usr/local/lib/python3.12/site-packages/authz/static:ro
     depends_on:
       opa-policy-seed:
@@ -567,7 +564,7 @@ services:
       PAYMENT_SERVICE_URL: http://payment-service:8093
       INSTRUCTION_SERVICE_URL: http://instruction-service:8000
       AUTHORIZATION_SERVICE_URL: http://authorization-service:8094
-      USERS_FILE: /app/zitadel-seed/users.yaml
+      EMAIL_DOMAIN: ssi.local
       ZITADEL_URL: http://zitadel-proxy
       ZITADEL_HOST_HEADER: localhost
       ZITADEL_INTERNAL_URL: http://zitadel-proxy
@@ -578,7 +575,6 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - zitadel-bootstrap:/zitadel/bootstrap:ro
-      - ./zitadel-seed:/app/zitadel-seed:ro
       - ./ssi-chat/src/chat_application/static:/usr/local/lib/python3.12/site-packages/chat_application/static:ro
       - ${GCP_SA_KEY_PATH:-${HOME}/.config/gcloud/rag-demos-501323-vertex-client-key.json}:/run/secrets/gcp-sa.json:ro
     depends_on:

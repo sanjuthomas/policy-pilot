@@ -1,0 +1,32 @@
+[project]
+name = "zitadel-directory"
+version = "0.1.0"
+description = "List ZITADEL human users with decoded business metadata for directory queries"
+requires-python = ">=3.12"
+dependencies = [
+  "httpx>=0.28.0",
+  "pydantic>=2.10.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+  "pytest-cov>=6",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.coverage.run]
+source = ["zitadel_directory"]
+
+[tool.coverage.report]
+fail_under = 70
+
+[build-system]
+requires = ["setuptools>=75.0.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
