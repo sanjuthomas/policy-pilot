@@ -172,7 +172,7 @@ Full specification, diagrams, example queries, and reload procedure: **[neo4j-gr
 
 Kafka consumers in **ssi-indexer** must not silently advance past failed Neo4j / embedding writes. Failures after retries are quarantined in a dedicated Mongo dead-letter store **before** the Kafka offset commits; if the DLQ itself is unavailable, consumers **pause** rather than skip. A scheduler (and admin **Retry Now**) replays stored payloads; chat surfaces lag / pause / active DLQ depth via an integrity banner.
 
-Full design, configuration, ops UI, and data flow: **[Indexer Mongo DLQ](ssi-indexer/src/etl/dlq/README.md)** ([GitHub](https://github.com/sanjuthomas/policy-pilot/blob/main/ssi-indexer/src/etl/dlq/README.md)).
+Full design, configuration, ops UI, and data flow: **[Indexer Mongo DLQ](ssi-indexer/src/etl/dlq/README.md)**.
 
 ---
 
