@@ -85,8 +85,8 @@ sequenceDiagram
         P->>A: CREATE evaluate (domain path)
         P->>M: Insert payment + security event<br/>(one transaction)
         P-->>C: PaymentResponse (DRAFT)
-        C->>A: eligible-approvers (svc-chat)
-        C-->>UI: Created report + who can approve
+        C->>A: eligible-submitters (svc-chat)
+        C-->>UI: Created report + who can submit
     end
 
     opt No Go
@@ -109,8 +109,8 @@ sequenceDiagram
 | 4. Explain | **Yes** + humanized allow basis, or **No** + stop | None |
 | 5. Confirm | Card: instruction, amount, value date, LOB, debtor/creditor names & accounts, intermediaries · **Go** / **No Go** | Pending skill id |
 | 6. Create (Go only) | Creating draft… | `POST /api/v1/payments` → Mongo |
-| 7. Approvers | Looking up who can approve… | Authz eligible-approvers |
-| 8. Report | Payment id, instruction, amount, LOB, eligible approvers | None |
+| 7. Submitters | Looking up who can submit… | Authz eligible-submitters |
+| 8. Report | Payment id, instruction, amount, LOB, eligible desk submitters | None |
 
 ---
 
@@ -138,7 +138,7 @@ Chat does **not** write Mongo directly. On **Go**, payment-service allocates the
 | `GET /api/v1/instructions/{id}` | Load SSI parties for the card |
 | `POST /api/v1/authorization/payments/evaluate` | Dry-run (and optional re-check) `CREATE` |
 | `POST /api/v1/payments` | Create DRAFT (user JWT) |
-| `POST /api/v1/authorization/payments/eligible-approvers` | Post-create approver list |
+| `POST /api/v1/authorization/payments/eligible-submitters` | Post-create desk submitter list |
 
 ---
 

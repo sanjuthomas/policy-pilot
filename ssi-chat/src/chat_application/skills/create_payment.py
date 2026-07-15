@@ -369,30 +369,30 @@ async def confirm_create_payment(
 
     payment_id = str(payment.get("payment_id") or "")
     activities.append(f"Created draft payment `{payment_id}`.")
-    activities.append("Looking up who can approve…")
+    activities.append("Looking up who can submit for approval…")
 
-    approvers_section = await _eligible_approvers_section(
+    submitters_section = await _eligible_submitters_section(
         payment=payment,
         instruction_status=pending.instruction_status,
         instruction_end_date=pending.instruction_end_date,
     )
-    if approvers_section:
-        activities.append("Eligible approvers loaded.")
+    if submitters_section:
+        activities.append("Eligible submitters loaded.")
     else:
-        activities.append("Eligible approvers unavailable — see note in the report.")
+        activities.append("Eligible submitters unavailable — see note in the report.")
 
     return SkillRunResult(
         answer=format_created_payment_report(
             payment,
             card=pending.card,
-            approvers_section=approvers_section,
+            submitters_section=submitters_section,
         ),
         activities=activities,
         intent_id="skill.create_payment.created",
     )
 
 
-async def _eligible_approvers_section(
+async def _eligible_submitters_section(
     *,
     payment: dict[str, Any],
     instruction_status: str,
@@ -404,7 +404,7 @@ async def _eligible_approvers_section(
     authz = AuthzOboClient()
     created_by = payment.get("created_by") or {}
     try:
-        data = await authz.eligible_payment_approvers(
+        data = await authz.eligible_payment_submitters(
             payment={
                 "payment_id": payment.get("payment_id"),
                 "instruction_id": payment.get("instruction_id"),
@@ -423,16 +423,23 @@ async def _eligible_approvers_section(
             service_session_id=service_identity.session_id,
         )
     except Exception as exc:
-        logger.warning("eligible approvers lookup failed: %s", exc)
+        logger.warning("eligible submitters lookup failed: %s", exc)
         return None
+
+    blocked = data.get("submit_blocked_reason")
+    if blocked:
+        return f"### Who can submit `{payment.get('payment_id')}`\n\n{blocked}"
 
     eligible = list(data.get("eligible") or [])
     return format_eligible_approvers_section(
-        header=f"### Who can approve `{payment.get('payment_id')}`",
-        section_title="Eligible funding approvers",
+        header=f"### Who can submit `{payment.get('payment_id')}` for approval",
+        section_title="Eligible desk submitters",
         eligible=eligible,
-        empty_message="No eligible funding approvers were found for this payment.",
-        candidate_role_label="FUNDING_APPROVER",
+        empty_message=(
+            "No eligible desk submitters were found for this payment "
+            "(need PAYMENT_CREATOR with desk LOB matching the instruction)."
+        ),
+        candidate_role_label="PAYMENT_CREATOR",
         candidates_evaluated=data.get("candidates_evaluated"),
     )
 

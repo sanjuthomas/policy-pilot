@@ -182,3 +182,98 @@ users:
     assert sample_payment_context.instruction_id in result.approval_blocked_reason
     assert "USED" in result.approval_blocked_reason
     opa.can_approve_payment.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_eligible_submitters_filters_by_opa(
+    tmp_path,
+    sample_payment_context: PaymentEligibilityContext,
+) -> None:
+    users_yaml = tmp_path / "users.yaml"
+    users_yaml.write_text(
+        """
+defaults:
+  password: Password1!
+users:
+  - user_id: fo-ficc-101
+    given_name: Alex
+    family_name: Nguyen
+    title: Desk Analyst
+    lob: FICC
+    roles: [PAYMENT_CREATOR]
+    groups: [FRONT_OFFICE]
+  - user_id: fo-fx-101
+    given_name: Blair
+    family_name: Ortiz
+    title: Desk Analyst
+    lob: FX
+    roles: [PAYMENT_CREATOR]
+    groups: [FRONT_OFFICE]
+""",
+        encoding="utf-8",
+    )
+
+    opa = AsyncMock()
+    opa.can_submit_payment.side_effect = [
+        (True, ["PAYMENT_CREATOR", "desk LOB matches"]),
+    ]
+
+    service = EligibilityService(
+        users=UserDirectory.from_yaml(users_yaml),
+        opa=opa,
+    )
+
+    draft_payment = sample_payment_context.model_copy(update={"status": "DRAFT"})
+    result = await service.eligible_submitters_for_payment(
+        PaymentEligibleApproversEvaluateRequest(
+            payment=draft_payment,
+            instruction_status="APPROVED",
+            instruction_end_date=datetime.now(UTC).isoformat(),
+        )
+    )
+
+    assert len(result.eligible) == 1
+    assert result.eligible[0].user_id == "fo-ficc-101"
+    assert result.candidates_evaluated == 1
+    assert result.submit_blocked_reason is None
+    opa.can_submit_payment.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_eligible_submitters_blocked_when_not_draft(
+    tmp_path,
+    sample_payment_context: PaymentEligibilityContext,
+) -> None:
+    users_yaml = tmp_path / "users.yaml"
+    users_yaml.write_text(
+        """
+users:
+  - user_id: fo-ficc-101
+    given_name: Alex
+    family_name: Nguyen
+    title: Desk Analyst
+    lob: FICC
+    roles: [PAYMENT_CREATOR]
+    groups: [FRONT_OFFICE]
+""",
+        encoding="utf-8",
+    )
+
+    opa = AsyncMock()
+    service = EligibilityService(
+        users=UserDirectory.from_yaml(users_yaml),
+        opa=opa,
+    )
+
+    result = await service.eligible_submitters_for_payment(
+        PaymentEligibleApproversEvaluateRequest(
+            payment=sample_payment_context,
+            instruction_status="APPROVED",
+            instruction_end_date=datetime.now(UTC).isoformat(),
+        )
+    )
+
+    assert result.eligible == []
+    assert result.submit_blocked_reason is not None
+    assert "DRAFT" in result.submit_blocked_reason
+    opa.can_submit_payment.assert_not_awaited()

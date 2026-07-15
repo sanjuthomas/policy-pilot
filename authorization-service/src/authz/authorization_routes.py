@@ -11,6 +11,7 @@ from authz.models import (
     PaymentAmountLimitsResponse,
     PaymentEligibleApproversEvaluateRequest,
     PaymentEligibleApproversResponse,
+    PaymentEligibleSubmittersResponse,
     PaymentEvaluateRequest,
     PersonPermissionSummaryResponse,
     PolicyDecisionResponse,
@@ -255,6 +256,18 @@ async def evaluate_payment_eligible_approvers(
 ) -> PaymentEligibleApproversResponse:
     try:
         return await service.eligible_approvers_for_payment(request)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"eligibility evaluation failed: {exc}") from exc
+
+
+@router.post("/payments/eligible-submitters", response_model=PaymentEligibleSubmittersResponse)
+async def evaluate_payment_eligible_submitters(
+    request: PaymentEligibleApproversEvaluateRequest,
+    _service_caller: Subject = Depends(get_service_caller),
+    service=Depends(_eligibility_service),
+) -> PaymentEligibleSubmittersResponse:
+    try:
+        return await service.eligible_submitters_for_payment(request)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"eligibility evaluation failed: {exc}") from exc
 

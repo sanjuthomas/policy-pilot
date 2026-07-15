@@ -248,9 +248,9 @@ async def test_confirm_go_creates_payment() -> None:
             "chat_application.skills.create_payment.service_identity"
         ) as identity,
         patch(
-            "chat_application.skills.create_payment._eligible_approvers_section",
+            "chat_application.skills.create_payment._eligible_submitters_section",
             new_callable=AsyncMock,
-            return_value="### Who can approve\n\nok",
+            return_value="### Who can submit\n\nok",
         ),
     ):
         identity.token = "svc-token"

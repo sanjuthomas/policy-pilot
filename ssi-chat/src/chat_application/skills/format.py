@@ -73,7 +73,7 @@ def format_created_payment_report(
     payment: dict[str, Any],
     *,
     card: ConfirmationCard,
-    approvers_section: str | None,
+    submitters_section: str | None,
 ) -> str:
     payment_id = payment.get("payment_id") or "—"
     lines = [
@@ -89,14 +89,14 @@ def format_created_payment_report(
         f"| Status | {payment.get('status') or 'DRAFT'} |",
         "",
     ]
-    if approvers_section:
-        lines.extend([approvers_section, ""])
+    if submitters_section:
+        lines.extend([submitters_section, ""])
     else:
         lines.extend(
             [
-                "I couldn't load eligible approvers automatically. "
-                f"Ask: “Who can approve payment {payment_id}?” "
-                "(compliance users get the live eligibility path).",
+                "I couldn't load eligible submitters automatically. "
+                "An owning-LOB desk analyst (`fo-*`) with `PAYMENT_CREATOR` "
+                "can submit this draft for funding approval via chat.",
                 "",
             ]
         )

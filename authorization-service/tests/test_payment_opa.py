@@ -3,7 +3,28 @@ from __future__ import annotations
 from authz.payment_opa import (
     payment_approval_blocked_reason,
     payment_prospective_instruction_status,
+    payment_submit_blocked_reason,
 )
+
+
+def test_payment_submit_blocked_when_not_draft() -> None:
+    reason = payment_submit_blocked_reason("SUBMITTED", "APPROVED")
+    assert reason is not None
+    assert "DRAFT" in reason
+
+
+def test_payment_submit_blocked_when_instruction_not_approved() -> None:
+    reason = payment_submit_blocked_reason(
+        "DRAFT",
+        "SUBMITTED",
+        instruction_id="i-1",
+    )
+    assert reason is not None
+    assert "APPROVED" in reason
+
+
+def test_payment_submit_allowed_for_draft_with_approved_instruction() -> None:
+    assert payment_submit_blocked_reason("DRAFT", "APPROVED") is None
 
 
 def test_payment_approval_blocked_reason_for_used_instruction() -> None:

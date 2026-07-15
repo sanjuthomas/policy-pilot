@@ -61,6 +61,32 @@ def payment_approval_blocked_reason(
     return None
 
 
+def payment_submit_blocked_reason(
+    payment_status: str,
+    instruction_status: str,
+    *,
+    instruction_id: str | None = None,
+) -> str | None:
+    """Explain why SUBMIT is not permitted in the current lifecycle state."""
+    payment_status = str(payment_status or "")
+    instruction_status = str(instruction_status or "")
+    instruction_label = _backing_instruction_label(instruction_id)
+
+    if payment_status != "DRAFT":
+        return (
+            f"Only DRAFT payments can be submitted for funding approval "
+            f"(status is {payment_status or 'unknown'})."
+        )
+
+    if instruction_status and instruction_status != "APPROVED":
+        return (
+            f"{instruction_label} is {instruction_status}; it must be APPROVED "
+            "before a payment can be submitted."
+        )
+
+    return None
+
+
 def payment_prospective_instruction_status(
     instruction_status: str,
     *,

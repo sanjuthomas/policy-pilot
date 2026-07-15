@@ -39,6 +39,42 @@ users:
     assert [subject.user_id for subject in candidates] == ["pay-201"]
 
 
+def test_payment_submitter_candidates_filters_desk_lob(tmp_path: Path) -> None:
+    users_yaml = tmp_path / "users.yaml"
+    users_yaml.write_text(
+        """
+users:
+  - user_id: fo-ficc-101
+    given_name: A
+    family_name: Desk
+    title: Analyst
+    lob: FICC
+    roles: [PAYMENT_CREATOR]
+    groups: [FRONT_OFFICE]
+  - user_id: fo-fx-101
+    given_name: B
+    family_name: DeskFx
+    title: Analyst
+    lob: FX
+    roles: [PAYMENT_CREATOR]
+    groups: [FRONT_OFFICE]
+  - user_id: pay-101
+    given_name: C
+    family_name: Middle
+    title: Analyst
+    roles: [PAYMENT_CREATOR]
+    groups: [MIDDLE_OFFICE]
+    covering_lobs: [FICC]
+""",
+        encoding="utf-8",
+    )
+
+    directory = UserDirectory.from_yaml(users_yaml)
+    candidates = directory.payment_submitter_candidates("FICC")
+
+    assert [subject.user_id for subject in candidates] == ["fo-ficc-101"]
+
+
 def test_members_of_group_filters_role_and_covering_lob(tmp_path: Path) -> None:
     users_yaml = tmp_path / "users.yaml"
     users_yaml.write_text(
