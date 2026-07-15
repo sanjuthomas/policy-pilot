@@ -28,8 +28,8 @@ from harness.helpers import (
     _valid_instruction_seed_pairs,
     auth_client,
     build_payment_seed_plan,
+    fetch_payment_amount_club_limits,
     instruction_service_client,
-    payment_client,
     payment_submitter_for_lob,
 )
 from harness.zitadel_auth import SessionCredentials, ZitadelAuthClient
@@ -411,6 +411,7 @@ def _execute_payment_job(
     settings: Settings,
     sessions: SessionCache,
     ps: FastPaymentClient,
+    club_limits: dict[str, float],
 ) -> PlannedPayment | None:
     try:
         creator = user_by_id(seed, job.creator_id)
@@ -453,7 +454,9 @@ def _execute_payment_job(
                     "supervisor_id": creator.supervisor_id,
                 },
             }
-            approver_id = _approver_for_payment(seed, pay_detail, rng=RNG)
+            approver_id = _approver_for_payment(
+                seed, pay_detail, club_limits=club_limits, rng=RNG
+            )
             if approver_id:
                 approver = sessions.get(approver_id)
                 appr = ps.approve_payment(approver, payment_id)
@@ -501,7 +504,11 @@ def create_payments(
     if not standing:
         raise RuntimeError("no approved instructions available for payments")
 
-    amount_plan = build_payment_seed_plan(remaining, seed=seed, rng=RNG)
+    admin = _session_for_user(auth_client(settings), seed, settings, "admin-001")
+    club_limits = fetch_payment_amount_club_limits(settings, admin)
+    amount_plan = build_payment_seed_plan(
+        remaining, seed=seed, club_limits=club_limits, rng=RNG
+    )
     fates = _payment_fates(remaining, existing_counts)
     sessions = SessionCache(auth_client(settings), seed, settings)
     ps = FastPaymentClient(settings)
@@ -551,6 +558,7 @@ def create_payments(
                 settings=settings,
                 sessions=sessions,
                 ps=ps,
+                club_limits=club_limits,
             )
             for job in jobs
         ]

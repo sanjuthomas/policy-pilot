@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+from collections.abc import Mapping
 from enum import StrEnum
 
 from harness.config import Settings
@@ -231,12 +232,6 @@ def payment_client(settings: Settings) -> PaymentServiceClient:
 # Payment helpers
 # ---------------------------------------------------------------------------
 
-_AMOUNT_CLUB_LIMITS: dict[str, float] = {
-    "UP_TO_100_MILLION_CLUB": 100_000_000.0,
-    "UP_TO_1_BILLION_CLUB": 1_000_000_000.0,
-    "UP_TO_100_BILLION_CLUB": 100_000_000_000.0,
-}
-
 _PAYMENT_AMOUNT_TIERS = (
     500_000.0,
     1_000_000.0,
@@ -248,8 +243,34 @@ _PAYMENT_AMOUNT_TIERS = (
 )
 
 
-def _user_amount_limit(user: SeedUser) -> float | None:
-    limits = [_AMOUNT_CLUB_LIMITS[group] for group in user.groups if group in _AMOUNT_CLUB_LIMITS]
+def fetch_payment_amount_club_limits(
+    settings: Settings,
+    session: SessionCredentials,
+) -> dict[str, float]:
+    """Load amount-club ceilings from authorization-service → OPA (no local constants)."""
+    import httpx
+
+    base = settings.authorization_service_url.rstrip("/")
+    response = httpx.get(
+        f"{base}/api/v1/authorization/payment-amount-limits",
+        headers={
+            "Authorization": f"Bearer {session.session_token}",
+            "X-Session-Id": session.session_id,
+            "Accept": "application/json",
+        },
+        timeout=30.0,
+    )
+    response.raise_for_status()
+    body = response.json()
+    clubs = body.get("club_limits") or {}
+    return {str(name): float(ceiling) for name, ceiling in clubs.items()}
+
+
+def _user_amount_limit(
+    user: SeedUser,
+    club_limits: Mapping[str, float],
+) -> float | None:
+    limits = [club_limits[group] for group in user.groups if group in club_limits]
     return max(limits) if limits else None
 
 
@@ -276,6 +297,7 @@ def _eligible_payment_approvers(
     amount: float,
     creator_user_id: str,
     creator_supervisor_id: str | None,
+    club_limits: Mapping[str, float],
 ) -> list[str]:
     """Return approver user_ids that satisfy payment OPA rules from the seed file."""
     eligible: list[str] = []
@@ -283,7 +305,7 @@ def _eligible_payment_approvers(
     for approver in _funding_approvers(seed):
         if owning_lob not in approver.covering_lobs:
             continue
-        limit = _user_amount_limit(approver)
+        limit = _user_amount_limit(approver, club_limits)
         if limit is None or amount > limit:
             continue
         if approver.user_id == creator_user_id:
@@ -307,6 +329,7 @@ def _approver_for_payment(
     seed: SeedFile,
     payment: dict,
     *,
+    club_limits: Mapping[str, float],
     rng: random.Random | None = None,
 ) -> str | None:
     created_by = payment.get("created_by") or {}
@@ -316,6 +339,7 @@ def _approver_for_payment(
         amount=float(payment.get("amount") or 0),
         creator_user_id=str(created_by.get("user_id") or ""),
         creator_supervisor_id=created_by.get("supervisor_id"),
+        club_limits=club_limits,
     )
     if not eligible:
         return None
@@ -339,6 +363,7 @@ def _rejector_for_payment(
 def build_payment_seed_plan(
     count: int,
     *,
+    club_limits: Mapping[str, float],
     seed: SeedFile | None = None,
     rng: random.Random | None = None,
 ) -> list[tuple[str, float]]:
@@ -359,7 +384,7 @@ def build_payment_seed_plan(
     plan: list[tuple[str, float]] = []
     for _ in range(count):
         creator = rng.choice(creators)
-        limit = _user_amount_limit(creator) or 1_000_000.0
+        limit = _user_amount_limit(creator, club_limits) or 1_000_000.0
         valid_amounts = [amount for amount in _PAYMENT_AMOUNT_TIERS if amount <= limit]
         amount = rng.choice(valid_amounts or [min(limit, 1_000_000.0)])
         plan.append((creator.user_id, amount))
@@ -371,6 +396,7 @@ def resolve_payment_update_amount(
     creator_user_id: str,
     *,
     seed: SeedFile,
+    club_limits: Mapping[str, float],
     override: float | None = None,
     rng: random.Random | None = None,
 ) -> float:
@@ -380,8 +406,8 @@ def resolve_payment_update_amount(
 
     rng = rng or random.Random()
     creator = next((user for user in seed.users if user.user_id == creator_user_id), None)
-    limit = _user_amount_limit(creator) if creator else None
-    cap = limit or 100_000_000.0
+    limit = _user_amount_limit(creator, club_limits) if creator else None
+    cap = limit or max(club_limits.values(), default=100_000_000.0)
 
     higher_tiers = [
         amount for amount in _PAYMENT_AMOUNT_TIERS if amount > current_amount and amount <= cap
@@ -496,6 +522,7 @@ __all__ = [
     "_eligible_payment_approvers",
     "_rejector_for_payment",
     "build_payment_seed_plan",
+    "fetch_payment_amount_club_limits",
     "payment_submitter_for_lob",
     "resolve_payment_update_amount",
     "_count_security_events",

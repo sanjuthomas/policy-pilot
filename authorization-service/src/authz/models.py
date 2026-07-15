@@ -184,6 +184,14 @@ class PolicySummaryResponse(BaseModel):
     source: str = "opa"
 
 
+class PaymentAmountLimitsResponse(BaseModel):
+    """OPA payment amount club ceilings — single source for directory answers."""
+
+    absolute_limit: float
+    club_limits: dict[str, float]
+    source: str = "opa"
+
+
 class PersonCapability(BaseModel):
     kind: str
     description: str

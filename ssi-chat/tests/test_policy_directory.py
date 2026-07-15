@@ -10,11 +10,23 @@ from chat_application.policy.directory import (
     payment_approval_clubs_from_question,
 )
 
+# Mirror of opa-policy-seed/policies/payment/amount_limits.rego — test fixture only.
+_OPA_CLUB_LIMITS = {
+    "UP_TO_100_MILLION_CLUB": 100_000_000.0,
+    "UP_TO_1_BILLION_CLUB": 1_000_000_000.0,
+    "UP_TO_100_BILLION_CLUB": 100_000_000_000.0,
+}
+_OPA_ABSOLUTE_LIMIT = 100_000_000_000.0
+
 
 def test_payment_approval_directory_question_detects_amount() -> None:
     question = "Who all have permission to approve payments worth more than 25 billion?"
     assert is_payment_approval_directory_question(question)
-    clubs, amount, strict = payment_approval_clubs_from_question(question)
+    clubs, amount, strict = payment_approval_clubs_from_question(
+        question,
+        club_limits=_OPA_CLUB_LIMITS,
+        absolute_limit=_OPA_ABSOLUTE_LIMIT,
+    )
     assert clubs == ["UP_TO_100_BILLION_CLUB"]
     assert amount == 25_000_000_000.0
     assert strict is True
@@ -23,7 +35,11 @@ def test_payment_approval_directory_question_detects_amount() -> None:
 def test_payment_approval_directory_detects_covering_lob() -> None:
     question = "Who has permission to approve payments belong to LOB FICC?"
     assert is_payment_approval_directory_question(question)
-    groups, amount, _strict = directory_groups_for_question(question)
+    groups, amount, _strict = directory_groups_for_question(
+        question,
+        club_limits=_OPA_CLUB_LIMITS,
+        absolute_limit=_OPA_ABSOLUTE_LIMIT,
+    )
     assert groups == ["MIDDLE_OFFICE"]
     assert amount is None
 
@@ -40,16 +56,31 @@ def test_payment_approval_directory_skips_when_payment_id_present() -> None:
 
 
 def test_payment_approval_clubs_for_amount_inclusive() -> None:
-    assert payment_approval_clubs_for_amount(50_000_000, strict=False) == [
+    assert payment_approval_clubs_for_amount(
+        50_000_000,
+        club_limits=_OPA_CLUB_LIMITS,
+        absolute_limit=_OPA_ABSOLUTE_LIMIT,
+        strict=False,
+    ) == [
         "UP_TO_100_MILLION_CLUB",
         "UP_TO_1_BILLION_CLUB",
         "UP_TO_100_BILLION_CLUB",
     ]
-    assert payment_approval_clubs_for_amount(500_000_000, strict=False) == [
+    assert payment_approval_clubs_for_amount(
+        500_000_000,
+        club_limits=_OPA_CLUB_LIMITS,
+        absolute_limit=_OPA_ABSOLUTE_LIMIT,
+        strict=False,
+    ) == [
         "UP_TO_1_BILLION_CLUB",
         "UP_TO_100_BILLION_CLUB",
     ]
-    assert payment_approval_clubs_for_amount(25_000_000_000, strict=False) == [
+    assert payment_approval_clubs_for_amount(
+        25_000_000_000,
+        club_limits=_OPA_CLUB_LIMITS,
+        absolute_limit=_OPA_ABSOLUTE_LIMIT,
+        strict=False,
+    ) == [
         "UP_TO_100_BILLION_CLUB",
     ]
 
@@ -59,7 +90,11 @@ def test_exceeding_one_billion_requires_highest_club_only() -> None:
         "Who has permission to approve payments exceeding $1 billion, "
         "and for which lines of business?"
     )
-    clubs, amount, strict = payment_approval_clubs_from_question(question)
+    clubs, amount, strict = payment_approval_clubs_from_question(
+        question,
+        club_limits=_OPA_CLUB_LIMITS,
+        absolute_limit=_OPA_ABSOLUTE_LIMIT,
+    )
     assert amount == 1_000_000_000.0
     assert strict is True
     assert clubs == ["UP_TO_100_BILLION_CLUB"]
@@ -70,7 +105,11 @@ def test_exceeding_one_million_unions_all_eligible_clubs() -> None:
         "Who has permission to approve payments exceeding $1 million, "
         "and for which lines of business?"
     )
-    clubs, amount, strict = payment_approval_clubs_from_question(question)
+    clubs, amount, strict = payment_approval_clubs_from_question(
+        question,
+        club_limits=_OPA_CLUB_LIMITS,
+        absolute_limit=_OPA_ABSOLUTE_LIMIT,
+    )
     assert amount == 1_000_000.0
     assert strict is True
     assert clubs == [
@@ -83,7 +122,12 @@ def test_exceeding_one_million_unions_all_eligible_clubs() -> None:
 def test_at_least_one_billion_includes_one_billion_club() -> None:
     question = "Who can approve payments of at least $1 billion?"
     assert is_strict_payment_amount_threshold(question) is False
-    assert payment_approval_clubs_for_amount(1_000_000_000.0, strict=False) == [
+    assert payment_approval_clubs_for_amount(
+        1_000_000_000.0,
+        club_limits=_OPA_CLUB_LIMITS,
+        absolute_limit=_OPA_ABSOLUTE_LIMIT,
+        strict=False,
+    ) == [
         "UP_TO_1_BILLION_CLUB",
         "UP_TO_100_BILLION_CLUB",
     ]

@@ -213,6 +213,15 @@ async def test_ask_policy_directory_uses_distinct_routing_labels(
         )
     )
     rag_service._eligibility = AsyncMock()
+    rag_service._eligibility.payment_amount_limits.return_value = {
+        "absolute_limit": 100_000_000_000.0,
+        "club_limits": {
+            "UP_TO_100_MILLION_CLUB": 100_000_000.0,
+            "UP_TO_1_BILLION_CLUB": 1_000_000_000.0,
+            "UP_TO_100_BILLION_CLUB": 100_000_000_000.0,
+        },
+        "source": "opa",
+    }
     rag_service._eligibility.group_members.return_value = {
         "group": "UP_TO_100_BILLION_CLUB",
         "members": [
@@ -245,4 +254,5 @@ async def test_ask_policy_directory_uses_distinct_routing_labels(
     assert response.routing.path == "policy_directory"
     assert response.routing.answer_synthesis == "policy_directory_api"
     assert response.routing.retrieval_strategy == "policy_directory"
+    rag_service._eligibility.payment_amount_limits.assert_awaited()
     rag_service._eligibility.group_members.assert_awaited()

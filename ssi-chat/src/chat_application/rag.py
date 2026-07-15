@@ -892,7 +892,30 @@ class RagService:
             )
 
         covering_lob = covering_lob_filter_from_question(message)
-        clubs, amount, strict_threshold = directory_groups_for_question(message)
+        try:
+            limits = await self._eligibility.payment_amount_limits(
+                bearer_token=bearer_token,
+                session_id=session_id,
+            )
+            club_limits = {
+                str(name): float(ceiling)
+                for name, ceiling in (limits.get("club_limits") or {}).items()
+            }
+            absolute_limit = float(limits["absolute_limit"])
+        except (EligibilityClientError, KeyError, TypeError, ValueError) as exc:
+            if isinstance(exc, EligibilityClientError):
+                return str(exc)
+            return (
+                "Could not load payment amount limits from policy (OPA). "
+                "Try again shortly, or ask with an explicit club name such as "
+                "UP_TO_100_BILLION_CLUB."
+            )
+
+        clubs, amount, strict_threshold = directory_groups_for_question(
+            message,
+            club_limits=club_limits,
+            absolute_limit=absolute_limit,
+        )
         if not clubs:
             return (
                 "I could not determine which payment amount-limit club or desk LOB applies. "

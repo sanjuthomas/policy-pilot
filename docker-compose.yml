@@ -470,6 +470,7 @@ services:
     environment:
       INSTRUCTION_SERVICE_URL: http://instruction-service:8000
       PAYMENT_SERVICE_URL: http://payment-service:8093
+      AUTHORIZATION_SERVICE_URL: http://authorization-service:8094
       MONGODB_URI: mongodb://mongodb:27017/?replicaSet=rs0
       OIDC_ISSUER_URL: http://localhost:8080
       OIDC_INTERNAL_URL: http://zitadel-proxy
@@ -484,6 +485,8 @@ services:
       instruction-service:
         condition: service_started
       payment-service:
+        condition: service_started
+      authorization-service:
         condition: service_started
       zitadel-api:
         condition: service_healthy

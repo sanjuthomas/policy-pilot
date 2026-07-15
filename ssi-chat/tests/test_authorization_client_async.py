@@ -82,3 +82,33 @@ async def test_policy_summary_success() -> None:
     call_kwargs = mock_client.get.await_args.kwargs
     assert call_kwargs["params"] == {"domain": "payment", "action": "APPROVE"}
     assert call_kwargs["headers"]["X-Session-Id"] == "sess-1"
+
+
+@pytest.mark.asyncio
+async def test_payment_amount_limits_success() -> None:
+    response = httpx.Response(
+        200,
+        json={
+            "absolute_limit": 100_000_000_000.0,
+            "club_limits": {"UP_TO_100_BILLION_CLUB": 100_000_000_000.0},
+            "source": "opa",
+        },
+        request=httpx.Request(
+            "GET",
+            "http://authz.test/api/v1/authorization/payment-amount-limits",
+        ),
+    )
+
+    with patch("chat_application.authz.client.httpx.AsyncClient") as mock_client_cls:
+        mock_client = mock_client_cls.return_value.__aenter__.return_value
+        mock_client.get = AsyncMock(return_value=response)
+        client = EligibilityClient(authorization_service_url="http://authz.test")
+        body = await client.payment_amount_limits(
+            bearer_token="token",
+            session_id="sess-1",
+        )
+
+    assert body["absolute_limit"] == 100_000_000_000.0
+    assert "UP_TO_100_BILLION_CLUB" in body["club_limits"]
+    call_kwargs = mock_client.get.await_args.kwargs
+    assert call_kwargs["headers"]["X-Session-Id"] == "sess-1"

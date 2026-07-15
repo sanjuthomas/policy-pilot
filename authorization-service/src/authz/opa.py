@@ -283,3 +283,10 @@ class OpaClient:
         if not isinstance(result, dict):
             raise RuntimeError(f"OPA returned empty policy_summary for {normalized}")
         return result
+
+    async def fetch_payment_amount_limits(self) -> dict[str, Any]:
+        """Return absolute + club ceilings from OPA (no subject input)."""
+        result = await self._get_data(f"{self._PAYMENT_PACKAGE}/amount_limits_catalog")
+        if not isinstance(result, dict):
+            raise RuntimeError("OPA returned empty amount_limits_catalog")
+        return result

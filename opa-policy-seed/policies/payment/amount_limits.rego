@@ -67,7 +67,20 @@ exceeds_absolute_limit if {
 
 # Amount is under the absolute ceiling but above the subject's club ceiling.
 exceeds_subject_limit if {
-    not exceeds_absolute_limit
-    has_any_limit_group
-    input.payment.amount > subject_limit
+	not exceeds_absolute_limit
+	has_any_limit_group
+	input.payment.amount > subject_limit
+}
+
+# ---------------------------------------------------------------------------
+# amount_limits_catalog — queryable policy metadata (no input).
+#
+# Queried via GET /v1/data/payment/lifecycle/amount_limits_catalog.
+# authorization-service / chat use this as the single source for club ceilings;
+# do not re-encode these constants in application code.
+# ---------------------------------------------------------------------------
+
+amount_limits_catalog := {
+	"absolute_limit": absolute_limit,
+	"club_limits": club_limit,
 }
