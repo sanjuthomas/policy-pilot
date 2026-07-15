@@ -45,7 +45,8 @@ class Settings(BaseSettings):
     dlq_scheduler_interval_seconds: int = 300
     dlq_scheduler_batch_size: int = 20
     dlq_scheduler_max_attempts: int = 8
-    dlq_scheduler_backoff_seconds: float = 30.0
+    # Space failed scheduler replays ~one interval apart (auto retry cadence).
+    dlq_scheduler_backoff_seconds: float = 300.0
     dlq_scheduler_max_backoff_seconds: float = 3600.0
     dlq_lock_ttl_seconds: int = 300
     dlq_pause_poll_seconds: float = 5.0

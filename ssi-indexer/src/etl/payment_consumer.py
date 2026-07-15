@@ -12,8 +12,8 @@ from etl.dlq.models import PipelineKind
 from etl.dlq.pause import pause_registry
 from etl.dlq.runtime import process_kafka_message
 from etl.dlq.store import DlqStore
-from etl.instruction_consumer import _estimated_lag
 from etl.kafka_deserialize import deserialize_kafka_json
+from etl.kafka_offsets import estimated_lag as _estimated_lag
 from etl.mongo_cdc import normalize_payment_message, normalize_security_event
 from etl.payment_pipeline import PaymentFactPipeline, PaymentSecurityEventPipeline
 
@@ -103,6 +103,9 @@ class PaymentSecurityEventKafkaConsumer:
             return
         await self.pipeline.process(event)
 
+    def is_task_running(self) -> bool:
+        return self._task is not None and not self._task.done()
+
 
 class PaymentFactKafkaConsumer:
     """Consumes payment fact snapshots from the payments topic."""
@@ -179,3 +182,6 @@ class PaymentFactKafkaConsumer:
             logger.warning("skipping invalid payment fact payload: %s", redact_value(payload))
             return
         await self.pipeline.process(fact)
+
+    def is_task_running(self) -> bool:
+        return self._task is not None and not self._task.done()

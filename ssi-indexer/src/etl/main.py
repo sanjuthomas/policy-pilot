@@ -259,6 +259,7 @@ async def stats() -> dict:
         "components": components,
         "all_ok": all(component["ok"] for component in components.values()),
         "integrity": integrity,
+        "consumer_groups": integrity.get("consumer_groups") or [],
     }
 
 

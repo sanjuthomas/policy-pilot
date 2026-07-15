@@ -126,6 +126,7 @@ function renderComponents(components) {
 async function refreshComponents() {
   if (!AdminAuth.loadSession()) {
     componentsGrid.innerHTML = '<div class="component-card status-down">Admin sign-in required</div>';
+    renderKafkaConsumers([], "Sign in to load consumer offsets.");
     return;
   }
   try {
@@ -135,9 +136,74 @@ async function refreshComponents() {
     }
     const data = await response.json();
     renderComponents(data.components || {});
+    const groups =
+      data.consumer_groups ||
+      data.integrity?.consumer_groups ||
+      [];
+    const totalLag =
+      data.integrity?.kafka_lag_total ??
+      groups.reduce((n, g) => n + (g.lag_total || 0), 0);
+    renderKafkaConsumers(
+      groups,
+      `total lag=${totalLag} · ${groups.length} consumer group(s)`,
+    );
   } catch (error) {
     componentsGrid.innerHTML = `<div class="component-card status-down">Component status unavailable: ${escapeHtml(error.message)}</div>`;
+    renderKafkaConsumers([], `Consumer metadata unavailable: ${error.message}`);
   }
+}
+
+const kafkaConsumersSummary = document.getElementById("kafka-consumers-summary");
+const kafkaConsumersBody = document.getElementById("kafka-consumers-body");
+const kafkaConsumersRefreshBtn = document.getElementById("kafka-consumers-refresh-btn");
+
+function renderKafkaConsumers(groups, summaryText) {
+  if (kafkaConsumersSummary) {
+    kafkaConsumersSummary.textContent = summaryText || "";
+  }
+  if (!kafkaConsumersBody) {
+    return;
+  }
+  if (!groups || !groups.length) {
+    kafkaConsumersBody.innerHTML = "";
+    return;
+  }
+  const rows = [];
+  for (const g of groups) {
+    const partitions = g.partitions || [];
+    if (!partitions.length) {
+      rows.push(`<tr>
+        <td>${escapeHtml(g.name)}</td>
+        <td>${escapeHtml(g.topic)}</td>
+        <td>${escapeHtml(g.consumer_group)}</td>
+        <td>—</td>
+        <td>—</td>
+        <td>—</td>
+        <td>—</td>
+        <td>${g.lag_total ?? 0}</td>
+        <td>${escapeHtml(g.status)}${g.pause_reason ? ` (${escapeHtml(g.pause_reason)})` : ""}</td>
+      </tr>`);
+      continue;
+    }
+    for (const p of partitions) {
+      rows.push(`<tr>
+        <td>${escapeHtml(g.name)}</td>
+        <td>${escapeHtml(p.topic || g.topic)}</td>
+        <td>${escapeHtml(g.consumer_group)}</td>
+        <td>${p.partition ?? "—"}</td>
+        <td>${p.committed_offset ?? "—"}</td>
+        <td>${p.position ?? "—"}</td>
+        <td>${p.latest_offset ?? "—"}</td>
+        <td>${p.lag ?? 0}</td>
+        <td>${escapeHtml(g.status)}${g.pause_reason ? ` (${escapeHtml(g.pause_reason)})` : ""}</td>
+      </tr>`);
+    }
+  }
+  kafkaConsumersBody.innerHTML = rows.join("");
+}
+
+if (kafkaConsumersRefreshBtn) {
+  kafkaConsumersRefreshBtn.addEventListener("click", () => void refreshComponents());
 }
 
 async function refreshStats() {
@@ -336,47 +402,60 @@ const dlqRetryBtn = document.getElementById("dlq-retry-btn");
 const dlqResumeBtn = document.getElementById("dlq-resume-btn");
 
 async function refreshDlq() {
-  if (!AdminAuth.getToken()) {
+  if (!AdminAuth.loadSession()) {
     if (dlqSummary) dlqSummary.textContent = "Sign in to load DLQ stats.";
     if (dlqBody) dlqBody.innerHTML = "";
+    if (dlqRetryBtn) dlqRetryBtn.disabled = true;
     return;
   }
   try {
-    const [stats, entries] = await Promise.all([
-      AdminAuth.adminFetch("/api/dlq/stats").then((r) => r.json()),
-      AdminAuth.adminFetch("/api/dlq/entries?limit=25").then((r) => r.json()),
+    const [statsResp, entriesResp] = await Promise.all([
+      apiFetch("/api/dlq/stats"),
+      apiFetch("/api/dlq/entries?limit=50&active_only=true"),
     ]);
+    const stats = await statsResp.json();
+    const entries = await entriesResp.json();
     const by = stats.by_status || {};
+    const depth = Number(stats.depth || 0);
     const paused = stats.any_paused
       ? ` · consumers paused: ${JSON.stringify(stats.consumers || {})}`
       : "";
     if (dlqSummary) {
       dlqSummary.textContent =
-        `depth=${stats.depth || 0} · pending=${by.pending || 0} · ` +
+        `depth=${depth} · pending=${by.pending || 0} · ` +
         `processing=${by.processing || 0} · exhausted=${by.exhausted || 0} · ` +
         `processed=${by.processed || 0} · poison=${by.poison || 0}` +
         paused;
     }
+    if (dlqRetryBtn) {
+      dlqRetryBtn.disabled = depth <= 0;
+    }
     if (dlqBody) {
       const rows = entries.entries || [];
-      dlqBody.innerHTML = rows
-        .map((e) => {
-          const k = e.kafka || {};
-          return `<tr>
-            <td>${e.status || ""}</td>
-            <td>${e.pipeline_kind || ""}</td>
-            <td>${e.event_id || e.entity_id || "—"}</td>
-            <td>${e.attempts ?? 0}/${e.max_attempts ?? "?"}</td>
-            <td title="${(e.last_error || e.error_message || "").replaceAll('"', "'")}">${
-              (e.last_error || e.error_message || "").slice(0, 80)
-            }</td>
-            <td>${k.topic || ""}:${k.partition ?? ""}:${k.offset ?? ""}</td>
-          </tr>`;
-        })
-        .join("");
+      if (!rows.length) {
+        dlqBody.innerHTML =
+          `<tr><td colspan="6" class="muted">No unresolved DLQ entries` +
+          `${by.processed ? ` (${by.processed} processed)` : ""}.</td></tr>`;
+      } else {
+        dlqBody.innerHTML = rows
+          .map((e) => {
+            const k = e.kafka || {};
+            const err = escapeHtml(e.last_error || e.error_message || "");
+            return `<tr>
+              <td>${escapeHtml(e.status)}</td>
+              <td>${escapeHtml(e.pipeline_kind)}</td>
+              <td>${escapeHtml(e.event_id || e.entity_id || "—")}</td>
+              <td>${e.attempts ?? 0}/${e.max_attempts ?? "?"}</td>
+              <td title="${err}">${err.slice(0, 80)}</td>
+              <td>${escapeHtml(k.topic || "")}:${k.partition ?? ""}:${k.offset ?? ""}</td>
+            </tr>`;
+          })
+          .join("");
+      }
     }
   } catch (error) {
     if (dlqSummary) dlqSummary.textContent = `DLQ load failed: ${error.message}`;
+    if (dlqRetryBtn) dlqRetryBtn.disabled = true;
   }
 }
 
@@ -385,19 +464,23 @@ if (dlqRefreshBtn) {
 }
 if (dlqRetryBtn) {
   dlqRetryBtn.addEventListener("click", async () => {
-    if (!AdminAuth.getToken()) return;
-    await AdminAuth.adminFetch("/api/dlq/reset", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reason: "ops_ui_retry_now" }),
-    });
-    await refreshDlq();
+    if (!AdminAuth.loadSession() || dlqRetryBtn.disabled) return;
+    dlqRetryBtn.disabled = true;
+    try {
+      await apiFetch("/api/dlq/retry-now", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "ops_ui_retry_now" }),
+      });
+    } finally {
+      await refreshDlq();
+    }
   });
 }
 if (dlqResumeBtn) {
   dlqResumeBtn.addEventListener("click", async () => {
-    if (!AdminAuth.getToken()) return;
-    await AdminAuth.adminFetch("/api/dlq/resume-consumers", {
+    if (!AdminAuth.loadSession()) return;
+    await apiFetch("/api/dlq/resume-consumers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}),

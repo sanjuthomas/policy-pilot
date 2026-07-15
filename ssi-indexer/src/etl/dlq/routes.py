@@ -10,13 +10,24 @@ from etl.dlq.scheduler import DlqScheduler
 from etl.dlq.store import DlqStore
 
 
+class DlqRetryNowRequest(BaseModel):
+    ids: list[str] | None = Field(
+        default=None,
+        description="Optional subset of DLQ entry ids; omit to act on all active rows",
+    )
+    reason: str = "ops_ui_retry_now"
+
+
 class DlqResetRequest(BaseModel):
     ids: list[str] | None = None
     statuses: list[str] | None = Field(
         default=None,
-        description="Statuses to reset when ids omitted (default exhausted+pending+processing)",
+        description=(
+            "Statuses to fully reset (attempts=0) when ids omitted. "
+            "Prefer POST /dlq/retry-now for Ops UI."
+        ),
     )
-    reason: str = "ops_ui_retry_now"
+    reason: str = "manual_reset"
 
 
 class DlqResumeRequest(BaseModel):
@@ -39,15 +50,22 @@ def build_dlq_router(store: DlqStore, scheduler: DlqScheduler) -> APIRouter:
     @router.get("/entries")
     async def dlq_entries(
         status: str | None = None,
+        active_only: bool = True,
         limit: int = 50,
         skip: int = 0,
     ) -> dict[str, Any]:
+        """List DLQ rows. Defaults to unresolved rows (excludes processed)."""
         limit = max(1, min(limit, 200))
         skip = max(0, skip)
-        entries = await store.list_entries(status=status, limit=limit, skip=skip)
+        entries = await store.list_entries(
+            status=status,
+            active_only=active_only and status is None,
+            limit=limit,
+            skip=skip,
+        )
         for entry in entries:
             entry.pop("payload", None)
-        return {"count": len(entries), "entries": entries}
+        return {"count": len(entries), "entries": entries, "active_only": active_only and status is None}
 
     @router.get("/entries/{entry_id}")
     async def dlq_entry(entry_id: str) -> dict[str, Any]:
@@ -55,6 +73,15 @@ def build_dlq_router(store: DlqStore, scheduler: DlqScheduler) -> APIRouter:
         if doc is None:
             raise HTTPException(status_code=404, detail="DLQ entry not found")
         return doc
+
+    @router.post("/retry-now")
+    async def dlq_retry_now(body: DlqRetryNowRequest) -> dict[str, Any]:
+        """Ops: immediately retry active DLQ rows; scheduler still runs until max attempts."""
+        if not store.enabled or store._col is None:
+            raise HTTPException(status_code=503, detail="DLQ store unavailable")
+        prepared = await store.prepare_retry_now(ids=body.ids, reason=body.reason)
+        drained = await scheduler.drain_once()
+        return {**prepared, "drained": drained}
 
     @router.post("/reset")
     async def dlq_reset(body: DlqResetRequest) -> dict[str, Any]:

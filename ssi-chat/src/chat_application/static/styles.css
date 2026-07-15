@@ -650,9 +650,9 @@ body {
 .index-integrity-banner {
   margin: 0;
   padding: 0.65rem 1.25rem;
-  border-bottom: 1px solid var(--border, #d6d3d1);
-  background: color-mix(in srgb, #b45309 12%, transparent);
-  color: #44403c;
+  border-bottom: 1px solid #991b1b;
+  background: #ef4444;
+  color: #ffffff;
   font-size: 0.9rem;
   line-height: 1.4;
 }

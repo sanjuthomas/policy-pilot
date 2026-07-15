@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from etl.dlq.classify import classify_exception, is_retryable
 from etl.dlq.models import DlqStatus, FailureClass, PipelineKind
@@ -171,6 +171,47 @@ async def test_dlq_store_mark_retry_exhausted():
     assert status == DlqStatus.EXHAUSTED.value
 
 
+async def test_dlq_store_reset_defaults_to_active_statuses():
+    store = DlqStore()
+    col = AsyncMock()
+    col.update_many = AsyncMock(return_value=MagicMock(modified_count=3))
+    store._col = col
+    modified = await store.reset_entries(reason="manual_reset")
+    assert modified == 3
+    query = col.update_many.await_args.args[0]
+    assert set(query["status"]["$in"]) == {
+        DlqStatus.EXHAUSTED.value,
+        DlqStatus.PENDING.value,
+        DlqStatus.PROCESSING.value,
+    }
+
+
+async def test_dlq_store_prepare_retry_now():
+    store = DlqStore()
+    col = AsyncMock()
+    col.update_many = AsyncMock(
+        side_effect=[
+            MagicMock(modified_count=4),
+            MagicMock(modified_count=2),
+        ]
+    )
+    store._col = col
+    result = await store.prepare_retry_now(reason="ops_ui_retry_now")
+    assert result == {"pending_made_ready": 4, "exhausted_reopened": 2}
+    assert col.update_many.await_count == 2
+    pending_query = col.update_many.await_args_list[0].args[0]
+    exhausted_query = col.update_many.await_args_list[1].args[0]
+    assert set(pending_query["status"]["$in"]) == {
+        DlqStatus.PENDING.value,
+        DlqStatus.PROCESSING.value,
+    }
+    assert exhausted_query["status"] == DlqStatus.EXHAUSTED.value
+    pending_set = col.update_many.await_args_list[0].args[1]["$set"]
+    assert "attempts" not in pending_set
+    exhausted_set = col.update_many.await_args_list[1].args[1]["$set"]
+    assert exhausted_set["attempts"] == 0
+
+
 async def test_dlq_routes_reset_and_stats():
     store = AsyncMock()
     store.enabled = True
@@ -181,6 +222,9 @@ async def test_dlq_routes_reset_and_stats():
     store.list_entries = AsyncMock(return_value=[{"id": "1", "status": "pending", "payload": {}}])
     store.get_entry = AsyncMock(return_value={"id": "1", "payload": {"a": 1}})
     store.reset_entries = AsyncMock(return_value=2)
+    store.prepare_retry_now = AsyncMock(
+        return_value={"pending_made_ready": 3, "exhausted_reopened": 1}
+    )
     scheduler = AsyncMock()
     scheduler.drain_once = AsyncMock(return_value=1)
 
@@ -189,20 +233,23 @@ async def test_dlq_routes_reset_and_stats():
     with TestClient(app) as client:
         assert client.get("/api/dlq/stats").status_code == 200
         assert client.get("/api/dlq/entries").json()["count"] == 1
+        store.list_entries.assert_awaited()
+        kwargs = store.list_entries.await_args.kwargs
+        assert kwargs.get("active_only") is True
+        assert client.get("/api/dlq/entries?active_only=false").status_code == 200
         assert client.get("/api/dlq/entries/1").status_code == 200
         reset = client.post("/api/dlq/reset", json={"reason": "test"})
         assert reset.status_code == 200
         assert reset.json()["reset"] == 2
+        retry = client.post("/api/dlq/retry-now", json={"reason": "ops_ui_retry_now"})
+        assert retry.status_code == 200
+        assert retry.json()["pending_made_ready"] == 3
+        assert retry.json()["drained"] == 1
         resumed = client.post("/api/dlq/resume-consumers", json={})
         assert resumed.status_code == 200
 
 
 async def test_index_integrity_banner_on_lag():
-    async def lag():
-        return 11
-
-    consumer = MagicMock()
-    consumer.estimated_lag = lag
     dlq = AsyncMock()
     dlq.stats = AsyncMock(
         return_value={
@@ -214,13 +261,24 @@ async def test_index_integrity_banner_on_lag():
         }
     )
     pause_registry.clear_paused("instruction_security_event")
-    status = await index_integrity_status(
-        dlq=dlq,
-        instruction_security_event_consumer=consumer,
-        instruction_consumer=consumer,
-        payment_security_event_consumer=consumer,
-        payment_fact_consumer=consumer,
-    )
+    groups = [
+        {"name": "instruction_security_event", "lag_total": 11},
+        {"name": "instruction_fact", "lag_total": 11},
+        {"name": "payment_security_event", "lag_total": 11},
+        {"name": "payment_fact", "lag_total": 11},
+    ]
+    with patch(
+        "etl.integrity.kafka_consumer_groups_status",
+        AsyncMock(return_value=groups),
+    ):
+        status = await index_integrity_status(
+            dlq=dlq,
+            instruction_security_event_consumer=MagicMock(),
+            instruction_consumer=MagicMock(),
+            payment_security_event_consumer=MagicMock(),
+            payment_fact_consumer=MagicMock(),
+        )
     assert status["show_banner"] is True
     assert status["kafka_lag_total"] == 44
+    assert status["consumer_groups"] == groups
     assert "behind" in (status["banner_message"] or "").lower()

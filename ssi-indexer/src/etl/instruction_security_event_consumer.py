@@ -12,9 +12,9 @@ from etl.dlq.models import PipelineKind
 from etl.dlq.pause import pause_registry
 from etl.dlq.runtime import process_kafka_message
 from etl.dlq.store import DlqStore
-from etl.instruction_consumer import _estimated_lag
 from etl.instruction_security_event_pipeline import InstructionSecurityEventPipeline
 from etl.kafka_deserialize import deserialize_kafka_json
+from etl.kafka_offsets import estimated_lag as _estimated_lag
 from etl.mongo_cdc import normalize_security_event
 
 logger = logging.getLogger(__name__)
@@ -105,3 +105,6 @@ class InstructionSecurityEventKafkaConsumer:
             logger.warning("skipping invalid Kafka payload: %s", redact_value(payload))
             return
         await self.pipeline.process_instruction_security_event(event)
+
+    def is_task_running(self) -> bool:
+        return self._task is not None and not self._task.done()

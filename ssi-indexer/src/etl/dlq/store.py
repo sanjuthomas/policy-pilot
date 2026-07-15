@@ -234,6 +234,77 @@ class DlqStore:
         )
         return status
 
+    async def prepare_retry_now(
+        self,
+        *,
+        ids: list[str] | None = None,
+        reason: str = "ops_ui_retry_now",
+    ) -> dict[str, int]:
+        """Make DLQ rows eligible for an immediate Ops replay.
+
+        - ``pending`` / ``processing``: unlock and set ``next_attempt_at=now``
+          (attempt counters preserved — scheduler budget still applies).
+        - ``exhausted``: reopen as ``pending`` with ``attempts=0``.
+        """
+        col = self._require()
+        now = _utc_now()
+        id_filter: dict[str, Any] = {}
+        if ids:
+            id_filter["_id"] = {"$in": [ObjectId(i) for i in ids]}
+
+        pending_result = await col.update_many(
+            {
+                **id_filter,
+                "status": {
+                    "$in": [DlqStatus.PENDING.value, DlqStatus.PROCESSING.value]
+                },
+            },
+            {
+                "$set": {
+                    "status": DlqStatus.PENDING.value,
+                    "next_attempt_at": now,
+                    "locked_by": None,
+                    "lock_until": None,
+                    "updated_at": now,
+                },
+                "$push": {
+                    "audit": {
+                        "at": now,
+                        "action": "retry_now",
+                        "detail": reason,
+                    }
+                },
+            },
+        )
+        exhausted_result = await col.update_many(
+            {
+                **id_filter,
+                "status": DlqStatus.EXHAUSTED.value,
+            },
+            {
+                "$set": {
+                    "status": DlqStatus.PENDING.value,
+                    "attempts": 0,
+                    "next_attempt_at": now,
+                    "locked_by": None,
+                    "lock_until": None,
+                    "updated_at": now,
+                    "last_error": None,
+                },
+                "$push": {
+                    "audit": {
+                        "at": now,
+                        "action": "retry_now_reopen_exhausted",
+                        "detail": reason,
+                    }
+                },
+            },
+        )
+        return {
+            "pending_made_ready": int(pending_result.modified_count),
+            "exhausted_reopened": int(exhausted_result.modified_count),
+        }
+
     async def reset_entries(
         self,
         *,
@@ -241,6 +312,7 @@ class DlqStore:
         ids: list[str] | None = None,
         reason: str = "manual_reset",
     ) -> int:
+        """Reset selected statuses to pending with attempts=0 (legacy / targeted)."""
         col = self._require()
         now = _utc_now()
         query: dict[str, Any] = {}
@@ -249,7 +321,11 @@ class DlqStore:
         else:
             query["status"] = {
                 "$in": statuses
-                or [DlqStatus.EXHAUSTED.value, DlqStatus.PENDING.value, DlqStatus.PROCESSING.value]
+                or [
+                    DlqStatus.EXHAUSTED.value,
+                    DlqStatus.PENDING.value,
+                    DlqStatus.PROCESSING.value,
+                ]
             }
 
         result = await col.update_many(
@@ -279,12 +355,25 @@ class DlqStore:
         self,
         *,
         status: str | None = None,
+        statuses: list[str] | None = None,
+        active_only: bool = False,
         limit: int = 50,
         skip: int = 0,
     ) -> list[dict[str, Any]]:
         col = self._require()
         query: dict[str, Any] = {}
-        if status:
+        if active_only:
+            query["status"] = {
+                "$in": [
+                    DlqStatus.PENDING.value,
+                    DlqStatus.PROCESSING.value,
+                    DlqStatus.EXHAUSTED.value,
+                    DlqStatus.POISON.value,
+                ]
+            }
+        elif statuses:
+            query["status"] = {"$in": statuses}
+        elif status:
             query["status"] = status
         cursor = (
             col.find(query)

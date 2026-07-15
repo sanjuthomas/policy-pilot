@@ -12,6 +12,7 @@ from etl.dlq.runtime import process_kafka_message
 from etl.dlq.store import DlqStore
 from etl.instruction_pipeline import InstructionPipeline
 from etl.kafka_deserialize import deserialize_kafka_json
+from etl.kafka_offsets import estimated_lag as _estimated_lag
 from etl.mongo_cdc import normalize_instruction_message
 
 logger = logging.getLogger(__name__)
@@ -99,19 +100,5 @@ class InstructionKafkaConsumer:
             return
         await self.pipeline.process_instruction_fact(fact)
 
-
-async def _estimated_lag(consumer: AIOKafkaConsumer | None) -> int:
-    if consumer is None:
-        return 0
-    try:
-        partitions = consumer.assignment()
-        if not partitions:
-            return 0
-        end_offsets = await consumer.end_offsets(list(partitions))
-        total = 0
-        for tp in partitions:
-            pos = await consumer.position(tp)
-            total += max(0, int(end_offsets.get(tp, 0)) - int(pos))
-        return total
-    except Exception:
-        return 0
+    def is_task_running(self) -> bool:
+        return self._task is not None and not self._task.done()
