@@ -10,10 +10,10 @@ Curated natural-language questions for demoing Policy Pilot. Prefer these over i
 | **`tools`** | Live policy tools umbrella (`policy_directory`, `eligibility`, policy summary, person entitlements) |
 | **`policy_directory`** | Amount-club / LOB funding-approver directory (not live OPA eligibility for a payment id) |
 | **`eligibility`** | Live OPA eligible-approvers for a specific payment or instruction id |
-| **`skill`** | Scripted mutation skill (create-payment with Go / No Go) |
+| **`skill`** | Scripted mutation skill (create-payment / submit-payment with Go / No Go) |
 | **`vector`** | Semantic retrieval over security-event audit text |
 
-**Chat modes:** **Policies** for `tools` questions (sign in as `comp-001` / `Password1!`). **Payments** for create-payment **`skill`** (sign in as `pay-101` or `pay-205`). **Events** for vector audit questions. **Instructions** / **Payments** for domain graph questions.
+**Chat modes:** **Policies** for `tools` questions (sign in as `comp-001` / `Password1!`). **Payments** for create-payment **`skill`** (`pay-101` / `pay-205`) and submit-payment **`skill`** (`fo-ficc-101` / `fo-fx-101` / `fo-rates-101`). **Events** for vector audit questions. **Instructions** / **Payments** for domain graph questions.
 
 Demo personas and seed users: **[Domain models and demo users](domain-models.md)**. Automated regression bank: **[ssi-chat/regression/questions.yaml](../ssi-chat/regression/questions.yaml)**.
 
@@ -70,14 +70,23 @@ Grab IDs from the [demo harness](http://localhost:8091) or instruction/payment U
 
 ## Skills (mutation)
 
-Use **Payments** mode. Sign in as a middle-office payment creator (`pay-101`, `pay-205`, …) with `Password1!`.
+Skills are **scripted pipelines**, not free-form agent tool loops. They dry-run OPA, show a confirmation card, and mutate only after **Go**.
 
-Skills are **scripted pipelines**, not free-form agent tool loops. Create-payment always dry-runs OPA `CREATE`, shows a confirmation card, and mutates only after **Go**. Details: **[Create-payment skill](create-payment-skill.md)**.
+### Create-payment
+
+Use **Payments** mode. Sign in as a middle-office payment creator (`pay-101`, `pay-205`, …) with `Password1!`. Details: **[Create-payment skill](create-payment-skill.md)**.
 
 - _Can you create a payment for instruction ID 20260705-FICC-I-31? Value date tomorrow; amount: 12 million USD._ **`skill`**
 - _Can you create a payment using instruction 20260705-FX-I-12? Value date today and amount 10 million._ **`skill`**
 
-After create, try:
+### Submit-payment
+
+Use **Payments** mode. Sign in as a front-office desk analyst for the owning LOB (`fo-ficc-101`, `fo-fx-101`, `fo-rates-101`) with `Password1!`. The payment must already be **DRAFT**. Details: **[Submit-payment skill](submit-payment-skill.md)**.
+
+- _Please submit payment 20260715-FICC-P-9 for approval._ **`skill`**
+- _Submit payment 20260715-FX-P-3 for approval._ **`skill`**
+
+After create or submit, try:
 
 - _Can you show me the payment 20260712-FICC-P-2?_ **`graph`**
 

@@ -42,6 +42,8 @@ def confirmation_card_from_instruction(
     *,
     amount: float,
     value_date: str,
+    payment_id: str | None = None,
+    payment_status: str | None = None,
 ) -> ConfirmationCard:
     return ConfirmationCard(
         instruction_id=str(instruction.get("instruction_id") or ""),
@@ -55,7 +57,10 @@ def confirmation_card_from_instruction(
         creditor_name=_party_name(instruction.get("creditor")),
         creditor_account=_account_id(instruction.get("creditor_account")),
         intermediaries=_intermediary_lines(instruction),
+        payment_id=payment_id,
+        payment_status=payment_status,
     )
+
 
 
 def format_amount(amount: float, currency: str) -> str:
@@ -68,7 +73,7 @@ def format_created_payment_report(
     payment: dict[str, Any],
     *,
     card: ConfirmationCard,
-    approvers_section: str | None,
+    submitters_section: str | None,
 ) -> str:
     payment_id = payment.get("payment_id") or "—"
     lines = [
@@ -84,6 +89,40 @@ def format_created_payment_report(
         f"| Status | {payment.get('status') or 'DRAFT'} |",
         "",
     ]
+    if submitters_section:
+        lines.extend([submitters_section, ""])
+    else:
+        lines.extend(
+            [
+                "I couldn't load eligible submitters automatically. "
+                "An owning-LOB desk analyst (`fo-*`) with `PAYMENT_CREATOR` "
+                "can submit this draft for funding approval via chat.",
+                "",
+            ]
+        )
+    return "\n".join(lines)
+
+
+def format_submitted_payment_report(
+    payment: dict[str, Any],
+    *,
+    card: ConfirmationCard,
+    approvers_section: str | None,
+) -> str:
+    payment_id = payment.get("payment_id") or card.payment_id or "—"
+    lines = [
+        "### Payment submitted for funding approval",
+        "",
+        "| Field | Value |",
+        "| --- | --- |",
+        f"| Payment id | `{payment_id}` |",
+        f"| Instruction | `{card.instruction_id}` |",
+        f"| Value date | {card.value_date} |",
+        f"| Amount | {format_amount(float(payment.get('amount') or card.amount), str(payment.get('currency') or card.currency))} |",
+        f"| Owning LOB | **{payment.get('owning_lob') or card.owning_lob}** |",
+        f"| Status | {payment.get('status') or 'SUBMITTED'} |",
+        "",
+    ]
     if approvers_section:
         lines.extend([approvers_section, ""])
     else:
@@ -96,3 +135,4 @@ def format_created_payment_report(
             ]
         )
     return "\n".join(lines)
+

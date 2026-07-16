@@ -17,12 +17,74 @@ class PaymentCreateDenied(PaymentClientError):
         self.detail = detail
 
 
+class PaymentSubmitDenied(PaymentClientError):
+    def __init__(self, detail: str) -> None:
+        super().__init__(detail)
+        self.detail = detail
+
+
+class PaymentNotFoundError(PaymentClientError):
+    pass
+
+
 class PaymentClient:
-    """Create draft payments as the logged-in chat user."""
+    """Payment reads/mutations as the logged-in chat user."""
 
     def __init__(self, base_url: str | None = None, *, timeout: float = 30.0) -> None:
         self._base = (base_url or settings.payment_service_url).rstrip("/")
         self._timeout = timeout
+
+    def _user_headers(
+        self, *, user_token: str, user_session_id: str | None
+    ) -> dict[str, str]:
+        headers = {
+            "Authorization": f"Bearer {user_token}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+        if user_session_id:
+            headers["X-Session-Id"] = user_session_id
+        return headers
+
+    @staticmethod
+    def _detail(response: httpx.Response) -> str:
+        detail = response.text
+        try:
+            detail = str(response.json().get("detail", detail))
+        except Exception:
+            pass
+        return detail
+
+    async def get_payment(
+        self,
+        payment_id: str,
+        *,
+        user_token: str,
+        user_session_id: str | None,
+    ) -> dict[str, Any]:
+        url = f"{self._base}/api/v1/payments/{payment_id}"
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                response = await client.get(
+                    url,
+                    headers=self._user_headers(
+                        user_token=user_token,
+                        user_session_id=user_session_id,
+                    ),
+                )
+        except httpx.HTTPError as exc:
+            raise PaymentClientError(
+                f"payment-service unreachable at {self._base}"
+            ) from exc
+
+        if response.status_code == 404:
+            raise PaymentNotFoundError(f"payment {payment_id} not found")
+        if response.status_code >= 400:
+            raise PaymentClientError(
+                f"payment-service rejected GET ({response.status_code}): "
+                f"{self._detail(response)}"
+            )
+        return response.json()
 
     async def create_payment(
         self,
@@ -33,14 +95,6 @@ class PaymentClient:
         user_token: str,
         user_session_id: str | None,
     ) -> dict[str, Any]:
-        headers = {
-            "Authorization": f"Bearer {user_token}",
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-        }
-        if user_session_id:
-            headers["X-Session-Id"] = user_session_id
-
         payload = {
             "instruction_id": instruction_id,
             "amount": amount,
@@ -49,27 +103,58 @@ class PaymentClient:
         url = f"{self._base}/api/v1/payments"
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
-                response = await client.post(url, json=payload, headers=headers)
+                response = await client.post(
+                    url,
+                    json=payload,
+                    headers=self._user_headers(
+                        user_token=user_token,
+                        user_session_id=user_session_id,
+                    ),
+                )
         except httpx.HTTPError as exc:
             raise PaymentClientError(
                 f"payment-service unreachable at {self._base}"
             ) from exc
 
         if response.status_code == 403:
-            detail = response.text
-            try:
-                detail = str(response.json().get("detail", detail))
-            except Exception:
-                pass
-            raise PaymentCreateDenied(detail)
+            raise PaymentCreateDenied(self._detail(response))
 
         if response.status_code >= 400:
-            detail = response.text
-            try:
-                detail = str(response.json().get("detail", detail))
-            except Exception:
-                pass
             raise PaymentClientError(
-                f"payment-service rejected CREATE ({response.status_code}): {detail}"
+                f"payment-service rejected CREATE ({response.status_code}): "
+                f"{self._detail(response)}"
+            )
+        return response.json()
+
+    async def submit_payment(
+        self,
+        payment_id: str,
+        *,
+        user_token: str,
+        user_session_id: str | None,
+    ) -> dict[str, Any]:
+        url = f"{self._base}/api/v1/payments/{payment_id}/submit"
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                response = await client.post(
+                    url,
+                    headers=self._user_headers(
+                        user_token=user_token,
+                        user_session_id=user_session_id,
+                    ),
+                )
+        except httpx.HTTPError as exc:
+            raise PaymentClientError(
+                f"payment-service unreachable at {self._base}"
+            ) from exc
+
+        if response.status_code == 403:
+            raise PaymentSubmitDenied(self._detail(response))
+        if response.status_code == 404:
+            raise PaymentNotFoundError(f"payment {payment_id} not found")
+        if response.status_code >= 400:
+            raise PaymentClientError(
+                f"payment-service rejected SUBMIT ({response.status_code}): "
+                f"{self._detail(response)}"
             )
         return response.json()

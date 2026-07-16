@@ -58,14 +58,16 @@ flowchart TD
 
 ### Front and middle office (payment operations)
 
-Payment creators and funding approvers use the same investigation path, and can also run **mutation skills** (create-payment) after OPA preflight and an explicit **Go / No Go**.
+Payment creators, desk submitters, and funding approvers use the same investigation path, and can also run **mutation skills** (create-payment, submit-payment) after OPA preflight and an explicit **Go / No Go**.
 
 ```mermaid
 flowchart TD
     Q["Front / middle office question + Bearer JWT + search mode"] --> ID[Identity — ZITADEL subject]
-    ID --> SK{create-payment skill?}
-    SK -->|yes| PRE[OPA CREATE preflight]
-    PRE -->|allow| CONF[Confirm card — Go / No Go]
+    ID --> SK{mutation skill?}
+    SK -->|create| PRE1[OPA CREATE preflight]
+    SK -->|submit| PRE2[OPA SUBMIT preflight]
+    PRE1 -->|allow| CONF[Confirm card — Go / No Go]
+    PRE2 -->|allow| CONF
     CONF -->|Go| PAY[POST payment-service]
     PAY --> A[Answer]
     CONF -->|No Go / deny| A
@@ -87,7 +89,7 @@ flowchart TD
     S --> A
 ```
 
-Implementation entry point: `RagService.ask()` delegates to `RagPipelineOrchestrator` in `ssi-chat/src/chat_application/pipeline/orchestrator.py`. Create-payment skill: [docs/create-payment-skill.md](create-payment-skill.md).
+Implementation entry point: `RagService.ask()` delegates to `RagPipelineOrchestrator` in `ssi-chat/src/chat_application/pipeline/orchestrator.py`. Skills: [create-payment](create-payment-skill.md), [submit-payment](submit-payment-skill.md).
 
 ## Step 1 — Semantic routing (LLM)
 
@@ -224,12 +226,20 @@ Illustrative structured replies (field set matches `RouterDecision`; `null` omit
 ```
 
 **Create-payment skill (mutation):**
-
 ```json
 {
   "path": "skill",
   "skill": "create_payment",
-  "reasoning": "User asks the assistant to create a payment for an instruction"
+  "reasoning": "User wants to create a draft payment from an instruction"
+}
+```
+
+**Submit-payment skill (mutation):**
+```json
+{
+  "path": "skill",
+  "skill": "submit_payment",
+  "reasoning": "User wants to submit an existing draft payment for funding approval"
 }
 ```
 

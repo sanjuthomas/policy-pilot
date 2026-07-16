@@ -19,7 +19,7 @@ IntentPath = Literal[
     "hybrid",
 ]
 
-SkillName = Literal["create_payment"]
+SkillName = Literal["create_payment", "submit_payment"]
 
 MeIntentKind = Literal[
     "who_am_i",

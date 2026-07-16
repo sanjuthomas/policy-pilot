@@ -141,6 +141,18 @@ class UserDirectory:
         candidates.sort(key=lambda subject: subject.user_id)
         return candidates
 
+    def payment_submitter_candidates(self, owning_lob: str) -> list[Subject]:
+        """Front-office desk analysts who may SUBMIT drafts for ``owning_lob``."""
+        candidates: list[Subject] = []
+        for user in self._users():
+            if "PAYMENT_CREATOR" not in user.roles:
+                continue
+            if not user.lob or user.lob != owning_lob:
+                continue
+            candidates.append(user.to_subject())
+        candidates.sort(key=lambda subject: subject.user_id)
+        return candidates
+
     def instruction_approver_candidates(self, owning_lob: str) -> list[Subject]:
         candidates: list[Subject] = []
         for user in self._users():

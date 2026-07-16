@@ -119,6 +119,20 @@ class PaymentEligibleApproversResponse(BaseModel):
     approval_blocked_reason: str | None = None
 
 
+class PaymentEligibleSubmittersResponse(BaseModel):
+    payment_id: str
+    instruction_id: str
+    payment_status: str
+    amount: float
+    currency: str
+    owning_lob: str
+    instruction_status: str
+    evaluated_at: str
+    eligible: list[EligibleApprover]
+    candidates_evaluated: int
+    submit_blocked_reason: str | None = None
+
+
 class InstructionEligibleApproversResponse(BaseModel):
     instruction_id: str
     instruction_status: str

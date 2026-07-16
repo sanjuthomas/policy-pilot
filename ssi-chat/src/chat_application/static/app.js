@@ -351,17 +351,28 @@ function createRateLimitPanel({ question, retryAfterSeconds }) {
 
 function createSkillConfirmation(confirmation, chatMeta) {
   const card = confirmation.card || {};
+  const skill = confirmation.skill || "create_payment";
+  const isSubmit = skill === "submit_payment";
   const panel = document.createElement("div");
   panel.className = "skill-confirm";
   panel.dataset.pendingId = confirmation.pending_id;
+  panel.dataset.skill = skill;
 
   const intermediaryText = (card.intermediaries || []).length
     ? (card.intermediaries || []).join("; ")
     : "None";
 
+  const paymentRow = card.payment_id
+    ? `<dt>Payment</dt><dd class="mono">${escapeHtml(card.payment_id)}</dd>
+       <dt>Payment status</dt><dd>${escapeHtml(card.payment_status || "DRAFT")}</dd>`
+    : "";
+
   panel.innerHTML = `
-    <div class="skill-confirm-title">Confirm payment create</div>
+    <div class="skill-confirm-title">${
+      isSubmit ? "Confirm payment submit" : "Confirm payment create"
+    }</div>
     <dl class="skill-confirm-grid">
+      ${paymentRow}
       <dt>Instruction</dt><dd class="mono">${escapeHtml(card.instruction_id || "—")}</dd>
       <dt>Amount</dt><dd><strong>${escapeHtml(String(card.currency || ""))} ${escapeHtml(formatNumber(card.amount))}</strong></dd>
       <dt>Value date</dt><dd>${escapeHtml(card.value_date || "—")}</dd>
@@ -382,13 +393,18 @@ function createSkillConfirmation(confirmation, chatMeta) {
   const goBtn = panel.querySelector(".btn-go");
   const noGoBtn = panel.querySelector(".btn-nogo");
   const status = panel.querySelector(".skill-confirm-status");
+  const confirmPath = isSubmit
+    ? "/api/chat/skills/submit-payment/confirm"
+    : "/api/chat/skills/create-payment/confirm";
 
   async function decide(decision) {
     goBtn.disabled = true;
     noGoBtn.disabled = true;
-    status.textContent = decision === "go" ? "Creating…" : "Cancelling…";
+    status.textContent = decision === "go"
+      ? (isSubmit ? "Submitting…" : "Creating…")
+      : "Cancelling…";
     try {
-      const response = await fetch("/api/chat/skills/create-payment/confirm", {
+      const response = await fetch(confirmPath, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

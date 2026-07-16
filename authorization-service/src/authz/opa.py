@@ -250,6 +250,32 @@ class OpaClient:
         )
         return True, basis
 
+    async def can_submit_payment(
+        self,
+        subject: Subject,
+        payment: PaymentRecord,
+        *,
+        instruction_end_date: str,
+        instruction_status: str,
+    ) -> tuple[bool, list[str]]:
+        payload = {
+            "input": {
+                "action": "SUBMIT",
+                "subject": subject.to_opa_subject(),
+                "payment": payment.to_opa_payment(
+                    instruction_end_date=instruction_end_date,
+                    instruction_status=instruction_status,
+                ),
+            }
+        }
+        allowed = bool(await self._post_data(f"{self._PAYMENT_PACKAGE}/allow", payload))
+        if not allowed:
+            return False, []
+        basis = self._as_string_list(
+            await self._post_data(f"{self._PAYMENT_PACKAGE}/allow_basis", payload)
+        )
+        return True, basis
+
     async def can_approve_instruction(
         self,
         subject: Subject,
