@@ -4,7 +4,15 @@ from collections import Counter
 from pathlib import Path
 
 import yaml
-from regression.models import RegressionCase, RegressionSuite
+
+from regression.assertions import evaluate_confirm_expectations, evaluate_expectations
+from regression.models import (
+    SKILL_CONFIRM_PATHS,
+    ConfirmStep,
+    ExpectConfig,
+    RegressionCase,
+    RegressionSuite,
+)
 
 QUESTIONS = Path(__file__).resolve().parents[1] / "regression" / "questions.yaml"
 
@@ -22,9 +30,16 @@ def test_regression_cases_have_unique_ids():
 
 def test_regression_cases_all_have_retrieval():
     suite = load_suite()
-    assert len(suite.cases) >= 57
+    assert len(suite.cases) >= 60
     for case in suite.cases:
-        assert case.retrieval in {"deterministic", "graph", "vector", "eligibility"}
+        assert case.retrieval in {
+            "deterministic",
+            "graph",
+            "vector",
+            "eligibility",
+            "policy_directory",
+            "skill",
+        }
 
 
 def test_regression_retrieval_distribution():
@@ -34,6 +49,34 @@ def test_regression_retrieval_distribution():
     assert counts["graph"] == 30
     assert counts["vector"] == 3
     assert counts.get("eligibility", 0) == 0
+    assert counts["skill"] == 3
+
+
+def test_regression_seed_leaves_draft_for_submit_skill():
+    suite = load_suite()
+    create = next(s for s in suite.seed.steps if s.action == "create-payments")
+    submit = next(s for s in suite.seed.steps if s.action == "submit-payments")
+    assert (create.count or 0) > (submit.count or 0)
+
+
+def test_regression_skill_cases_present():
+    suite = load_suite()
+    by_id = {case.id: case for case in suite.cases}
+    create = by_id["skill_create_payment_phase1_nogo"]
+    submit = by_id["skill_submit_payment_phase1_nogo"]
+    approve = by_id["skill_approve_payment_phase1_nogo"]
+
+    assert create.persona == "pay-101"
+    assert create.confirm is not None and create.confirm.decision == "no_go"
+    assert create.expect.skill_name == "create_payment"
+
+    assert submit.persona == "fo-ficc-101"
+    assert submit.expect.skill_name == "submit_payment"
+    assert "draft_payment_id" in submit.expect.requires_context
+
+    assert approve.persona == "pay-400"
+    assert approve.expect.skill_name == "approve_payment"
+    assert "submitted_payment_id" in approve.expect.requires_context
 
 
 def test_regression_alert_entity_id_case_present():
@@ -42,6 +85,7 @@ def test_regression_alert_entity_id_case_present():
     assert case.retrieval == "deterministic"
     assert "Entity ID" in case.expect.answer_contains_all
     assert any("-I-" in token or "-P-" in token for token in case.expect.answer_contains_any)
+
 
 def test_regression_case_model_accepts_retrieval():
     case = RegressionCase.model_validate(
@@ -53,3 +97,58 @@ def test_regression_case_model_accepts_retrieval():
         }
     )
     assert case.retrieval == "vector"
+
+
+def test_regression_case_model_accepts_skill_persona_confirm():
+    case = RegressionCase.model_validate(
+        {
+            "id": "skill_example",
+            "mode": "payments",
+            "retrieval": "skill",
+            "persona": "pay-400",
+            "question": "Please approve payment {submitted_payment_id}.",
+            "confirm": {"decision": "no_go", "intent_id": "skill.approve_payment.cancelled"},
+            "expect": {
+                "require_skill_confirmation": True,
+                "skill_name": "approve_payment",
+                "intent_id": "skill.approve_payment.awaiting_confirmation",
+            },
+        }
+    )
+    assert case.retrieval == "skill"
+    assert case.persona == "pay-400"
+    assert case.confirm is not None
+    assert case.confirm.decision == "no_go"
+    assert SKILL_CONFIRM_PATHS["approve_payment"].endswith("/approve-payment/confirm")
+
+
+def test_evaluate_skill_confirmation_expectations():
+    ok, reason = evaluate_expectations(
+        ExpectConfig(
+            intent_id="skill.create_payment.awaiting_confirmation",
+            require_skill_confirmation=True,
+            skill_name="create_payment",
+            min_answer_length=5,
+            answer_contains_all=["Preflight"],
+        ),
+        answer="Preflight passed. Choose **Go** or **No Go**.",
+        sources=[],
+        graph_rows=[],
+        cypher=None,
+        intent_id="skill.create_payment.awaiting_confirmation",
+        skill_confirmation={"pending_id": "abc", "skill": "create_payment", "card": {}},
+    )
+    assert ok, reason
+
+
+def test_evaluate_confirm_no_go():
+    ok, reason = evaluate_confirm_expectations(
+        ConfirmStep(
+            decision="no_go",
+            intent_id="skill.create_payment.cancelled",
+            answer_contains_any=["cancelled"],
+        ),
+        answer="**No Go** — cancelled. No payment was created.",
+        intent_id="skill.create_payment.cancelled",
+    )
+    assert ok, reason

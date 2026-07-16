@@ -15,7 +15,7 @@ seed:
   - action: approve-instructions
     count: 3
   - action: create-payments
-    count: 4
+    count: 5
   - action: submit-payments
     count: 4
   - action: approve-payments

@@ -5,8 +5,12 @@
 #   graph          Neo4j planned or LLM Cypher is authoritative (vector runs but de-prioritized)
 #   vector         Neo4j dense vector hits are primary for open-ended event-log questions
 #   eligibility    Live OPA via authorization-service (no case in this bank yet)
+#   skill          Mutation skill phase-1 (+ optional confirm Go / No Go) under a persona
 #
 # Note: PolicyPilot still invokes dense vector search in parallel for all cases except eligibility.
+#
+# Skill cases use ``persona`` (ZITADEL user id) and optional ``confirm.decision``.
+# Seed leaves ≥1 DRAFT payment (create 5 / submit 4) for submit-payment.
 
 version: 1
 seed:
@@ -20,7 +24,7 @@ seed:
   - action: approve-instructions
     count: 3
   - action: create-payments
-    count: 4
+    count: 5
   - action: submit-payments
     count: 4
   - action: approve-payments
@@ -837,3 +841,92 @@ cases:
     - largest
     - payment
     min_answer_length: 15
+- id: skill_create_payment_phase1_nogo
+  mode: payments
+  retrieval: skill
+  persona: pay-101
+  tags:
+  - skill
+  - create_payment
+  question: >
+    Can you create a payment for instruction ID {ficc_standing_instruction_id}?
+    Value date tomorrow; amount: 1 million USD.
+  confirm:
+    decision: no_go
+    intent_id: skill.create_payment.cancelled
+    answer_contains_any:
+    - cancelled
+    - No Go
+  expect:
+    requires_context:
+    - ficc_standing_instruction_id
+    require_skill_confirmation: true
+    skill_name: create_payment
+    intent_id: skill.create_payment.awaiting_confirmation
+    min_answer_length: 20
+    answer_contains_all:
+    - Preflight
+    - Go
+    - No Go
+    require_routing: true
+    routing_path: skill
+    answer_synthesis: formatter
+    cypher_class: none
+- id: skill_submit_payment_phase1_nogo
+  mode: payments
+  retrieval: skill
+  persona: fo-ficc-101
+  tags:
+  - skill
+  - submit_payment
+  question: Please submit payment {draft_payment_id} for approval.
+  confirm:
+    decision: no_go
+    intent_id: skill.submit_payment.cancelled
+    answer_contains_any:
+    - cancelled
+    - No Go
+  expect:
+    requires_context:
+    - draft_payment_id
+    require_skill_confirmation: true
+    skill_name: submit_payment
+    intent_id: skill.submit_payment.awaiting_confirmation
+    min_answer_length: 20
+    answer_contains_all:
+    - Preflight
+    - Go
+    - No Go
+    require_routing: true
+    routing_path: skill
+    answer_synthesis: formatter
+    cypher_class: none
+- id: skill_approve_payment_phase1_nogo
+  mode: payments
+  retrieval: skill
+  persona: pay-400
+  tags:
+  - skill
+  - approve_payment
+  question: Please approve payment {submitted_payment_id}.
+  confirm:
+    decision: no_go
+    intent_id: skill.approve_payment.cancelled
+    answer_contains_any:
+    - cancelled
+    - No Go
+  expect:
+    requires_context:
+    - submitted_payment_id
+    require_skill_confirmation: true
+    skill_name: approve_payment
+    intent_id: skill.approve_payment.awaiting_confirmation
+    min_answer_length: 20
+    answer_contains_all:
+    - Preflight
+    - Go
+    - No Go
+    require_routing: true
+    routing_path: skill
+    answer_synthesis: formatter
+    cypher_class: none

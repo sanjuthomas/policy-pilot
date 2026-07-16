@@ -79,8 +79,8 @@ Product surfaces that are **not** deterministic formatter paths (keep out of the
 
 - Vector / full-RAG summaries (`golden_vector_security_summary` already covers a soft variant)
 - LLM-planned Cypher or Gemini synthesis answers
-- Me-intents and create-payment skill (multi-turn / persona-dependent)
-- Chat history / follow-ups
+- Me-intents under operational personas → Persona matrix; separate suite beyond skill phase-1
+- Create/submit/approve **Go** mutate path (soft bank covers phase-1 + **No Go** only)
 
 When adding cases: define them in `eval_golden.yaml` first, then update the **Case catalog** and check off the todo item below.
 
@@ -158,7 +158,7 @@ Not in `questions.yaml` today; answers come from live policy / AuthZ tools (stat
 |-------|----------------------------------------|
 | Vector summaries / open audit prose | Non-deterministic wording even with static docs |
 | LLM Cypher for ad-hoc shapes | Not formatter-stable |
-| Create-payment skill Go / No Go | Mutation + multi-turn |
+| Create/submit/approve skill **Go** mutate | Soft bank covers phase-1 + **No Go**; Go mutates inventory |
 | Me-intents under `pay-*` / `mo-*` | Persona matrix; separate suite |
 | Compliance SoD graph finds that currently allow `no`/`0`/`none` | Need seed that **always** produces the violation before exact asserts |
 

@@ -12,6 +12,7 @@ Each case also declares a **`retrieval`** tag — the primary engine the answer 
 | `graph` | Neo4j planned or LLM Cypher is authoritative | 30 |
 | `vector` | Neo4j dense vector hits drive open-ended security-event answers | 3 |
 | `eligibility` | Live OPA via authorization-service (no vector search) | 0 (supported in chat, not in this bank) |
+| `skill` | Mutation skill phase-1 + optional confirm (`persona` login) | 3 |
 
 PolicyPilot still runs dense vector search **in parallel** for every case except `eligibility` — the tag documents where the answer should actually come from.
 
@@ -55,8 +56,11 @@ python -m regression.runner --mode events
 # Tag filter (counts, compliance, who, why, when, …)
 python -m regression.runner --tags counts,alerts
 
-# Retrieval filter (deterministic, graph, vector, eligibility)
-python -m regression.runner --retrieval vector
+# Retrieval filter (deterministic, graph, vector, eligibility, skill)
+python -m regression.runner --retrieval skill
+
+# Mutation skills only
+python -m regression.runner --tags skill --skip-api-smoke
 
 # Single case
 python -m regression.runner --ids events_who_approved_payment_why
@@ -105,7 +109,7 @@ RUN_API_SMOKE=1 pytest tests/test_api_smoke.py -v
 | **instruction-service** | UI list (admin), REST auth gate; lifecycle via harness seed |
 | **payment-service** | UI list (admin), REST auth gate; lifecycle via harness seed |
 | **ssi-indexer** | Stats, vector search, graph events, intent extract, cypher run, auth gates |
-| **PolicyPilot** (`ssi-chat`) | Compliance login, `/api/chat` (56 YAML cases), compliance-users |
+| **PolicyPilot** (`ssi-chat`) | Compliance + operational persona login, `/api/chat` (60 YAML cases incl. skills), compliance-users |
 | **authorization-service** | Health, service-auth gate on evaluate endpoints |
 | **payment-service** / **instruction-service** | Payment/instruction eligible-approvers (compliance JWT), auth gate |
 
@@ -164,19 +168,19 @@ No live stack required — validates metric math and golden YAML schema.
 | `runner.py` | CLI entry point (chat + API smoke) |
 | `api_smoke.py` | Cross-service API smoke checks |
 | `auth_helpers.py` | Shared admin/compliance login headers |
-| `seed.py` | Harness actions, ETL wait, context `{approved_payment_id}` resolution |
-| `assertions.py` | Expectation evaluation |
+| `seed.py` | Harness actions, ETL wait, context placeholders (`approved_payment_id`, `draft_payment_id`, …) |
+| `assertions.py` | Expectation evaluation (incl. skill confirmation / confirm step) |
 | `eval_metrics.py` | Routing accuracy, recall, precision@k, faithfulness proxies |
 | `eval_golden.yaml` | Labeled golden eval set with strict quality gates |
 | `GOLDEN_EVAL.md` | Human-readable catalog of golden cases and gates |
-| `models.py` | Pydantic schemas |
+| `models.py` | Pydantic schemas (`persona`, `confirm`, `retrieval: skill`) |
 
 ## Adding cases
 
 ```yaml
 - id: my_new_case
   mode: events
-  retrieval: graph   # deterministic | graph | vector | eligibility
+  retrieval: graph   # deterministic | graph | vector | eligibility | skill
   tags: [who, approve]
   question: Who approved payment {approved_payment_id} and why?
   expect:
@@ -185,7 +189,25 @@ No live stack required — validates metric math and golden YAML schema.
     answer_contains_any: ["allowed", "because", "role"]
 ```
 
-Context placeholders are filled from instruction-service/payment UI APIs after seeding.
+Skill cases (Payments mode) also take `persona` and optional `confirm`:
+
+```yaml
+- id: skill_approve_payment_phase1_nogo
+  mode: payments
+  retrieval: skill
+  persona: pay-400
+  question: Please approve payment {submitted_payment_id}.
+  confirm:
+    decision: no_go
+    intent_id: skill.approve_payment.cancelled
+  expect:
+    require_skill_confirmation: true
+    skill_name: approve_payment
+    intent_id: skill.approve_payment.awaiting_confirmation
+```
+
+Context placeholders are filled from instruction-service/payment UI APIs after seeding
+(`draft_payment_id` prefers a FICC DRAFT left by create 5 / submit 4).
 
 ## Exit codes
 
