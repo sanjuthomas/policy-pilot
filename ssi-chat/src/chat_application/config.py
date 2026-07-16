@@ -23,8 +23,8 @@ class Settings(BaseSettings):
     multimodal_vector_index: str = "multimodal_embedding"
 
     neo4j_uri: str = "bolt://neo4j:7687"
-    neo4j_user: str = "neo4j"
-    neo4j_password: str = "devpassword"
+    neo4j_user: str = "svc_chat"
+    neo4j_password: str = "Password1!"
 
     retrieval_limit: int = 15
     rrf_k: int = 60

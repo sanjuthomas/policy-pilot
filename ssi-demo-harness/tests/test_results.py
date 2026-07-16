@@ -19,3 +19,4 @@ def test_harness_action_result_to_dict() -> None:
     assert payload["failed"] == 1
     assert payload["ok"] is False
     assert payload["logs"] == ["ok", "fail"]
+    assert payload["context"] == {}

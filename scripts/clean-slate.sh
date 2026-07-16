@@ -183,7 +183,7 @@ main() {
   log "Phase 1: start infrastructure + ZITADEL"
   compose_up \
     mongodb mongo-init \
-    neo4j \
+    neo4j neo4j-init \
     kafka kafka-init \
     opa opa-policy-seed \
     opensearch opensearch-dashboards otel-collector \
@@ -240,7 +240,7 @@ main() {
   Instructions:  http://localhost:8000/ui/
   Payments:      http://localhost:8093/ui/
   Indexer:       http://localhost:8090
-  Neo4j:         http://localhost:7474/browser/  (neo4j / devpassword)
+  Neo4j:         http://localhost:7474/browser/  (admin neo4j / devpassword; apps use svc_*)
 
 Domain Mongo + Neo4j are empty${WITH_DEMO_SEED:+ (then demo-seeded)}.
 ZITADEL users: password Password1! — see docs/domain-models.md

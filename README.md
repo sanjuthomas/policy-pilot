@@ -228,7 +228,7 @@ Allow **ssi-indexer** to catch up after seeding before ALERT counts in chat look
 | http://localhost:8093 | Payment service |
 | http://localhost:8094 | Authorization service |
 | http://localhost:8095 | Sequence service |
-| http://localhost:7474/browser/ | Neo4j (`neo4j` / `devpassword`) |
+| http://localhost:7474/browser/ | Neo4j Browser (admin `neo4j` / `devpassword`; apps use `svc_*`) |
 
 **Reset:** prefer `./scripts/clean-slate.sh`. Manual equivalent: `docker compose down -v --remove-orphans && docker compose up -d`, then re-seed ZITADEL users (and optionally run the harness seed script).
 

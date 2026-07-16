@@ -217,8 +217,11 @@ expect:
     - needs `FUNDING_APPROVER`
 ```
 
-Context placeholders are filled from instruction-service/payment UI APIs after seeding
-(`draft_payment_id` prefers a FICC DRAFT left by create 5 / submit 4).
+Context placeholders for non-skill cases are filled from instruction-service /
+payment UI APIs after the suite seed. **Skill cases** are independent: the runner
+calls harness `setup-skill-fixture` (create approved instruction → optional draft
+or submitted payment) before the case and `teardown-skill-fixture` (cancel
+payment + suspend instruction) afterward.
 
 ## Exit codes
 

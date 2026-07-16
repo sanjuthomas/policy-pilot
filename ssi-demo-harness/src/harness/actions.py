@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from datetime import date, timedelta
 
 from harness.config import Settings
@@ -10,12 +11,14 @@ from harness.helpers import (
     _approver_for_instruction,
     _approver_for_payment,
     _count_payment_security_events,
+    _eligible_instruction_approvers,
     _fetch_api_instructions,
     _fetch_api_payments,
     _fetch_approved_instructions,
     _instruction_submitter,
     _rejector_for_payment,
     _session_for_user,
+    _valid_instruction_seed_pairs,
     auth_client,
     build_payment_scenario,
     build_payment_seed_plan,
@@ -869,6 +872,351 @@ def run_payment_policy_scenario(
     result.ok = failures == 0
     result.logs.append(f"Scenario finished with {failures} failure(s).")
     return result
+
+
+def _ficc_payment_creator(seed: SeedFile) -> str | None:
+    """Deterministic middle-office PAYMENT_CREATOR covering FICC (e.g. pay-101)."""
+    candidates = sorted(
+        user.user_id
+        for user in seed.users
+        if "PAYMENT_CREATOR" in user.roles
+        and "MIDDLE_OFFICE" in user.groups
+        and "FICC" in user.covering_lobs
+    )
+    return candidates[0] if candidates else None
+
+
+def _ficc_instruction_suspender(seed: SeedFile) -> str | None:
+    """OPA SUSPEND requires INSTRUCTION_APPROVER + Managing Director + same LOB."""
+    candidates = sorted(
+        user.user_id
+        for user in seed.users
+        if "INSTRUCTION_APPROVER" in user.roles
+        and user.lob == "FICC"
+        and user.title == "Managing Director"
+    )
+    return candidates[0] if candidates else None
+
+
+def _create_approved_ficc_standing(
+    settings: Settings,
+    *,
+    seed: SeedFile,
+    auth: ZitadelAuthClient,
+    instruction_service: InstructionServiceClient,
+    result: HarnessActionResult,
+) -> str | None:
+    """Create → submit → approve a FICC STANDING instruction. Returns id or None."""
+    ficc_creators = sorted(
+        creator_id
+        for creator_id, owning_lob in _valid_instruction_seed_pairs(seed)
+        if owning_lob == "FICC"
+    )
+    if not ficc_creators:
+        result.logs.append("error: no eligible FICC instruction creator in directory")
+        return None
+
+    creator_id = ficc_creators[0]
+    creator = user_by_id(seed, creator_id)
+    approvers = _eligible_instruction_approvers(
+        seed,
+        owning_lob="FICC",
+        creator_user_id=creator_id,
+        creator_title=creator.title,
+        creator_supervisor_id=creator.supervisor_id,
+    )
+    if not approvers:
+        result.logs.append(f"error: no eligible FICC approver for creator {creator_id}")
+        return None
+    approver_id = sorted(approvers)[0]
+
+    creator_session = _session_for_user(auth, seed, settings, creator_id)
+    payload = build_instruction_payload(owning_lob="FICC", instruction_type="STANDING")
+    result.logs.append(f"create FICC STANDING instruction as {creator_id}")
+    response = instruction_service.create_instruction(creator_session, payload)
+    if response.status_code != 201:
+        result.logs.append(f"  -> create instruction HTTP {response.status_code} FAIL")
+        result.logs.append(f"     {response.text.strip()[:300]}")
+        return None
+    instruction_id = response.json()["instruction_id"]
+    result.logs.append(f"  -> HTTP 201 {instruction_id}")
+
+    result.logs.append(f"submit instruction {instruction_id} as {creator_id}")
+    response = instruction_service.submit_instruction(creator_session, instruction_id)
+    if response.status_code not in range(200, 300):
+        result.logs.append(f"  -> submit HTTP {response.status_code} FAIL")
+        result.logs.append(f"     {response.text.strip()[:300]}")
+        return None
+
+    approver_session = _session_for_user(auth, seed, settings, approver_id)
+    result.logs.append(f"approve instruction {instruction_id} as {approver_id}")
+    response = instruction_service.approve_instruction(approver_session, instruction_id)
+    if response.status_code not in range(200, 300):
+        result.logs.append(f"  -> approve HTTP {response.status_code} FAIL")
+        result.logs.append(f"     {response.text.strip()[:300]}")
+        return None
+
+    result.context["ficc_standing_instruction_id"] = instruction_id
+    result.context["skill_fixture_instruction_creator"] = creator_id
+    suspender = _ficc_instruction_suspender(seed)
+    if suspender:
+        result.context["skill_fixture_instruction_suspender"] = suspender
+    return instruction_id
+
+
+def setup_skill_fixture(
+    settings: Settings,
+    admin_session: SessionCredentials,
+    *,
+    need: str = "instruction",
+) -> HarnessActionResult:
+    """Per-case setup for chat mutation-skill regressions.
+
+    ``need`` selects how far to build the isolated fixture chain:
+      - ``instruction`` — approved FICC STANDING instruction
+      - ``draft`` — that instruction + a DRAFT payment
+      - ``submitted`` — that instruction + a SUBMITTED payment
+
+    Returns concrete ids in ``result.context``. Pair with
+    :func:`teardown_skill_fixture` so each skill case is independent.
+    """
+    if need not in {"instruction", "draft", "submitted"}:
+        result = HarnessActionResult(action="setup_skill_fixture", requested=1, ok=False)
+        result.logs.append(
+            f"error: need must be instruction|draft|submitted, got {need!r}"
+        )
+        return result
+
+    requested = {"instruction": 1, "draft": 2, "submitted": 2}[need]
+    result = HarnessActionResult(action="setup_skill_fixture", requested=requested)
+    if error := _require_pat(settings):
+        result.logs.append(f"error: {error}")
+        result.ok = False
+        return result
+
+    seed, auth, instruction_service = _clients(settings)
+    instruction_id = _create_approved_ficc_standing(
+        settings,
+        seed=seed,
+        auth=auth,
+        instruction_service=instruction_service,
+        result=result,
+    )
+    if not instruction_id:
+        result.failed += 1
+        result.ok = False
+        return result
+    result.succeeded += 1
+
+    if need == "instruction":
+        result.ok = True
+        result.logs.append(f"Skill fixture ready (instruction): {instruction_id}")
+        return result
+
+    pay_creator_id = _ficc_payment_creator(seed)
+    if not pay_creator_id:
+        result.logs.append("error: no FICC middle-office payment creator in directory")
+        result.failed += 1
+        result.ok = False
+        return result
+
+    amount = 1_000_000.0
+    value_date = (date.today() + timedelta(days=1)).isoformat()
+    pay_session = _session_for_user(auth, seed, settings, pay_creator_id)
+    ps = payment_client(settings)
+    result.context["skill_fixture_payment_creator"] = pay_creator_id
+
+    result.logs.append(
+        f"create payment on {instruction_id} as {pay_creator_id} amount={amount:,.0f}"
+    )
+    response = ps.create_payment(pay_session, instruction_id, amount, value_date)
+    if response.status_code != 201:
+        result.failed += 1
+        result.ok = False
+        result.logs.append(f"  -> create payment HTTP {response.status_code} FAIL")
+        result.logs.append(f"     {response.text.strip()[:300]}")
+        return result
+    payment_id = response.json()["payment_id"]
+    result.logs.append(f"  -> HTTP 201 {payment_id}")
+
+    if need == "draft":
+        result.context["draft_payment_id"] = payment_id
+        result.succeeded += 1
+        result.ok = True
+        result.logs.append(f"Skill fixture ready (draft): {payment_id}")
+        return result
+
+    submitter_id = payment_submitter_for_lob(seed, "FICC", rng=random.Random(0))
+    result.logs.append(f"submit payment {payment_id} as {submitter_id}")
+    submit_session = _session_for_user(auth, seed, settings, submitter_id)
+    response = ps.submit_payment(submit_session, payment_id)
+    if response.status_code not in range(200, 300):
+        result.failed += 1
+        result.ok = False
+        result.logs.append(f"  -> submit payment HTTP {response.status_code} FAIL")
+        result.logs.append(f"     {response.text.strip()[:300]}")
+        # Still expose the DRAFT id so teardown can cancel it.
+        result.context["draft_payment_id"] = payment_id
+        return result
+
+    result.context["submitted_payment_id"] = payment_id
+    result.succeeded += 1
+    result.ok = True
+    result.logs.append(f"Skill fixture ready (submitted): {payment_id}")
+    return result
+
+
+def teardown_skill_fixture(
+    settings: Settings,
+    admin_session: SessionCredentials,
+    *,
+    context: dict[str, str] | None = None,
+) -> HarnessActionResult:
+    """Cancel payments and suspend the instruction created by setup_skill_fixture."""
+    context = dict(context or {})
+    result = HarnessActionResult(action="teardown_skill_fixture", requested=0)
+    if error := _require_pat(settings):
+        result.logs.append(f"error: {error}")
+        result.ok = False
+        return result
+
+    seed, auth, instruction_service = _clients(settings)
+    ps = payment_client(settings)
+
+    pay_creator_id = (
+        context.get("skill_fixture_payment_creator") or _ficc_payment_creator(seed)
+    )
+    payment_ids = [
+        pid
+        for key in ("draft_payment_id", "submitted_payment_id")
+        if (pid := context.get(key))
+    ]
+    # Deduplicate while preserving order (setup creates one payment at a time).
+    seen: set[str] = set()
+    unique_payments: list[str] = []
+    for pid in payment_ids:
+        if pid not in seen:
+            seen.add(pid)
+            unique_payments.append(pid)
+
+    result.requested = len(unique_payments) + (
+        1 if context.get("ficc_standing_instruction_id") else 0
+    )
+
+    if unique_payments and pay_creator_id:
+        pay_session = _session_for_user(auth, seed, settings, pay_creator_id)
+        for payment_id in unique_payments:
+            result.logs.append(f"cancel payment {payment_id} as {pay_creator_id}")
+            response = ps.cancel_payment(pay_session, payment_id)
+            if response.status_code in range(200, 300):
+                result.succeeded += 1
+                result.logs.append(f"  -> cancel HTTP {response.status_code} OK")
+            else:
+                # Already cancelled / wrong state — treat as cleaned up.
+                result.skipped += 1
+                result.logs.append(
+                    f"  -> cancel HTTP {response.status_code} "
+                    f"(ignored for teardown): {response.text.strip()[:200]}"
+                )
+    elif unique_payments:
+        result.failed += len(unique_payments)
+        result.logs.append("error: no payment creator available to cancel fixtures")
+
+    instruction_id = context.get("ficc_standing_instruction_id")
+    if instruction_id:
+        suspender_id = (
+            context.get("skill_fixture_instruction_suspender")
+            or _ficc_instruction_suspender(seed)
+        )
+        if not suspender_id:
+            result.failed += 1
+            result.logs.append(
+                "error: no FICC Managing Director INSTRUCTION_APPROVER for suspend"
+            )
+        else:
+            suspend_session = _session_for_user(auth, seed, settings, suspender_id)
+            result.logs.append(f"suspend instruction {instruction_id} as {suspender_id}")
+            response = instruction_service.suspend_instruction(
+                suspend_session, instruction_id
+            )
+            if response.status_code in range(200, 300):
+                result.succeeded += 1
+                result.logs.append(f"  -> suspend HTTP {response.status_code} OK")
+            else:
+                result.skipped += 1
+                result.logs.append(
+                    f"  -> suspend HTTP {response.status_code} "
+                    f"(ignored for teardown): {response.text.strip()[:200]}"
+                )
+
+    result.ok = result.failed == 0
+    result.logs.append(
+        f"Teardown finished: succeeded={result.succeeded} "
+        f"skipped={result.skipped} failed={result.failed}"
+    )
+    return result
+
+
+def seed_skill_fixtures(
+    settings: Settings,
+    admin_session: SessionCredentials,
+) -> HarnessActionResult:
+    """Backward-compatible alias: setup draft + submitted against one instruction.
+
+    Prefer :func:`setup_skill_fixture` + :func:`teardown_skill_fixture` per case.
+    """
+    # Build instruction + draft, then a separate submitted payment on the same instruction.
+    draft = setup_skill_fixture(settings, admin_session, need="draft")
+    if not draft.ok:
+        draft.action = "seed_skill_fixtures"
+        return draft
+
+    instruction_id = draft.context["ficc_standing_instruction_id"]
+    seed, auth, _instruction_service = _clients(settings)
+    ps = payment_client(settings)
+    pay_creator_id = draft.context.get("skill_fixture_payment_creator") or _ficc_payment_creator(
+        seed
+    )
+    if not pay_creator_id:
+        draft.ok = False
+        draft.failed += 1
+        draft.logs.append("error: no FICC payment creator for submitted leg")
+        draft.action = "seed_skill_fixtures"
+        return draft
+
+    amount = 1_000_000.0
+    value_date = (date.today() + timedelta(days=1)).isoformat()
+    pay_session = _session_for_user(auth, seed, settings, pay_creator_id)
+    draft.logs.append(f"create second payment on {instruction_id} for SUBMITTED fixture")
+    response = ps.create_payment(pay_session, instruction_id, amount, value_date)
+    if response.status_code != 201:
+        draft.ok = False
+        draft.failed += 1
+        draft.logs.append(f"  -> create payment HTTP {response.status_code} FAIL")
+        draft.action = "seed_skill_fixtures"
+        return draft
+    submitted_id = response.json()["payment_id"]
+    submitter_id = payment_submitter_for_lob(seed, "FICC", rng=random.Random(0))
+    submit_session = _session_for_user(auth, seed, settings, submitter_id)
+    response = ps.submit_payment(submit_session, submitted_id)
+    if response.status_code not in range(200, 300):
+        draft.ok = False
+        draft.failed += 1
+        draft.logs.append(f"  -> submit HTTP {response.status_code} FAIL")
+        draft.context["draft_payment_id_extra"] = submitted_id
+        draft.action = "seed_skill_fixtures"
+        return draft
+
+    draft.context["submitted_payment_id"] = submitted_id
+    draft.succeeded += 1
+    draft.requested = 3
+    draft.action = "seed_skill_fixtures"
+    draft.logs.append(
+        "Skill fixtures ready: "
+        f"instruction={instruction_id} draft={draft.context.get('draft_payment_id')} "
+        f"submitted={submitted_id}"
+    )
+    return draft
 
 
 def suspend_instructions(

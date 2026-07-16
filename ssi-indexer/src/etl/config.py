@@ -55,8 +55,8 @@ class Settings(BaseSettings):
     index_lag_banner_threshold: int = 10
 
     neo4j_uri: str = "bolt://neo4j:7687"
-    neo4j_user: str = "neo4j"
-    neo4j_password: str = "devpassword"
+    neo4j_user: str = "svc_indexer"
+    neo4j_password: str = "Password1!"
     graph_model_dir: str = "/app/neo4j-graph-model"
 
     multimodal_vector_index: str = "multimodal_embedding"

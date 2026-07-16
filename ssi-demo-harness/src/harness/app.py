@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Literal
 
 import httpx
 import uvicorn
@@ -48,6 +48,14 @@ class CountRequest(BaseModel):
 class UpdatePaymentsRequest(BaseModel):
     count: int = Field(ge=1, le=500)
     amount: float | None = Field(default=None, gt=0)
+
+
+class SkillFixtureSetupRequest(BaseModel):
+    need: Literal["instruction", "draft", "submitted"] = "instruction"
+
+
+class SkillFixtureTeardownRequest(BaseModel):
+    context: dict[str, str] = Field(default_factory=dict)
 
 
 @app.get("/")
@@ -136,6 +144,7 @@ _COUNT_ACTIONS: dict[str, Callable[..., object]] = {
 _SCENARIO_ACTIONS: dict[str, Callable[..., object]] = {
     "run-policy-scenario": actions.run_policy_scenario,
     "run-payment-policy-scenario": actions.run_payment_policy_scenario,
+    "seed-skill-fixtures": actions.seed_skill_fixtures,
 }
 
 
@@ -221,6 +230,37 @@ app.post("/api/actions/run-policy-scenario")(_scenario_route("run-policy-scenari
 app.post("/api/actions/run-payment-policy-scenario")(
     _scenario_route("run-payment-policy-scenario")
 )
+app.post("/api/actions/seed-skill-fixtures")(_scenario_route("seed-skill-fixtures"))
+
+
+@app.post("/api/actions/setup-skill-fixture")
+async def setup_skill_fixture(
+    request: SkillFixtureSetupRequest,
+    _admin: Subject = Depends(get_admin_subject),
+    admin_session: SessionCredentials = Depends(get_admin_session),
+) -> dict:
+    result = await asyncio.to_thread(
+        actions.setup_skill_fixture,
+        settings,
+        admin_session,
+        need=request.need,
+    )
+    return result.to_dict()
+
+
+@app.post("/api/actions/teardown-skill-fixture")
+async def teardown_skill_fixture(
+    request: SkillFixtureTeardownRequest,
+    _admin: Subject = Depends(get_admin_subject),
+    admin_session: SessionCredentials = Depends(get_admin_session),
+) -> dict:
+    result = await asyncio.to_thread(
+        actions.teardown_skill_fixture,
+        settings,
+        admin_session,
+        context=request.context,
+    )
+    return result.to_dict()
 
 
 def run() -> None:
