@@ -105,13 +105,24 @@ class TestRouterDecisionDispatch:
         )
         assert isinstance(handler, PolicyToolsHandler)
 
-    def test_skill_path_denied_without_creator_role(self) -> None:
+    def test_skill_path_allowed_for_approver(self) -> None:
         handler = resolve_handler(
             _ctx(
                 path="skill",
                 strategy="skill",
                 mode="payments",
                 caps=_caps(approver=True),
+            )
+        )
+        assert isinstance(handler, CreatePaymentSkillHandler)
+
+    def test_skill_path_denied_without_operational_role(self) -> None:
+        handler = resolve_handler(
+            _ctx(
+                path="skill",
+                strategy="skill",
+                mode="payments",
+                caps=_caps(),
             )
         )
         assert isinstance(handler, DenialHandler)

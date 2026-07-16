@@ -72,7 +72,7 @@ def resolve_lane_access(
     if lane == HandlerLane.SKILL:
         if mode not in SKILL_MODES:
             return LaneAccess(False, lane, DenialReason.SKILL_WRONG_MODE)
-        if not capabilities.can_create_payment:
+        if not (capabilities.can_create_payment or capabilities.can_approve_payment):
             return LaneAccess(False, lane, DenialReason.SKILL_NOT_CREATOR)
         return LaneAccess(True, lane)
 
@@ -106,14 +106,15 @@ def denial_message(reason: DenialReason) -> tuple[str, Literal["skill", "eligibi
     """User-facing denial copy and observability path/synthesis hints."""
     if reason == DenialReason.SKILL_WRONG_MODE:
         return (
-            "Payment creation is available in **Payments** mode. "
-            "Switch modes and ask again with an instruction id, amount, and value date.",
+            "Payment mutation skills are available in **Payments** mode. "
+            "Switch modes and ask again (create / submit / approve with the required ids).",
             "skill",
         )
     if reason == DenialReason.SKILL_NOT_CREATOR:
         return (
-            "Creating a payment requires the **PAYMENT_CREATOR** role. "
-            "Sign in as a payment creator (e.g. pay-101) or switch to Events / Instructions to investigate.",
+            "Payment mutation skills require **PAYMENT_CREATOR** (create/submit) or "
+            "**FUNDING_APPROVER** (approve). "
+            "Sign in as an operational payment user or switch to Events / Instructions to investigate.",
             "skill",
         )
     if reason == DenialReason.TOOLS_WRONG_MODE:

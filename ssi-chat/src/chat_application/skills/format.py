@@ -136,3 +136,30 @@ def format_submitted_payment_report(
         )
     return "\n".join(lines)
 
+
+def format_approved_payment_report(
+    payment: dict[str, Any],
+    *,
+    card: ConfirmationCard,
+    approver_display: str,
+) -> str:
+    payment_id = payment.get("payment_id") or card.payment_id or "—"
+    approved_at = payment.get("approved_at") or "—"
+    return "\n".join(
+        [
+            "### Payment approved",
+            "",
+            "| Field | Value |",
+            "| --- | --- |",
+            f"| Payment id | `{payment_id}` |",
+            f"| Instruction | `{card.instruction_id}` |",
+            f"| Value date | {card.value_date} |",
+            f"| Amount | {format_amount(float(payment.get('amount') or card.amount), str(payment.get('currency') or card.currency))} |",
+            f"| Owning LOB | **{payment.get('owning_lob') or card.owning_lob}** |",
+            f"| Status | {payment.get('status') or 'APPROVED'} |",
+            f"| Approver | {approver_display} |",
+            f"| Approved at | {approved_at} |",
+            "",
+        ]
+    )
+

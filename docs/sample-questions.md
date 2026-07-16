@@ -10,10 +10,10 @@ Curated natural-language questions for demoing Policy Pilot. Prefer these over i
 | **`tools`** | Live policy tools umbrella (`policy_directory`, `eligibility`, policy summary, person entitlements) |
 | **`policy_directory`** | Amount-club / LOB funding-approver directory (not live OPA eligibility for a payment id) |
 | **`eligibility`** | Live OPA eligible-approvers for a specific payment or instruction id |
-| **`skill`** | Scripted mutation skill (create-payment / submit-payment with Go / No Go) |
+| **`skill`** | Scripted mutation skill (create / submit / approve payment with Go / No Go) |
 | **`vector`** | Semantic retrieval over security-event audit text |
 
-**Chat modes:** **Policies** for `tools` questions (sign in as `comp-001` / `Password1!`). **Payments** for create-payment **`skill`** (`pay-101` / `pay-205`) and submit-payment **`skill`** (`fo-ficc-101` / `fo-fx-101` / `fo-rates-101`). **Events** for vector audit questions. **Instructions** / **Payments** for domain graph questions.
+**Chat modes:** **Policies** for `tools` questions (sign in as `comp-001` / `Password1!`). **Payments** for create-payment **`skill`** (`pay-101` / `pay-205`), submit-payment **`skill`** (`fo-ficc-101` / `fo-fx-101` / `fo-rates-101`), and approve-payment **`skill`** (`pay-201` / `pay-400`). **Events** for vector audit questions. **Instructions** / **Payments** for domain graph questions.
 
 Demo personas and seed users: **[Domain models and demo users](domain-models.md)**. Automated regression bank: **[ssi-chat/regression/questions.yaml](../ssi-chat/regression/questions.yaml)**.
 
@@ -86,7 +86,14 @@ Use **Payments** mode. Sign in as a front-office desk analyst for the owning LOB
 - _Please submit payment 20260715-FICC-P-9 for approval._ **`skill`**
 - _Submit payment 20260715-FX-P-3 for approval._ **`skill`**
 
-After create or submit, try:
+### Approve-payment
+
+Use **Payments** mode. Sign in as a funding approver (`pay-201`, `pay-400`, …) with `Password1!`. The payment must already be **SUBMITTED**. Details: **[Approve-payment skill](approve-payment-skill.md)**.
+
+- _Please approve payment 20260715-FICC-P-9._ **`skill`**
+- _Approve payment 20260715-FX-P-3._ **`skill`**
+
+After create, submit, or approve, try:
 
 - _Can you show me the payment 20260712-FICC-P-2?_ **`graph`**
 

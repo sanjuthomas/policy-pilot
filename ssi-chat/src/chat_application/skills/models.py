@@ -16,6 +16,11 @@ class SubmitPaymentParams:
     payment_id: str
 
 
+@dataclass(frozen=True)
+class ApprovePaymentParams:
+    payment_id: str
+
+
 @dataclass
 class ConfirmationCard:
     instruction_id: str
@@ -72,6 +77,27 @@ class PendingCreatePayment:
 
 @dataclass
 class PendingSubmitPayment:
+    pending_id: str
+    user_id: str
+    payment_id: str
+    instruction_id: str
+    amount: float
+    value_date: str
+    currency: str
+    owning_lob: str
+    payment_status: str
+    instruction_status: str
+    instruction_end_date: str
+    instruction_type: str
+    instruction_version: int
+    created_by_user_id: str
+    created_by_supervisor_id: str | None
+    card: ConfirmationCard
+    expires_at: float
+
+
+@dataclass
+class PendingApprovePayment:
     pending_id: str
     user_id: str
     payment_id: str

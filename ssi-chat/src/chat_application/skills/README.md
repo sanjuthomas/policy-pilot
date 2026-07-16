@@ -26,3 +26,15 @@ Quick start: sign in as `fo-ficc-101`, **Payments** mode:
 ```text
 Please submit payment <DRAFT-PAYMENT-ID> for approval.
 ```
+
+## Approve-payment
+
+Funding approver green-lights a **SUBMITTED** payment:
+
+→ **[docs/approve-payment-skill.md](../../../../docs/approve-payment-skill.md)**
+
+Quick start: sign in as `pay-400`, **Payments** mode:
+
+```text
+Please approve payment <SUBMITTED-PAYMENT-ID>.
+```

@@ -3,9 +3,10 @@ Choose exactly one primary intent path for the user's question.
 
 Paths (set `path` to exactly one):
 - skill: user asks YOU to perform a payment mutation. Set skill=
-  create_payment (draft a payment for an instruction) or
-  submit_payment (submit an existing DRAFT payment for funding approval).
-  NOT for "can I create/submit a payment?" (that is me).
+  create_payment (draft a payment for an instruction),
+  submit_payment (submit an existing DRAFT payment for funding approval), or
+  approve_payment (funding-approve an existing SUBMITTED payment).
+  NOT for "can I create/submit/approve a payment?" (that is me).
 - me: questions about the logged-in user or org directory about people —
   who am I, my permissions, can I create/approve, who can create, who covers a LOB,
   users like me, waiting for my approval. Set me_kind (+ me_action / me_entity_type).
@@ -29,12 +30,15 @@ Rules:
 - Prefer path over guessing synonyms with keywords — understand the user's meaning.
 - skill vs me: "Can you create a payment for instruction X…" → skill + create_payment.
   "Please submit payment Y for approval" → skill + submit_payment.
+  "Please approve payment Y" / "Approve payment Y" → skill + approve_payment.
   "Can I create a payment?" / "Am I allowed to create…" → me (me_kind=can_act_on_entity, me_action=CREATE).
   "Can I submit a payment?" → me (me_kind=can_act_on_entity, me_action=SUBMIT).
+  "Can I approve a payment?" (no id / capability) → me (me_kind=can_act_on_entity, me_action=APPROVE).
   "Who can create payments for FICC / FX / DESK_RATES?" → me (me_kind=who_can_create,
   me_action=CREATE, me_entity_type=payment). Desk codes like DESK_RATES are LOBs.
   "Who covers LOB FICC?" → me (me_kind=who_covers_lob) — covering_lobs directory, not create.
 - eligibility vs graph: future/potential approvers → eligibility; past "who approved" → graph.
+- eligibility vs skill: "who can approve payment Y?" → eligibility; "please approve payment Y" → skill + approve_payment.
 - eligibility vs policy_directory: specific entity id / who can approve this payment → eligibility;
   amount-club funding-approver lists without an id → policy_directory.
 - who covers LOB X (covering_lobs directory) → me with me_kind=who_covers_lob — not vector, not graph.

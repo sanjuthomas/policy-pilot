@@ -48,6 +48,10 @@ Policy Pilot surfaces **fraud patterns, compliance violations, and collusion sig
 
   Scripted **submit-payment** skill: load DRAFT payment → OPA `SUBMIT` preflight → same confirmation card details → submit for funding approval only on **Go**. Full write-up: **[Submit-payment skill](docs/submit-payment-skill.md)**.
 
+- _Please approve payment 20260715-FICC-P-9._ **`skill`** (sign in as `pay-400`)
+
+  Scripted **approve-payment** skill: load SUBMITTED payment → OPA `APPROVE` preflight → confirmation card → funding approve only on **Go**. Full write-up: **[Approve-payment skill](docs/approve-payment-skill.md)**.
+
 **Vector** (use **Events** mode)
 
 - _Show payment policy denial ALERT events today with actor and reason._ **`vector`**
@@ -67,6 +71,7 @@ Policy Pilot sits at the end of an event-driven pipeline: domain services enforc
 |-------|---------|
 | **[Create-payment skill](docs/create-payment-skill.md)** | Draft payment: OPA `CREATE` preflight, Go / No Go confirmation, payment-service CREATE → Mongo. |
 | **[Submit-payment skill](docs/submit-payment-skill.md)** | Owning-LOB desk submits DRAFT for funding approval: OPA `SUBMIT` preflight, same confirmation card, submit on **Go**. |
+| **[Approve-payment skill](docs/approve-payment-skill.md)** | Funding approver green-lights SUBMITTED payment: OPA `APPROVE` preflight, same confirmation card, approve on **Go**. |
 | **[OPA policy controls](docs/opa-controls.md)** | Segregation of duties, reporting-line inversion of control, LOB boundaries, amount clubs — the checks and balances enforced on every action. |
 | **[Sample questions](docs/sample-questions.md)** | Curated demo questions by retrieval path (`graph`, `tools`, `skill`, `vector`), including Policies-mode and create/submit payment skills. |
 | **[Intent determination](docs/intent-determination.md)** | Gemini returns a strict `RouterDecision` (eligibility, graph, vector, or hybrid). Selective retrieval — no blind merge of graph and vector on every question. |
@@ -87,7 +92,7 @@ Policy Pilot's chat layer (**ssi-chat**) decides what to do with a natural-langu
 | Layer | Mechanism | Purpose |
 |-------|-----------|---------|
 | **Route** | Gemini Flash + structured `RouterDecision` JSON | Pick retrieval strategy from question intent |
-| **Skills** | Scripted multi-step actions (create-payment, submit-payment) | Mutate only after OPA preflight + explicit Go / No Go |
+| **Skills** | Scripted multi-step actions (create / submit / approve payment) | Mutate only after OPA preflight + explicit Go / No Go |
 | **Fast paths** | Neo4j direct YAML intents, live OPA eligibility API, me-intents | Skip full RAG when a specialized handler applies |
 | **Retrieve** | Selective backends (graph, vector, or both) | Avoid merging unrelated search results |
 | **Synthesize** | Deterministic formatters or Gemini | Produce the final answer from retrieved context |
@@ -125,7 +130,7 @@ flowchart TD
 
 #### Front and middle office (payment operations)
 
-Payment creators (`pay-*`), desk submitters (`fo-*`), and funding approvers (`mo-*`) use the same route → retrieve → synthesize path for questions, and can also run **mutation skills** (create-payment, submit-payment) after OPA preflight and an explicit **Go / No Go**.
+Payment creators (`pay-*`), desk submitters (`fo-*`), and funding approvers (`pay-*` / `mo-*`) use the same route → retrieve → synthesize path for questions, and can also run **mutation skills** (create-payment, submit-payment, approve-payment) after OPA preflight and an explicit **Go / No Go**.
 
 ```mermaid
 flowchart TD
@@ -133,8 +138,10 @@ flowchart TD
     ID --> SK{mutation skill?}
     SK -->|create| PRE1[OPA CREATE preflight]
     SK -->|submit| PRE2[OPA SUBMIT preflight]
+    SK -->|approve| PRE3[OPA APPROVE preflight]
     PRE1 -->|allow| CONF[Confirm card — Go / No Go]
     PRE2 -->|allow| CONF
+    PRE3 -->|allow| CONF
     CONF -->|Go| PAY[POST payment-service]
     PAY --> A[Answer]
     CONF -->|No Go / deny| A
@@ -156,7 +163,7 @@ flowchart TD
     S --> A
 ```
 
-Implementation entry point: `RagService.ask()` delegates to `RagPipelineOrchestrator` in `ssi-chat/src/chat_application/pipeline/orchestrator.py`. Mutation skills: **[create-payment](docs/create-payment-skill.md)**, **[submit-payment](docs/submit-payment-skill.md)** (`ssi-chat/src/chat_application/skills/`). Full routing specification: **[docs/intent-determination.md](docs/intent-determination.md)**.
+Implementation entry point: `RagService.ask()` delegates to `RagPipelineOrchestrator` in `ssi-chat/src/chat_application/pipeline/orchestrator.py`. Mutation skills: **[create-payment](docs/create-payment-skill.md)**, **[submit-payment](docs/submit-payment-skill.md)**, **[approve-payment](docs/approve-payment-skill.md)** (`ssi-chat/src/chat_application/skills/`). Full routing specification: **[docs/intent-determination.md](docs/intent-determination.md)**.
 
 ---
 
