@@ -48,7 +48,7 @@ See **[Intent Determination in Policy Pilot](../docs/intent-determination.md)** 
 Summary:
 
 1. **Route** — Gemini structured `RouterDecision` (eligibility / graph / vector / hybrid)
-2. **Skills** — scripted mutations (create / submit / approve payment: OPA preflight → Go / No Go → payment-service)
+2. **Skills** — scripted mutations (create / submit / approve / cancel payment: OPA preflight → Go / No Go → payment-service)
 3. **Fast paths** — live OPA eligibility API; Neo4j direct YAML intents (planned Cypher + formatters); me-intents
 4. **Selective retrieve** — graph only, vector only, or hybrid (RRF of vector + graph when both run)
 5. **Synthesize** — deterministic formatters, Who/When/Why audit, or Gemini over context
@@ -82,6 +82,16 @@ Funding approver green-lights a **SUBMITTED** payment. Example:
 Flow: parse payment id → load SUBMITTED → dry-run authz `APPROVE` → confirmation card → **Go** calls `POST …/payments/{id}/approve`.
 
 Full write-up: **[Approve-payment skill](../docs/approve-payment-skill.md)**. Confirm API: `POST /api/chat/skills/approve-payment/confirm`.
+
+### Cancel-payment skill
+
+Middle-office payment creator cancels a **DRAFT** or **SUBMITTED** payment. Example:
+
+> Please cancel payment 20260715-FICC-P-9.
+
+Flow: parse payment id → capability gate (`PAYMENT_CREATOR` + `MIDDLE_OFFICE`) → load DRAFT/SUBMITTED → dry-run authz `CANCEL` → confirmation card → **Go** calls `POST …/payments/{id}/cancel`.
+
+Full write-up: **[Cancel-payment skill](../docs/cancel-payment-skill.md)**. Confirm API: `POST /api/chat/skills/cancel-payment/confirm`.
 
 ## Who / When / Why (approval audit)
 
