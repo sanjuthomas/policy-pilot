@@ -3,8 +3,9 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
-from chat_application.auth.subject import Subject
 from fastapi.testclient import TestClient
+
+from chat_application.auth.subject import Subject
 
 
 @pytest.fixture

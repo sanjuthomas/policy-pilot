@@ -3,6 +3,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 import pytest
+
 from chat_application.pipeline.heuristic_strategy import (
     heuristic_router_decision,
     infer_execution_strategy_heuristic,
@@ -36,6 +37,14 @@ class TestHeuristicStrategy:
         )
         assert decision.path == "skill"
         assert decision.skill == "approve_payment"
+
+    def test_cancel_payment_skill_heuristic(self) -> None:
+        decision = heuristic_router_decision(
+            "Please cancel payment 20260705-FX-P-534.",
+            mode="payments",
+        )
+        assert decision.path == "skill"
+        assert decision.skill == "cancel_payment"
 
     def test_policies_mode_prefers_eligibility(self) -> None:
         assert (

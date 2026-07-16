@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+
 from chat_application.auth.subject import Subject
 from chat_application.me.handlers import dispatch_me_intent, try_me_intent
 from chat_application.me.models import MeIntent

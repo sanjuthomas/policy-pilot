@@ -6,6 +6,7 @@ import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from chat_application.auth.capabilities import ChatCapabilities
 from chat_application.models import ChatResponse
 from chat_application.pipeline.handlers.base import HandlerContext
@@ -24,11 +25,13 @@ def _caps(
     compliance: bool = False,
     creator: bool = False,
     approver: bool = False,
+    canceller: bool = False,
 ) -> ChatCapabilities:
     return ChatCapabilities(
         is_compliance=compliance,
         can_create_payment=creator,
         can_approve_payment=approver,
+        can_cancel_payment=canceller,
     )
 
 

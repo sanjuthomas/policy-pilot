@@ -17,18 +17,28 @@ class ChatCapabilities:
     is_compliance: bool
     can_create_payment: bool
     can_approve_payment: bool
+    can_cancel_payment: bool
 
     @property
     def is_operational(self) -> bool:
-        return self.can_create_payment or self.can_approve_payment
+        return (
+            self.can_create_payment
+            or self.can_approve_payment
+            or self.can_cancel_payment
+        )
 
 
 def capabilities_for(subject: Subject) -> ChatCapabilities:
     roles = set(subject.roles)
+    groups = set(subject.groups)
     return ChatCapabilities(
         is_compliance=bool(roles & COMPLIANCE_ROLES),
         can_create_payment="PAYMENT_CREATOR" in roles,
         can_approve_payment="FUNDING_APPROVER" in roles,
+        # OPA CANCEL: PAYMENT_CREATOR + MIDDLE_OFFICE + covering LOB.
+        can_cancel_payment=(
+            "PAYMENT_CREATOR" in roles and "MIDDLE_OFFICE" in groups
+        ),
     )
 
 

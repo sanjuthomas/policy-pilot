@@ -91,7 +91,7 @@ flowchart TD
     S --> A
 ```
 
-Implementation entry point: `RagService.ask()` delegates to `RagPipelineOrchestrator` in `ssi-chat/src/chat_application/pipeline/orchestrator.py`. Skills: [create-payment](create-payment-skill.md), [submit-payment](submit-payment-skill.md).
+Implementation entry point: `RagService.ask()` delegates to `RagPipelineOrchestrator` in `ssi-chat/src/chat_application/pipeline/orchestrator.py`. Skills: [create-payment](create-payment-skill.md), [submit-payment](submit-payment-skill.md), [approve-payment](approve-payment-skill.md), [cancel-payment](cancel-payment-skill.md).
 
 ## Step 1 — Semantic routing (LLM)
 

@@ -28,6 +28,8 @@ def answer_who_am_i(subject: Subject) -> MeIntentResult:
         audience_bits.append("compliance inquiry")
     if caps.can_create_payment:
         audience_bits.append("payment creator")
+    if caps.can_cancel_payment:
+        audience_bits.append("payment canceller")
     if caps.can_approve_payment:
         audience_bits.append("funding approver")
     audience = ", ".join(audience_bits) if audience_bits else "chat user"

@@ -9,7 +9,7 @@ Policy Pilot mutation skill: funding-approve an existing **SUBMITTED** payment a
 | **Chat mode** | **Payments** |
 | **Router** | `path=skill`, `skill=approve_payment` |
 
-Related: **[Create-payment](create-payment-skill.md)** → **[Submit-payment](submit-payment-skill.md)** → this skill.
+Related: **[Create-payment](create-payment-skill.md)** → **[Submit-payment](submit-payment-skill.md)** → this skill → **[Cancel-payment](cancel-payment-skill.md)**.
 
 ---
 

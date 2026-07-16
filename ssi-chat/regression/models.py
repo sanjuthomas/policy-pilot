@@ -22,6 +22,7 @@ SKILL_CONFIRM_PATHS: dict[str, str] = {
     "create_payment": "/api/chat/skills/create-payment/confirm",
     "submit_payment": "/api/chat/skills/submit-payment/confirm",
     "approve_payment": "/api/chat/skills/approve-payment/confirm",
+    "cancel_payment": "/api/chat/skills/cancel-payment/confirm",
 }
 
 

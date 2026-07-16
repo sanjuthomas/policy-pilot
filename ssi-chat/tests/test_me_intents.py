@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+
 from chat_application.auth.capabilities import audience_labels, capabilities_for
 from chat_application.auth.subject import Subject
 from chat_application.auth.users import SeedFile, SeedUser
@@ -23,8 +24,23 @@ def test_capabilities_for_creator() -> None:
     )
     assert caps.can_create_payment
     assert not caps.can_approve_payment
+    assert not caps.can_cancel_payment
     assert caps.is_operational
     assert not caps.is_compliance
+
+
+def test_capabilities_for_mo_creator_can_cancel() -> None:
+    caps = capabilities_for(
+        Subject(
+            user_id="pay-101",
+            title="Ops",
+            roles=["PAYMENT_CREATOR"],
+            groups=["MIDDLE_OFFICE"],
+        )
+    )
+    assert caps.can_create_payment
+    assert caps.can_cancel_payment
+    assert caps.is_operational
 
 
 def test_capabilities_for_dual_role() -> None:
@@ -37,6 +53,7 @@ def test_capabilities_for_dual_role() -> None:
     )
     assert caps.can_create_payment
     assert caps.can_approve_payment
+    assert not caps.can_cancel_payment
     assert caps.is_operational
 
 

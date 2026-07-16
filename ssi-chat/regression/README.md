@@ -192,18 +192,18 @@ No live stack required — validates metric math and golden YAML schema.
 Skill cases (Payments mode) also take `persona` and optional `confirm`:
 
 ```yaml
-- id: skill_approve_payment_phase1_nogo
+- id: skill_cancel_payment_phase1_nogo
   mode: payments
   retrieval: skill
-  persona: pay-400
-  question: Please approve payment {submitted_payment_id}.
+  persona: pay-101
+  question: Please cancel payment {draft_payment_id}.
   confirm:
     decision: no_go
-    intent_id: skill.approve_payment.cancelled
+    intent_id: skill.cancel_payment.no_go
   expect:
     require_skill_confirmation: true
-    skill_name: approve_payment
-    intent_id: skill.approve_payment.awaiting_confirmation
+    skill_name: cancel_payment
+    intent_id: skill.cancel_payment.awaiting_confirmation
 ```
 
 Negative skill cases assert the denial path and that no confirmation card is issued:
@@ -211,10 +211,10 @@ Negative skill cases assert the denial path and that no confirmation card is iss
 ```yaml
 expect:
   forbid_skill_confirmation: true
-  intent_id: skill.approve_payment.forbidden
+  intent_id: skill.cancel_payment.forbidden
   answer_contains_all:
-    - cannot run the approve-payment skill
-    - needs `FUNDING_APPROVER`
+    - cannot run the cancel-payment skill
+    - needs `PAYMENT_CREATOR` and `MIDDLE_OFFICE`
 ```
 
 Context placeholders for non-skill cases are filled from instruction-service /

@@ -4,15 +4,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
+
 from chat_application.skills.instruction_client import (
     InstructionClient,
     InstructionClientError,
     InstructionNotFoundError,
 )
 from chat_application.skills.payment_client import (
+    PaymentCancelDenied,
     PaymentClient,
     PaymentClientError,
     PaymentCreateDenied,
+    PaymentNotFoundError,
 )
 
 
@@ -141,6 +144,58 @@ async def test_payment_client_success_denied_and_errors() -> None:
             instruction_id="i1",
             amount=12.0,
             value_date="2026-01-01",
+            user_token="token",
+            user_session_id=None,
+        )
+
+
+@pytest.mark.asyncio
+async def test_payment_client_cancel_success_denied_and_errors() -> None:
+    context, mock_client = _async_client(
+        _response(200, json={"payment_id": "p1", "status": "CANCELLED"})
+    )
+    with patch(
+        "chat_application.skills.payment_client.httpx.AsyncClient", return_value=context
+    ):
+        result = await PaymentClient("http://payment.test").cancel_payment(
+            "p1",
+            user_token="token",
+            user_session_id="session",
+            reason="demo",
+        )
+    assert result["status"] == "CANCELLED"
+    assert mock_client.post.await_args.args[0].endswith("/p1/cancel")
+    assert mock_client.post.await_args.kwargs["json"] == {"reason": "demo"}
+
+    for response, expected in [
+        (_response(403, json={"detail": "not allowed"}), PaymentCancelDenied),
+        (_response(404), PaymentNotFoundError),
+        (_response(422, text="invalid"), PaymentClientError),
+    ]:
+        context, _ = _async_client(response)
+        with (
+            patch(
+                "chat_application.skills.payment_client.httpx.AsyncClient",
+                return_value=context,
+            ),
+            pytest.raises(expected),
+        ):
+            await PaymentClient("http://payment.test").cancel_payment(
+                "p1",
+                user_token="token",
+                user_session_id=None,
+            )
+
+    context, _ = _async_client(error=httpx.ConnectError("down"))
+    with (
+        patch(
+            "chat_application.skills.payment_client.httpx.AsyncClient",
+            return_value=context,
+        ),
+        pytest.raises(PaymentClientError, match="unreachable"),
+    ):
+        await PaymentClient("http://payment.test").cancel_payment(
+            "p1",
             user_token="token",
             user_session_id=None,
         )

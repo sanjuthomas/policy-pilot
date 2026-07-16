@@ -1005,3 +1005,56 @@ cases:
     routing_path: skill
     answer_synthesis: formatter
     cypher_class: none
+- id: skill_cancel_payment_phase1_nogo
+  mode: payments
+  retrieval: skill
+  persona: pay-101
+  tags:
+  - skill
+  - cancel_payment
+  question: Please cancel payment {draft_payment_id}.
+  confirm:
+    decision: no_go
+    intent_id: skill.cancel_payment.no_go
+    answer_contains_any:
+    - No Go
+    - Nothing was changed
+  expect:
+    requires_context:
+    - draft_payment_id
+    require_skill_confirmation: true
+    skill_name: cancel_payment
+    intent_id: skill.cancel_payment.awaiting_confirmation
+    min_answer_length: 20
+    answer_contains_all:
+    - Preflight
+    - Go
+    - No Go
+    require_routing: true
+    routing_path: skill
+    answer_synthesis: formatter
+    cypher_class: none
+- id: skill_cancel_payment_forbidden
+  mode: payments
+  retrieval: skill
+  persona: fo-ficc-101
+  tags:
+  - skill
+  - cancel_payment
+  - negative
+  - forbidden
+  question: Please cancel payment {draft_payment_id}.
+  expect:
+    requires_context:
+    - draft_payment_id
+    forbid_skill_confirmation: true
+    intent_id: skill.cancel_payment.forbidden
+    min_answer_length: 20
+    answer_contains_all:
+    - cannot run the cancel-payment skill
+    - needs `PAYMENT_CREATOR` and `MIDDLE_OFFICE`
+    - No payment was cancelled
+    require_routing: true
+    routing_path: skill
+    answer_synthesis: formatter
+    cypher_class: none
