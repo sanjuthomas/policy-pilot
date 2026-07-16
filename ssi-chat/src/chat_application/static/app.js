@@ -354,6 +354,7 @@ function createSkillConfirmation(confirmation, chatMeta) {
   const skill = confirmation.skill || "create_payment";
   const isSubmit = skill === "submit_payment";
   const isApprove = skill === "approve_payment";
+  const isCancel = skill === "cancel_payment";
   const panel = document.createElement("div");
   panel.className = "skill-confirm";
   panel.dataset.pendingId = confirmation.pending_id;
@@ -368,11 +369,13 @@ function createSkillConfirmation(confirmation, chatMeta) {
        <dt>Payment status</dt><dd>${escapeHtml(card.payment_status || "DRAFT")}</dd>`
     : "";
 
-  const title = isApprove
-    ? "Confirm payment approve"
-    : isSubmit
-      ? "Confirm payment submit"
-      : "Confirm payment create";
+  const title = isCancel
+    ? "Confirm payment cancel"
+    : isApprove
+      ? "Confirm payment approve"
+      : isSubmit
+        ? "Confirm payment submit"
+        : "Confirm payment create";
 
   panel.innerHTML = `
     <div class="skill-confirm-title">${title}</div>
@@ -398,11 +401,13 @@ function createSkillConfirmation(confirmation, chatMeta) {
   const goBtn = panel.querySelector(".btn-go");
   const noGoBtn = panel.querySelector(".btn-nogo");
   const status = panel.querySelector(".skill-confirm-status");
-  const confirmPath = isApprove
-    ? "/api/chat/skills/approve-payment/confirm"
-    : isSubmit
-      ? "/api/chat/skills/submit-payment/confirm"
-      : "/api/chat/skills/create-payment/confirm";
+  const confirmPath = isCancel
+    ? "/api/chat/skills/cancel-payment/confirm"
+    : isApprove
+      ? "/api/chat/skills/approve-payment/confirm"
+      : isSubmit
+        ? "/api/chat/skills/submit-payment/confirm"
+        : "/api/chat/skills/create-payment/confirm";
 
   async function decide(decision) {
     goBtn.disabled = true;

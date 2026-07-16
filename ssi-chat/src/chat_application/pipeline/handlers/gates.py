@@ -72,7 +72,11 @@ def resolve_lane_access(
     if lane == HandlerLane.SKILL:
         if mode not in SKILL_MODES:
             return LaneAccess(False, lane, DenialReason.SKILL_WRONG_MODE)
-        if not (capabilities.can_create_payment or capabilities.can_approve_payment):
+        if not (
+            capabilities.can_create_payment
+            or capabilities.can_approve_payment
+            or capabilities.can_cancel_payment
+        ):
             return LaneAccess(False, lane, DenialReason.SKILL_NOT_CREATOR)
         return LaneAccess(True, lane)
 

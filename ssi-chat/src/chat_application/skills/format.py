@@ -163,3 +163,30 @@ def format_approved_payment_report(
         ]
     )
 
+
+def format_cancelled_payment_report(
+    payment: dict[str, Any],
+    *,
+    card: ConfirmationCard,
+    canceller_display: str,
+) -> str:
+    payment_id = payment.get("payment_id") or card.payment_id or "—"
+    cancelled_at = payment.get("cancelled_at") or "—"
+    return "\n".join(
+        [
+            "### Payment cancelled",
+            "",
+            "| Field | Value |",
+            "| --- | --- |",
+            f"| Payment id | `{payment_id}` |",
+            f"| Instruction | `{card.instruction_id}` |",
+            f"| Value date | {card.value_date} |",
+            f"| Amount | {format_amount(float(payment.get('amount') or card.amount), str(payment.get('currency') or card.currency))} |",
+            f"| Owning LOB | **{payment.get('owning_lob') or card.owning_lob}** |",
+            f"| Status | {payment.get('status') or 'CANCELLED'} |",
+            f"| Cancelled by | {canceller_display} |",
+            f"| Cancelled at | {cancelled_at} |",
+            "",
+        ]
+    )
+

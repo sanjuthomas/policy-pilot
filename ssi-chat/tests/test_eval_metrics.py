@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+
 from regression.eval_metrics import (
     ROUTING_BY_RETRIEVAL,
     CaseQualityScores,

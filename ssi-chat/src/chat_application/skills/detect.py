@@ -24,6 +24,7 @@ from datetime import date, timedelta
 from chat_application.graph.cypher import extract_entity_ids, extract_instruction_ids
 from chat_application.skills.models import (
     ApprovePaymentParams,
+    CancelPaymentParams,
     CreatePaymentParams,
     SubmitPaymentParams,
 )
@@ -179,4 +180,15 @@ def parse_approve_payment_params(message: str) -> ApprovePaymentParams | None:
     if not payment_id:
         return None
     return ApprovePaymentParams(payment_id=payment_id)
+
+
+def parse_cancel_payment_params(message: str) -> CancelPaymentParams | None:
+    """Parse cancel-payment slot once intent is known (payment id)."""
+    text = message.strip()
+    if not text:
+        return None
+    payment_id = _pick_payment_id(text)
+    if not payment_id:
+        return None
+    return CancelPaymentParams(payment_id=payment_id)
 

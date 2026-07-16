@@ -22,10 +22,11 @@ def _ensure_service_src(service: str) -> None:
 _ensure_service_src("payment-service")
 _ensure_service_src("instruction-service")
 
-from chat_application.skills.instruction_client import InstructionClient  # noqa: E402
-from chat_application.skills.payment_client import PaymentClient  # noqa: E402
 from inst.models.api import InstructionResponse  # noqa: E402
 from ps.models.api import CreatePaymentRequest, PaymentResponse  # noqa: E402
+
+from chat_application.skills.instruction_client import InstructionClient  # noqa: E402
+from chat_application.skills.payment_client import PaymentClient  # noqa: E402
 
 
 def _user_ref(user_id: str = "pay-101") -> dict:

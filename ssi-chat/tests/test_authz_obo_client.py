@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
+
 from chat_application.authz.obo import AuthzOboClient, AuthzOboClientError
 
 

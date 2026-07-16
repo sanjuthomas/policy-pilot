@@ -85,10 +85,20 @@ _APPROVE_PAYMENT_SKILL = re.compile(
     re.IGNORECASE,
 )
 
+_CANCEL_PAYMENT_SKILL = re.compile(
+    r"\b("
+    r"(please\s+)?cancel\s+(a\s+|the\s+|this\s+)?payment|"
+    r"can\s+you\s+cancel\s+(a\s+|the\s+|this\s+)?payment|"
+    r"void\s+(a\s+|the\s+|this\s+)?payment|"
+    r"withdraw\s+(a\s+|the\s+|this\s+)?payment"
+    r")\b",
+    re.IGNORECASE,
+)
+
 _CAPABILITY_ONLY = re.compile(
     r"^\s*(can|may|do)\s+i\b|"
     r"^\s*am\s+i\s+(allowed|able|permitted)\b|"
-    r"\b(permission|allowed)\s+to\s+(create|submit|approve)\b",
+    r"\b(permission|allowed)\s+to\s+(create|submit|approve|cancel)\b",
     re.IGNORECASE,
 )
 
@@ -225,6 +235,20 @@ def _looks_like_approve_payment_skill(message: str) -> bool:
     return parse_approve_payment_params(text) is not None
 
 
+def _looks_like_cancel_payment_skill(message: str) -> bool:
+    text = message.strip()
+    if not text or not _CANCEL_PAYMENT_SKILL.search(text):
+        return False
+    # "Who can cancel payment Y?" is eligibility, not the mutation skill.
+    if re.search(r"\bwho\b.+\bcancel\b", text, re.IGNORECASE):
+        return False
+    if _CAPABILITY_ONLY.search(text) and "you" not in text.lower()[:40]:
+        return False
+    from chat_application.skills.detect import parse_cancel_payment_params
+
+    return parse_cancel_payment_params(text) is not None
+
+
 def _looks_like_create_payment_skill(message: str) -> bool:
     text = message.strip()
     if not text or not _CREATE_PAYMENT_SKILL.search(text):
@@ -257,6 +281,13 @@ def heuristic_router_decision(question: str, *, mode: str) -> RouterDecision:
             path="skill",
             skill="approve_payment",
             reasoning="heuristic fallback: approve_payment skill",
+        )
+
+    if _looks_like_cancel_payment_skill(question):
+        return RouterDecision(
+            path="skill",
+            skill="cancel_payment",
+            reasoning="heuristic fallback: cancel_payment skill",
         )
 
     if _looks_like_create_payment_skill(question):

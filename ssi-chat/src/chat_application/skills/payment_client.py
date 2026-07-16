@@ -29,6 +29,12 @@ class PaymentApproveDenied(PaymentClientError):
         self.detail = detail
 
 
+class PaymentCancelDenied(PaymentClientError):
+    def __init__(self, detail: str) -> None:
+        super().__init__(detail)
+        self.detail = detail
+
+
 class PaymentNotFoundError(PaymentClientError):
     pass
 
@@ -194,6 +200,42 @@ class PaymentClient:
         if response.status_code >= 400:
             raise PaymentClientError(
                 f"payment-service rejected APPROVE ({response.status_code}): "
+                f"{self._detail(response)}"
+            )
+        return response.json()
+
+    async def cancel_payment(
+        self,
+        payment_id: str,
+        *,
+        user_token: str,
+        user_session_id: str | None,
+        reason: str | None = None,
+    ) -> dict[str, Any]:
+        url = f"{self._base}/api/v1/payments/{payment_id}/cancel"
+        payload = {"reason": reason} if reason else {}
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                response = await client.post(
+                    url,
+                    json=payload,
+                    headers=self._user_headers(
+                        user_token=user_token,
+                        user_session_id=user_session_id,
+                    ),
+                )
+        except httpx.HTTPError as exc:
+            raise PaymentClientError(
+                f"payment-service unreachable at {self._base}"
+            ) from exc
+
+        if response.status_code == 403:
+            raise PaymentCancelDenied(self._detail(response))
+        if response.status_code == 404:
+            raise PaymentNotFoundError(f"payment {payment_id} not found")
+        if response.status_code >= 400:
+            raise PaymentClientError(
+                f"payment-service rejected CANCEL ({response.status_code}): "
                 f"{self._detail(response)}"
             )
         return response.json()

@@ -4,9 +4,10 @@ import os
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from chat_application.rag import RagService
 from cypher_builder import GraphIntent, GraphQueryPlan
 from fastapi.testclient import TestClient
+
+from chat_application.rag import RagService
 
 
 @pytest.fixture(scope="session", autouse=True)

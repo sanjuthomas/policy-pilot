@@ -3,9 +3,10 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi.testclient import TestClient
+
 from chat_application.auth.users import SeedFile, SeedUser
 from chat_application.auth.zitadel import SessionCredentials
-from fastapi.testclient import TestClient
 
 
 def _comp_seed() -> SeedFile:

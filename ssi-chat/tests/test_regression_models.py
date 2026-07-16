@@ -49,7 +49,7 @@ def test_regression_retrieval_distribution():
     assert counts["graph"] == 30
     assert counts["vector"] == 3
     assert counts.get("eligibility", 0) == 0
-    assert counts["skill"] == 6
+    assert counts["skill"] == 8
 
 
 def test_regression_seed_leaves_draft_for_submit_skill():
@@ -65,9 +65,11 @@ def test_regression_skill_cases_present():
     create = by_id["skill_create_payment_phase1_nogo"]
     submit = by_id["skill_submit_payment_phase1_nogo"]
     approve = by_id["skill_approve_payment_phase1_nogo"]
+    cancel = by_id["skill_cancel_payment_phase1_nogo"]
     create_denied = by_id["skill_create_payment_forbidden"]
     submit_denied = by_id["skill_submit_payment_forbidden"]
     approve_denied = by_id["skill_approve_payment_forbidden"]
+    cancel_denied = by_id["skill_cancel_payment_forbidden"]
 
     assert create.persona == "pay-101"
     assert create.confirm is not None and create.confirm.decision == "no_go"
@@ -81,6 +83,12 @@ def test_regression_skill_cases_present():
     assert approve.expect.skill_name == "approve_payment"
     assert "submitted_payment_id" in approve.expect.requires_context
 
+    assert cancel.persona == "pay-101"
+    assert cancel.expect.skill_name == "cancel_payment"
+    assert "draft_payment_id" in cancel.expect.requires_context
+    assert cancel.confirm is not None
+    assert cancel.confirm.intent_id == "skill.cancel_payment.no_go"
+
     assert create_denied.persona == "pay-400"
     assert create_denied.expect.forbid_skill_confirmation
     assert create_denied.expect.intent_id == "skill.create_payment.forbidden"
@@ -92,6 +100,10 @@ def test_regression_skill_cases_present():
     assert approve_denied.persona == "fo-ficc-101"
     assert approve_denied.expect.forbid_skill_confirmation
     assert approve_denied.expect.intent_id == "skill.approve_payment.forbidden"
+
+    assert cancel_denied.persona == "fo-ficc-101"
+    assert cancel_denied.expect.forbid_skill_confirmation
+    assert cancel_denied.expect.intent_id == "skill.cancel_payment.forbidden"
 
 
 def test_regression_alert_entity_id_case_present():
@@ -135,6 +147,7 @@ def test_regression_case_model_accepts_skill_persona_confirm():
     assert case.confirm is not None
     assert case.confirm.decision == "no_go"
     assert SKILL_CONFIRM_PATHS["approve_payment"].endswith("/approve-payment/confirm")
+    assert SKILL_CONFIRM_PATHS["cancel_payment"].endswith("/cancel-payment/confirm")
 
 
 def test_evaluate_skill_confirmation_expectations():

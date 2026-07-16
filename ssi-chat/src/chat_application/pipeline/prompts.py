@@ -4,11 +4,12 @@ Choose exactly one primary intent path for the user's question.
 Paths (set `path` to exactly one):
 - skill: user asks YOU to perform a payment mutation. Set skill=
   create_payment (draft a payment for an instruction),
-  submit_payment (submit an existing DRAFT payment for funding approval), or
-  approve_payment (funding-approve an existing SUBMITTED payment).
-  NOT for "can I create/submit/approve a payment?" (that is me).
+  submit_payment (submit an existing DRAFT payment for funding approval),
+  approve_payment (funding-approve an existing SUBMITTED payment), or
+  cancel_payment (cancel an existing DRAFT or SUBMITTED payment).
+  NOT for "can I create/submit/approve/cancel a payment?" (that is me).
 - me: questions about the logged-in user or org directory about people —
-  who am I, my permissions, can I create/approve, who can create, who covers a LOB,
+  who am I, my permissions, can I create/approve/cancel, who can create, who covers a LOB,
   users like me, waiting for my approval. Set me_kind (+ me_action / me_entity_type).
   For "who covers LOB FICC / FX / …" set me_kind=who_covers_lob (list users whose
   covering_lobs include that desk). Not policy_directory (that is funding-approver clubs).
@@ -31,14 +32,17 @@ Rules:
 - skill vs me: "Can you create a payment for instruction X…" → skill + create_payment.
   "Please submit payment Y for approval" → skill + submit_payment.
   "Please approve payment Y" / "Approve payment Y" → skill + approve_payment.
+  "Please cancel payment Y" / "Cancel payment Y" → skill + cancel_payment.
   "Can I create a payment?" / "Am I allowed to create…" → me (me_kind=can_act_on_entity, me_action=CREATE).
   "Can I submit a payment?" → me (me_kind=can_act_on_entity, me_action=SUBMIT).
   "Can I approve a payment?" (no id / capability) → me (me_kind=can_act_on_entity, me_action=APPROVE).
+  "Can I cancel a payment?" (no id / capability) → me (me_kind=can_act_on_entity, me_action=CANCEL).
   "Who can create payments for FICC / FX / DESK_RATES?" → me (me_kind=who_can_create,
   me_action=CREATE, me_entity_type=payment). Desk codes like DESK_RATES are LOBs.
   "Who covers LOB FICC?" → me (me_kind=who_covers_lob) — covering_lobs directory, not create.
 - eligibility vs graph: future/potential approvers → eligibility; past "who approved" → graph.
 - eligibility vs skill: "who can approve payment Y?" → eligibility; "please approve payment Y" → skill + approve_payment.
+  "who can cancel payment Y?" → eligibility; "please cancel payment Y" → skill + cancel_payment.
 - eligibility vs policy_directory: specific entity id / who can approve this payment → eligibility;
   amount-club funding-approver lists without an id → policy_directory.
 - who covers LOB X (covering_lobs directory) → me with me_kind=who_covers_lob — not vector, not graph.

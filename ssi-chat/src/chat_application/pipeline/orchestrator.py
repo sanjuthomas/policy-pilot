@@ -28,6 +28,7 @@ def _capabilities_for_optional(subject: Subject | None) -> ChatCapabilities:
             is_compliance=False,
             can_create_payment=False,
             can_approve_payment=False,
+            can_cancel_payment=False,
         )
     return capabilities_for(subject)
 

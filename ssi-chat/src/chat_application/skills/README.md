@@ -38,3 +38,15 @@ Quick start: sign in as `pay-400`, **Payments** mode:
 ```text
 Please approve payment <SUBMITTED-PAYMENT-ID>.
 ```
+
+## Cancel-payment
+
+Middle-office creator cancels a **DRAFT** or **SUBMITTED** payment:
+
+→ **[docs/cancel-payment-skill.md](../../../../docs/cancel-payment-skill.md)**
+
+Quick start: sign in as `pay-101`, **Payments** mode:
+
+```text
+Please cancel payment <DRAFT-OR-SUBMITTED-PAYMENT-ID>.
+```
