@@ -68,6 +68,9 @@ def evaluate_expectations(
                     f"skill_confirmation.skill={actual_skill!r} != expected {expect.skill_name!r}",
                 )
 
+    if expect.forbid_skill_confirmation and skill_confirmation is not None:
+        return False, "did not expect skill_confirmation"
+
     return True, "ok"
 
 

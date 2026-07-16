@@ -30,7 +30,7 @@ def test_regression_cases_have_unique_ids():
 
 def test_regression_cases_all_have_retrieval():
     suite = load_suite()
-    assert len(suite.cases) >= 60
+    assert len(suite.cases) >= 63
     for case in suite.cases:
         assert case.retrieval in {
             "deterministic",
@@ -49,7 +49,7 @@ def test_regression_retrieval_distribution():
     assert counts["graph"] == 30
     assert counts["vector"] == 3
     assert counts.get("eligibility", 0) == 0
-    assert counts["skill"] == 3
+    assert counts["skill"] == 6
 
 
 def test_regression_seed_leaves_draft_for_submit_skill():
@@ -65,6 +65,9 @@ def test_regression_skill_cases_present():
     create = by_id["skill_create_payment_phase1_nogo"]
     submit = by_id["skill_submit_payment_phase1_nogo"]
     approve = by_id["skill_approve_payment_phase1_nogo"]
+    create_denied = by_id["skill_create_payment_forbidden"]
+    submit_denied = by_id["skill_submit_payment_forbidden"]
+    approve_denied = by_id["skill_approve_payment_forbidden"]
 
     assert create.persona == "pay-101"
     assert create.confirm is not None and create.confirm.decision == "no_go"
@@ -77,6 +80,18 @@ def test_regression_skill_cases_present():
     assert approve.persona == "pay-400"
     assert approve.expect.skill_name == "approve_payment"
     assert "submitted_payment_id" in approve.expect.requires_context
+
+    assert create_denied.persona == "pay-400"
+    assert create_denied.expect.forbid_skill_confirmation
+    assert create_denied.expect.intent_id == "skill.create_payment.forbidden"
+
+    assert submit_denied.persona == "pay-400"
+    assert submit_denied.expect.forbid_skill_confirmation
+    assert submit_denied.expect.intent_id == "skill.submit_payment.forbidden"
+
+    assert approve_denied.persona == "fo-ficc-101"
+    assert approve_denied.expect.forbid_skill_confirmation
+    assert approve_denied.expect.intent_id == "skill.approve_payment.forbidden"
 
 
 def test_regression_alert_entity_id_case_present():
@@ -139,6 +154,35 @@ def test_evaluate_skill_confirmation_expectations():
         skill_confirmation={"pending_id": "abc", "skill": "create_payment", "card": {}},
     )
     assert ok, reason
+
+
+def test_evaluate_forbid_skill_confirmation_expectations():
+    ok, reason = evaluate_expectations(
+        ExpectConfig(
+            intent_id="skill.approve_payment.forbidden",
+            forbid_skill_confirmation=True,
+            min_answer_length=5,
+            answer_contains_all=["cannot run"],
+        ),
+        answer="No Go from preflight — cannot run approve-payment skill.",
+        sources=[],
+        graph_rows=[],
+        cypher=None,
+        intent_id="skill.approve_payment.forbidden",
+        skill_confirmation=None,
+    )
+    assert ok, reason
+
+    ok, reason = evaluate_expectations(
+        ExpectConfig(forbid_skill_confirmation=True),
+        answer="Unexpected confirmation.",
+        sources=[],
+        graph_rows=[],
+        cypher=None,
+        skill_confirmation={"pending_id": "abc", "skill": "approve_payment"},
+    )
+    assert not ok
+    assert reason == "did not expect skill_confirmation"
 
 
 def test_evaluate_confirm_no_go():

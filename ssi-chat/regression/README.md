@@ -12,7 +12,7 @@ Each case also declares a **`retrieval`** tag — the primary engine the answer 
 | `graph` | Neo4j planned or LLM Cypher is authoritative | 30 |
 | `vector` | Neo4j dense vector hits drive open-ended security-event answers | 3 |
 | `eligibility` | Live OPA via authorization-service (no vector search) | 0 (supported in chat, not in this bank) |
-| `skill` | Mutation skill phase-1 + optional confirm (`persona` login) | 3 |
+| `skill` | Mutation skill phase-1 + optional confirm/forbidden checks (`persona` login) | 6 |
 
 PolicyPilot still runs dense vector search **in parallel** for every case except `eligibility` — the tag documents where the answer should actually come from.
 
@@ -109,7 +109,7 @@ RUN_API_SMOKE=1 pytest tests/test_api_smoke.py -v
 | **instruction-service** | UI list (admin), REST auth gate; lifecycle via harness seed |
 | **payment-service** | UI list (admin), REST auth gate; lifecycle via harness seed |
 | **ssi-indexer** | Stats, vector search, graph events, intent extract, cypher run, auth gates |
-| **PolicyPilot** (`ssi-chat`) | Compliance + operational persona login, `/api/chat` (60 YAML cases incl. skills), compliance-users |
+| **PolicyPilot** (`ssi-chat`) | Compliance + operational persona login, `/api/chat` (63 YAML cases incl. skills), compliance-users |
 | **authorization-service** | Health, service-auth gate on evaluate endpoints |
 | **payment-service** / **instruction-service** | Payment/instruction eligible-approvers (compliance JWT), auth gate |
 
@@ -204,6 +204,17 @@ Skill cases (Payments mode) also take `persona` and optional `confirm`:
     require_skill_confirmation: true
     skill_name: approve_payment
     intent_id: skill.approve_payment.awaiting_confirmation
+```
+
+Negative skill cases assert the denial path and that no confirmation card is issued:
+
+```yaml
+expect:
+  forbid_skill_confirmation: true
+  intent_id: skill.approve_payment.forbidden
+  answer_contains_all:
+    - cannot run the approve-payment skill
+    - needs `FUNDING_APPROVER`
 ```
 
 Context placeholders are filled from instruction-service/payment UI APIs after seeding

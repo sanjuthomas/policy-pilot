@@ -57,6 +57,7 @@ class ExpectConfig(BaseModel):
     # Skill phase-1 (mutation skills)
     intent_id: str | None = None
     require_skill_confirmation: bool = False
+    forbid_skill_confirmation: bool = False
     skill_name: str | None = None
     # Retrieval-quality overrides (defaults derived from case ``retrieval`` tag).
     routing_path: str | None = None

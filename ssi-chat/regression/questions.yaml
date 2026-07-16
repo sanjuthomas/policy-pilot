@@ -930,3 +930,77 @@ cases:
     routing_path: skill
     answer_synthesis: formatter
     cypher_class: none
+- id: skill_create_payment_forbidden
+  mode: payments
+  retrieval: skill
+  persona: pay-400
+  tags:
+  - skill
+  - create_payment
+  - negative
+  - forbidden
+  question: >
+    Can you create a payment for instruction ID {ficc_standing_instruction_id}?
+    Value date tomorrow; amount: 1 million USD.
+  expect:
+    requires_context:
+    - ficc_standing_instruction_id
+    forbid_skill_confirmation: true
+    intent_id: skill.create_payment.forbidden
+    min_answer_length: 20
+    answer_contains_all:
+    - cannot run the create-payment skill
+    - needs `PAYMENT_CREATOR`
+    - No payment was created
+    require_routing: true
+    routing_path: skill
+    answer_synthesis: formatter
+    cypher_class: none
+- id: skill_submit_payment_forbidden
+  mode: payments
+  retrieval: skill
+  persona: pay-400
+  tags:
+  - skill
+  - submit_payment
+  - negative
+  - forbidden
+  question: Please submit payment {draft_payment_id} for approval.
+  expect:
+    requires_context:
+    - draft_payment_id
+    forbid_skill_confirmation: true
+    intent_id: skill.submit_payment.forbidden
+    min_answer_length: 20
+    answer_contains_all:
+    - cannot run the submit-payment skill
+    - needs `PAYMENT_CREATOR`
+    - No payment was submitted
+    require_routing: true
+    routing_path: skill
+    answer_synthesis: formatter
+    cypher_class: none
+- id: skill_approve_payment_forbidden
+  mode: payments
+  retrieval: skill
+  persona: fo-ficc-101
+  tags:
+  - skill
+  - approve_payment
+  - negative
+  - forbidden
+  question: Please approve payment {submitted_payment_id}.
+  expect:
+    requires_context:
+    - submitted_payment_id
+    forbid_skill_confirmation: true
+    intent_id: skill.approve_payment.forbidden
+    min_answer_length: 20
+    answer_contains_all:
+    - cannot run the approve-payment skill
+    - needs `FUNDING_APPROVER`
+    - No payment was approved
+    require_routing: true
+    routing_path: skill
+    answer_synthesis: formatter
+    cypher_class: none
