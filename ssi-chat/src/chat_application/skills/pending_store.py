@@ -5,7 +5,11 @@ import time
 import uuid
 from typing import Any
 
-from chat_application.skills.models import PendingCreatePayment, PendingSubmitPayment
+from chat_application.skills.models import (
+    PendingApprovePayment,
+    PendingCreatePayment,
+    PendingSubmitPayment,
+)
 
 _DEFAULT_TTL_SECONDS = 600.0
 
@@ -122,5 +126,47 @@ def build_submit_pending(
     )
 
 
+def build_approve_pending(
+    *,
+    user_id: str,
+    payment_id: str,
+    instruction_id: str,
+    amount: float,
+    value_date: str,
+    currency: str,
+    owning_lob: str,
+    payment_status: str,
+    instruction_status: str,
+    instruction_end_date: str,
+    instruction_type: str,
+    instruction_version: int,
+    created_by_user_id: str,
+    created_by_supervisor_id: str | None,
+    card: Any,
+    ttl_seconds: float = _DEFAULT_TTL_SECONDS,
+) -> PendingApprovePayment:
+    now = time.time()
+    return PendingApprovePayment(
+        pending_id=new_pending_id(),
+        user_id=user_id,
+        payment_id=payment_id,
+        instruction_id=instruction_id,
+        amount=amount,
+        value_date=value_date,
+        currency=currency,
+        owning_lob=owning_lob,
+        payment_status=payment_status,
+        instruction_status=instruction_status,
+        instruction_end_date=instruction_end_date,
+        instruction_type=instruction_type,
+        instruction_version=instruction_version,
+        created_by_user_id=created_by_user_id,
+        created_by_supervisor_id=created_by_supervisor_id,
+        card=card,
+        expires_at=now + ttl_seconds,
+    )
+
+
 pending_create_payment_store = PendingSkillStore()
 pending_submit_payment_store = PendingSkillStore()
+pending_approve_payment_store = PendingSkillStore()

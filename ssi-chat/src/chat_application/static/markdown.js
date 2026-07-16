@@ -50,6 +50,14 @@ function isBulletLine(line) {
   return /^\s*[-*]\s+/.test(line);
 }
 
+function parseHeading(line) {
+  const match = /^(#{1,6})\s+(.+?)\s*$/.exec(line);
+  if (!match) {
+    return null;
+  }
+  return { level: match[1].length, text: match[2] };
+}
+
 function renderPlainMarkdown(lines) {
   const parts = [];
   let index = 0;
@@ -57,6 +65,17 @@ function renderPlainMarkdown(lines) {
   while (index < lines.length) {
     const line = lines[index];
     if (!line.trim()) {
+      index += 1;
+      continue;
+    }
+
+    const heading = parseHeading(line);
+    if (heading) {
+      parts.push(
+        `<h${heading.level} class="md-h${heading.level}">` +
+          `${formatInlineMarkdown(heading.text)}` +
+          `</h${heading.level}>`
+      );
       index += 1;
       continue;
     }

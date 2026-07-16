@@ -58,7 +58,7 @@ def _ctx(
 
 
 class TestLaneAccess:
-    def test_skill_requires_payments_mode_and_creator(self) -> None:
+    def test_skill_requires_payments_mode_and_creator_or_approver(self) -> None:
         denied_mode = resolve_lane_access(
             path="skill", mode="events", capabilities=_caps(creator=True)
         )
@@ -71,11 +71,17 @@ class TestLaneAccess:
         assert not denied_role.allowed
         assert denied_role.denial == DenialReason.SKILL_NOT_CREATOR
 
-        ok = resolve_lane_access(
+        ok_creator = resolve_lane_access(
             path="skill", mode="payments", capabilities=_caps(creator=True)
         )
-        assert ok.allowed
-        assert ok.lane == HandlerLane.SKILL
+        assert ok_creator.allowed
+        assert ok_creator.lane == HandlerLane.SKILL
+
+        ok_approver = resolve_lane_access(
+            path="skill", mode="payments", capabilities=_caps(approver=True)
+        )
+        assert ok_approver.allowed
+        assert ok_approver.lane == HandlerLane.SKILL
 
     def test_tools_require_policies_mode_and_compliance(self) -> None:
         denied_mode = resolve_lane_access(

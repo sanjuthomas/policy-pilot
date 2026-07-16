@@ -198,6 +198,10 @@ def fetch_context(
     submitted_payments = [
         item for item in payments if item.get("status") == "SUBMITTED"
     ]
+    draft_payments = [item for item in payments if item.get("status") == "DRAFT"]
+    ficc_drafts = [
+        item for item in draft_payments if item.get("owning_lob") == "FICC"
+    ]
 
     if approved_instructions:
         context["approved_instruction_id"] = approved_instructions[0]["instruction_id"]
@@ -211,6 +215,10 @@ def fetch_context(
         context["approved_payment_instruction_id"] = payment.get("instruction_id", "")
     if submitted_payments:
         context["submitted_payment_id"] = submitted_payments[0]["payment_id"]
+    if ficc_drafts:
+        context["draft_payment_id"] = ficc_drafts[0]["payment_id"]
+    elif draft_payments:
+        context["draft_payment_id"] = draft_payments[0]["payment_id"]
     if payments:
         context["any_payment_id"] = payments[0]["payment_id"]
     if instructions:

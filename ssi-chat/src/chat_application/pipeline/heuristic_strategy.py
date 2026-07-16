@@ -75,10 +75,20 @@ _SUBMIT_PAYMENT_SKILL = re.compile(
     re.IGNORECASE,
 )
 
+_APPROVE_PAYMENT_SKILL = re.compile(
+    r"\b("
+    r"(please\s+)?approve\s+(a\s+|the\s+|this\s+)?payment|"
+    r"can\s+you\s+approve\s+(a\s+|the\s+|this\s+)?payment|"
+    r"funding[- ]?approve\s+(a\s+|the\s+|this\s+)?payment|"
+    r"green[- ]?light\s+(a\s+|the\s+|this\s+)?payment"
+    r")\b",
+    re.IGNORECASE,
+)
+
 _CAPABILITY_ONLY = re.compile(
     r"^\s*(can|may|do)\s+i\b|"
     r"^\s*am\s+i\s+(allowed|able|permitted)\b|"
-    r"\b(permission|allowed)\s+to\s+(create|submit)\b",
+    r"\b(permission|allowed)\s+to\s+(create|submit|approve)\b",
     re.IGNORECASE,
 )
 
@@ -201,6 +211,20 @@ def _looks_like_submit_payment_skill(message: str) -> bool:
     return parse_submit_payment_params(text) is not None
 
 
+def _looks_like_approve_payment_skill(message: str) -> bool:
+    text = message.strip()
+    if not text or not _APPROVE_PAYMENT_SKILL.search(text):
+        return False
+    # "Who can approve payment Y?" is eligibility, not the mutation skill.
+    if is_eligibility_question_heuristic(text):
+        return False
+    if _CAPABILITY_ONLY.search(text) and "you" not in text.lower()[:40]:
+        return False
+    from chat_application.skills.detect import parse_approve_payment_params
+
+    return parse_approve_payment_params(text) is not None
+
+
 def _looks_like_create_payment_skill(message: str) -> bool:
     text = message.strip()
     if not text or not _CREATE_PAYMENT_SKILL.search(text):
@@ -220,11 +244,19 @@ def heuristic_router_decision(question: str, *, mode: str) -> RouterDecision:
     from chat_application.policy.person import extract_person_name_heuristic
     from chat_application.policy.summary import detect_policy_summary_question
 
+    # Submit before approve — "submit … for approval" must not become approve_payment.
     if _looks_like_submit_payment_skill(question):
         return RouterDecision(
             path="skill",
             skill="submit_payment",
             reasoning="heuristic fallback: submit_payment skill",
+        )
+
+    if _looks_like_approve_payment_skill(question):
+        return RouterDecision(
+            path="skill",
+            skill="approve_payment",
+            reasoning="heuristic fallback: approve_payment skill",
         )
 
     if _looks_like_create_payment_skill(question):

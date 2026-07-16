@@ -48,7 +48,7 @@ See **[Intent Determination in Policy Pilot](../docs/intent-determination.md)** 
 Summary:
 
 1. **Route** — Gemini structured `RouterDecision` (eligibility / graph / vector / hybrid)
-2. **Skills** — scripted mutations (create-payment / submit-payment: OPA preflight → Go / No Go → payment-service)
+2. **Skills** — scripted mutations (create / submit / approve payment: OPA preflight → Go / No Go → payment-service)
 3. **Fast paths** — live OPA eligibility API; Neo4j direct YAML intents (planned Cypher + formatters); me-intents
 4. **Selective retrieve** — graph only, vector only, or hybrid (RRF of vector + graph when both run)
 5. **Synthesize** — deterministic formatters, Who/When/Why audit, or Gemini over context
@@ -72,6 +72,16 @@ Owning-LOB desk analyst submits a **DRAFT** for funding approval. Example:
 Flow: parse payment id → load DRAFT → dry-run authz `SUBMIT` → confirmation card (same party details as create) → **Go** calls `POST …/payments/{id}/submit`.
 
 Full write-up: **[Submit-payment skill](../docs/submit-payment-skill.md)**. Confirm API: `POST /api/chat/skills/submit-payment/confirm`.
+
+### Approve-payment skill
+
+Funding approver green-lights a **SUBMITTED** payment. Example:
+
+> Please approve payment 20260715-FICC-P-9.
+
+Flow: parse payment id → load SUBMITTED → dry-run authz `APPROVE` → confirmation card → **Go** calls `POST …/payments/{id}/approve`.
+
+Full write-up: **[Approve-payment skill](../docs/approve-payment-skill.md)**. Confirm API: `POST /api/chat/skills/approve-payment/confirm`.
 
 ## Who / When / Why (approval audit)
 

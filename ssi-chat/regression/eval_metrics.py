@@ -91,6 +91,12 @@ ROUTING_BY_RETRIEVAL: dict[RetrievalStrategy, RoutingExpectation] = {
         min_sources=1,
         source_channels_any=frozenset({"vector"}),
     ),
+    "skill": RoutingExpectation(
+        paths=frozenset({"skill"}),
+        cypher_classes=frozenset({"none"}),
+        synthesis_modes=frozenset({"formatter"}),
+        min_sources=0,
+    ),
 }
 
 

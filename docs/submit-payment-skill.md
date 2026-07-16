@@ -11,7 +11,7 @@ Middle-office creators draft payments; a **front-office desk analyst** whose `su
 | **Chat mode** | **Payments** |
 | **Router** | `path=skill`, `skill=submit_payment` |
 
-Related: **[Create-payment skill](create-payment-skill.md)** (draft first).
+Related: **[Create-payment skill](create-payment-skill.md)** (draft first), **[Approve-payment skill](approve-payment-skill.md)** (funding approve after submit).
 
 ---
 

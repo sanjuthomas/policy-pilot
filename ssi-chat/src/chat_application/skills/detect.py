@@ -22,7 +22,11 @@ import re
 from datetime import date, timedelta
 
 from chat_application.graph.cypher import extract_entity_ids, extract_instruction_ids
-from chat_application.skills.models import CreatePaymentParams, SubmitPaymentParams
+from chat_application.skills.models import (
+    ApprovePaymentParams,
+    CreatePaymentParams,
+    SubmitPaymentParams,
+)
 
 _AMOUNT = re.compile(
     r"(?:"
@@ -164,4 +168,15 @@ def parse_submit_payment_params(message: str) -> SubmitPaymentParams | None:
     if not payment_id:
         return None
     return SubmitPaymentParams(payment_id=payment_id)
+
+
+def parse_approve_payment_params(message: str) -> ApprovePaymentParams | None:
+    """Parse approve-payment slot once intent is known (payment id)."""
+    text = message.strip()
+    if not text:
+        return None
+    payment_id = _pick_payment_id(text)
+    if not payment_id:
+        return None
+    return ApprovePaymentParams(payment_id=payment_id)
 

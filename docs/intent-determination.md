@@ -58,7 +58,7 @@ flowchart TD
 
 ### Front and middle office (payment operations)
 
-Payment creators, desk submitters, and funding approvers use the same investigation path, and can also run **mutation skills** (create-payment, submit-payment) after OPA preflight and an explicit **Go / No Go**.
+Payment creators, desk submitters, and funding approvers use the same investigation path, and can also run **mutation skills** (create-payment, submit-payment, approve-payment) after OPA preflight and an explicit **Go / No Go**.
 
 ```mermaid
 flowchart TD
@@ -66,8 +66,10 @@ flowchart TD
     ID --> SK{mutation skill?}
     SK -->|create| PRE1[OPA CREATE preflight]
     SK -->|submit| PRE2[OPA SUBMIT preflight]
+    SK -->|approve| PRE3[OPA APPROVE preflight]
     PRE1 -->|allow| CONF[Confirm card — Go / No Go]
     PRE2 -->|allow| CONF
+    PRE3 -->|allow| CONF
     CONF -->|Go| PAY[POST payment-service]
     PAY --> A[Answer]
     CONF -->|No Go / deny| A
@@ -119,7 +121,7 @@ class RouterDecision(BaseModel):
     ] | None
     strategy: Literal["eligibility", "graph", "vector", "hybrid"] | None
     eligibility_target: Literal["payment", "instruction"] | None
-    skill: Literal["create_payment"] | None
+    skill: Literal["create_payment", "submit_payment", "approve_payment"] | None
     me_kind / me_action / me_entity_type: ...
     policy_domain / policy_action: ...
     person_query: str | None
@@ -139,6 +141,8 @@ class RouterDecision(BaseModel):
 | Tool | Path | Example questions |
 |------|------|-------------------|
 | **CreatePaymentSkill** | `skill` | Can you create a payment for instruction X…? |
+| **SubmitPaymentSkill** | `skill` | Please submit payment Y for approval. |
+| **ApprovePaymentSkill** | `skill` | Please approve payment Y. |
 | **MeIntent** | `me` | Who am I? Can I create a payment? |
 | **PolicySummary** | `policy_summary` | What is the funding approval policy? |
 | **PolicyDirectory** | `policy_directory` | Who can approve payments over $25B? |
@@ -240,6 +244,15 @@ Illustrative structured replies (field set matches `RouterDecision`; `null` omit
   "path": "skill",
   "skill": "submit_payment",
   "reasoning": "User wants to submit an existing draft payment for funding approval"
+}
+```
+
+**Approve-payment skill (mutation):**
+```json
+{
+  "path": "skill",
+  "skill": "approve_payment",
+  "reasoning": "User wants to funding-approve an existing submitted payment"
 }
 ```
 

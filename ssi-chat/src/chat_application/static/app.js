@@ -353,6 +353,7 @@ function createSkillConfirmation(confirmation, chatMeta) {
   const card = confirmation.card || {};
   const skill = confirmation.skill || "create_payment";
   const isSubmit = skill === "submit_payment";
+  const isApprove = skill === "approve_payment";
   const panel = document.createElement("div");
   panel.className = "skill-confirm";
   panel.dataset.pendingId = confirmation.pending_id;
@@ -367,10 +368,14 @@ function createSkillConfirmation(confirmation, chatMeta) {
        <dt>Payment status</dt><dd>${escapeHtml(card.payment_status || "DRAFT")}</dd>`
     : "";
 
+  const title = isApprove
+    ? "Confirm payment approve"
+    : isSubmit
+      ? "Confirm payment submit"
+      : "Confirm payment create";
+
   panel.innerHTML = `
-    <div class="skill-confirm-title">${
-      isSubmit ? "Confirm payment submit" : "Confirm payment create"
-    }</div>
+    <div class="skill-confirm-title">${title}</div>
     <dl class="skill-confirm-grid">
       ${paymentRow}
       <dt>Instruction</dt><dd class="mono">${escapeHtml(card.instruction_id || "—")}</dd>
@@ -393,15 +398,17 @@ function createSkillConfirmation(confirmation, chatMeta) {
   const goBtn = panel.querySelector(".btn-go");
   const noGoBtn = panel.querySelector(".btn-nogo");
   const status = panel.querySelector(".skill-confirm-status");
-  const confirmPath = isSubmit
-    ? "/api/chat/skills/submit-payment/confirm"
-    : "/api/chat/skills/create-payment/confirm";
+  const confirmPath = isApprove
+    ? "/api/chat/skills/approve-payment/confirm"
+    : isSubmit
+      ? "/api/chat/skills/submit-payment/confirm"
+      : "/api/chat/skills/create-payment/confirm";
 
   async function decide(decision) {
     goBtn.disabled = true;
     noGoBtn.disabled = true;
     status.textContent = decision === "go"
-      ? (isSubmit ? "Submitting…" : "Creating…")
+      ? (isApprove ? "Approving…" : isSubmit ? "Submitting…" : "Creating…")
       : "Cancelling…";
     try {
       const response = await fetch(confirmPath, {

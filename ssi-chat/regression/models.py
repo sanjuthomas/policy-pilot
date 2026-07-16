@@ -13,7 +13,16 @@ RetrievalStrategy = Literal[
     "vector",
     "eligibility",
     "policy_directory",
+    "skill",
 ]
+
+DEFAULT_PERSONA_PASSWORD = "Password1!"
+
+SKILL_CONFIRM_PATHS: dict[str, str] = {
+    "create_payment": "/api/chat/skills/create-payment/confirm",
+    "submit_payment": "/api/chat/skills/submit-payment/confirm",
+    "approve_payment": "/api/chat/skills/approve-payment/confirm",
+}
 
 
 class SeedStep(BaseModel):
@@ -45,6 +54,11 @@ class ExpectConfig(BaseModel):
     requires_cypher: bool = False
     requires_context: list[str] = Field(default_factory=list)
     skip_if_missing_context: bool = True
+    # Skill phase-1 (mutation skills)
+    intent_id: str | None = None
+    require_skill_confirmation: bool = False
+    forbid_skill_confirmation: bool = False
+    skill_name: str | None = None
     # Retrieval-quality overrides (defaults derived from case ``retrieval`` tag).
     routing_path: str | None = None
     cypher_class: Literal["deterministic", "llm", "none"] | None = None
@@ -57,6 +71,17 @@ class ExpectConfig(BaseModel):
     min_faithfulness: float | None = None
 
 
+class ConfirmStep(BaseModel):
+    """Optional second step after phase-1 skill confirmation card."""
+
+    decision: Literal["go", "no_go"] = "no_go"
+    intent_id: str | None = None
+    min_answer_length: int = 1
+    answer_contains_any: list[str] = Field(default_factory=list)
+    answer_contains_all: list[str] = Field(default_factory=list)
+    answer_not_contains: list[str] = Field(default_factory=list)
+
+
 class RegressionCase(BaseModel):
     id: str
     mode: SearchMode
@@ -64,11 +89,21 @@ class RegressionCase(BaseModel):
         description=(
             "Primary engine for the answer: deterministic (Neo4j formatter, no LLM synthesis), "
             "graph (Neo4j planned/LLM Cypher authoritative), vector (Neo4j dense primary), "
-            "eligibility (live OPA via authorization-service, no vector search)."
+            "eligibility (live OPA via authorization-service, no vector search), "
+            "skill (mutation skill with optional Go / No Go confirm)."
         ),
     )
     question: str
     tags: list[str] = Field(default_factory=list)
+    persona: str | None = Field(
+        default=None,
+        description="ZITADEL user id for chat login (default: compliance analyst).",
+    )
+    password: str = Field(
+        default=DEFAULT_PERSONA_PASSWORD,
+        description="Login password for persona (demo users use Password1!).",
+    )
+    confirm: ConfirmStep | None = None
     expect: ExpectConfig = Field(default_factory=ExpectConfig)
 
 
@@ -93,6 +128,7 @@ class CaseResult(BaseModel):
     tags: list[str] = Field(default_factory=list)
     retrieval: RetrievalStrategy | None = None
     quality: dict[str, Any] | None = None
+    persona: str | None = None
 
 
 class SuiteResult(BaseModel):

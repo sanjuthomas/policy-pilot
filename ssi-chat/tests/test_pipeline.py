@@ -29,6 +29,14 @@ class TestHeuristicStrategy:
         assert decision.strategy == "eligibility"
         assert decision.eligibility_target == "payment"
 
+    def test_approve_payment_skill_heuristic(self) -> None:
+        decision = heuristic_router_decision(
+            "Please approve payment 20260705-FX-P-534.",
+            mode="payments",
+        )
+        assert decision.path == "skill"
+        assert decision.skill == "approve_payment"
+
     def test_policies_mode_prefers_eligibility(self) -> None:
         assert (
             infer_execution_strategy_heuristic(

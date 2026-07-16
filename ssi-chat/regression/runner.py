@@ -13,14 +13,19 @@ import httpx
 import yaml
 
 from regression.api_smoke import print_smoke_summary, run_api_smoke, smoke_to_dict
-from regression.assertions import evaluate_expectations
-from regression.auth_helpers import compliance_auth_headers
+from regression.assertions import evaluate_confirm_expectations, evaluate_expectations
+from regression.auth_helpers import (
+    DEFAULT_COMPLIANCE_USER,
+    compliance_auth_headers,
+    login_headers,
+)
 from regression.eval_metrics import (
     CaseQualityScores,
     evaluate_case_quality,
     summarize_suite_quality,
 )
 from regression.models import (
+    SKILL_CONFIRM_PATHS,
     CaseResult,
     RegressionCase,
     RegressionSuite,
@@ -91,6 +96,52 @@ def ask_chat(
     return response.json()
 
 
+def confirm_skill(
+    client: httpx.Client,
+    chat_url: str,
+    *,
+    skill: str,
+    pending_id: str,
+    decision: str,
+    auth_headers: dict[str, str],
+) -> dict:
+    path = SKILL_CONFIRM_PATHS.get(skill)
+    if not path:
+        raise ValueError(f"unknown skill for confirm: {skill}")
+    response = client.post(
+        f"{chat_url.rstrip('/')}{path}",
+        json={"pending_id": pending_id, "decision": decision},
+        headers=auth_headers,
+        timeout=120.0,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def auth_headers_for_case(
+    client: httpx.Client,
+    chat_url: str,
+    case: RegressionCase,
+    *,
+    cache: dict[str, dict[str, str]],
+) -> dict[str, str]:
+    user_id = case.persona or DEFAULT_COMPLIANCE_USER
+    cached = cache.get(user_id)
+    if cached is not None:
+        return cached
+    if case.persona is None:
+        headers = compliance_auth_headers(client, chat_url)
+    else:
+        headers = login_headers(
+            client,
+            chat_url,
+            user_id=case.persona,
+            password=case.password,
+        )
+    cache[user_id] = headers
+    return headers
+
+
 def _quality_gate_enabled(expect) -> bool:
     return bool(
         expect.require_routing
@@ -113,6 +164,7 @@ def run_case(
     *,
     auth_headers: dict[str, str],
 ) -> CaseResult:
+    persona = case.persona or DEFAULT_COMPLIANCE_USER
     try:
         question = render_question(case.question, context)
     except KeyError as exc:
@@ -126,6 +178,7 @@ def run_case(
                 reason=f"missing context key: {exc.args[0]}",
                 tags=case.tags,
                 retrieval=case.retrieval,
+                persona=persona,
             )
         return CaseResult(
             id=case.id,
@@ -135,6 +188,7 @@ def run_case(
             reason=f"missing context key: {exc.args[0]}",
             tags=case.tags,
             retrieval=case.retrieval,
+            persona=persona,
         )
 
     for key in case.expect.requires_context:
@@ -149,6 +203,7 @@ def run_case(
                     reason=f"missing required context: {key}",
                     tags=case.tags,
                     retrieval=case.retrieval,
+                    persona=persona,
                 )
             return CaseResult(
                 id=case.id,
@@ -158,6 +213,7 @@ def run_case(
                 reason=f"missing required context: {key}",
                 tags=case.tags,
                 retrieval=case.retrieval,
+                persona=persona,
             )
 
     try:
@@ -171,18 +227,55 @@ def run_case(
             reason=f"chat request failed: {exc}",
             tags=case.tags,
             retrieval=case.retrieval,
+            persona=persona,
         )
 
     answer = payload.get("answer") or ""
     sources = payload.get("sources") or []
     graph_rows = payload.get("graph_rows") or []
+    routing = payload.get("routing") or {}
+    skill_confirmation = payload.get("skill_confirmation")
     passed, reason = evaluate_expectations(
         case.expect,
         answer=answer,
         sources=sources,
         graph_rows=graph_rows,
         cypher=payload.get("cypher"),
+        intent_id=routing.get("intent_id"),
+        skill_confirmation=skill_confirmation
+        if isinstance(skill_confirmation, dict)
+        else None,
     )
+
+    if passed and case.confirm is not None:
+        confirmation = skill_confirmation if isinstance(skill_confirmation, dict) else {}
+        pending_id = confirmation.get("pending_id")
+        skill = confirmation.get("skill") or case.expect.skill_name
+        if not pending_id or not skill:
+            passed = False
+            reason = "confirm step requested but skill_confirmation.pending_id/skill missing"
+        else:
+            try:
+                confirm_payload = confirm_skill(
+                    client,
+                    chat_url,
+                    skill=skill,
+                    pending_id=pending_id,
+                    decision=case.confirm.decision,
+                    auth_headers=auth_headers,
+                )
+            except Exception as exc:  # noqa: BLE001
+                passed = False
+                reason = f"skill confirm failed: {exc}"
+            else:
+                confirm_routing = confirm_payload.get("routing") or {}
+                confirm_answer = confirm_payload.get("answer") or ""
+                passed, reason = evaluate_confirm_expectations(
+                    case.confirm,
+                    answer=confirm_answer,
+                    intent_id=confirm_routing.get("intent_id"),
+                )
+                answer = confirm_answer
 
     quality = evaluate_case_quality(
         retrieval=case.retrieval,
@@ -216,6 +309,7 @@ def run_case(
         tags=case.tags,
         retrieval=case.retrieval,
         quality=quality.to_dict(),
+        persona=persona,
     )
 
 
@@ -257,6 +351,8 @@ def print_summary(result: SuiteResult) -> None:
         status = "PASS" if case.passed else ("SKIP" if case.skipped else "FAIL")
         retrieval = f" retrieval={case.retrieval}" if case.retrieval else ""
         print(f"[{status}] {case.id} ({case.mode}{retrieval})")
+        if case.persona and case.persona != DEFAULT_COMPLIANCE_USER:
+            print(f"       persona: {case.persona}")
         if not case.passed:
             print(f"       reason: {case.reason}")
             if case.answer_preview:
@@ -287,7 +383,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--retrieval",
         default="",
-        help="Comma-separated retrieval filter: deterministic, graph, vector, eligibility",
+        help=(
+            "Comma-separated retrieval filter: deterministic, graph, vector, "
+            "eligibility, skill"
+        ),
     )
     parser.add_argument("--ids", default="", help="Comma-separated case id filter")
     parser.add_argument(
@@ -369,13 +468,33 @@ def main(argv: list[str] | None = None) -> int:
         with httpx.Client() as client:
             health = client.get(f"{args.chat_url.rstrip('/')}/health", timeout=15.0)
             health.raise_for_status()
-            auth_headers = compliance_auth_headers(client, args.chat_url)
+            auth_cache: dict[str, dict[str, str]] = {}
 
             for index, case in enumerate(cases, start=1):
                 logger.info("[%s/%s] %s", index, len(cases), case.id)
-                case_result = run_case(
-                    client, args.chat_url, case, context, auth_headers=auth_headers
-                )
+                try:
+                    auth_headers = auth_headers_for_case(
+                        client, args.chat_url, case, cache=auth_cache
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    case_result = CaseResult(
+                        id=case.id,
+                        mode=case.mode,
+                        question=case.question,
+                        passed=False,
+                        reason=f"persona login failed: {exc}",
+                        tags=case.tags,
+                        retrieval=case.retrieval,
+                        persona=case.persona or DEFAULT_COMPLIANCE_USER,
+                    )
+                else:
+                    case_result = run_case(
+                        client,
+                        args.chat_url,
+                        case,
+                        context,
+                        auth_headers=auth_headers,
+                    )
                 result.cases.append(case_result)
                 if case_result.skipped:
                     result.skipped += 1
