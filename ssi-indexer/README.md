@@ -122,6 +122,8 @@ Copy `.env.example` to `.env` at the repo root to override defaults. Docker Comp
 | `KAFKA_PAYMENTS_TOPIC` | `payments` |
 | `MULTIMODAL_VECTOR_INDEX` | `multimodal_embedding` |
 | `NEO4J_URI` | `bolt://neo4j:7687` |
+| `NEO4J_USER` | `svc_indexer` |
+| `NEO4J_PASSWORD` | `Password1!` |
 
 Requires **GCP Vertex AI** credentials for embeddings and vector search.
 

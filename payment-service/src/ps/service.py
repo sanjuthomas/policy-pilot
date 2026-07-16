@@ -774,13 +774,31 @@ class PaymentService:
         instruction_end_date = instruction.get("end_date") or ""
         instruction_status = instruction.get("status", "")
 
+        # Authorize while status is still DRAFT/SUBMITTED (OPA CANCEL checks status),
+        # then mutate — same pattern as submit().
+        try:
+            authorization = await self._authorize(
+                PaymentAction.CANCEL,
+                subject,
+                payment,
+                instruction_end_date=instruction_end_date,
+                instruction_status=instruction_status,
+                bearer_token=bearer_token,
+                session_id=session_id,
+            )
+        except PermissionError:
+            raise
+
         now = datetime.now(timezone.utc)
         payment.status = PaymentStatus.CANCELLED
         payment.cancelled_by = _user_ref(subject)
         payment.cancellation_reason = request.reason if request and request.reason else None
         payment.cancelled_at = now
         payment.updated_at = now
-        details = {"reason": request.reason} if request and request.reason else {}
+        details = details_with_authorization(
+            {"reason": request.reason} if request and request.reason else None,
+            authorization,
+        )
 
         saved = await self._persist_new_version(
             payment,
@@ -791,6 +809,7 @@ class PaymentService:
             instruction_status=instruction_status,
             bearer_token=bearer_token,
             session_id=session_id,
+            skip_authorize=True,
         )
 
         await self._try_release_single_use_instruction(

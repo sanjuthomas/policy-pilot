@@ -62,6 +62,20 @@ class PaymentServiceClient:
     ) -> httpx.Response:
         return self.request("POST", f"/payments/{payment_id}/submit", session=session)
 
+    def cancel_payment(
+        self,
+        session: SessionCredentials,
+        payment_id: str,
+        *,
+        reason: str = "Cancelled by skill fixture teardown",
+    ) -> httpx.Response:
+        return self.request(
+            "POST",
+            f"/payments/{payment_id}/cancel",
+            session=session,
+            json_body={"reason": reason},
+        )
+
     def approve_payment(
         self, session: SessionCredentials, payment_id: str
     ) -> httpx.Response:

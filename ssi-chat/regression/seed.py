@@ -23,15 +23,13 @@ def _post_action(
     base = harness_url.rstrip("/")
     action = step.action
 
-    if action == "run-policy-scenario":
+    if action in {
+        "run-policy-scenario",
+        "run-payment-policy-scenario",
+        "seed-skill-fixtures",
+    }:
         response = client.post(
-            f"{base}/api/actions/run-policy-scenario",
-            headers=auth_headers,
-            timeout=300.0,
-        )
-    elif action == "run-payment-policy-scenario":
-        response = client.post(
-            f"{base}/api/actions/run-payment-policy-scenario",
+            f"{base}/api/actions/{action}",
             headers=auth_headers,
             timeout=300.0,
         )
@@ -69,11 +67,91 @@ def _post_action(
     return payload
 
 
-def run_seed(harness_url: str, config: SeedConfig) -> None:
+def run_seed(harness_url: str, config: SeedConfig) -> dict[str, str]:
+    """Run suite-level seed steps; return any context ids they produced."""
+    context: dict[str, str] = {}
     with httpx.Client(timeout=60.0) as client:
         auth_headers = admin_auth_headers(client, harness_url)
         for step in config.steps:
-            _post_action(client, harness_url, step, auth_headers=auth_headers)
+            payload = _post_action(client, harness_url, step, auth_headers=auth_headers)
+            step_context = payload.get("context") or {}
+            if isinstance(step_context, dict):
+                context.update(
+                    {str(k): str(v) for k, v in step_context.items() if v}
+                )
+    return context
+
+
+def skill_fixture_need(requires_context: list[str]) -> str | None:
+    """Derive setup-skill-fixture ``need`` from case placeholder requirements."""
+    required = set(requires_context)
+    if "submitted_payment_id" in required:
+        return "submitted"
+    if "draft_payment_id" in required:
+        return "draft"
+    if "ficc_standing_instruction_id" in required:
+        return "instruction"
+    return None
+
+
+def setup_skill_fixture(harness_url: str, *, need: str) -> dict[str, str]:
+    """Create isolated fixture data for one skill case. Raises on failure.
+
+    On failure the exception carries ``partial_context`` so the caller can still
+    tear down anything that was created before the error.
+    """
+    with httpx.Client(timeout=120.0) as client:
+        auth_headers = admin_auth_headers(client, harness_url)
+        response = client.post(
+            f"{harness_url.rstrip('/')}/api/actions/setup-skill-fixture",
+            json={"need": need},
+            headers=auth_headers,
+            timeout=120.0,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    context = {
+        str(k): str(v) for k, v in (payload.get("context") or {}).items() if v
+    }
+    logger.info(
+        "setup-skill-fixture need=%s -> ok=%s succeeded=%s failed=%s context=%s",
+        need,
+        payload.get("ok"),
+        payload.get("succeeded"),
+        payload.get("failed"),
+        sorted(context.keys()),
+    )
+    if not payload.get("ok"):
+        logs = payload.get("logs") or []
+        err = RuntimeError(
+            f"setup-skill-fixture({need}) failed: " + "; ".join(logs[-5:])
+        )
+        err.partial_context = context  # type: ignore[attr-defined]
+        raise err
+    return context
+
+
+def teardown_skill_fixture(harness_url: str, context: dict[str, str]) -> None:
+    """Best-effort teardown of fixtures created for one skill case."""
+    if not context:
+        return
+    with httpx.Client(timeout=120.0) as client:
+        auth_headers = admin_auth_headers(client, harness_url)
+        response = client.post(
+            f"{harness_url.rstrip('/')}/api/actions/teardown-skill-fixture",
+            json={"context": context},
+            headers=auth_headers,
+            timeout=120.0,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    logger.info(
+        "teardown-skill-fixture -> ok=%s succeeded=%s skipped=%s failed=%s",
+        payload.get("ok"),
+        payload.get("succeeded"),
+        payload.get("skipped"),
+        payload.get("failed"),
+    )
 
 
 def fetch_harness_status(harness_url: str) -> dict[str, Any]:

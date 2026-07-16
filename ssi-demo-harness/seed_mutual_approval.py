@@ -24,11 +24,15 @@ Optional overrides:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 
-NEO4J_URI = "bolt://localhost:7687"
-NEO4J_AUTH = ("neo4j", "devpassword")
+NEO4J_URI = os.environ.get("NEO4J_URI", "bolt://localhost:7687")
+NEO4J_AUTH = (
+    os.environ.get("NEO4J_USER", "svc_harness"),
+    os.environ.get("NEO4J_PASSWORD", os.environ.get("NEO4J_HARNESS_PASSWORD", "Password1!")),
+)
 
 DEFAULT_USER_A = "ficc-300"
 DEFAULT_USER_B = "ficc-400"

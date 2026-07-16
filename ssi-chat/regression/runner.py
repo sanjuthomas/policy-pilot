@@ -34,6 +34,9 @@ from regression.models import (
 from regression.seed import (
     fetch_context,
     run_seed,
+    setup_skill_fixture,
+    skill_fixture_need,
+    teardown_skill_fixture,
     wait_for_index,
 )
 
@@ -427,9 +430,10 @@ def main(argv: list[str] | None = None) -> int:
         retrieval=retrieval_filter,
     )
 
+    seed_context: dict[str, str] = {}
     if args.seed and suite.seed.steps:
         logger.info("running %s seed step(s)", len(suite.seed.steps))
-        run_seed(args.harness_url, suite.seed)
+        seed_context = run_seed(args.harness_url, suite.seed)
         if not args.no_wait:
             wait_for_index(
                 harness_url=args.harness_url,
@@ -445,6 +449,7 @@ def main(argv: list[str] | None = None) -> int:
         instruction_service_url=args.instruction_service_url,
         payment_url=args.payment_url,
     )
+    context.update(seed_context)
     logger.info("resolved context keys: %s", sorted(context))
 
     started = time.perf_counter()
@@ -472,29 +477,71 @@ def main(argv: list[str] | None = None) -> int:
 
             for index, case in enumerate(cases, start=1):
                 logger.info("[%s/%s] %s", index, len(cases), case.id)
+                case_context = dict(context)
+                fixture_context: dict[str, str] = {}
+                need = (
+                    skill_fixture_need(case.expect.requires_context)
+                    if case.retrieval == "skill"
+                    else None
+                )
                 try:
-                    auth_headers = auth_headers_for_case(
-                        client, args.chat_url, case, cache=auth_cache
-                    )
+                    if need is not None:
+                        try:
+                            fixture_context = setup_skill_fixture(
+                                args.harness_url, need=need
+                            )
+                        except Exception as exc:  # noqa: BLE001
+                            fixture_context = dict(
+                                getattr(exc, "partial_context", {}) or {}
+                            )
+                            raise
+                        case_context.update(fixture_context)
+
+                    try:
+                        auth_headers = auth_headers_for_case(
+                            client, args.chat_url, case, cache=auth_cache
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        case_result = CaseResult(
+                            id=case.id,
+                            mode=case.mode,
+                            question=case.question,
+                            passed=False,
+                            reason=f"persona login failed: {exc}",
+                            tags=case.tags,
+                            retrieval=case.retrieval,
+                            persona=case.persona or DEFAULT_COMPLIANCE_USER,
+                        )
+                    else:
+                        case_result = run_case(
+                            client,
+                            args.chat_url,
+                            case,
+                            case_context,
+                            auth_headers=auth_headers,
+                        )
                 except Exception as exc:  # noqa: BLE001
                     case_result = CaseResult(
                         id=case.id,
                         mode=case.mode,
                         question=case.question,
                         passed=False,
-                        reason=f"persona login failed: {exc}",
+                        reason=f"skill fixture setup failed: {exc}",
                         tags=case.tags,
                         retrieval=case.retrieval,
                         persona=case.persona or DEFAULT_COMPLIANCE_USER,
                     )
-                else:
-                    case_result = run_case(
-                        client,
-                        args.chat_url,
-                        case,
-                        context,
-                        auth_headers=auth_headers,
-                    )
+                finally:
+                    if fixture_context:
+                        try:
+                            teardown_skill_fixture(args.harness_url, fixture_context)
+                        except Exception as exc:  # noqa: BLE001
+                            logger.warning(
+                                "teardown-skill-fixture failed for %s: %s",
+                                case.id,
+                                exc,
+                            )
+
                 result.cases.append(case_result)
                 if case_result.skipped:
                     result.skipped += 1

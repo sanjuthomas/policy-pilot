@@ -4,12 +4,16 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
 BATCH = 100
-NEO4J_URI = "bolt://localhost:7687"
-NEO4J_AUTH = ("neo4j", "devpassword")
+NEO4J_URI = os.environ.get("NEO4J_URI", "bolt://localhost:7687")
+NEO4J_AUTH = (
+    os.environ.get("NEO4J_USER", "svc_harness"),
+    os.environ.get("NEO4J_PASSWORD", os.environ.get("NEO4J_HARNESS_PASSWORD", "Password1!")),
+)
 
 
 def _load_driver():

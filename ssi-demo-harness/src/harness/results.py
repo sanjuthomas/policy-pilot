@@ -12,6 +12,7 @@ class HarnessActionResult:
     skipped: int = 0
     logs: list[str] = field(default_factory=list)
     ok: bool = True
+    context: dict[str, str] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -22,4 +23,5 @@ class HarnessActionResult:
             "skipped": self.skipped,
             "ok": self.ok,
             "logs": self.logs,
+            "context": self.context,
         }

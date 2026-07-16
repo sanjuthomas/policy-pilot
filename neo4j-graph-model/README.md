@@ -209,7 +209,17 @@ The chat API filters by source based on the selected mode:
 
 ## Neo4j Browser
 
-http://localhost:7474/browser/ — login `neo4j` / `devpassword`
+http://localhost:7474/browser/ — admin login `neo4j` / `devpassword`
+
+Application services use dedicated least-privilege accounts (Neo4j Enterprise RBAC), bootstrapped by `scripts/neo4j-init-users.sh` / `init-service-accounts.cypher`:
+
+| User | Used by | Privileges (summary) |
+|------|---------|----------------------|
+| `svc_chat` | ssi-chat | Read (`MATCH`), show indexes, execute procedures (vector search) |
+| `svc_indexer` | ssi-indexer | Read/write, create labels/types/properties, index + constraint management, procedures |
+| `svc_harness` | demo seed scripts | Read/write + create labels/types/properties (no schema management) |
+
+Default app passwords: `Password1!` (override with `NEO4J_CHAT_PASSWORD` / `NEO4J_INDEXER_PASSWORD` / `NEO4J_HARNESS_PASSWORD`).
 
 ## Apply schema manually
 

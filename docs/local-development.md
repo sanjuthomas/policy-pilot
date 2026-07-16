@@ -84,7 +84,7 @@ Browse logs: open [OpenSearch Dashboards](http://localhost:5601), create an inde
 | http://localhost:8090 | SSI indexer search console |
 | http://localhost:8091 | Demo harness |
 | http://localhost:8094 | Authorization service |
-| http://localhost:7474/browser/ | Neo4j (`neo4j` / `devpassword`) |
+| http://localhost:7474/browser/ | Neo4j Browser (admin `neo4j` / `devpassword`; apps use `svc_*`) |
 | http://localhost:8080/ui/console | ZITADEL admin |
 | http://localhost:5601 | OpenSearch Dashboards |
 

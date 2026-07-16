@@ -10,7 +10,8 @@
 # Note: PolicyPilot still invokes dense vector search in parallel for all cases except eligibility.
 #
 # Skill cases use ``persona`` (ZITADEL user id) and optional ``confirm.decision``.
-# Seed leaves ≥1 DRAFT payment (create 5 / submit 4) for submit-payment.
+# Each skill case setups its own fixture via harness setup-skill-fixture and
+# teardowns with teardown-skill-fixture (independent of suite seed data).
 
 version: 1
 seed:
