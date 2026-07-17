@@ -46,16 +46,27 @@ pip install -q \
 
 Each service reads configuration from environment variables — see its own README.
 
-## Observability (logs)
+## Observability mesh
 
-Application services send logs **directly over OTLP** to the OpenTelemetry Collector (`4317`). The collector forwards them to:
+All services emit **OTLP** (logs, metrics, traces) to the OpenTelemetry Collector (`4317`), which fans the three signals out to a Grafana-centric backend modeled on [observability-mesh-demo](https://github.com/sanjuthomas/observability-mesh-demo):
 
-1. **Debug exporter** — collector stdout (`docker compose logs otel-collector`)
-2. **OpenSearch** — index `otel-logs` (redacted HTTP and Vertex Gen AI log lines, startup messages, errors)
+| Signal | Path | Backend |
+|--------|------|---------|
+| **Metrics** | Collector `prometheus` exporter (`:8889`) → Prometheus scrape | Prometheus → Grafana |
+| **Logs** | Collector `otlphttp` → Loki OTLP ingest | Loki → Grafana (replaces OpenSearch) |
+| **Traces** | Collector `otlp` → Tempo | Tempo → Grafana |
+| **SLOs** | OpenSLO docs in the catalog → Sloth recording rules → Prometheus | Grafana SLO dashboard |
 
-Metrics and traces still use the debug exporter only. There is no application log file on disk; optional console mirroring uses `OTEL_LOG_CONSOLE=true`.
+Everything is provisioned — no manual dashboard/datasource setup. See the full guide in [observability.md](observability.md).
 
-Browse logs: open [OpenSearch Dashboards](http://localhost:5601), create an index pattern for `otel-logs*`, and use **Discover**.
+Quick checks after `docker compose up`:
+
+- **Grafana** [http://localhost:3000](http://localhost:3000) (`admin`/`admin`) — folder **Policy Pilot** has *SLO Overview*, *HTTP SLIs*, and *Domain SLIs* dashboards.
+- **Prometheus targets** [http://localhost:9099/targets](http://localhost:9099/targets) — `otel-collector` should be **UP**.
+- **SLO provisioner** [http://localhost:9097/ui/](http://localhost:9097/ui/) — the six seeded SLOs compile to Sloth rules.
+- **Collector metrics** `curl http://localhost:8889/metrics` — raw re-exported series.
+
+There is no application log file on disk; optional console mirroring uses `OTEL_LOG_CONSOLE=true`.
 
 ## Components
 
@@ -86,7 +97,10 @@ Browse logs: open [OpenSearch Dashboards](http://localhost:5601), create an inde
 | http://localhost:8094 | Authorization service |
 | http://localhost:7474/browser/ | Neo4j Browser (admin `neo4j` / `devpassword`; apps use `svc_*`) |
 | http://localhost:8080/ui/console | ZITADEL admin |
-| http://localhost:5601 | OpenSearch Dashboards |
+| http://localhost:3000 | Grafana (SLO / HTTP / domain dashboards) |
+| http://localhost:9099 | Prometheus |
+| http://localhost:9096/ui/ | SLO catalog author |
+| http://localhost:9097/ui/ | SLO provisioner |
 
 ## Retrieval quality evaluation
 

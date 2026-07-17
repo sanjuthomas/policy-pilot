@@ -186,7 +186,7 @@ main() {
     neo4j neo4j-init \
     kafka kafka-init \
     opa opa-policy-seed \
-    opensearch opensearch-dashboards otel-collector \
+    loki tempo otel-collector slo-catalog prometheus grafana \
     zitadel-postgres zitadel-api zitadel-login zitadel-proxy \
     sequence-service
 
@@ -241,6 +241,9 @@ main() {
   Payments:      http://localhost:8093/ui/
   Indexer:       http://localhost:8090
   Neo4j:         http://localhost:7474/browser/  (admin neo4j / devpassword; apps use svc_*)
+  Grafana:       http://localhost:3000           (admin / admin — SLO + HTTP + domain dashboards)
+  Prometheus:    http://localhost:9099/targets
+  SLO catalog:   http://localhost:9096/ui/  (author)  ·  http://localhost:9097/ui/  (provisioner)
 
 Domain Mongo + Neo4j are empty${WITH_DEMO_SEED:+ (then demo-seeded)}.
 ZITADEL users: password Password1! — see docs/domain-models.md

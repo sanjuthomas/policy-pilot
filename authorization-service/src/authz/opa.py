@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
 
 from authz.config import settings
+from authz.metrics import record_opa_evaluation
 from authz.models import PaymentRecord, Subject
 
 
@@ -129,28 +131,36 @@ class OpaClient:
         package: str,
         payload: dict[str, Any],
     ) -> PolicyDecision:
+        started = time.perf_counter()
         allowed = bool(await self._post_data(f"{package}/allow", payload))
-        if allowed:
-            basis = self._as_string_list(
-                await self._post_data(f"{package}/allow_basis", payload)
-            )
-            return PolicyDecision(
-                allowed=True,
-                allow_basis=basis,
-                violations=[],
-                is_alert=False,
-            )
+        try:
+            if allowed:
+                basis = self._as_string_list(
+                    await self._post_data(f"{package}/allow_basis", payload)
+                )
+                return PolicyDecision(
+                    allowed=True,
+                    allow_basis=basis,
+                    violations=[],
+                    is_alert=False,
+                )
 
-        violations = self._violation_codes(
-            await self._post_data(f"{package}/violations", payload)
-        )
-        is_alert = bool(await self._post_data(f"{package}/is_alert", payload))
-        return PolicyDecision(
-            allowed=False,
-            allow_basis=[],
-            violations=violations,
-            is_alert=is_alert,
-        )
+            violations = self._violation_codes(
+                await self._post_data(f"{package}/violations", payload)
+            )
+            is_alert = bool(await self._post_data(f"{package}/is_alert", payload))
+            return PolicyDecision(
+                allowed=False,
+                allow_basis=[],
+                violations=violations,
+                is_alert=is_alert,
+            )
+        finally:
+            record_opa_evaluation(
+                package,
+                allowed=allowed,
+                duration_ms=(time.perf_counter() - started) * 1000.0,
+            )
 
     async def evaluate_instruction(
         self,

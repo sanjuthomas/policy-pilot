@@ -124,3 +124,57 @@ async def test_fetch_policy_summary_rejects_unknown_domain() -> None:
     client = OpaClient(base_url="http://opa.test")
     with pytest.raises(ValueError, match="unsupported policy domain"):
         await client.fetch_policy_summary("treasury")
+
+
+@pytest.mark.asyncio
+async def test_evaluate_payment_records_allow_metric() -> None:
+    client = OpaClient(base_url="http://opa.test")
+    subject = Subject(user_id="pay-201", title="VP", roles=["FUNDING_APPROVER"])
+
+    with patch("authz.opa.record_opa_evaluation") as record, patch.object(
+        client, "_post_data", new_callable=AsyncMock
+    ) as post_data:
+        post_data.side_effect = [True, ["has_role"]]
+        decision = await client.evaluate_payment(
+            action="APPROVE",
+            subject=subject,
+            payment={"status": "SUBMITTED"},
+        )
+
+    assert decision.allowed is True
+    record.assert_called_once()
+    kwargs = record.call_args.kwargs
+    assert record.call_args.args[0] == "payment/lifecycle"
+    assert kwargs["allowed"] is True
+    assert kwargs["duration_ms"] >= 0
+
+
+@pytest.mark.asyncio
+async def test_evaluate_instruction_records_deny_metric() -> None:
+    client = OpaClient(base_url="http://opa.test")
+    subject = Subject(user_id="mo-100", title="Analyst", roles=["INSTRUCTION_CREATOR"])
+
+    with patch("authz.opa.record_opa_evaluation") as record, patch.object(
+        client, "_post_data", new_callable=AsyncMock
+    ) as post_data:
+        post_data.side_effect = [False, {"end_date_expired": True}, False]
+        decision = await client.evaluate_instruction(
+            action="APPROVE",
+            subject=subject,
+            instruction={"status": "SUBMITTED"},
+            account={"owning_lob": "FICC"},
+        )
+
+    assert decision.allowed is False
+    assert decision.violations == ["end_date_expired"]
+    record.assert_called_once()
+    assert record.call_args.args[0] == "instruction/lifecycle"
+    assert record.call_args.kwargs["allowed"] is False
+
+
+def test_record_opa_evaluation_no_telemetry_is_noop() -> None:
+    from authz.metrics import record_opa_evaluation
+
+    # Telemetry is not configured under pytest, so this must be a safe no-op.
+    record_opa_evaluation("payment/lifecycle", allowed=True, duration_ms=12.5)
+    record_opa_evaluation("instruction/lifecycle", allowed=False, duration_ms=0.0)

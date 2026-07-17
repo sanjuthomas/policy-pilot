@@ -1,0 +1,26 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+# Sloth recording rules compiled by the OpenSLO catalog provisioner land in the
+# shared volume mounted here. Prometheus evaluates SLI error ratios + burn rates.
+rule_files:
+  - /etc/prometheus/rules-sloth/*.yml
+  - /etc/prometheus/rules-sloth/*.yaml
+
+scrape_configs:
+  # Primary path: OTel Collector re-exposes all service OTLP metrics on :8889.
+  - job_name: otel-collector
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["otel-collector:8889"]
+        labels:
+          collector: otel
+
+  # Collector self-observability (pipeline throughput, refused spans, etc.).
+  - job_name: otel-collector-internal
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["otel-collector:8888"]
+        labels:
+          collector: otel-internal

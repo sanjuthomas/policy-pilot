@@ -8,65 +8,111 @@ x-otel-environment: &otel-environment
 name: policy-pilot
 
 services:
+  # ── Observability mesh ──────────────────────────────────────────────────────
+  # OTel Collector fans OTLP out to Prometheus (metrics), Loki (logs), Tempo
+  # (traces). Modeled on sanjuthomas/observability-mesh-demo.
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.96.0
+    image: otel/opentelemetry-collector-contrib:0.114.0
     container_name: otel-collector
     command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
       - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
     ports:
-      - "4317:4317"
-      - "4318:4318"
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8889:8889"   # Prometheus exporter (scraped by Prometheus)
     depends_on:
-      opensearch:
-        condition: service_healthy
+      - loki
+      - tempo
     restart: unless-stopped
     networks:
       - security-event-net
 
-  opensearch:
-    image: opensearchproject/opensearch:2.11.1
-    container_name: opensearch
-    environment:
-      cluster.name: policy-pilot
-      node.name: opensearch
-      discovery.type: single-node
-      bootstrap.memory_lock: "true"
-      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
-      DISABLE_SECURITY_PLUGIN: "true"
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-    ports:
-      - "9200:9200"
+  loki:
+    image: grafana/loki:3.3.2
+    container_name: loki
+    command: ["-config.file=/etc/loki/loki-config.yaml"]
     volumes:
-      - opensearch-data:/usr/share/opensearch/data
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -sf http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s || exit 1",
-        ]
-      interval: 10s
-      timeout: 10s
-      retries: 12
-      start_period: 30s
+      - ./observability/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "3100:3100"
     restart: unless-stopped
     networks:
       - security-event-net
 
-  opensearch-dashboards:
-    image: opensearchproject/opensearch-dashboards:2.11.1
-    container_name: opensearch-dashboards
-    environment:
-      OPENSEARCH_HOSTS: '["http://opensearch:9200"]'
-      DISABLE_SECURITY_DASHBOARDS_PLUGIN: "true"
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: tempo
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./observability/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/var/tempo
     ports:
-      - "5601:5601"
+      - "3200:3200"
+    restart: unless-stopped
+    networks:
+      - security-event-net
+
+  slo-catalog:
+    image: sanjuthomas/observability-mesh-slo-catalog:latest
+    container_name: slo-catalog
+    environment:
+      OBSERVABILITY_MESH_AUTH_ENABLED: "false"
+      OBSERVABILITY_MESH_SLO_PROVISIONER_DATASOURCE_NAMES: prometheus
+      PROMETHEUS_RELOAD_URL: http://prometheus:9090/-/reload
+      OTEL_SDK_DISABLED: "true"
+    ports:
+      - "5433:5432"   # OpenSLO document store (Postgres)
+      - "9096:9090"   # SLO author UI
+      - "9097:9097"   # SLO provisioner UI
+    volumes:
+      - slo-catalog-pg:/var/lib/postgresql/data
+      - prometheus-sloth-rules:/rules
+      - ./observability/slo-catalog/seed-slos.sql:/docker-entrypoint-initdb.d/02-seed-slos.sql:ro
+    restart: unless-stopped
+    networks:
+      - security-event-net
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    ports:
+      - "9099:9090"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-sloth-rules:/etc/prometheus/rules-sloth
+      - prometheus-data:/prometheus
     depends_on:
-      opensearch:
-        condition: service_healthy
+      - otel-collector
+      - slo-catalog
+    restart: unless-stopped
+    networks:
+      - security-event-net
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_DEFAULT_THEME: light
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
     restart: unless-stopped
     networks:
       - security-event-net
@@ -790,6 +836,11 @@ volumes:
   kafka-data:
   neo4j-data:
   mongo-data:
-  opensearch-data:
   zitadel-postgres-data:
   zitadel-bootstrap:
+  loki-data:
+  tempo-data:
+  prometheus-data:
+  prometheus-sloth-rules:
+  slo-catalog-pg:
+  grafana-data:
