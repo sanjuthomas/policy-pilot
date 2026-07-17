@@ -121,6 +121,57 @@ def format_payment_detail_by_id(question: str, rows: list[dict[str, Any]]) -> st
     return f"### Payment `{payment_id}`\n\n{table}{footer}"
 
 
+def format_instruction_detail_by_id(question: str, rows: list[dict[str, Any]]) -> str | None:
+    """Full instruction card for “show me instruction …” — CURRENT version only."""
+    row = _first_row(rows)
+    if row is None:
+        return "No instruction with that ID was found in the graph."
+
+    instruction_id = str(row.get("instruction_id") or "—")
+    status = str(row.get("status") or "—")
+    creator = str(row.get("creator_display") or "—").strip() or "—"
+    approver = str(row.get("approver_display") or "").strip()
+    if not approver:
+        approver = "— (not yet approved)"
+
+    creditor = str(row.get("creditor_name") or "").strip()
+    if not creditor or creditor.lower() in {"none", "null"}:
+        creditor = "—"
+    account = str(row.get("creditor_account") or "").strip()
+    if account and account.lower() not in {"none", "null"}:
+        creditor = f"{creditor} (`{account}`)" if creditor != "—" else f"`{account}`"
+
+    version = row.get("version_number")
+    version_cell = str(version) if version is not None and str(version).strip() else "—"
+
+    table = format_markdown_table(
+        ["Field", "Value"],
+        [
+            ["Instruction id", f"`{instruction_id}`"],
+            ["Status", f"**{status}**"],
+            ["Type", str(row.get("instruction_type") or "—")],
+            ["Owning LOB", f"**{row.get('owning_lob') or '—'}**"],
+            ["Currency", str(row.get("currency") or "—")],
+            ["Wire scope", str(row.get("wire_scope") or "—")],
+            ["Creditor", creditor],
+            ["Effective", str(row.get("effective_date") or "—")],
+            ["End", str(row.get("end_date") or "—")],
+            ["Current version", version_cell],
+            ["Creator", creator],
+            ["Approver", approver],
+        ],
+    )
+    extra: list[str] = []
+    created_at = row.get("created_at")
+    approved_at = row.get("approved_at")
+    if created_at:
+        extra.append(f"Created at: {created_at}")
+    if approved_at:
+        extra.append(f"Approved at: {approved_at}")
+    footer = ("\n\n" + "\n".join(extra)) if extra else ""
+    return f"### Instruction `{instruction_id}`\n\n{table}{footer}"
+
+
 def format_instruction_status_by_id(question: str, rows: list[dict[str, Any]]) -> str | None:
     row = _first_row(rows)
     if row is None:
@@ -458,6 +509,7 @@ FORMATTERS: dict[str, Formatter] = {
     "payment_status_by_id": format_payment_status_by_id,
     "payment_creator_and_approver_by_id": format_payment_creator_and_approver_by_id,
     "payment_detail_by_id": format_payment_detail_by_id,
+    "instruction_detail_by_id": format_instruction_detail_by_id,
     "instruction_inventory_table": format_instruction_inventory_table,
     "instruction_mutual_approval": format_instruction_mutual_approval,
     "cross_entity_reciprocal_approval": format_cross_entity_reciprocal_approval,
