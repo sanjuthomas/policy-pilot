@@ -50,6 +50,16 @@ intents:
     query: instruction_approval_lookup
     formatter: instruction_approver_by_id
 
+  - id: instruction.show_by_id
+    priority: 90
+    modes: [instructions, all, events]
+    match: '\b(show|get|display|look\s*up|find|fetch|open|pull\s+up)\b.*\binstruction\b|\b(tell\s+me\s+about|details?\s+(?:for|of|on)|what\s+about)\b.*\binstruction\b|\binstruction\b\s+(?:id\s+)?\d{8}-[A-Z_]+-I-\d+'
+    exclude: '\bversions?\b|\bwho\s+created\b|\bwho\s+approv|\bstatus of\b|\bwhat is\s+the\s+status\b|\bcreate\b|\bdraft\b|\bpayments?\b|\beligible\b|\bcan\s+approv'
+    requires:
+      instruction_id: true
+    query: instruction_detail_by_id
+    formatter: instruction_detail_by_id
+
   # ── Payment by ID ────────────────────────────────────────────────────────
   - id: payment.creator_by_id
     priority: 100
@@ -108,6 +118,13 @@ intents:
     formatter: payment_versions_table
 
   # ── Instruction inventory / compliance ─────────────────────────────────────
+  - id: instruction.list_by_status
+    priority: 78
+    modes: [instructions, all]
+    match: '\b(list|show|get|display|find|enumerate)\b.*\binstructions?\b.*\b(submitted|approved|rejected|suspended|expired|cancelled|draft|used|pending)\b|\b(list|show|get|display|find|enumerate)\b.*\b(submitted|approved|rejected|suspended|expired|cancelled|draft|used|pending)\b.*\binstructions?\b'
+    query: instruction_list_by_status
+    formatter: instruction_inventory_table
+
   # Synonyms (single use / single-use / one-time / …) are handled by the shared
   # instruction_type taxonomy in cypher_builder — keep match verbs broad.
   - id: instruction.list_single_use

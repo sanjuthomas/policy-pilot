@@ -21,6 +21,24 @@ class TestParseKeyValueRecord:
         assert record["status"] == "APPROVED"
         assert record["approver"] == "Nguyen, Caroline (ficc-500)"
 
+    def test_parses_colon_separated_fields(self) -> None:
+        record = parse_key_value_record(
+            "instruction_id: 20260717-FICC-I-19, owning_lob: FICC, status: APPROVED, "
+            "effective: 2026-07-17T00:00:00"
+        )
+        assert record["instruction_id"] == "20260717-FICC-I-19"
+        assert record["owning_lob"] == "FICC"
+        assert record["status"] == "APPROVED"
+        assert record["effective"] == "2026-07-17T00:00:00"
+
+    def test_parses_markdown_bold_colon_fields(self) -> None:
+        record = parse_key_value_record(
+            "**instruction_id:** 20260717-FICC-I-3, **owning_lob:** FICC, **status:** APPROVED"
+        )
+        assert record["instruction_id"] == "20260717-FICC-I-3"
+        assert record["owning_lob"] == "FICC"
+        assert record["status"] == "APPROVED"
+
 
 class TestFormatChatResponse:
     def test_formats_numbered_instruction_list_as_table(self) -> None:
@@ -77,6 +95,75 @@ class TestFormatChatResponse:
         assert "20260628-FICC-I-1" in formatted
         assert "20260628-FICC-I-12" in formatted
 
+    def test_formats_gemini_bold_colon_numbered_list(self) -> None:
+        """Downvote shape: Gemini emits **field:** value in a numbered inventory."""
+        text = (
+            "Yes, there are 2 approved instructions in the system:\n\n"
+            "1.  **instruction_id:** 20260717-DESK_RATES-I-1, **owning_lob:** DESK_RATES, "
+            "**status:** APPROVED, **currency:** USD, **wire_scope:** DOMESTIC, "
+            "**instruction_type:** SINGLE_USE\n"
+            "2.  **instruction_id:** 20260717-FICC-I-3, **owning_lob:** FICC, "
+            "**status:** APPROVED, **currency:** USD, **wire_scope:** DOMESTIC, "
+            "**instruction_type:** SINGLE_USE"
+        )
+        formatted = format_chat_response(text)
+
+        assert formatted.startswith("Yes, there are 2 approved instructions in the system:")
+        assert "| Instruction ID" in formatted
+        assert "| LOB" in formatted
+        assert "20260717-DESK_RATES-I-1" in formatted
+        assert "20260717-FICC-I-3" in formatted
+        assert "instruction_id:" not in formatted
+        assert "**" not in formatted
+
+    def test_formats_gemini_colon_instruction_detail(self) -> None:
+        """Single instruction detail becomes a vertical Field/Value card, not a wide row."""
+        text = (
+            "Instruction:\n"
+            "instruction_id: 20260717-FICC-I-19, owning_lob: FICC, status: APPROVED, "
+            "currency: USD, wire_scope: DOMESTIC, creditor: None, "
+            "creator: Okonkwo, David (mo-050), effective: 2026-07-17T00:00:00, "
+            "end: 2027-07-17T00:00:00\n"
+            "approver: Nguyen, Caroline (ficc-500)"
+        )
+        formatted = format_chat_response(text)
+
+        assert formatted.startswith("Instruction:")
+        assert "| Field" in formatted
+        assert "| Value" in formatted
+        assert "Instruction ID" in formatted
+        assert "20260717-FICC-I-19" in formatted
+        assert "Okonkwo, David (mo-050)" in formatted
+        assert "Nguyen, Caroline (ficc-500)" in formatted
+        assert "instruction_id:" not in formatted
+        # Must not be a one-row mega-table with entity columns across the header.
+        assert not formatted.splitlines()[1].startswith("| Instruction ID")
+
+    def test_formats_gemini_per_line_instruction_detail(self) -> None:
+        """Upvote shape: one snake_case field per line → vertical Field/Value card."""
+        text = (
+            "instruction_id: 20260717-FICC-I-19\n"
+            "owning_lob: FICC\n"
+            "status: APPROVED\n"
+            "instruction_type: STANDING\n"
+            "currency: USD\n"
+            "wire_scope: DOMESTIC\n"
+            "creditor: None\n"
+            "creator: Okonkwo, David (mo-050)\n"
+            "approver: Nguyen, Caroline (ficc-500)\n"
+            "approved_at: 2026-07-17T10:00:00\n"
+            "effective_date: 2026-07-17T00:00:00\n"
+            "end_date: 2027-07-17T00:00:00"
+        )
+        formatted = format_chat_response(text)
+
+        assert "| Field" in formatted
+        assert "| Value" in formatted
+        assert "Instruction ID" in formatted
+        assert "20260717-FICC-I-19" in formatted
+        assert "STANDING" in formatted
+        assert "instruction_id:" not in formatted
+
 
 class TestHasMarkdownTable:
     def test_detects_gfm_table(self) -> None:
@@ -88,7 +175,26 @@ class TestHasMarkdownTable:
 
 
 class TestRecordsToMarkdownTable:
-    def test_orders_instruction_columns(self) -> None:
+    def test_orders_instruction_columns_for_multi_record(self) -> None:
+        table = records_to_markdown_table(
+            [
+                {
+                    "status": "APPROVED",
+                    "instruction_id": "20260628-FICC-I-1",
+                    "owning_lob": "FICC",
+                },
+                {
+                    "status": "DRAFT",
+                    "instruction_id": "20260628-FICC-I-2",
+                    "owning_lob": "FICC",
+                },
+            ]
+        )
+        header_line = table.splitlines()[0]
+        assert header_line.index("Instruction ID") < header_line.index("LOB")
+        assert header_line.index("LOB") < header_line.index("Status")
+
+    def test_single_record_uses_vertical_field_value_card(self) -> None:
         table = records_to_markdown_table(
             [
                 {
@@ -98,6 +204,9 @@ class TestRecordsToMarkdownTable:
                 }
             ]
         )
-        header_line = table.splitlines()[0]
-        assert header_line.index("Instruction ID") < header_line.index("LOB")
-        assert header_line.index("LOB") < header_line.index("Status")
+        assert "| Field" in table.splitlines()[0]
+        assert "Value" in table.splitlines()[0]
+        assert table.startswith("| Field")
+        assert "Instruction ID" in table
+        assert "20260628-FICC-I-1" in table
+        assert "FICC" in table

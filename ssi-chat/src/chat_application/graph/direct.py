@@ -82,6 +82,18 @@ def _build_instruction_list_by_type(context: dict[str, Any], question: str, _mod
     )
 
 
+def _build_instruction_list_by_status(context: dict[str, Any], question: str, _mode: SearchMode):
+    from chat_application.graph.cypher import instruction_count_filters_from_question
+
+    status, _ = instruction_count_filters_from_question(question)
+    if not status:
+        return []
+    return _GRAPH_BUILDER.instruction_list_by_status(
+        status=status,
+        lob=lob_filter_from_question(question),
+    )
+
+
 def _build_instructions_created_by_user(context: dict[str, Any], _question: str, _mode: SearchMode):
     user_id = context.get("user_id")
     if not user_id:
@@ -160,7 +172,7 @@ QUERY_BUILDERS: dict[str, QueryBuilder] = {
     "payment_versions_by_id": _build_payment_versions,
     "instruction_approval_lookup": _build_instruction_approval_lookup,
     "instruction_list_by_type": _build_instruction_list_by_type,
-    "instruction_list_by_status": _build_instruction_list_by_type,  # legacy YAML key
+    "instruction_list_by_status": _build_instruction_list_by_status,
     "instructions_created_by_user": _build_instructions_created_by_user,
     "instruction_mutual_approval": _build_instruction_mutual_approval,
     "cross_entity_reciprocal_approval": _build_cross_entity_reciprocal_approval,

@@ -166,6 +166,11 @@ def format_planned_graph_answer(
 
         return format_payment_detail_by_id(question, rows)
 
+    if "instruction_detail" in labels:
+        from chat_application.formatting.neo4j import format_instruction_detail_by_id
+
+        return format_instruction_detail_by_id(question, rows)
+
     if "approval_lookup" in labels or "payment_approval_lookup" in labels:
         from chat_application.formatting.neo4j import format_approval_lookup_answer
 

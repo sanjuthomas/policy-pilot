@@ -6,6 +6,7 @@ import pytest
 
 from chat_application.formatting.neo4j import (
     format_instruction_creator_by_id,
+    format_instruction_detail_by_id,
     format_instruction_status_by_id,
     format_payment_creator_by_id,
     format_payment_detail_by_id,
@@ -46,6 +47,27 @@ class TestNeo4jDirectMatching:
         assert match is not None
         assert match.intent_id == "payment.show_by_id"
         assert match.formatter_name == "payment_detail_by_id"
+
+    def test_matches_show_instruction_by_id(self) -> None:
+        question = "Can you show me the instruction 20260717-FICC-I-19?"
+        match = match_neo4j_direct_intent(question, mode="instructions")
+        assert match is not None
+        assert match.intent_id == "instruction.show_by_id"
+        assert match.formatter_name == "instruction_detail_by_id"
+        assert "instruction_detail" in match.planned[0][0]
+        assert "[:CURRENT]->" in match.planned[0][1]
+
+    def test_matches_show_instruction_by_id_in_events_mode(self) -> None:
+        question = "Can you show me instruction 20260717-FICC-I-19?"
+        match = match_neo4j_direct_intent(question, mode="events")
+        assert match is not None
+        assert match.intent_id == "instruction.show_by_id"
+
+    def test_show_instruction_excludes_version_history(self) -> None:
+        question = "Show me all versions of instruction 20260717-FICC-I-19"
+        match = match_neo4j_direct_intent(question, mode="instructions")
+        assert match is not None
+        assert match.intent_id == "instruction.versions_by_id"
 
     def test_matches_creator_by_payment_id_in_events_mode(self) -> None:
         question = "Who created 20260704-FICC-P-1?"
@@ -104,6 +126,15 @@ class TestNeo4jDirectMatching:
         assert match is not None
         assert match.intent_id == "instruction.list_standing"
         assert "instruction_type: 'STANDING'" in match.planned[0][1]
+
+    def test_list_approved_instructions_by_status(self) -> None:
+        question = "Can you list all approved instructions?"
+        match = match_neo4j_direct_intent(question, mode="instructions")
+        assert match is not None
+        assert match.intent_id == "instruction.list_by_status"
+        assert match.formatter_name == "instruction_inventory_table"
+        assert "[:CURRENT]->" in match.planned[0][1]
+        assert "status: 'APPROVED'" in match.planned[0][1]
 
     def test_list_evergreen_instructions(self) -> None:
         question = "Can you show me the evergreen instructions in the system?"
@@ -263,6 +294,38 @@ class TestNeo4jDirectFormatters:
         assert "not yet approved" in answer
         assert "paymentid:" not in answer.lower()
         assert "| Field" in answer and "| Value" in answer
+
+    def test_format_instruction_detail_by_id(self) -> None:
+        answer = format_instruction_detail_by_id(
+            "Can you show me the instruction 20260717-FICC-I-19?",
+            [
+                {
+                    "instruction_id": "20260717-FICC-I-19",
+                    "status": "APPROVED",
+                    "instruction_type": "STANDING",
+                    "owning_lob": "FICC",
+                    "currency": "USD",
+                    "wire_scope": "DOMESTIC",
+                    "creditor_name": None,
+                    "creditor_account": None,
+                    "effective_date": "2026-07-17T00:00:00",
+                    "end_date": "2027-07-17T00:00:00",
+                    "version_number": 2,
+                    "creator_display": "Okonkwo, David (mo-050)",
+                    "approver_display": "Nguyen, Caroline (ficc-500)",
+                    "approved_at": "2026-07-17T10:00:00",
+                }
+            ],
+        )
+        assert answer is not None
+        assert "### Instruction `20260717-FICC-I-19`" in answer
+        assert "**APPROVED**" in answer
+        assert "STANDING" in answer
+        assert "Okonkwo, David (mo-050)" in answer
+        assert "Nguyen, Caroline (ficc-500)" in answer
+        assert "Approved at: 2026-07-17T10:00:00" in answer
+        assert "| Field" in answer and "| Value" in answer
+        assert "instruction_id:" not in answer
 
 
 class TestNeo4jDirectExecution:

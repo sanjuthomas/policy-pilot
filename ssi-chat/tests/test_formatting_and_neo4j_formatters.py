@@ -280,6 +280,7 @@ class TestNeo4jFormatters:
         assert "| — |" in text or " — " in text
     def test_formatters_registry(self) -> None:
         assert "instruction_creator_by_id" in FORMATTERS
+        assert "instruction_detail_by_id" in FORMATTERS
         assert "instruction_versions_table" in FORMATTERS
         assert FORMATTERS["alert_count_today"] is format_alert_count_today
 

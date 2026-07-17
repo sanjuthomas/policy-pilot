@@ -11,9 +11,11 @@ from collections.abc import Callable
 
 from chat_application.formatting.common import format_markdown_table
 
-_KV_FIELD_RE = re.compile(r"([a-z][a-z0-9_]*)=")
+# Gemini often emits key: value or **key:** value; older paths use key=value.
+_KV_FIELD_RE = re.compile(r"(?:\*\*)?([a-z][a-z0-9_]*)(?:\*\*)?\s*[:=]\s*")
 _NUMBERED_LINE_RE = re.compile(r"^\s*\d+\.\s+(.+)$")
 _MARKDOWN_TABLE_SEPARATOR_RE = re.compile(r"^\|?\s*[-:| ]+\|")
+_MARKDOWN_EMPHASIS_RE = re.compile(r"\*+")
 
 INSTRUCTION_FIELD_ORDER = [
     "instruction_id",
@@ -104,8 +106,18 @@ def format_chat_response(text: str) -> str:
     return text
 
 
+def _clean_field_value(value: str) -> str:
+    cleaned = value.rstrip().removesuffix(",").strip()
+    cleaned = _MARKDOWN_EMPHASIS_RE.sub("", cleaned).strip()
+    return cleaned
+
+
 def parse_key_value_record(text: str) -> dict[str, str]:
-    """Parse comma-separated key=value segments from a single record line."""
+    """Parse comma-separated key=value / key: value segments from a record line.
+
+    Accepts Gemini's markdown-bold variants (``**instruction_id:** …``) as well as
+    the older ``instruction_id=…`` shape used by deterministic formatters.
+    """
     matches = list(_KV_FIELD_RE.finditer(text))
     if not matches:
         return {}
@@ -115,9 +127,21 @@ def parse_key_value_record(text: str) -> dict[str, str]:
         key = match.group(1)
         value_start = match.end()
         value_end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
-        value = text[value_start:value_end].rstrip().removesuffix(",").strip()
-        record[key] = value
+        value = _clean_field_value(text[value_start:value_end])
+        if value:
+            record[key] = value
     return record
+
+
+def _merge_continuation_fields(
+    records: list[dict[str, str]],
+    parsed: dict[str, str],
+) -> bool:
+    """Merge a short trailing key:value line into the previous multi-field record."""
+    if not records or len(parsed) != 1:
+        return False
+    records[-1].update(parsed)
+    return True
 
 
 def humanize_field_name(key: str) -> str:
@@ -134,11 +158,28 @@ def column_order(keys: set[str]) -> list[str]:
 
 
 def records_to_markdown_table(records: list[dict[str, str]]) -> str:
+    """Render records as a markdown table.
+
+    Multi-record answers stay wide (one row per entity). A single record becomes a
+    vertical Field/Value card — matching payment-detail UX and avoiding a one-row
+    mega-table that users downvote.
+    """
+    if len(records) == 1:
+        return _single_record_to_vertical_table(records[0])
+
     keys = {key for record in records for key in record}
-    headers = [humanize_field_name(key) for key in column_order(keys)]
     key_order = column_order(keys)
+    headers = [humanize_field_name(key) for key in key_order]
     rows = [[record.get(key, "—") for key in key_order] for record in records]
     return format_markdown_table(headers, rows)
+
+
+def _single_record_to_vertical_table(record: dict[str, str]) -> str:
+    rows = [
+        [humanize_field_name(key), record.get(key, "—") or "—"]
+        for key in column_order(set(record))
+    ]
+    return format_markdown_table(["Field", "Value"], rows)
 
 
 def has_markdown_table(text: str) -> bool:
@@ -180,9 +221,23 @@ def _split_numbered_key_value_records(text: str) -> tuple[str, list[dict[str, st
     for line in text.splitlines():
         match = _NUMBERED_LINE_RE.match(line)
         if match:
+            parsed = parse_key_value_record(match.group(1))
+            if len(parsed) < 2:
+                if not seen_record:
+                    intro_lines.append(line)
+                else:
+                    footer_lines.append(line)
+                continue
             seen_record = True
-            records.append(parse_key_value_record(match.group(1)))
+            records.append(parsed)
             continue
+
+        stripped = line.strip()
+        if seen_record and stripped:
+            parsed = parse_key_value_record(stripped)
+            if _merge_continuation_fields(records, parsed):
+                continue
+
         if not seen_record:
             intro_lines.append(line)
         else:
@@ -196,10 +251,26 @@ def _split_plain_key_value_lines(text: str) -> tuple[str, list[dict[str, str]], 
     footer_lines: list[str] = []
     records: list[dict[str, str]] = []
     seen_record = False
+    # Gemini sometimes emits one snake_case field per line for a single entity.
+    pending_vertical: dict[str, str] = {}
+
+    def _flush_vertical() -> None:
+        nonlocal pending_vertical, seen_record
+        if len(pending_vertical) >= 3:
+            seen_record = True
+            records.append(pending_vertical)
+        elif pending_vertical:
+            # Too sparse to treat as a record — keep as prose.
+            for key, value in pending_vertical.items():
+                target = footer_lines if seen_record else intro_lines
+                target.append(f"{key}: {value}")
+        pending_vertical = {}
 
     for line in text.splitlines():
         stripped = line.strip()
         if not stripped:
+            if pending_vertical:
+                _flush_vertical()
             if not seen_record:
                 intro_lines.append(line)
             else:
@@ -207,16 +278,27 @@ def _split_plain_key_value_lines(text: str) -> tuple[str, list[dict[str, str]], 
             continue
 
         parsed = parse_key_value_record(stripped)
-        if len(parsed) >= 2 and "=" in stripped:
+        if len(parsed) >= 2:
+            _flush_vertical()
             seen_record = True
             records.append(parsed)
             continue
 
+        if len(parsed) == 1:
+            # Continuation of a multi-field inline record, or start/continue a
+            # vertical one-field-per-line card.
+            if records and _merge_continuation_fields(records, parsed):
+                continue
+            pending_vertical.update(parsed)
+            continue
+
+        _flush_vertical()
         if not seen_record:
             intro_lines.append(line)
         else:
             footer_lines.append(line)
 
+    _flush_vertical()
     return "\n".join(intro_lines).strip(), records, "\n".join(footer_lines).strip()
 
 
@@ -235,7 +317,8 @@ def _try_plain_key_value_lines(text: str) -> str | None:
         return None
 
     intro, records, footer = _split_plain_key_value_lines(text)
-    if len(records) < 2:
+    # Single multi-field records (e.g. "show me instruction X") become a one-row table.
+    if len(records) < 1:
         return None
     return _format_record_block(intro, records, footer)
 
