@@ -79,6 +79,129 @@
           "legendFormat": "{{sloth_id}}"
         }
       ]
+    },
+    {
+      "type": "row",
+      "title": "Answer feedback — votes behind the non-downvote SLO",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 }
+    },
+    {
+      "type": "stat",
+      "title": "Upvotes (total)",
+      "description": "Cumulative thumbs-up on chat answers (chat_feedback_count, rating=up).",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 19 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "fixed", "fixedColor": "green" }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "textMode": "value_and_name" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(chat_feedback_count{chat_feedback_rating=\"up\"}) or vector(0)",
+          "legendFormat": "upvotes"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Downvotes (total)",
+      "description": "Cumulative thumbs-down on chat answers (chat_feedback_count, rating=down). These are the only events that burn the non-downvote budget.",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 19 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "fixed", "fixedColor": "red" }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "textMode": "value_and_name" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(chat_feedback_count{chat_feedback_rating=\"down\"}) or vector(0)",
+          "legendFormat": "downvotes"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "No-vote (approx)",
+      "description": "Completed answers with no vote = chat_answer_count - chat_feedback_count. No-vote counts as good for the SLO.",
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 19 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "fixed", "fixedColor": "blue" }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none", "textMode": "value_and_name" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "clamp_min((sum(chat_answer_count) or vector(0)) - (sum(chat_feedback_count) or vector(0)), 0)",
+          "legendFormat": "no vote"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Non-downvote rate",
+      "description": "(answers - downvotes) / answers. Upvotes and no-votes are good. SLO target 98%.",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 19 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 0.98 },
+              { "color": "green", "value": 0.99 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none", "textMode": "value_and_name" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "clamp_min(((sum(chat_answer_count) or vector(0)) - (sum(chat_feedback_count{chat_feedback_rating=\"down\"}) or vector(0))) / clamp_min(sum(chat_answer_count), 1), 0)",
+          "legendFormat": "non-downvote"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Vote mix over time (rate)",
+      "description": "Up/down vote rate plus approximate no-vote rate (answers minus votes).",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 25 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "min": 0 }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (chat_feedback_rating) (rate(chat_feedback_count[5m]))",
+          "legendFormat": "{{chat_feedback_rating}}"
+        },
+        {
+          "refId": "B",
+          "expr": "clamp_min(sum(rate(chat_answer_count[5m])) - (sum(rate(chat_feedback_count[5m])) or vector(0)), 0)",
+          "legendFormat": "no_vote"
+        }
+      ]
     }
   ]
 }

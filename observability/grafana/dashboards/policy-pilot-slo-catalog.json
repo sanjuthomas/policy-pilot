@@ -1815,7 +1815,7 @@
       "title": "SLI error ratio",
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 8,
         "x": 0,
         "y": 87
       },
@@ -1866,8 +1866,8 @@
       "title": "Burn rate",
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
+        "w": 8,
+        "x": 8,
         "y": 87
       },
       "datasource": {
@@ -1898,6 +1898,63 @@
           "refId": "B",
           "expr": "slo:period_burn_rate:ratio{sloth_id=\"ssi-chat-skill-execution-success-30d-0\"}",
           "legendFormat": "period"
+        }
+      ]
+    },
+    {
+      "type": "piechart",
+      "title": "Skill executions by type",
+      "description": "All finalized skill outcomes grouped by skill type over the selected dashboard time range.",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 87
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "pieType": "pie",
+        "displayLabels": [
+          "name",
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (chat_skill) (increase(chat_skill_outcome_count[$__range]))",
+          "legendFormat": "{{chat_skill}}",
+          "instant": true
         }
       ]
     },
@@ -2558,6 +2615,282 @@
           "refId": "B",
           "expr": "slo:period_burn_rate:ratio{sloth_id=\"ssi-indexer-pipeline-consumer-success-30d-0\"}",
           "legendFormat": "period"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Answer feedback \u2014 votes behind chat-answer-non-downvote-30d",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 123
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Total answers",
+      "description": "Cumulative completed chat answers (chat_answer_count). Denominator for the non-downvote rate.",
+      "gridPos": {
+        "h": 6,
+        "w": 5,
+        "x": 0,
+        "y": 124
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(chat_answer_count) or vector(0)",
+          "legendFormat": "answers"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Upvotes (total)",
+      "description": "Cumulative thumbs-up (chat_feedback_count, rating=up).",
+      "gridPos": {
+        "h": 6,
+        "w": 5,
+        "x": 5,
+        "y": 124
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(chat_feedback_count{chat_feedback_rating=\"up\"}) or vector(0)",
+          "legendFormat": "upvotes"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Downvotes (total)",
+      "description": "Cumulative thumbs-down (chat_feedback_count, rating=down). Only these burn the non-downvote budget.",
+      "gridPos": {
+        "h": 6,
+        "w": 5,
+        "x": 10,
+        "y": 124
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "red"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(chat_feedback_count{chat_feedback_rating=\"down\"}) or vector(0)",
+          "legendFormat": "downvotes"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "No-vote (approx)",
+      "description": "Answers with no vote = chat_answer_count - chat_feedback_count. Counts as good.",
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 15,
+        "y": 124
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "clamp_min((sum(chat_answer_count) or vector(0)) - (sum(chat_feedback_count) or vector(0)), 0)",
+          "legendFormat": "no vote"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Non-downvote rate",
+      "description": "(answers - downvotes) / answers. Target 98%.",
+      "gridPos": {
+        "h": 6,
+        "w": 5,
+        "x": 19,
+        "y": 124
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.98
+              },
+              {
+                "color": "green",
+                "value": 0.99
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "clamp_min(((sum(chat_answer_count) or vector(0)) - (sum(chat_feedback_count{chat_feedback_rating=\"down\"}) or vector(0))) / clamp_min(sum(chat_answer_count), 1), 0)",
+          "legendFormat": "non-downvote"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Vote mix over time (rate)",
+      "description": "Up/down vote rate plus approximate no-vote rate.",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 130
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (chat_feedback_rating) (rate(chat_feedback_count[5m]))",
+          "legendFormat": "{{chat_feedback_rating}}"
+        },
+        {
+          "refId": "B",
+          "expr": "clamp_min(sum(rate(chat_answer_count[5m])) - (sum(rate(chat_feedback_count[5m])) or vector(0)), 0)",
+          "legendFormat": "no_vote"
         }
       ]
     }
