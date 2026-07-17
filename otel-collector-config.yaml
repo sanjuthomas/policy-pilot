@@ -1,3 +1,14 @@
+# Observability-mesh collector for Policy Pilot.
+#
+# Two planes, three signals — all ingested over OTLP from the services and
+# fanned out to a Grafana-centric backend:
+#   metrics → Prometheus (via the collector prometheus exporter on :8889)
+#   logs    → Loki (OTLP-native ingest)
+#   traces  → Tempo (OTLP)
+#
+# Modeled on sanjuthomas/observability-mesh-demo (metrics + SLO planes),
+# extended with Loki/Tempo so logs and traces join metrics in Grafana.
+
 receivers:
   otlp:
     protocols:
@@ -8,30 +19,46 @@ receivers:
 
 processors:
   batch:
+    timeout: 5s
+    send_batch_size: 1024
 
 exporters:
   debug:
     verbosity: basic
-  opensearch/logs:
-    http:
-      endpoint: http://opensearch:9200
-    dataset: ssi
-    namespace: development
-    logs_index: otel-logs
-    mapping:
-      mode: ss4o
+
+  # Metrics plane: re-expose OTLP metrics for Prometheus to scrape on :8889.
+  # Suffixes disabled so metric names stay predictable for SLO PromQL
+  # (e.g. chat_answer_count, http_server_request_duration_bucket).
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    add_metric_suffixes: false
+    resource_to_telemetry_conversion:
+      enabled: true
+
+  # Logs plane: Loki OTLP-native endpoint (replaces the OpenSearch pipeline).
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+
+  # Traces plane: Tempo OTLP gRPC.
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
 
 service:
-  pipelines:
+  telemetry:
     logs:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: [debug, opensearch/logs]
+      level: info
+  pipelines:
     metrics:
       receivers: [otlp]
       processors: [batch]
-      exporters: [debug]
+      exporters: [debug, prometheus]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug, otlphttp/loki]
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [debug]
+      exporters: [debug, otlp/tempo]

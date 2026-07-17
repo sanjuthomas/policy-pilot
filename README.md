@@ -84,6 +84,7 @@ Policy Pilot sits at the end of an event-driven pipeline: domain services enforc
 | **[ETL resilience](ssi-indexer/src/etl/dlq/README.md)** | Mongo DLQ, DLQ-before-commit, pause when quarantine fails, replay scheduler, chat integrity banner. |
 | **[Architecture decisions](docs/architecture-decisions.md)** | Why ZITADEL, OPA, MongoDB, Kafka, Neo4j graph and vector search, Vertex AI, and `cypher_builder`. |
 | **[Authorization audit trail](docs/authorization-audit-trail.md)** | Who / When / Why on past approvals; live *who can approve?* via eligible-approvers APIs. |
+| **[Observability mesh](docs/observability.md)** | OTLP → Prometheus (metrics) / Loki (logs) / Tempo (traces), plus an OpenSLO catalog that compiles SLOs to Sloth rules and Grafana dashboards. Modeled on [observability-mesh-demo](https://github.com/sanjuthomas/observability-mesh-demo). |
 | **[Local development](docs/local-development.md)** | Run services locally, observability, regression evaluation, component map. |
 
 ---
@@ -257,6 +258,7 @@ Demo logins (password `Password1!`): see **[Domain models and demo users](docs/d
 | [docs/authorization-audit-trail.md](docs/authorization-audit-trail.md) | Who / When / Why, live eligibility |
 | [docs/domain-models.md](docs/domain-models.md) | Instruction and payment models, demo users |
 | [docs/gcp-setup.md](docs/gcp-setup.md) | Vertex AI credentials and smoke test |
+| [docs/observability.md](docs/observability.md) | Observability mesh — Prometheus/Loki/Tempo, OpenSLO catalog, Sloth rules, Grafana dashboards |
 | [docs/local-development.md](docs/local-development.md) | Local services, logs, regression suite, URLs |
 
 Each application directory also has its own README — see table below.
@@ -285,6 +287,8 @@ Each application directory also has its own README — see table below.
 ├── ssi-demo-harness/                # Scenario harness + seed-demo-data.sh
 ├── neo4j-graph-model/               # Graph schema (README.md)
 ├── opa-policy-seed/                 # Rego policies
+├── observability/                   # Prometheus, Grafana, Loki, Tempo, OpenSLO catalog seed
+├── otel-collector-config.yaml       # OTLP → Prometheus / Loki / Tempo fan-out
 └── zitadel-seed/                    # Demo user definitions
 ```
 

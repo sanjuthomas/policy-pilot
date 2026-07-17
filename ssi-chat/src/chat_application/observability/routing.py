@@ -463,6 +463,10 @@ def finalize_chat_response(
         requested_path=effective_requested,
     )
     log_answer_routing(routing)
+    if path == "skill":
+        from chat_application.observability.skills import record_skill_outcome
+
+        record_skill_outcome(intent_id)
     confirmation: SkillConfirmationInfo | None = None
     if skill_confirmation is not None:
         if isinstance(skill_confirmation, SkillConfirmationInfo):
