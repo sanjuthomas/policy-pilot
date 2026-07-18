@@ -402,6 +402,7 @@ services:
       SERVICE_USER_PASSWORD: Password1!
       OIDC_ISSUER_URL: http://localhost:8080
       OIDC_INTERNAL_URL: http://zitadel-proxy
+      OIDC_AUDIENCE: policy-pilot
       ZITADEL_INTERNAL_URL: http://zitadel-proxy
       ZITADEL_SERVICE_PAT_FILE: /zitadel/bootstrap/login-client.pat
       AUTH_MODE: jwt
@@ -465,6 +466,7 @@ services:
       GRAPH_MODEL_DIR: /app/neo4j-graph-model
       OIDC_ISSUER_URL: http://localhost:8080
       OIDC_INTERNAL_URL: http://zitadel-api:8080
+      OIDC_AUDIENCE: policy-pilot
       ZITADEL_INTERNAL_URL: http://zitadel-api:8080
       ZITADEL_SERVICE_PAT_FILE: /zitadel/bootstrap/login-client.pat
       AUTH_MODE: jwt
@@ -518,6 +520,7 @@ services:
       SERVICE_USER_PASSWORD: Password1!
       OIDC_ISSUER_URL: http://localhost:8080
       OIDC_INTERNAL_URL: http://zitadel-proxy
+      OIDC_AUDIENCE: policy-pilot
       ZITADEL_INTERNAL_URL: http://zitadel-proxy
       ZITADEL_SERVICE_PAT_FILE: /zitadel/bootstrap/login-client.pat
       AUTH_MODE: jwt
@@ -560,6 +563,7 @@ services:
       MONGODB_URI: mongodb://mongodb:27017/?replicaSet=rs0
       OIDC_ISSUER_URL: http://localhost:8080
       OIDC_INTERNAL_URL: http://zitadel-proxy
+      OIDC_AUDIENCE: policy-pilot
       ZITADEL_URL: http://zitadel-proxy
       ZITADEL_INTERNAL_URL: http://zitadel-proxy
       ZITADEL_HOST_HEADER: localhost
@@ -594,6 +598,7 @@ services:
       EMAIL_DOMAIN: ssi.local
       OIDC_ISSUER_URL: http://localhost:8080
       OIDC_INTERNAL_URL: http://zitadel-proxy
+      OIDC_AUDIENCE: policy-pilot
       ZITADEL_INTERNAL_URL: http://zitadel-proxy
       ZITADEL_SERVICE_PAT_FILE: /zitadel/bootstrap/login-client.pat
       AUTH_MODE: jwt
@@ -661,6 +666,7 @@ services:
       ZITADEL_SERVICE_PAT_FILE: /zitadel/bootstrap/login-client.pat
       OIDC_ISSUER_URL: http://localhost:8080
       OIDC_INTERNAL_URL: http://zitadel-proxy
+      OIDC_AUDIENCE: policy-pilot
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

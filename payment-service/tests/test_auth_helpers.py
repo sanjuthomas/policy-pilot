@@ -159,3 +159,27 @@ def test_subject_from_bearer_token_via_userinfo(monkeypatch: pytest.MonkeyPatch)
         subject = subject_from_bearer_token("token")
 
     assert subject.user_id == "bob"
+
+
+def test_subject_from_bearer_token_rejects_wrong_audience(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Wrong-audience JWTs must not fall through to userinfo (issue #64 / F-2)."""
+    import jwt
+    from fastapi import HTTPException
+
+    monkeypatch.setattr("ps.auth.settings.oidc_issuer_url", "https://auth.example.com")
+    monkeypatch.setattr("ps.auth.settings.oidc_audience", "policy-pilot")
+
+    mock_jwks = MagicMock()
+    mock_jwks.get_signing_key_from_jwt.return_value = MagicMock(key="secret")
+
+    with patch("ps.auth._jwks_client", return_value=mock_jwks), patch(
+        "ps.auth.jwt.decode",
+        side_effect=jwt.exceptions.InvalidAudienceError("aud"),
+    ), patch("ps.auth._fetch_userinfo_metadata") as userinfo:
+        with pytest.raises(HTTPException) as exc_info:
+            subject_from_bearer_token("foreign-aud-jwt")
+        assert exc_info.value.status_code == 401
+        assert "audience" in str(exc_info.value.detail).lower()
+        userinfo.assert_not_called()

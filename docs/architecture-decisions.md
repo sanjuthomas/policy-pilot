@@ -23,6 +23,8 @@ This metadata is stored in ZITADEL via the `zitadel-seed/seed.py` script, which 
 
 **Service accounts** (`svc-instruction`, `svc-payment`) authenticate to authorization-service and (for payment) instruction-service using machine tokens. On user-initiated lifecycle calls, the domain service forwards the user's JWT in `X-On-Behalf-Of` so OPA evaluates policy for the real actor, not the service account.
 
+**Audience validation:** Docker Compose sets a shared `OIDC_AUDIENCE=policy-pilot` on authz, instruction, payment, chat, indexer, and harness. When a Bearer token is a JWT, services verify `aud` and **fail closed** on audience mismatch (no userinfo fallback). Demo login still uses ZITADEL **session** tokens (opaque), which skip the JWT path and resolve via `X-Session-Id` — unaffected by audience. A future hardening step is to mint OIDC access tokens bound to a ZITADEL API project id and set `OIDC_AUDIENCE` to that project id.
+
 **Why ZITADEL over a simpler alternative:** ZITADEL provides a **user metadata API** that allows arbitrary key-value pairs per user (roles, LOB, supervisor). Identity attributes that drive authorization policy (LOB ownership, seniority, org hierarchy) live in the identity layer — not hard-coded in the application or duplicated across services.
 
 ---

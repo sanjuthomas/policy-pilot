@@ -80,6 +80,7 @@ OPA itself is **unauthenticated** in this demo — see root README for productio
 | `USER_DIRECTORY_CACHE_TTL_SECONDS` | `60` |
 | `AUTHORIZED_SERVICE_USER_IDS` | `svc-instruction,svc-payment` |
 | `OIDC_ISSUER_URL` | `http://localhost:8080` |
+| `OIDC_AUDIENCE` | unset locally; Docker Compose uses `policy-pilot` |
 | `ZITADEL_SERVICE_PAT_FILE` | `/zitadel/bootstrap/login-client.pat` |
 
 ## Run locally
