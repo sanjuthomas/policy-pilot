@@ -83,6 +83,7 @@ Policy Pilot sits at the end of an event-driven pipeline: domain services enforc
 | **[Data flow](docs/data-flow.md)** | Mongo transactions → Kafka CDC → four ETL pipelines → Neo4j graph + vector store → chat. |
 | **[ETL resilience](ssi-indexer/src/etl/dlq/README.md)** | Mongo DLQ, DLQ-before-commit, pause when quarantine fails, replay scheduler, chat integrity banner. |
 | **[Architecture decisions](docs/architecture-decisions.md)** | Why ZITADEL, OPA, MongoDB, Kafka, Neo4j graph and vector search, Vertex AI, and `cypher_builder`. |
+| **[Architecture review (2026-07-18)](docs/architecture-review-2026-07-18.md)** | Adversarial Claude Opus pass — **8.5 / 10**, 0 P0 / 0 P1; residual P2s documented. |
 | **[Authorization audit trail](docs/authorization-audit-trail.md)** | Who / When / Why on past approvals; live *who can approve?* via eligible-approvers APIs. |
 | **[Observability mesh](docs/observability.md)** | OTLP → Prometheus (metrics) / Loki (logs) / Tempo (traces), plus an OpenSLO catalog that compiles SLOs to Sloth rules and Grafana dashboards. Modeled on [observability-mesh-demo](https://github.com/sanjuthomas/observability-mesh-demo). |
 | **[Local development](docs/local-development.md)** | Run services locally, observability, regression evaluation, component map. |
@@ -255,6 +256,7 @@ Demo logins (password `Password1!`): see **[Domain models and demo users](docs/d
 | [docs/data-flow.md](docs/data-flow.md) | End-to-end pipeline, transactions, storage and Kafka topics |
 | [ssi-indexer/src/etl/dlq/README.md](ssi-indexer/src/etl/dlq/README.md) | ETL resilience — Mongo DLQ, pause-on-failure, replay, integrity banner |
 | [docs/architecture-decisions.md](docs/architecture-decisions.md) | ZITADEL, OPA, MongoDB, Kafka, Neo4j, Vertex, models |
+| [docs/architecture-review-2026-07-18.md](docs/architecture-review-2026-07-18.md) | Claude Opus adversarial review — 8.5 / 10 |
 | [docs/authorization-audit-trail.md](docs/authorization-audit-trail.md) | Who / When / Why, live eligibility |
 | [docs/domain-models.md](docs/domain-models.md) | Instruction and payment models, demo users |
 | [docs/gcp-setup.md](docs/gcp-setup.md) | Vertex AI credentials and smoke test |
