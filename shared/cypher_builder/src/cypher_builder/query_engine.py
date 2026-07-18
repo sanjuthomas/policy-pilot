@@ -722,18 +722,15 @@ def is_instruction_type_inventory_list_question(
 
 
 def instruction_count_filters_from_question(question: str) -> tuple[str | None, str | None]:
-    """Return (status_filter, type_filter) for instruction count queries.
+    """Return (status_filter, type_filter) for instruction count/list queries.
 
-    Standing and single-use questions are instruction_type filters. Lifecycle
-    words such as approved, submitted, or draft are status filters.
+    Standing and single-use words are instruction_type filters. Lifecycle words
+    such as approved, submitted, or draft are status filters. Both may apply in
+    the same question (e.g. "approved standing instructions").
     """
     status = instruction_status_filter_from_question(question)
-    if status:
-        return status, None
     instruction_type = instruction_type_filter_from_question(question)
-    if instruction_type:
-        return None, instruction_type
-    return None, None
+    return status, instruction_type
 
 
 def instruction_status_filter_from_question(question: str) -> str | None:
@@ -1541,38 +1538,28 @@ LIMIT 1""",
     ]
 
 
-def _instruction_list_by_status_queries(*, status: str, lob: str | None = None) -> list[tuple[str, str]]:
-    lob_clause = f"AND v.owning_lob = '{_escape_cypher_literal(lob)}'" if lob else ""
-    safe_status = _escape_cypher_literal(status)
+def _instruction_list_inventory_queries(
+    *,
+    status: str | None = None,
+    instruction_type: str | None = None,
+    lob: str | None = None,
+) -> list[tuple[str, str]]:
+    """List CURRENT instruction versions, optionally filtered by status and/or type."""
+    clauses: list[str] = []
+    if status:
+        clauses.append(f"AND v.status = '{_escape_cypher_literal(status)}'")
+    if instruction_type:
+        clauses.append(
+            f"AND v.instruction_type = '{_escape_cypher_literal(instruction_type)}'"
+        )
+    if lob:
+        clauses.append(f"AND v.owning_lob = '{_escape_cypher_literal(lob)}'")
+    where_extra = " ".join(clauses)
     return [
         (
             "instruction_inventory",
-            f"""MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion {{status: '{safe_status}'}})
-WHERE true {lob_clause}
-OPTIONAL MATCH (creator:User {{user_id: v.creator_user_id}})
-OPTIONAL MATCH (approver:User {{user_id: v.approver_user_id}})
-RETURN v.instruction_id AS instruction_id,
-       v.status AS status,
-       v.owning_lob AS owning_lob,
-       v.currency AS currency,
-       v.wire_scope AS wire_scope,
-       coalesce(creator.display_name, v.creator_user_id, '') AS creator_display,
-       coalesce(approver.display_name, v.approver_user_id, '') AS approver_display,
-       v.approved_at AS approved_at
-ORDER BY v.instruction_id
-LIMIT 200""",
-        ),
-    ]
-
-
-def _instruction_list_by_type_queries(*, instruction_type: str, lob: str | None = None) -> list[tuple[str, str]]:
-    lob_clause = f"AND v.owning_lob = '{_escape_cypher_literal(lob)}'" if lob else ""
-    safe_type = _escape_cypher_literal(instruction_type)
-    return [
-        (
-            "instruction_inventory",
-            f"""MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion {{instruction_type: '{safe_type}'}})
-WHERE true {lob_clause}
+            f"""MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion)
+WHERE true {where_extra}
 OPTIONAL MATCH (creator:User {{user_id: v.creator_user_id}})
 OPTIONAL MATCH (approver:User {{user_id: v.approver_user_id}})
 RETURN v.instruction_id AS instruction_id,
@@ -1588,6 +1575,22 @@ ORDER BY v.instruction_id
 LIMIT 200""",
         ),
     ]
+
+
+def _instruction_list_by_status_queries(
+    *, status: str, lob: str | None = None, instruction_type: str | None = None
+) -> list[tuple[str, str]]:
+    return _instruction_list_inventory_queries(
+        status=status, instruction_type=instruction_type, lob=lob
+    )
+
+
+def _instruction_list_by_type_queries(
+    *, instruction_type: str, lob: str | None = None, status: str | None = None
+) -> list[tuple[str, str]]:
+    return _instruction_list_inventory_queries(
+        status=status, instruction_type=instruction_type, lob=lob
+    )
 
 
 def _instructions_created_by_user_queries(user_id: str) -> list[tuple[str, str]]:
@@ -2019,6 +2022,7 @@ def plan_graph_queries(question: str, *, mode: str) -> list[tuple[str, str]] | N
             return builder.instruction_list_by_type(
                 instruction_type=instruction_type,
                 lob=lob_filter_from_question(question),
+                status=instruction_status_filter_from_question(question),
             )
 
     if mode in ("payments", "all") and is_payment_versions_list_question(

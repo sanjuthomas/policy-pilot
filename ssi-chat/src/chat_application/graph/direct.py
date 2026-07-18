@@ -70,27 +70,34 @@ def _build_instruction_approval_lookup(context: dict[str, Any], _question: str, 
 
 
 def _build_instruction_list_by_type(context: dict[str, Any], question: str, _mode: SearchMode):
-    from chat_application.graph.cypher import instruction_type_filter_from_question
+    from chat_application.graph.cypher import (
+        instruction_status_filter_from_question,
+        instruction_type_filter_from_question,
+    )
 
     instruction_type = instruction_type_filter_from_question(question)
     if not instruction_type:
         return []
-    lob = lob_filter_from_question(question)
     return _GRAPH_BUILDER.instruction_list_by_type(
         instruction_type=instruction_type,
-        lob=lob,
+        lob=lob_filter_from_question(question),
+        status=instruction_status_filter_from_question(question),
     )
 
 
 def _build_instruction_list_by_status(context: dict[str, Any], question: str, _mode: SearchMode):
-    from chat_application.graph.cypher import instruction_count_filters_from_question
+    from chat_application.graph.cypher import (
+        instruction_status_filter_from_question,
+        instruction_type_filter_from_question,
+    )
 
-    status, _ = instruction_count_filters_from_question(question)
+    status = instruction_status_filter_from_question(question)
     if not status:
         return []
     return _GRAPH_BUILDER.instruction_list_by_status(
         status=status,
         lob=lob_filter_from_question(question),
+        instruction_type=instruction_type_filter_from_question(question),
     )
 
 

@@ -63,14 +63,26 @@ class CypherQueryBuilder:
         return qe._instruction_duplicate_routes_queries(lob=lob)
 
     def instruction_list_by_status(
-        self, *, status: str, lob: str | None = None
+        self,
+        *,
+        status: str,
+        lob: str | None = None,
+        instruction_type: str | None = None,
     ) -> list[tuple[str, str]]:
-        return qe._instruction_list_by_status_queries(status=status, lob=lob)
+        return qe._instruction_list_by_status_queries(
+            status=status, lob=lob, instruction_type=instruction_type
+        )
 
     def instruction_list_by_type(
-        self, *, instruction_type: str, lob: str | None = None
+        self,
+        *,
+        instruction_type: str,
+        lob: str | None = None,
+        status: str | None = None,
     ) -> list[tuple[str, str]]:
-        return qe._instruction_list_by_type_queries(instruction_type=instruction_type, lob=lob)
+        return qe._instruction_list_by_type_queries(
+            instruction_type=instruction_type, lob=lob, status=status
+        )
 
     def instruction_mutual_approval(self) -> list[tuple[str, str]]:
         return qe._instruction_mutual_approval_queries()
@@ -221,14 +233,22 @@ def _plans_for_instruction_inventory(
     if instruction_type is None:
         instruction_type = instruction_type_filter_from_question(question)
 
-    if instruction_type:
-        return builder.instruction_list_by_type(
-            instruction_type=instruction_type,
-            lob=plan.owning_lob,
-        )
-    if plan.status:
+    status = plan.status
+    if not status:
+        from cypher_builder.query_engine import instruction_status_filter_from_question
+
+        status = instruction_status_filter_from_question(question)
+
+    if instruction_type or status:
+        if instruction_type:
+            return builder.instruction_list_by_type(
+                instruction_type=instruction_type,
+                lob=plan.owning_lob,
+                status=status,
+            )
+        assert status is not None
         return builder.instruction_list_by_status(
-            status=plan.status,
+            status=status,
             lob=plan.owning_lob,
         )
     return None

@@ -91,7 +91,7 @@ def test_expand_instruction_count_to_inventory_follow_up() -> None:
     assert match.intent_id == "instruction.list_by_status"
     assert match.formatter_name == "instruction_inventory_table"
     assert "[:CURRENT]->" in match.planned[0][1]
-    assert "status: 'APPROVED'" in match.planned[0][1]
+    assert "status = 'APPROVED'" in match.planned[0][1]
 
 
 def test_expand_noop_for_non_anaphoric_payment_request() -> None:

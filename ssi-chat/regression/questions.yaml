@@ -520,6 +520,23 @@ cases:
     - instruction
     - 'no'
     - '0'
+- id: instructions_approved_standing_list
+  mode: instructions
+  retrieval: graph
+  tags:
+  - inventory
+  - standing
+  - approved
+  question: can you list all approved standing instructions?
+  expect:
+    answer_contains_any:
+    - standing
+    - approved
+    - instruction
+    - 'no'
+    - '0'
+    require_routing: true
+    routing_path: neo4j_direct
 - id: instructions_pending_list
   mode: instructions
   retrieval: graph

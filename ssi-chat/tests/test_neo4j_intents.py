@@ -105,14 +105,18 @@ class TestNeo4jDirectMatching:
         assert match is not None
         assert match.intent_id == "instruction.list_single_use"
         assert match.formatter_name == "instruction_inventory_table"
-        assert "instruction_type: 'SINGLE_USE'" in match.planned[0][1]
+        cypher = match.planned[0][1]
+        assert "instruction_type = 'SINGLE_USE'" in cypher
+        assert "status = 'APPROVED'" in cypher
 
     def test_list_single_use_underscore_token(self) -> None:
         question = "Can you show me the approved SINGLE_USE instructions in the system?"
         match = match_neo4j_direct_intent(question, mode="instructions")
         assert match is not None
         assert match.intent_id == "instruction.list_single_use"
-        assert "instruction_type: 'SINGLE_USE'" in match.planned[0][1]
+        cypher = match.planned[0][1]
+        assert "instruction_type = 'SINGLE_USE'" in cypher
+        assert "status = 'APPROVED'" in cypher
 
     def test_list_single_use_one_time_synonym(self) -> None:
         question = "List one-time use instructions"
@@ -125,7 +129,7 @@ class TestNeo4jDirectMatching:
         match = match_neo4j_direct_intent(question, mode="instructions")
         assert match is not None
         assert match.intent_id == "instruction.list_standing"
-        assert "instruction_type: 'STANDING'" in match.planned[0][1]
+        assert "instruction_type = 'STANDING'" in match.planned[0][1]
 
     def test_list_approved_instructions_by_status(self) -> None:
         question = "Can you list all approved instructions?"
@@ -134,14 +138,22 @@ class TestNeo4jDirectMatching:
         assert match.intent_id == "instruction.list_by_status"
         assert match.formatter_name == "instruction_inventory_table"
         assert "[:CURRENT]->" in match.planned[0][1]
-        assert "status: 'APPROVED'" in match.planned[0][1]
+        assert "status = 'APPROVED'" in match.planned[0][1]
+
+    def test_list_approved_standing_applies_both_filters(self) -> None:
+        question = "can you list all approved standing instructions?"
+        match = match_neo4j_direct_intent(question, mode="instructions")
+        assert match is not None
+        cypher = match.planned[0][1]
+        assert "status = 'APPROVED'" in cypher
+        assert "instruction_type = 'STANDING'" in cypher
 
     def test_list_evergreen_instructions(self) -> None:
         question = "Can you show me the evergreen instructions in the system?"
         match = match_neo4j_direct_intent(question, mode="instructions")
         assert match is not None
         assert match.intent_id == "instruction.list_standing"
-        assert "instruction_type: 'STANDING'" in match.planned[0][1]
+        assert "instruction_type = 'STANDING'" in match.planned[0][1]
 
     def test_cross_entity_reciprocal_approval_events_mode(self) -> None:
         question = (
