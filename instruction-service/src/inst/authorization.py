@@ -30,6 +30,9 @@ VIOLATION_LABELS: dict[str, str] = {
     "ALERT_UNAPPROVED_INSTRUCTION": "instruction is not in an approved status",
     "ALERT_EXPIRED_INSTRUCTION": "instruction has expired",
     "VIEWER_ACCESS_DENIED": "subject lacks instruction viewer access",
+    "INSTRUCTION_LOB_ACCESS_DENIED": (
+        "subject LOB/covering_lobs does not entitle read of this instruction"
+    ),
 }
 
 _ALERT_PREFIX = "ALERT_"

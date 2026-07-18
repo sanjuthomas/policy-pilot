@@ -100,7 +100,7 @@ Instruction creators and payment operators intentionally use **different identit
 | Suspend authority | SUSPEND requires Managing Director title | `SUSPEND_REQUIRES_MANAGING_DIRECTOR` | |
 | Suspend / reactivate pairing | User who suspended cannot reactivate same instruction | `SELF_REACTIVATION` | ✓ |
 | Instruction USE | Only `INSTRUCTION_MARKER` service via OBO; instruction must be `APPROVED`, not expired | `ALERT_UNAUTHORIZED_SERVICE`, `ALERT_UNAPPROVED_INSTRUCTION`, `ALERT_EXPIRED_INSTRUCTION` | ✓ |
-| Read access | VIEW / USE require viewer role set (creator, approver, payment staff, etc.) | `VIEWER_ACCESS_DENIED` | |
+| Read access | VIEW / USE require viewer role **and** LOB entitlement (`subject.lob`, `covering_lobs`, creator, or platform admin) | `VIEWER_ACCESS_DENIED`, `INSTRUCTION_LOB_ACCESS_DENIED` | |
 
 ### Instruction approval matrix (title seniority)
 

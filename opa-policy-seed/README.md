@@ -37,8 +37,12 @@ policies/
 
 | Actor | Roles | Scope |
 |-------|-------|-------|
-| Middle office | `INSTRUCTION_CREATOR`, `MIDDLE_OFFICE` | Create, update, submit, delete (draft/pending), view all LOBs |
-| Profit center | `INSTRUCTION_APPROVER` + `lob` | Approve, reject, suspend, use, view matching `owning_lob` |
+| Middle office | `INSTRUCTION_CREATOR`, `MIDDLE_OFFICE` | Create/update/submit/cancel; **VIEW** only for LOBs in `covering_lobs` (or own creations) |
+| Profit center | `INSTRUCTION_APPROVER` + `lob` | Approve/reject/suspend; **VIEW** when `subject.lob` matches `owning_lob` |
+| Payment staff | `PAYMENT_CREATOR` / `FUNDING_APPROVER` + `covering_lobs` | **VIEW**/USE when covering includes instruction LOB |
+| Platform admin | `PLATFORM_ADMIN` / `ADMIN` | Cross-LOB **VIEW** for operators |
+
+`VIEW` / `USE` / `RELEASE_USE` require both a viewer role **and** data-level BU entitlement (`can_view_instruction_data`). Role alone is not enough.
 
 Valid LOB values: `FICC`, `FX`, or `DESK_<name>`.
 

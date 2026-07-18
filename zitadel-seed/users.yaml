@@ -7,7 +7,8 @@
 #   UP_TO_1_BILLION_CLUB   — may create/approve payments up to $1 B
 #   UP_TO_100_BILLION_CLUB — may create/approve payments up to $100 B
 #   ADMIN                 — platform operator; required for secured admin UIs
-# covering_lobs — LOBs the user is assigned to cover for payment approval
+# covering_lobs — LOBs the user is assigned to cover (payment create/approve
+# and instruction VIEW/USE data entitlement for middle-office users)
 
 defaults:
   password: "Password1!"
@@ -28,6 +29,10 @@ users:
       - INSTRUCTION_CREATOR
     groups:
       - MIDDLE_OFFICE
+    covering_lobs:
+      - FICC
+      - FX
+      - DESK_RATES
     supervisor_id: mo-050
 
   - user_id: mo-101
@@ -38,6 +43,10 @@ users:
       - INSTRUCTION_CREATOR
     groups:
       - MIDDLE_OFFICE
+    covering_lobs:
+      - FICC
+      - FX
+      - DESK_RATES
     supervisor_id: mo-050
 
   - user_id: mo-050
@@ -48,6 +57,10 @@ users:
       - INSTRUCTION_CREATOR
     groups:
       - MIDDLE_OFFICE
+    covering_lobs:
+      - FICC
+      - FX
+      - DESK_RATES
     supervisor_id: mo-010
 
   - user_id: mo-010
@@ -58,6 +71,10 @@ users:
       - INSTRUCTION_CREATOR
     groups:
       - MIDDLE_OFFICE
+    covering_lobs:
+      - FICC
+      - FX
+      - DESK_RATES
 
   # ═══════════════════════════════════════════════════════════════════════════
   # FICC profit center — SSI instruction approvers

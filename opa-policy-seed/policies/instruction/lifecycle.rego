@@ -176,6 +176,8 @@ allow if {
 
 	has_viewer_access
 
+	can_view_instruction_data
+
 	is_valid_profit_center
 
 	not_expired
@@ -194,6 +196,8 @@ allow if {
 
 	has_viewer_access
 
+	can_view_instruction_data
+
 	is_valid_profit_center
 
 	input.instruction.status == "USED"
@@ -208,6 +212,8 @@ allow if {
 	input.action == "VIEW"
 
 	has_viewer_access
+
+	can_view_instruction_data
 
 	is_valid_profit_center
 }

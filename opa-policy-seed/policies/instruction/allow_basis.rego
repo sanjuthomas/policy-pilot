@@ -147,6 +147,16 @@ allow_basis contains "OBO user has instruction viewer access" if {
     has_viewer_access
 }
 
+allow_basis contains sprintf("covers instruction LOB %v", [input.instruction.owning_lob]) if {
+    input.action == "USE"
+    covers_lob(input.instruction.owning_lob)
+}
+
+allow_basis contains sprintf("subject LOB %v matches instruction LOB", [input.subject.lob]) if {
+    input.action == "USE"
+    same_lob_as_instruction
+}
+
 allow_basis contains "instruction not expired" if {
     input.action == "USE"
     not_expired
@@ -180,4 +190,29 @@ allow_basis contains "instruction status USED and type SINGLE_USE" if {
 allow_basis contains "subject has instruction viewer access" if {
     input.action == "VIEW"
     has_viewer_access
+}
+
+allow_basis contains sprintf("subject LOB %v matches instruction LOB", [input.subject.lob]) if {
+    input.action == "VIEW"
+    same_lob_as_instruction
+}
+
+allow_basis contains sprintf("covers instruction LOB %v", [input.instruction.owning_lob]) if {
+    input.action == "VIEW"
+    covers_lob(input.instruction.owning_lob)
+}
+
+allow_basis contains "subject is the instruction creator" if {
+    input.action == "VIEW"
+    input.subject.user_id == input.instruction.created_by.user_id
+}
+
+allow_basis contains "platform admin" if {
+    input.action == "VIEW"
+    has_role("PLATFORM_ADMIN")
+}
+
+allow_basis contains "platform admin" if {
+    input.action == "VIEW"
+    in_group("ADMIN")
 }
