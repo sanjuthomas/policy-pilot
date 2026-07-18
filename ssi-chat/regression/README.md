@@ -26,7 +26,12 @@ PolicyPilot still runs dense vector search **in parallel** for every case except
 
 ## Quick run
 
-From repo root with the stack up. **Harness seed from `questions.yaml` runs by default** (policy scenarios + create/submit/approve instructions & payments, then ETL wait):
+From repo root with the stack up. Default integration order:
+
+1. **Harness seed** (from `questions.yaml`)
+2. **Golden eval** (`eval_golden.yaml`) — before smoke so denial counts stay seed-deterministic
+3. **API smoke**
+4. **Full chat bank** (`questions.yaml`)
 
 ```bash
 cd ssi-chat
@@ -38,6 +43,13 @@ Skip seed only when the graph is already warm:
 
 ```bash
 PYTHONPATH=. python -m regression.runner --no-seed
+```
+
+Skip golden (smoke + bank only) or smoke:
+
+```bash
+PYTHONPATH=. python -m regression.runner --skip-golden
+PYTHONPATH=. python -m regression.runner --skip-api-smoke
 ```
 
 After install:
@@ -132,6 +144,8 @@ Metrics are printed after the case summary and written to `--report` JSON under 
 ### Golden labeled set
 
 `eval_golden.yaml` is a smaller hand-labeled set with explicit routing and quality gates (`require_routing`, `require_entity_recall`, `min_faithfulness`, …). Case-by-case catalog: **[GOLDEN_EVAL.md](GOLDEN_EVAL.md)**.
+
+The full integration suite runs golden **first**, then API smoke, then the chat bank. Golden-only (still runs smoke after golden; skips the full bank):
 
 ```bash
 PYTHONPATH=. python -m regression.runner --eval-golden --report golden-eval.json

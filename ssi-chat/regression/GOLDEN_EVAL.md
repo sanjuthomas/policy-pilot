@@ -6,7 +6,9 @@ Unlike the main bank in [`questions.yaml`](questions.yaml) (mostly soft keywords
 
 ## How to run
 
-Stack up, preferably after a clean slate + harness seed (same context placeholders as the main bank):
+Stack up, preferably after a clean slate. The default integration suite already runs golden **first** (seed → golden → API smoke → chat bank).
+
+Golden + smoke only (skips the full chat bank):
 
 ```bash
 cd ssi-chat
@@ -20,7 +22,7 @@ Seed runs by default (`--no-seed` if the graph is already warm). Offline schema 
 pytest tests/test_eval_metrics.py -v
 ```
 
-## Case catalog (11)
+## Case catalog (13)
 
 | ID | Mode | Retrieval | Question | Context | Quality gates | Answer expects |
 |----|------|-----------|----------|---------|---------------|----------------|
@@ -29,21 +31,23 @@ pytest tests/test_eval_metrics.py -v
 | `golden_events_count_today` | events | graph | How many ALERT events happened today? | — | `require_routing`, `min_groundedness` 0.05 | `answer_has_number` |
 | `golden_events_top_denial_user` | events | deterministic | Which user triggered the most policy denial alerts this week? | — | `require_routing`, path `neo4j_direct`, Cypher `deterministic`, synthesis `formatter` | contains all: `pay-101`; min length 10 |
 | `golden_instruction_status` | instructions | deterministic | What is the status of instruction `{approved_instruction_id}`? | `approved_instruction_id` | `require_routing`, path `neo4j_direct`, `require_entity_recall` | contains any: approved, status, instruction |
+| `golden_instruction_view_fo_ficc` | instructions | deterministic | What is the status of instruction `{ficc_standing_instruction_id}`? | `ficc_standing_instruction_id`; persona `fo-ficc-101` | `require_routing`, path `neo4j_direct`, `require_entity_recall` | positive FO FICC VIEW; contains any: approved, status, instruction, ficc |
+| `golden_instruction_view_mo_covering_ficc` | instructions | deterministic | What is the status of instruction `{ficc_standing_instruction_id}`? | `ficc_standing_instruction_id`; persona `pay-101` | same | positive MO covering-FICC VIEW; same answer tokens |
 | `golden_events_who_approved_payment` | events | graph | Who approved payment `{approved_payment_id}` and why? | `approved_payment_id` | `require_routing`, `require_entity_recall` | contains any: approv, allowed, because, role; min length 20 |
-| `golden_vector_security_summary` | events | graph (tag: vector) | Write a brief narrative about recent policy denial activity in the audit log. | — | `require_routing`, path `full_rag`, `min_faithfulness` 0.05 | min length 40; contains denial/alert/policy |
-| `golden_instruction_denials_count_week` | events | deterministic | How many instruction policy denials happened this week? | — | `require_routing`, path `neo4j_direct`, Cypher `deterministic`, synthesis `formatter` | exact: “There were 2 instruction policy denial events this week.” |
-| `golden_instruction_denials_list_week` | events | deterministic | Can you list all instruction denial events for this week? | — | same deterministic gates | `min_graph_rows: 2`; ALERT title; Entity ID; instruction / `-I-` |
-| `golden_payment_denials_count_today` | events | deterministic | How many payment policy denial alerts happened today? | — | same deterministic gates | exact: “There were 4 payment policy denial events today.” |
+| `golden_vector_security_summary` | events | graph (tag: vector) | Write a brief narrative about recent policy denial activity in the audit log. | — | `require_routing`, path `full_rag`, `cypher_class: none`, `min_faithfulness` 0.05 | min length 40; contains denial/alert/policy |
+| `golden_instruction_denials_count_week` | events | deterministic | How many instruction policy denials happened this week? | — | `require_routing`, path `neo4j_direct`, Cypher `deterministic`, synthesis `formatter` | exact: “There were 4 instruction policy denial events this week.” |
+| `golden_instruction_denials_list_week` | events | deterministic | Can you list all instruction denial events for this week? | — | same deterministic gates | `exact_graph_rows: 4`; title `(4)`; Entity ID; instruction / `-I-` |
+| `golden_payment_denials_count_today` | events | deterministic | How many payment policy denial alerts happened today? | — | same deterministic gates | exact: “There were 3 payment policy denial events today.” (pay-203 APPROVE is an instruction VIEW ALERT) |
 | `golden_alerts_list_today_entity_ids` | events | deterministic | Can you report all ALERTS today? | — | same deterministic gates | `min_graph_rows: 2`; Entity ID + ALERT; `-I-` / `-P-` |
 
-Pinned exact totals assume the shared harness seed in `eval_golden.yaml` / `questions.yaml` after truncate+reload. Do not re-seed on a warm graph before golden runs (`--no-seed`) or counts inflate.
+Pinned exact totals assume the shared harness seed in `eval_golden.yaml` / `questions.yaml` after truncate+reload. Golden runs **before** API smoke in the default suite so FO/MO VIEW denial ALERTs do not inflate counts. Do not re-seed on a warm graph before golden runs (`--no-seed`) or counts inflate.
 
 ### By theme
 
 | Theme | Case IDs |
 |-------|----------|
 | Payment entity lookup | `golden_payment_creator`, `golden_payment_status` |
-| Instruction entity lookup | `golden_instruction_status` |
+| Instruction entity lookup | `golden_instruction_status`, `golden_instruction_view_fo_ficc`, `golden_instruction_view_mo_covering_ficc` |
 | Denial / alert counts & lists | `golden_instruction_denials_count_week`, `golden_instruction_denials_list_week`, `golden_payment_denials_count_today`, `golden_alerts_list_today_entity_ids`, `golden_events_top_denial_user` |
 | Other alert counts | `golden_events_count_today` |
 | Auth narrative (who / why) | `golden_events_who_approved_payment` |
@@ -53,7 +57,7 @@ Pinned exact totals assume the shared harness seed in `eval_golden.yaml` / `ques
 
 | Retrieval | Count | Case IDs |
 |-----------|------:|----------|
-| deterministic | 8 | `golden_payment_creator`, `golden_payment_status`, `golden_events_top_denial_user`, `golden_instruction_status`, `golden_instruction_denials_count_week`, `golden_instruction_denials_list_week`, `golden_payment_denials_count_today`, `golden_alerts_list_today_entity_ids` |
+| deterministic | 10 | `golden_payment_creator`, `golden_payment_status`, `golden_events_top_denial_user`, `golden_instruction_status`, `golden_instruction_view_fo_ficc`, `golden_instruction_view_mo_covering_ficc`, `golden_instruction_denials_count_week`, `golden_instruction_denials_list_week`, `golden_payment_denials_count_today`, `golden_alerts_list_today_entity_ids` |
 | graph | 3 | `golden_events_count_today`, `golden_events_who_approved_payment`, `golden_vector_security_summary` |
 | vector | 0 | (vector channel gate deferred; narrative case tagged graph for routing defaults) |
 

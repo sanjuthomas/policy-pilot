@@ -164,7 +164,7 @@ def approve_instructions(
     def _created_by(instruction: dict) -> dict:
         return instruction.get("created_by") or {}
 
-    def _sort_key(instruction: dict) -> tuple[int, str]:
+    def _sort_key(instruction: dict) -> tuple[int, int, str]:
         created_by = _created_by(instruction)
         approvable = _approver_for_instruction(
             seed,
@@ -173,7 +173,16 @@ def approve_instructions(
             str(created_by.get("title") or ""),
             created_by.get("supervisor_id"),
         )
-        return (0 if approvable else 1, instruction["instruction_id"])
+        # Prefer FICC STANDING so regression context gets ficc_standing_instruction_id.
+        is_ficc_standing = (
+            instruction.get("owning_lob") == "FICC"
+            and instruction.get("instruction_type") == "STANDING"
+        )
+        return (
+            0 if approvable else 1,
+            0 if is_ficc_standing else 1,
+            instruction["instruction_id"],
+        )
 
     candidates.sort(key=_sort_key)
     to_process = candidates[:count]
@@ -771,6 +780,9 @@ def run_payment_policy_scenario(
     failures = 0
     scenario = build_payment_scenario()
     expected_denials = sum(1 for _, _, expect_success, _ in scenario if not expect_success)
+    # pay-203 APPROVE fails on OBO instruction VIEW before payment policy, so one
+    # HTTP DENY does not create a payment ALERT (instruction ALERT instead).
+    expected_payment_alerts = expected_denials - 1
     expected_successes = sum(1 for _, _, expect_success, _ in scenario if expect_success)
 
     alerts_before = (
@@ -853,13 +865,16 @@ def run_payment_policy_scenario(
         new_alerts = alerts_after - alerts_before
         new_infos = infos_after - infos_before
         result.logs.append(
-            f"Security events: +{new_alerts} ALERT (expected {expected_denials}), "
+            f"Security events: +{new_alerts} payment ALERT "
+            f"(expected {expected_payment_alerts}; "
+            f"{expected_denials} HTTP denials incl. instruction VIEW spillover), "
             f"+{new_infos} INFO (expected {expected_successes})"
         )
-        if new_alerts < expected_denials:
+        if new_alerts < expected_payment_alerts:
             failures += 1
             result.logs.append(
-                "  FAIL: expected an ALERT security event for each policy denial"
+                "  FAIL: expected a payment ALERT for each payment-policy denial "
+                "(excluding pay-203 instruction VIEW spillover)"
             )
         if new_infos < expected_successes:
             failures += 1

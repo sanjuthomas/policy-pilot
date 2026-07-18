@@ -314,6 +314,8 @@ async def payment_eligible_approvers(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except InstructionNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except httpx.HTTPStatusError as exc:
         raise HTTPException(
             status_code=exc.response.status_code,
@@ -348,3 +350,9 @@ async def _lifecycle_action(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except httpx.HTTPStatusError as exc:
+        # Belt-and-suspenders if a client call still raises raw httpx errors.
+        raise HTTPException(
+            status_code=exc.response.status_code,
+            detail=exc.response.text,
+        ) from exc

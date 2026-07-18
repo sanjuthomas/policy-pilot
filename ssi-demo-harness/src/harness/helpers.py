@@ -148,7 +148,12 @@ def build_seed_plan(
     seed: SeedFile | None = None,
     rng: random.Random | None = None,
 ) -> list[tuple[str, str, str, str]]:
-    """Return randomized (user_id, owning_lob, instruction_type, currency) rows."""
+    """Return randomized (user_id, owning_lob, instruction_type, currency) rows.
+
+    Always includes at least one FICC STANDING row when ``count >= 1`` so suite
+    context can resolve ``ficc_standing_instruction_id`` for golden VIEW cases
+    and payment creation against a reusable instruction.
+    """
     rng = rng or random.Random()
     pairs = _valid_instruction_seed_pairs(seed) if seed else [
         ("mo-100", "FICC"),
@@ -163,6 +168,24 @@ def build_seed_plan(
         instruction_type = rng.choice(_INSTRUCTION_TYPES)
         currency = _LOB_CURRENCIES[owning_lob]
         plan.append((creator_id, owning_lob, instruction_type, currency))
+
+    if count >= 1 and not any(
+        owning_lob == "FICC" and instruction_type == "STANDING"
+        for _, owning_lob, instruction_type, _ in plan
+    ):
+        ficc_pairs = [
+            (creator_id, owning_lob)
+            for creator_id, owning_lob in pairs
+            if owning_lob == "FICC"
+        ]
+        if ficc_pairs:
+            creator_id, owning_lob = rng.choice(ficc_pairs)
+            plan[0] = (
+                creator_id,
+                owning_lob,
+                "STANDING",
+                _LOB_CURRENCIES[owning_lob],
+            )
     return plan
 
 
@@ -493,9 +516,13 @@ def build_payment_scenario() -> list[tuple[PaymentOperation, str, bool, str]]:
       2. pay-201 (approver only) tries to create           → DENY (ALERT)
       3. pay-101 (middle office) tries to submit            → DENY (ALERT)
       4. fo-ficc-101 submits the payment (→ SUBMITTED, INFO)
-      5. pay-101 tries to approve own payment               → DENY (ALERT)
-      6. pay-203 (FX-only) tries to approve                 → DENY (ALERT)
+      5. pay-101 tries to approve own payment               → DENY (payment ALERT)
+      6. pay-203 (FX-only) tries to approve                 → DENY via instruction VIEW
+         (covering_lobs=FX; OBO GET FICC instruction fails → instruction ALERT,
+          no payment APPROVE ALERT)
       7. pay-201 (FICC/FX VP) approves                      → OK (INFO)
+
+    Net ALERTs from denials: 3 payment + 1 instruction (step 6 spillover).
     """
     return [
         (PaymentOperation.CREATE_PAYMENT,  "pay-101", True,  "middle office creates FICC payment (→ DRAFT)"),
@@ -503,7 +530,7 @@ def build_payment_scenario() -> list[tuple[PaymentOperation, str, bool, str]]:
         (PaymentOperation.SUBMIT_PAYMENT,  "pay-101", False, "middle office cannot submit — not front-office LOB (ALERT)"),
         (PaymentOperation.SUBMIT_PAYMENT,  "fo-ficc-101", True,  "front office submits payment for approval (→ SUBMITTED)"),
         (PaymentOperation.APPROVE_PAYMENT, "pay-101", False, "creator cannot approve own payment (ALERT)"),
-        (PaymentOperation.APPROVE_PAYMENT, "pay-203", False, "FX-only approver cannot approve FICC payment (ALERT)"),
+        (PaymentOperation.APPROVE_PAYMENT, "pay-203", False, "FX-only approver blocked on FICC instruction VIEW (instruction ALERT)"),
         (PaymentOperation.APPROVE_PAYMENT, "pay-201", True,  "FICC/FX VP approver approves payment (→ APPROVED)"),
     ]
 

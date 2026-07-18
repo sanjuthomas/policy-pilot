@@ -23,6 +23,30 @@ class InstructionStateError(InstructionServiceClientError):
     """Instruction is in the wrong state (e.g. already USED, expired)."""
 
 
+def _response_detail(resp: httpx.Response) -> str:
+    try:
+        body = resp.json()
+        if isinstance(body, dict) and body.get("detail") is not None:
+            return str(body["detail"])
+    except Exception:
+        pass
+    text = (resp.text or "").strip()
+    return text or f"instruction-service returned HTTP {resp.status_code}"
+
+
+def _raise_for_instruction_status(resp: httpx.Response, *, instruction_id: str) -> None:
+    """Map instruction-service authz denials to PermissionError (HTTP 403 upstream).
+
+    Without this, ``raise_for_status()`` surfaces as an unhandled ``HTTPStatusError``
+    and FastAPI turns payment lifecycle calls into HTTP 500.
+    """
+    if resp.status_code == 403:
+        raise PermissionError(_response_detail(resp))
+    if resp.status_code == 404:
+        raise InstructionNotFoundError(f"instruction {instruction_id} not found")
+    resp.raise_for_status()
+
+
 class InstructionServiceClient:
     """Thin async HTTP client over the instruction-service REST API.
 
@@ -80,9 +104,7 @@ class InstructionServiceClient:
                 url, headers=await self._auth_headers(bearer_token, session_id)
             )
 
-        if resp.status_code == 404:
-            raise InstructionNotFoundError(f"instruction {instruction_id} not found")
-        resp.raise_for_status()
+        _raise_for_instruction_status(resp, instruction_id=instruction_id)
         return resp.json()
 
     async def mark_used(
@@ -112,7 +134,7 @@ class InstructionServiceClient:
             raise InstructionStateError(
                 f"instruction {instruction_id} cannot be marked USED: {resp.text}"
             )
-        resp.raise_for_status()
+        _raise_for_instruction_status(resp, instruction_id=instruction_id)
         return resp.json()
 
     async def release_use(
@@ -139,5 +161,5 @@ class InstructionServiceClient:
             raise InstructionStateError(
                 f"instruction {instruction_id} cannot be released: {resp.text}"
             )
-        resp.raise_for_status()
+        _raise_for_instruction_status(resp, instruction_id=instruction_id)
         return resp.json()

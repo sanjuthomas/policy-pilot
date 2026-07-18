@@ -285,6 +285,14 @@ def fetch_context(
         context["approved_instruction_id"] = approved_instructions[0]["instruction_id"]
     if ficc_standing:
         context["ficc_standing_instruction_id"] = ficc_standing[0]["instruction_id"]
+    else:
+        # Fallback when seed RNG left no APPROVED FICC STANDING (e.g. only
+        # SINGLE_USE FICC). VIEW goldens still need a FICC id the persona can see.
+        ficc_approved = [
+            item for item in approved_instructions if item.get("owning_lob") == "FICC"
+        ]
+        if ficc_approved:
+            context["ficc_standing_instruction_id"] = ficc_approved[0]["instruction_id"]
     if pending_instructions:
         context["pending_instruction_id"] = pending_instructions[0]["instruction_id"]
     if approved_payments:

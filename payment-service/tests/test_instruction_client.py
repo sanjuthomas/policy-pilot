@@ -97,6 +97,33 @@ async def test_get_instruction_success(
 
 
 @pytest.mark.asyncio
+async def test_get_instruction_forbidden(
+    instruction_service_client: InstructionServiceClient,
+) -> None:
+    mock_response = httpx.Response(
+        403,
+        json={"detail": "subject LOB/covering_lobs does not entitle VIEW"},
+        request=_REQUEST,
+    )
+    service_identity = MagicMock()
+    service_identity.token = "svc"
+    service_identity.session_id = None
+    service_identity.ensure_logged_in = AsyncMock()
+
+    with (
+        patch("ps.instruction_client.httpx.AsyncClient") as mock_client_cls,
+        patch("ps.service_identity.service_identity", service_identity),
+    ):
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client_cls.return_value = mock_client
+
+        with pytest.raises(PermissionError, match="covering_lobs"):
+            await instruction_service_client.get_instruction("i1", bearer_token="tok")
+
+
+@pytest.mark.asyncio
 async def test_get_instruction_not_found(
     instruction_service_client: InstructionServiceClient,
 ) -> None:

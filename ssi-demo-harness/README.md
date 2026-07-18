@@ -61,8 +61,8 @@ The payment scenario verifies MongoDB counts: **+4 ALERT** and **+3 INFO** event
 2. `pay-201` (approver only) tries to create → DENY (ALERT)
 3. `pay-101` (middle office) tries to submit → DENY (ALERT)
 4. `fo-ficc-101` submits payment → SUBMITTED (INFO)
-5. `pay-101` tries to approve own payment → DENY (ALERT)
-6. `pay-203` (FX-only) tries to approve → DENY (ALERT)
+5. `pay-101` tries to approve own payment → DENY (payment ALERT)
+6. `pay-203` (FX-only) tries to approve → DENY on FICC instruction VIEW (instruction ALERT; no payment ALERT)
 7. `pay-201` approves → APPROVED (INFO)
 
 Requires at least one approved FICC instruction (run instruction create + approve first, or the full instruction scenario).
