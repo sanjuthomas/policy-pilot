@@ -227,6 +227,12 @@ def subject_from_bearer_token(access_token: str, *, session_id: str | None = Non
                 raise HTTPException(status_code=401, detail=str(exc)) from exc
     except HTTPException:
         raise
+    except jwt.exceptions.InvalidAudienceError as exc:
+        # Wrong-audience JWTs must not fall through to userinfo (F-2 / issue #64).
+        raise HTTPException(
+            status_code=401,
+            detail="token audience is not accepted",
+        ) from exc
     except Exception:
         pass
 
