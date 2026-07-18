@@ -167,7 +167,7 @@ def test_summarize_suite_quality():
 def test_golden_eval_yaml_loads():
     raw = yaml.safe_load(GOLDEN.read_text(encoding="utf-8"))
     suite = RegressionSuite.model_validate({"seed": {}, **raw})
-    assert len(suite.cases) >= 11
+    assert len(suite.cases) >= 13
     for case in suite.cases:
         assert case.expect.require_routing is True
     p0 = {c.id for c in suite.cases if "p0" in c.tags}

@@ -347,8 +347,8 @@ def print_quality_summary(result: SuiteResult) -> None:
         print(f"quality_gate_failures: {summary.quality_failures} (cases with explicit quality expect)")
 
 
-def print_summary(result: SuiteResult) -> None:
-    print("\n=== Chat regression summary ===")
+def print_summary(result: SuiteResult, *, title: str = "Chat regression summary") -> None:
+    print(f"\n=== {title} ===")
     print(f"passed={result.passed} failed={result.failed} skipped={result.skipped}")
     for case in result.cases:
         status = "PASS" if case.passed else ("SKIP" if case.skipped else "FAIL")
@@ -362,13 +362,120 @@ def print_summary(result: SuiteResult) -> None:
                 print(f"       answer: {case.answer_preview}")
 
 
+def execute_chat_cases(
+    *,
+    cases: list[RegressionCase],
+    context: dict[str, str],
+    chat_url: str,
+    harness_url: str,
+    label: str,
+) -> SuiteResult:
+    """Run chat cases against a live stack; return aggregated SuiteResult."""
+    result = SuiteResult(context=context)
+    if not cases:
+        return result
+
+    with httpx.Client() as client:
+        health = client.get(f"{chat_url.rstrip('/')}/health", timeout=15.0)
+        health.raise_for_status()
+        auth_cache: dict[str, dict[str, str]] = {}
+
+        for index, case in enumerate(cases, start=1):
+            logger.info("[%s %s/%s] %s", label, index, len(cases), case.id)
+            case_context = dict(context)
+            fixture_context: dict[str, str] = {}
+            need = (
+                skill_fixture_need(case.expect.requires_context)
+                if case.retrieval == "skill"
+                else None
+            )
+            try:
+                if need is not None:
+                    try:
+                        fixture_context = setup_skill_fixture(
+                            harness_url, need=need
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        fixture_context = dict(
+                            getattr(exc, "partial_context", {}) or {}
+                        )
+                        raise
+                    case_context.update(fixture_context)
+
+                try:
+                    auth_headers = auth_headers_for_case(
+                        client, chat_url, case, cache=auth_cache
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    case_result = CaseResult(
+                        id=case.id,
+                        mode=case.mode,
+                        question=case.question,
+                        passed=False,
+                        reason=f"persona login failed: {exc}",
+                        tags=case.tags,
+                        retrieval=case.retrieval,
+                        persona=case.persona or DEFAULT_COMPLIANCE_USER,
+                    )
+                else:
+                    case_result = run_case(
+                        client,
+                        chat_url,
+                        case,
+                        case_context,
+                        auth_headers=auth_headers,
+                    )
+            except Exception as exc:  # noqa: BLE001
+                case_result = CaseResult(
+                    id=case.id,
+                    mode=case.mode,
+                    question=case.question,
+                    passed=False,
+                    reason=f"skill fixture setup failed: {exc}",
+                    tags=case.tags,
+                    retrieval=case.retrieval,
+                    persona=case.persona or DEFAULT_COMPLIANCE_USER,
+                )
+            finally:
+                if fixture_context:
+                    try:
+                        teardown_skill_fixture(harness_url, fixture_context)
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning(
+                            "teardown-skill-fixture failed for %s: %s",
+                            case.id,
+                            exc,
+                        )
+
+            result.cases.append(case_result)
+            if case_result.skipped:
+                result.skipped += 1
+            elif case_result.passed:
+                result.passed += 1
+            else:
+                result.failed += 1
+
+    print_summary(result, title=f"{label} summary")
+    print_quality_summary(result)
+    print(f"\nCompleted {len(cases)} {label} case(s)")
+    return result
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run ssi-chat regression suite")
     parser.add_argument("--questions", type=Path, default=DEFAULT_QUESTIONS)
     parser.add_argument(
         "--eval-golden",
         action="store_true",
-        help="Run labeled golden eval set (eval_golden.yaml) instead of full question bank",
+        help=(
+            "Run labeled golden eval set only (eval_golden.yaml), then API smoke. "
+            "Skips the full questions.yaml chat bank."
+        ),
+    )
+    parser.add_argument(
+        "--skip-golden",
+        action="store_true",
+        help="Skip the golden-eval stage that normally runs before API smoke",
     )
     parser.add_argument("--chat-url", default="http://localhost:8092")
     parser.add_argument("--harness-url", default="http://localhost:8091")
@@ -407,7 +514,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--api-smoke-only",
         action="store_true",
-        help="Run API smoke checks only (no chat cases)",
+        help="Run API smoke checks only (no golden or chat cases)",
     )
     parser.add_argument("--report", type=Path, help="Write JSON report to this path")
     parser.add_argument("-v", "--verbose", action="store_true")
@@ -418,30 +525,39 @@ def main(argv: list[str] | None = None) -> int:
         format="%(levelname)s %(message)s",
     )
 
-    suite = load_suite(DEFAULT_GOLDEN if args.eval_golden else args.questions)
+    # Stage order: golden (seed-deterministic) → API smoke → chat bank.
+    # Smoke is never dropped for golden; it just runs after golden asserts.
+    bank_suite = load_suite(args.questions)
+    golden_suite = load_suite(DEFAULT_GOLDEN)
+    seed_suite = golden_suite if args.eval_golden else bank_suite
+
     tag_filter = {tag.strip() for tag in args.tags.split(",") if tag.strip()} or None
     retrieval_filter = {item.strip() for item in args.retrieval.split(",") if item.strip()} or None
     id_filter = {item.strip() for item in args.ids.split(",") if item.strip()} or None
-    cases = filter_cases(
-        suite.cases,
+
+    bank_cases = filter_cases(
+        bank_suite.cases,
         mode=args.mode,
         tags=tag_filter,
         case_ids=id_filter,
         retrieval=retrieval_filter,
     )
+    # Golden stage ignores bank filters so the integration suite always gets a
+    # full deterministic check when enabled.
+    golden_cases = list(golden_suite.cases)
 
     seed_context: dict[str, str] = {}
-    if args.seed and suite.seed.steps:
-        logger.info("running %s seed step(s)", len(suite.seed.steps))
-        seed_context = run_seed(args.harness_url, suite.seed)
+    if args.seed and seed_suite.seed.steps:
+        logger.info("running %s seed step(s)", len(seed_suite.seed.steps))
+        seed_context = run_seed(args.harness_url, seed_suite.seed)
         if not args.no_wait:
             wait_for_index(
                 harness_url=args.harness_url,
                 indexer_url=args.indexer_url,
-                min_security_events=suite.seed.wait.min_security_events,
-                min_multimodal_documents=suite.seed.wait.min_multimodal_documents,
-                timeout_seconds=suite.seed.wait.timeout_seconds,
-                poll_interval_seconds=suite.seed.wait.poll_interval_seconds,
+                min_security_events=seed_suite.seed.wait.min_security_events,
+                min_multimodal_documents=seed_suite.seed.wait.min_multimodal_documents,
+                timeout_seconds=seed_suite.seed.wait.timeout_seconds,
+                poll_interval_seconds=seed_suite.seed.wait.poll_interval_seconds,
             )
 
     context = fetch_context(
@@ -453,8 +569,29 @@ def main(argv: list[str] | None = None) -> int:
     logger.info("resolved context keys: %s", sorted(context))
 
     started = time.perf_counter()
+    golden_result: SuiteResult | None = None
     smoke_result = None
+    bank_result: SuiteResult | None = None
+
+    # Stage order: golden (seed-deterministic) → API smoke → chat bank.
+    run_golden = not args.api_smoke_only and not args.skip_golden
+    run_bank = not args.api_smoke_only and not args.eval_golden
+
+    if run_golden:
+        logger.info(
+            "stage 1: golden eval (%s cases) before API smoke",
+            len(golden_cases),
+        )
+        golden_result = execute_chat_cases(
+            cases=golden_cases,
+            context=context,
+            chat_url=args.chat_url,
+            harness_url=args.harness_url,
+            label="golden",
+        )
+
     if not args.skip_api_smoke:
+        logger.info("stage 2: API smoke")
         smoke_result = run_api_smoke(
             harness_url=args.harness_url,
             instruction_service_url=args.instruction_service_url,
@@ -466,109 +603,37 @@ def main(argv: list[str] | None = None) -> int:
         )
         print_smoke_summary(smoke_result)
 
-    result = SuiteResult(context=context)
-    chat_failed = 0
-
-    if not args.api_smoke_only:
-        with httpx.Client() as client:
-            health = client.get(f"{args.chat_url.rstrip('/')}/health", timeout=15.0)
-            health.raise_for_status()
-            auth_cache: dict[str, dict[str, str]] = {}
-
-            for index, case in enumerate(cases, start=1):
-                logger.info("[%s/%s] %s", index, len(cases), case.id)
-                case_context = dict(context)
-                fixture_context: dict[str, str] = {}
-                need = (
-                    skill_fixture_need(case.expect.requires_context)
-                    if case.retrieval == "skill"
-                    else None
-                )
-                try:
-                    if need is not None:
-                        try:
-                            fixture_context = setup_skill_fixture(
-                                args.harness_url, need=need
-                            )
-                        except Exception as exc:  # noqa: BLE001
-                            fixture_context = dict(
-                                getattr(exc, "partial_context", {}) or {}
-                            )
-                            raise
-                        case_context.update(fixture_context)
-
-                    try:
-                        auth_headers = auth_headers_for_case(
-                            client, args.chat_url, case, cache=auth_cache
-                        )
-                    except Exception as exc:  # noqa: BLE001
-                        case_result = CaseResult(
-                            id=case.id,
-                            mode=case.mode,
-                            question=case.question,
-                            passed=False,
-                            reason=f"persona login failed: {exc}",
-                            tags=case.tags,
-                            retrieval=case.retrieval,
-                            persona=case.persona or DEFAULT_COMPLIANCE_USER,
-                        )
-                    else:
-                        case_result = run_case(
-                            client,
-                            args.chat_url,
-                            case,
-                            case_context,
-                            auth_headers=auth_headers,
-                        )
-                except Exception as exc:  # noqa: BLE001
-                    case_result = CaseResult(
-                        id=case.id,
-                        mode=case.mode,
-                        question=case.question,
-                        passed=False,
-                        reason=f"skill fixture setup failed: {exc}",
-                        tags=case.tags,
-                        retrieval=case.retrieval,
-                        persona=case.persona or DEFAULT_COMPLIANCE_USER,
-                    )
-                finally:
-                    if fixture_context:
-                        try:
-                            teardown_skill_fixture(args.harness_url, fixture_context)
-                        except Exception as exc:  # noqa: BLE001
-                            logger.warning(
-                                "teardown-skill-fixture failed for %s: %s",
-                                case.id,
-                                exc,
-                            )
-
-                result.cases.append(case_result)
-                if case_result.skipped:
-                    result.skipped += 1
-                elif case_result.passed:
-                    result.passed += 1
-                else:
-                    result.failed += 1
-                    chat_failed += 1
-
-        print_summary(result)
-        print_quality_summary(result)
-        print(f"\nCompleted {len(cases)} chat case(s)")
+    if run_bank:
+        logger.info("stage 3: chat bank (%s cases)", len(bank_cases))
+        bank_result = execute_chat_cases(
+            cases=bank_cases,
+            context=context,
+            chat_url=args.chat_url,
+            harness_url=args.harness_url,
+            label="chat",
+        )
 
     elapsed = time.perf_counter() - started
     print(f"Total elapsed: {elapsed:.1f}s")
 
     if args.report:
         payload: dict = {"elapsed_seconds": round(elapsed, 2), "context": context}
+        if golden_result is not None:
+            payload["golden"] = golden_result.to_dict()
         if smoke_result is not None:
             payload["api_smoke"] = smoke_to_dict(smoke_result)
-        if not args.api_smoke_only:
-            payload["chat"] = result.to_dict()
+        if bank_result is not None:
+            payload["chat"] = bank_result.to_dict()
+        elif args.eval_golden and golden_result is not None:
+            # Keep prior consumers that expect chat= when --eval-golden alone.
+            payload["chat"] = golden_result.to_dict()
         args.report.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         print(f"Report written to {args.report}")
 
+    golden_failed = golden_result.failed if golden_result is not None else 0
     smoke_failed = smoke_result.failed if smoke_result is not None else 0
-    return 1 if smoke_failed or chat_failed else 0
+    chat_failed = bank_result.failed if bank_result is not None else 0
+    return 1 if golden_failed or smoke_failed or chat_failed else 0
 
 
 if __name__ == "__main__":
