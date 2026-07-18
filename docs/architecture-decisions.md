@@ -57,7 +57,9 @@ Example input (built by the domain service, evaluated by authz → OPA):
 
 OPA evaluates the Rego policy bundle and returns `allow` / `deny`. Authorization-service also queries **`allow_basis`**, **`violations`**, and **`is_alert`**. Domain services store the result on every security event as `details.authorization` and copy `authorization.summary` to `event.reason` for authorized actions.
 
-**OPA security in this demo:** OPA listens on `:8181` with no authentication (typical for a local policy sidecar). The trust boundary is **authorization-service**, which requires `svc-instruction` or `svc-payment` bearer tokens. Do not expose OPA to untrusted networks in production.
+**OPA security in this demo:** OPA listens on `:8181` with no authentication (typical for a local policy sidecar). The trust boundary is **authorization-service**, which requires `svc-instruction` or `svc-payment` bearer tokens. Do not expose OPA to untrusted networks in production. Single-broker Kafka and single-node Mongo `rs0` are the same class of accepted local demo debt.
+
+**Directory org header:** `build_directory_client` falls back to an unscoped client only on `ZitadelDirectoryError` when resolving `x-zitadel-orgid` (e.g. `/orgs/me` 404), and logs a warning — unexpected exceptions propagate (issue #54).
 
 Example authorization block on an APPROVE security event:
 
