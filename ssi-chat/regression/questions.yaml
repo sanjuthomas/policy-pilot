@@ -527,7 +527,6 @@ cases:
   - inventory
   - standing
   - approved
-  - downvote_regression
   question: can you list all approved standing instructions?
   expect:
     answer_contains_any:
