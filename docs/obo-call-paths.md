@@ -19,6 +19,8 @@ Missing `X-On-Behalf-Of` → **403**.
 
 Admin `/api/ui/*` is an exception: platform-admin JWT in `Authorization` only (no OBO).
 
+**Assumption:** end users never call payment / instruction / authz `/api/v1` directly. Only chat, harness, and service-to-service callers use those APIs (always with OBO). API smoke and other tests must use the same pattern.
+
 ---
 
 ## 1. Chat API → backends

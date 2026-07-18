@@ -111,7 +111,7 @@ RUN_API_SMOKE=1 pytest tests/test_api_smoke.py -v
 | **ssi-indexer** | Stats, vector search, graph events, intent extract, cypher run, auth gates |
 | **PolicyPilot** (`ssi-chat`) | Compliance + operational persona login, `/api/chat` (65 YAML cases incl. skills), compliance-users |
 | **authorization-service** | Health, service-auth gate on evaluate endpoints |
-| **payment-service** / **instruction-service** | Eligible-approvers (compliance JWT); FO (`fo-ficc-101` / `fo-fx-101`) and MO (`pay-101` / `pay-203`) FICC view allow/deny |
+| **payment-service** / **instruction-service** | Eligible-approvers + FO/MO FICC view via **svc-chat + OBO** (bare human JWT rejected); admin UI probes use platform-admin JWT only |
 
 Chat cases exercise RAG end-to-end; they do not call instruction-service/payment REST APIs directly. Indexer and authz are covered by API smoke, not chat YAML.
 
