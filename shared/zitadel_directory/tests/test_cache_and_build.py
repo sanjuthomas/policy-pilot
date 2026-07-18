@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+import pytest
+
 from zitadel_directory.cache import DirectoryCache
-from zitadel_directory.client import ZitadelDirectoryClient, build_directory_client
+from zitadel_directory.client import (
+    ZitadelDirectoryClient,
+    ZitadelDirectoryError,
+    build_directory_client,
+)
 from zitadel_directory.models import DirectoryUser
 
 
@@ -67,7 +73,7 @@ def test_build_directory_client_without_org_attach() -> None:
 
 def test_build_directory_client_org_fallback(monkeypatch) -> None:
     def _boom(self, org_id: str | None = None):
-        raise RuntimeError("org unavailable")
+        raise ZitadelDirectoryError("GET /management/v1/orgs/me failed (404): not found")
 
     monkeypatch.setattr(ZitadelDirectoryClient, "with_org", _boom)
     client = build_directory_client(
@@ -77,3 +83,18 @@ def test_build_directory_client_org_fallback(monkeypatch) -> None:
     )
     assert isinstance(client, ZitadelDirectoryClient)
     assert "x-zitadel-orgid" not in client._headers
+
+
+def test_build_directory_client_unexpected_org_error_propagates(monkeypatch) -> None:
+    """Non-directory errors must not be swallowed (issue #54 / P2-3)."""
+
+    def _boom(self, org_id: str | None = None):
+        raise RuntimeError("unexpected bug")
+
+    monkeypatch.setattr(ZitadelDirectoryClient, "with_org", _boom)
+    with pytest.raises(RuntimeError, match="unexpected bug"):
+        build_directory_client(
+            base_url="http://zitadel.test",
+            pat="token",
+            attach_org=True,
+        )

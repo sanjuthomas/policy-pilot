@@ -52,8 +52,10 @@ def build_directory_client(
 ) -> ZitadelDirectoryClient:
     """Construct a directory client; optionally attach ``x-zitadel-orgid``.
 
-    When ``attach_org`` is true and org resolution fails, falls back to the
-    unscoped client (org header is optional for some deployments).
+    When ``attach_org`` is true and org resolution fails with
+    ``ZitadelDirectoryError`` (e.g. ``/orgs/me`` 404), falls back to the
+    unscoped client — org header is optional for some deployments. Unexpected
+    errors (transport bugs, programming errors) are not swallowed.
     """
     client = ZitadelDirectoryClient(
         base_url=base_url,
@@ -66,8 +68,12 @@ def build_directory_client(
         return client
     try:
         return client.with_org()
-    except Exception:
-        logger.warning("directory client continuing without org header", exc_info=True)
+    except ZitadelDirectoryError as exc:
+        # Expected when the PAT cannot resolve an org (issue #54 / P2-3).
+        logger.warning(
+            "directory client continuing without org header: %s",
+            exc,
+        )
         return client
 
 
