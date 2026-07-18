@@ -415,9 +415,17 @@ async def confirm_submit_payment(
                 skill="submit_payment",
             )
     except AuthzOboClientError as exc:
-        logger.warning("submit-payment confirm recheck failed: %s — proceeding", exc)
-        activities.append(
-            f"Could not re-check policy ({exc}); payment-service will enforce SUBMIT."
+        # Fail closed (issue #50 / P1-3): do not mutate when policy re-check cannot complete.
+        logger.warning("submit-payment confirm recheck failed: %s — aborting submit", exc)
+        activities.append(f"Could not re-check policy ({exc}) — stopped before submit.")
+        return SkillRunResult(
+            answer=(
+                f"**Stopped before submit** — could not re-check SUBMIT permission "
+                f"({exc}). Nothing was submitted."
+            ),
+            activities=activities,
+            intent_id="skill.submit_payment.recheck_error",
+            skill="submit_payment",
         )
 
     payment_client = PaymentClient()

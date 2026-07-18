@@ -122,7 +122,7 @@ sequenceDiagram
 | **OPA stays normative** | Preflight and create both use payment `CREATE` policy |
 | **Explain before confirm** | Stream permission reasoning before any Go button |
 | **Confirm before mutate** | No Mongo write until **Go** |
-| **Fail closed** | Deny, No Go, expired pending, or wrong user → no create |
+| **Fail closed** | Deny, No Go, expired pending, wrong user, or authz re-check unavailable → no create |
 | **Act as logged-in user** | User JWT on instruction GET and payment CREATE; `svc-chat` OBO for evaluate |
 
 Chat does **not** write Mongo directly. On **Go**, payment-service allocates the id, re-evaluates OPA, and inserts the payment version + security event in one transaction (`ssi_cash_activities.payments` + `security_events.payment_service`). Kafka CDC / indexer then update Neo4j as for any other create.

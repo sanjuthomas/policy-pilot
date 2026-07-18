@@ -303,3 +303,61 @@ async def test_confirm_go_approves_payment() -> None:
     assert result.intent_id == "skill.approve_payment.approved"
     assert "approved" in result.answer.lower()
     client.approve_payment.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_confirm_go_aborts_when_recheck_authz_errors() -> None:
+    from chat_application.authz.obo import AuthzOboClientError
+
+    pending_approve_payment_store.clear()
+    with (
+        patch(
+            "chat_application.skills.approve_payment.PaymentClient"
+        ) as payment_cls,
+        patch(
+            "chat_application.skills.approve_payment.InstructionClient"
+        ) as instruction_cls,
+        patch(
+            "chat_application.skills.approve_payment.AuthzOboClient"
+        ) as authz_cls,
+        patch(
+            "chat_application.skills.approve_payment.service_identity"
+        ) as identity,
+    ):
+        identity.token = "svc-token"
+        identity.session_id = "svc-session"
+        client = payment_cls.return_value
+        client.get_payment = AsyncMock(return_value=_payment())
+        client.approve_payment = AsyncMock()
+        instruction_cls.return_value.get_instruction = AsyncMock(
+            return_value=_instruction()
+        )
+        authz_cls.return_value.evaluate_payment = AsyncMock(
+            side_effect=[
+                PolicyDecision(
+                    allowed=True,
+                    allow_basis=["ok"],
+                    violations=[],
+                    is_alert=False,
+                ),
+                AuthzOboClientError("authz unavailable"),
+            ]
+        )
+        phase1 = await run_approve_payment_phase1(
+            "Please approve payment 20260715-FICC-P-9.",
+            subject=_funding_approver(),
+            user_token="user-token",
+            user_session_id="sess",
+        )
+        assert phase1 is not None and phase1.pending_id
+        result = await confirm_approve_payment(
+            pending_id=phase1.pending_id,
+            decision="go",
+            subject=_funding_approver(),
+            user_token="user-token",
+            user_session_id="sess",
+        )
+
+    assert result.intent_id == "skill.approve_payment.recheck_error"
+    assert "Stopped before approve" in result.answer
+    client.approve_payment.assert_not_awaited()

@@ -42,5 +42,5 @@ Sign in as `fo-ficc-101` / `Password1!` (FICC desk), select **Payments**, then s
 |------|---------|
 | Scripted pipeline | Fixed steps; LLM selects the skill, regex parses the payment id |
 | OPA stays normative | Preflight and domain submit both use payment `SUBMIT` |
-| Fail closed on deny / No Go | Nothing submitted |
+| Fail closed on deny / No Go / authz re-check error | Nothing submitted |
 | Card parity | Debtor / creditor / intermediaries / amount / value date / LOB match create-payment |

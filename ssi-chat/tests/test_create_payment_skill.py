@@ -290,3 +290,56 @@ async def test_confirm_go_creates_payment() -> None:
     assert result.intent_id == "skill.create_payment.created"
     assert "20260712-FX-P-99" in result.answer
     payment_cls.return_value.create_payment.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_confirm_go_aborts_when_recheck_authz_errors() -> None:
+    """Confirm must fail closed when policy re-check cannot complete (issue #50)."""
+    from chat_application.authz.obo import AuthzOboClientError
+
+    pending_create_payment_store.clear()
+    subject = _creator()
+    decision = PolicyDecision(True, ["ok"], [], False)
+    with (
+        patch(
+            "chat_application.skills.create_payment.InstructionClient"
+        ) as instruction_cls,
+        patch(
+            "chat_application.skills.create_payment.AuthzOboClient"
+        ) as authz_cls,
+        patch(
+            "chat_application.skills.create_payment.PaymentClient"
+        ) as payment_cls,
+        patch(
+            "chat_application.skills.create_payment.service_identity"
+        ) as identity,
+    ):
+        identity.token = "svc-token"
+        identity.session_id = "svc-session"
+        instruction_cls.return_value.get_instruction = AsyncMock(
+            return_value=_instruction()
+        )
+        authz_cls.return_value.evaluate_payment = AsyncMock(
+            side_effect=[decision, AuthzOboClientError("authz unavailable")]
+        )
+        payment_cls.return_value.create_payment = AsyncMock()
+        phase1 = await run_create_payment_phase1(
+            "Create a payment using instruction 20260705-FX-I-12 "
+            "amount 1 million value date today",
+            subject=subject,
+            user_token="user-token",
+            user_session_id="user-session",
+        )
+        assert phase1 and phase1.pending_id
+        result = await confirm_create_payment(
+            pending_id=phase1.pending_id,
+            decision="go",
+            subject=subject,
+            user_token="user-token",
+            user_session_id="user-session",
+        )
+
+    assert result.intent_id == "skill.create_payment.recheck_error"
+    assert "Stopped before create" in result.answer
+    assert "No payment was created" in result.answer
+    payment_cls.return_value.create_payment.assert_not_awaited()
