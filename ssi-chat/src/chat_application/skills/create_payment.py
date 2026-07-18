@@ -338,9 +338,16 @@ async def confirm_create_payment(
                 intent_id="skill.create_payment.recheck_denied",
             )
     except AuthzOboClientError as exc:
-        logger.warning("create-payment confirm recheck failed: %s — proceeding to create", exc)
-        activities.append(
-            f"Could not re-check policy ({exc}); payment-service will enforce CREATE."
+        # Fail closed (issue #50 / P1-3): do not mutate when policy re-check cannot complete.
+        logger.warning("create-payment confirm recheck failed: %s — aborting create", exc)
+        activities.append(f"Could not re-check policy ({exc}) — stopped before create.")
+        return SkillRunResult(
+            answer=(
+                f"**Stopped before create** — could not re-check CREATE permission "
+                f"({exc}). No payment was created."
+            ),
+            activities=activities,
+            intent_id="skill.create_payment.recheck_error",
         )
 
     payment_client = PaymentClient()

@@ -416,9 +416,17 @@ async def confirm_approve_payment(
                 skill="approve_payment",
             )
     except AuthzOboClientError as exc:
-        logger.warning("approve-payment confirm recheck failed: %s — proceeding", exc)
-        activities.append(
-            f"Could not re-check policy ({exc}); payment-service will enforce APPROVE."
+        # Fail closed (issue #50 / P1-3): do not mutate when policy re-check cannot complete.
+        logger.warning("approve-payment confirm recheck failed: %s — aborting approve", exc)
+        activities.append(f"Could not re-check policy ({exc}) — stopped before approve.")
+        return SkillRunResult(
+            answer=(
+                f"**Stopped before approve** — could not re-check APPROVE permission "
+                f"({exc}). Nothing was approved."
+            ),
+            activities=activities,
+            intent_id="skill.approve_payment.recheck_error",
+            skill="approve_payment",
         )
 
     payment_client = PaymentClient()

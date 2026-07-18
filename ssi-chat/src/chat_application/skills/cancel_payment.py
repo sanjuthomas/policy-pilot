@@ -415,9 +415,17 @@ async def confirm_cancel_payment(
                 skill="cancel_payment",
             )
     except AuthzOboClientError as exc:
-        logger.warning("cancel-payment confirm recheck failed: %s — proceeding", exc)
-        activities.append(
-            f"Could not re-check policy ({exc}); payment-service will enforce CANCEL."
+        # Fail closed (issue #50 / P1-3): do not mutate when policy re-check cannot complete.
+        logger.warning("cancel-payment confirm recheck failed: %s — aborting cancel", exc)
+        activities.append(f"Could not re-check policy ({exc}) — stopped before cancel.")
+        return SkillRunResult(
+            answer=(
+                f"**Stopped before cancel** — could not re-check CANCEL permission "
+                f"({exc}). Nothing was cancelled."
+            ),
+            activities=activities,
+            intent_id="skill.cancel_payment.recheck_error",
+            skill="cancel_payment",
         )
 
     payment_client = PaymentClient()

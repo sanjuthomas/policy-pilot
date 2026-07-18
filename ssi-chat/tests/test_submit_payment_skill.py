@@ -322,3 +322,62 @@ async def test_confirm_go_submits_payment() -> None:
     assert result.intent_id == "skill.submit_payment.submitted"
     assert "submitted" in result.answer.lower()
     client.submit_payment.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_confirm_go_aborts_when_recheck_authz_errors() -> None:
+    from chat_application.authz.obo import AuthzOboClientError
+
+    pending_submit_payment_store.clear()
+    submitted = {**_payment(), "status": "SUBMITTED"}
+    with (
+        patch(
+            "chat_application.skills.submit_payment.PaymentClient"
+        ) as payment_cls,
+        patch(
+            "chat_application.skills.submit_payment.InstructionClient"
+        ) as instruction_cls,
+        patch(
+            "chat_application.skills.submit_payment.AuthzOboClient"
+        ) as authz_cls,
+        patch(
+            "chat_application.skills.submit_payment.service_identity"
+        ) as identity,
+    ):
+        identity.token = "svc-token"
+        identity.session_id = "svc-session"
+        client = payment_cls.return_value
+        client.get_payment = AsyncMock(return_value=_payment())
+        client.submit_payment = AsyncMock(return_value=submitted)
+        instruction_cls.return_value.get_instruction = AsyncMock(
+            return_value=_instruction()
+        )
+        authz_cls.return_value.evaluate_payment = AsyncMock(
+            side_effect=[
+                PolicyDecision(
+                    allowed=True,
+                    allow_basis=["ok"],
+                    violations=[],
+                    is_alert=False,
+                ),
+                AuthzOboClientError("authz unavailable"),
+            ]
+        )
+        phase1 = await run_submit_payment_phase1(
+            "Please submit payment 20260715-FICC-P-9 for approval.",
+            subject=_fo_submitter(),
+            user_token="user-token",
+            user_session_id="sess",
+        )
+        assert phase1 is not None and phase1.pending_id
+        result = await confirm_submit_payment(
+            pending_id=phase1.pending_id,
+            decision="go",
+            subject=_fo_submitter(),
+            user_token="user-token",
+            user_session_id="sess",
+        )
+
+    assert result.intent_id == "skill.submit_payment.recheck_error"
+    assert "Stopped before submit" in result.answer
+    client.submit_payment.assert_not_awaited()

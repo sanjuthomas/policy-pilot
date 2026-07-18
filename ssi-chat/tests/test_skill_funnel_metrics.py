@@ -18,6 +18,7 @@ from chat_application.observability.skills import (
         ("skill.submit_payment.wrong_status", ("submit_payment", "wrong_status", "ok")),
         ("skill.cancel_payment.cancel_error", ("cancel_payment", "cancel_error", "error")),
         ("skill.create_payment.evaluate_error", ("create_payment", "evaluate_error", "error")),
+        ("skill.create_payment.recheck_error", ("create_payment", "recheck_error", "error")),
         ("skill.create_payment.auth_error", ("create_payment", "auth_error", "error")),
         ("skill", ("unknown", "unknown", "ok")),
         ("skill.cancel_payment", ("cancel_payment", "unknown", "ok")),

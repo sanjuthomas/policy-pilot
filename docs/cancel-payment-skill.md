@@ -41,7 +41,7 @@ Sign in as `pay-101` / `Password1!`, select **Payments**, then send the question
 |------|---------|
 | Scripted pipeline | Fixed steps; LLM selects the skill, regex parses the payment id |
 | OPA stays normative | Preflight and domain cancel both use payment `CANCEL` |
-| Fail closed on deny / No Go | Nothing cancelled |
+| Fail closed on deny / No Go / authz re-check error | Nothing cancelled |
 | Status gate | Only DRAFT and SUBMITTED are cancellable |
 | Card parity | Debtor / creditor / intermediaries / amount / value date / LOB match create/submit |
 | Role + group | Cancel requires middle-office creator — not front-office desk-only creators |

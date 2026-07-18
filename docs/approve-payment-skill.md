@@ -40,6 +40,6 @@ Sign in as `pay-400` / `Password1!`, select **Payments**, then send the question
 |------|---------|
 | Scripted pipeline | Fixed steps; LLM selects the skill, regex parses the payment id |
 | OPA stays normative | Preflight and domain approve both use payment `APPROVE` |
-| Fail closed on deny / No Go | Nothing approved |
+| Fail closed on deny / No Go / authz re-check error | Nothing approved |
 | Card parity | Debtor / creditor / intermediaries / amount / value date / LOB match create/submit |
 | Maker–checker | Approver must satisfy four-eyes and reporting-line rules vs the payment creator |
