@@ -208,8 +208,14 @@ violations["ALERT_EXPIRED_INSTRUCTION"] if {
 # ── VIEW / USE — read access ──────────────────────────────────────────────────
 
 violations["VIEWER_ACCESS_DENIED"] if {
-    input.action in {"VIEW", "USE"}
+    input.action in {"VIEW", "USE", "RELEASE_USE"}
     not has_viewer_access
+}
+
+violations["INSTRUCTION_LOB_ACCESS_DENIED"] if {
+    input.action in {"VIEW", "USE", "RELEASE_USE"}
+    has_viewer_access
+    not can_view_instruction_data
 }
 
 # ---------------------------------------------------------------------------

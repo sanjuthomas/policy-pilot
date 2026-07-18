@@ -45,7 +45,7 @@ The security-critical spine — one policy engine, fail-closed OBO, atomic state
 
 | ID | Severity | Area | Finding | Suggested fix / question |
 |----|----------|------|---------|--------------------------|
-| F-1 | **P2** (+Question) | Chat data plane | Graph/vector retrieval is **not scoped** by caller identity or LOB. Operational users can read cross-LOB data via NL questions. | Intentional for compliance demo? If not, inject LOB/role into Cypher plans and vector filters. |
+| F-1 | **P2** (+Question) | Chat data plane | Graph/vector retrieval is **not scoped** by caller identity or LOB. Operational users can read cross-LOB data via NL questions. | Intentional for compliance demo? If not, inject LOB/role into Cypher plans and vector filters. **Partial (REST):** instruction `VIEW`/`USE` now require LOB/`covering_lobs` entitlement (issue #63 follow-on for chat). |
 | F-2 | **P2** (+Question) | Identity / JWT | OIDC **audience not validated** (`verify_aud=False` when unset). | Set and enforce `oidc_audience` before non-demo deployment. **Fixed 2026-07-18:** compose sets `OIDC_AUDIENCE=policy-pilot`; JWT path fail-closes on `InvalidAudienceError` (issue #64). Session login unaffected. |
 | F-3 | **P2** | Neo4j | `svc_chat` has `EXECUTE BOOSTED PROCEDURE *` — latent privilege beyond read-only graph grants. | Restrict to the specific procedures chat needs. **Fixed 2026-07-18:** `role_ssi_chat` now grants only `EXECUTE PROCEDURE db.index.vector.queryNodes` (see #65). |
 | F-4 | Question | Audit labeling | `SELF_APPROVAL` is not `ALERT_`-prefixed, so `is_alert` may disagree with stored severity. | Confirm intent for four-eyes denials. |
