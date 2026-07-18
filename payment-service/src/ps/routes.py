@@ -1,6 +1,8 @@
+import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
 from ps.dependencies import get_compliance_subject, get_subject
+from ps.evaluate_tokens import resolve_evaluate_token_context
 from ps.instruction_client import InstructionNotFoundError
 from ps.models.api import (
     CancelPaymentRequest,
@@ -22,10 +24,19 @@ def get_service() -> PaymentService:
     return PaymentService()
 
 
-def _bearer_token(authorization: str | None) -> str | None:
-    if authorization and authorization.lower().startswith("bearer "):
-        return authorization.split(" ", 1)[1].strip()
-    return None
+def _user_tokens(
+    authorization: str | None,
+    x_session_id: str | None,
+    x_on_behalf_of: str | None,
+    x_on_behalf_of_session_id: str | None,
+) -> tuple[str | None, str | None]:
+    ctx = resolve_evaluate_token_context(
+        authorization=authorization,
+        x_session_id=x_session_id,
+        x_on_behalf_of=x_on_behalf_of,
+        x_on_behalf_of_session_id=x_on_behalf_of_session_id,
+    )
+    return ctx.user_token, ctx.user_session_id
 
 
 def _fmt_datetime(value) -> str | None:
@@ -79,15 +90,22 @@ async def create_payment(
     service: PaymentService = Depends(get_service),
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    x_on_behalf_of: str | None = Header(default=None, alias="X-On-Behalf-Of"),
+    x_on_behalf_of_session_id: str | None = Header(
+        default=None, alias="X-On-Behalf-Of-Session-Id"
+    ),
 ) -> PaymentResponse:
+    user_token, user_session_id = _user_tokens(
+        authorization, x_session_id, x_on_behalf_of, x_on_behalf_of_session_id
+    )
     try:
         record = await service.create(
             instruction_id=request.instruction_id,
             value_date=request.value_date,
             amount=request.amount,
             subject=subject,
-            bearer_token=_bearer_token(authorization),
-            session_id=x_session_id,
+            bearer_token=user_token,
+            session_id=user_session_id,
         )
         return _to_response(record)
     except InstructionNotFoundError as exc:
@@ -125,7 +143,14 @@ async def update_payment(
     service: PaymentService = Depends(get_service),
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    x_on_behalf_of: str | None = Header(default=None, alias="X-On-Behalf-Of"),
+    x_on_behalf_of_session_id: str | None = Header(
+        default=None, alias="X-On-Behalf-Of-Session-Id"
+    ),
 ) -> PaymentResponse:
+    user_token, user_session_id = _user_tokens(
+        authorization, x_session_id, x_on_behalf_of, x_on_behalf_of_session_id
+    )
     try:
         record = await service.update(
             payment_id,
@@ -133,8 +158,8 @@ async def update_payment(
             value_date=request.value_date,
             amount=request.amount,
             subject=subject,
-            bearer_token=_bearer_token(authorization),
-            session_id=x_session_id,
+            bearer_token=user_token,
+            session_id=user_session_id,
         )
         return _to_response(record)
     except LookupError as exc:
@@ -170,13 +195,20 @@ async def submit_payment(
     service: PaymentService = Depends(get_service),
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    x_on_behalf_of: str | None = Header(default=None, alias="X-On-Behalf-Of"),
+    x_on_behalf_of_session_id: str | None = Header(
+        default=None, alias="X-On-Behalf-Of-Session-Id"
+    ),
 ) -> PaymentResponse:
+    user_token, user_session_id = _user_tokens(
+        authorization, x_session_id, x_on_behalf_of, x_on_behalf_of_session_id
+    )
     return await _lifecycle_action(
         service.submit,
         payment_id,
         subject,
-        bearer_token=_bearer_token(authorization),
-        session_id=x_session_id,
+        bearer_token=user_token,
+        session_id=user_session_id,
     )
 
 
@@ -187,13 +219,20 @@ async def approve_payment(
     service: PaymentService = Depends(get_service),
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    x_on_behalf_of: str | None = Header(default=None, alias="X-On-Behalf-Of"),
+    x_on_behalf_of_session_id: str | None = Header(
+        default=None, alias="X-On-Behalf-Of-Session-Id"
+    ),
 ) -> PaymentResponse:
+    user_token, user_session_id = _user_tokens(
+        authorization, x_session_id, x_on_behalf_of, x_on_behalf_of_session_id
+    )
     return await _lifecycle_action(
         service.approve,
         payment_id,
         subject,
-        bearer_token=_bearer_token(authorization),
-        session_id=x_session_id,
+        bearer_token=user_token,
+        session_id=user_session_id,
     )
 
 
@@ -205,14 +244,21 @@ async def reject_payment(
     service: PaymentService = Depends(get_service),
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    x_on_behalf_of: str | None = Header(default=None, alias="X-On-Behalf-Of"),
+    x_on_behalf_of_session_id: str | None = Header(
+        default=None, alias="X-On-Behalf-Of-Session-Id"
+    ),
 ) -> PaymentResponse:
+    user_token, user_session_id = _user_tokens(
+        authorization, x_session_id, x_on_behalf_of, x_on_behalf_of_session_id
+    )
     return await _lifecycle_action(
         service.reject,
         payment_id,
         subject,
         request,
-        bearer_token=_bearer_token(authorization),
-        session_id=x_session_id,
+        bearer_token=user_token,
+        session_id=user_session_id,
     )
 
 
@@ -224,30 +270,55 @@ async def cancel_payment(
     service: PaymentService = Depends(get_service),
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    x_on_behalf_of: str | None = Header(default=None, alias="X-On-Behalf-Of"),
+    x_on_behalf_of_session_id: str | None = Header(
+        default=None, alias="X-On-Behalf-Of-Session-Id"
+    ),
 ) -> PaymentResponse:
+    user_token, user_session_id = _user_tokens(
+        authorization, x_session_id, x_on_behalf_of, x_on_behalf_of_session_id
+    )
     return await _lifecycle_action(
         service.cancel,
         payment_id,
         subject,
         request,
-        bearer_token=_bearer_token(authorization),
-        session_id=x_session_id,
+        bearer_token=user_token,
+        session_id=user_session_id,
     )
 
 
 @router.post("/{payment_id}/eligible-approvers", response_model=PaymentEligibleApproversResponse)
 async def payment_eligible_approvers(
     payment_id: str,
+    authorization: str | None = Header(default=None),
+    x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    x_on_behalf_of: str | None = Header(default=None, alias="X-On-Behalf-Of"),
+    x_on_behalf_of_session_id: str | None = Header(
+        default=None, alias="X-On-Behalf-Of-Session-Id"
+    ),
     _subject: Subject = Depends(get_compliance_subject),
     service: PaymentService = Depends(get_service),
 ) -> PaymentEligibleApproversResponse:
+    user_token, user_session_id = _user_tokens(
+        authorization, x_session_id, x_on_behalf_of, x_on_behalf_of_session_id
+    )
     try:
-        data = await service.eligible_approvers(payment_id)
+        data = await service.eligible_approvers(
+            payment_id,
+            bearer_token=user_token,
+            session_id=user_session_id,
+        )
         return PaymentEligibleApproversResponse.model_validate(data)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except InstructionNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=exc.response.status_code,
+            detail=exc.response.text,
+        ) from exc
 
 
 async def _lifecycle_action(

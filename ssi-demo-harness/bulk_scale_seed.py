@@ -131,12 +131,9 @@ class FastPaymentClient:
         return f"{self.base_url}{self.api_prefix}{path}"
 
     def _headers(self, session: SessionCredentials) -> dict[str, str]:
-        return {
-            "Authorization": f"Bearer {session.session_token}",
-            "X-Session-Id": session.session_id,
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-        }
+        from harness.service_identity import obo_headers
+
+        return obo_headers(session)
 
     def create_payment(
         self,

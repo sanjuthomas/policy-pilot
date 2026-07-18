@@ -59,7 +59,7 @@ def test_policy_summary_requires_auth(client: TestClient) -> None:
         "/api/v1/authorization/policy-summary",
         params={"domain": "payment", "action": "APPROVE"},
     )
-    assert response.status_code == 401
+    assert response.status_code == 403
 
 
 def test_policy_summary_payment_approve(client: TestClient) -> None:
@@ -171,7 +171,7 @@ _AMOUNT_LIMITS = {
 
 def test_payment_amount_limits_requires_auth(client: TestClient) -> None:
     response = client.get("/api/v1/authorization/payment-amount-limits")
-    assert response.status_code == 401
+    assert response.status_code == 403
 
 
 def test_payment_amount_limits_success(client: TestClient) -> None:

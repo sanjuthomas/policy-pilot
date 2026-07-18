@@ -74,6 +74,8 @@ def test_get_subject_headers_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     subject = get_subject(
         authorization=None,
         x_session_id=None,
+        x_on_behalf_of=None,
+        x_on_behalf_of_session_id=None,
         x_subject_user_id="alice",
         x_subject_title="VP",
         x_subject_roles="PAYMENT_CREATOR",
@@ -91,6 +93,8 @@ def test_get_subject_headers_mode_missing_required(monkeypatch: pytest.MonkeyPat
         get_subject(
             authorization=None,
             x_session_id=None,
+        x_on_behalf_of=None,
+        x_on_behalf_of_session_id=None,
             x_subject_user_id=None,
             x_subject_title="VP",
             x_subject_roles="PAYMENT_CREATOR",
@@ -109,6 +113,8 @@ def test_get_subject_jwt_mode_requires_bearer(monkeypatch: pytest.MonkeyPatch) -
         get_subject(
             authorization=None,
             x_session_id=None,
+            x_on_behalf_of=None,
+            x_on_behalf_of_session_id=None,
             x_subject_user_id="alice",
             x_subject_title="VP",
             x_subject_roles="PAYMENT_CREATOR",
@@ -128,6 +134,8 @@ def test_get_subject_jwt_mode_missing_oidc_config(monkeypatch: pytest.MonkeyPatc
         get_subject(
             authorization="Bearer token",
             x_session_id=None,
+            x_on_behalf_of=None,
+            x_on_behalf_of_session_id=None,
             x_subject_user_id=None,
             x_subject_title=None,
             x_subject_roles=None,
@@ -156,3 +164,64 @@ def test_get_subject_auto_mode_uses_headers_without_bearer(
         x_subject_covering_lobs=None,
     )
     assert subject.user_id == "alice"
+
+
+def test_get_subject_obo_uses_user_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    from unittest.mock import patch
+
+    from ps.models.api import Subject
+
+    monkeypatch.setattr("ps.dependencies.settings.auth_mode", "jwt")
+    monkeypatch.setattr("ps.dependencies.settings.oidc_issuer_url", "http://localhost:8080")
+    user = Subject(
+        user_id="comp-001",
+        title="Analyst",
+        roles=["COMPLIANCE_ANALYST"],
+        groups=["COMPLIANCE"],
+        delegated_by="svc-chat",
+    )
+    with patch("ps.dependencies.subject_from_obo_call", return_value=user) as obo:
+        result = get_subject(
+            authorization="Bearer svc-token",
+            x_session_id="svc-sess",
+            x_on_behalf_of="user-token",
+            x_on_behalf_of_session_id="user-sess",
+            x_subject_user_id=None,
+            x_subject_title=None,
+            x_subject_roles=None,
+            x_subject_lob=None,
+            x_subject_supervisor_id=None,
+            x_subject_groups=None,
+            x_subject_covering_lobs=None,
+        )
+    assert result.user_id == "comp-001"
+    assert result.delegated_by == "svc-chat"
+    obo.assert_called_once_with(
+        "svc-token",
+        "user-token",
+        service_session_id="svc-sess",
+        user_session_id="user-sess",
+    )
+
+
+def test_get_subject_rejects_without_obo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("ps.dependencies.settings.auth_mode", "jwt")
+    monkeypatch.setattr("ps.dependencies.settings.oidc_issuer_url", "http://localhost:8080")
+    with pytest.raises(HTTPException) as exc:
+        get_subject(
+            authorization="Bearer svc-token",
+            x_session_id="svc-sess",
+            x_on_behalf_of=None,
+            x_on_behalf_of_session_id=None,
+            x_subject_user_id=None,
+            x_subject_title=None,
+            x_subject_roles=None,
+            x_subject_lob=None,
+            x_subject_supervisor_id=None,
+            x_subject_groups=None,
+            x_subject_covering_lobs=None,
+        )
+    assert exc.value.status_code == 403
+    assert "X-On-Behalf-Of" in str(exc.value.detail)

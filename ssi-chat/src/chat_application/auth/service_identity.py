@@ -107,5 +107,11 @@ class ServiceIdentity:
             last_exc,
         )
 
+    async def ensure_logged_in(self) -> None:
+        """Retry login when startup raced ahead of Zitadel."""
+        if self._session_token:
+            return
+        await self.login(max_attempts=3, retry_delay_s=1.0)
+
 
 service_identity = ServiceIdentity()

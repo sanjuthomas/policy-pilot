@@ -460,6 +460,8 @@ async def confirm_submit_payment(
         payment=payment,
         instruction_status=pending.instruction_status,
         instruction_end_date=pending.instruction_end_date,
+        user_token=user_token,
+        user_session_id=user_session_id,
     )
     if approvers_section:
         activities.append("Eligible approvers loaded.")
@@ -483,6 +485,8 @@ async def _eligible_approvers_section(
     payment: dict[str, Any],
     instruction_status: str,
     instruction_end_date: str,
+    user_token: str,
+    user_session_id: str | None,
 ) -> str | None:
     if not service_identity.token:
         return None
@@ -507,6 +511,8 @@ async def _eligible_approvers_section(
             instruction_end_date=instruction_end_date,
             service_token=service_identity.token,
             service_session_id=service_identity.session_id,
+            user_token=user_token,
+            user_session_id=user_session_id,
         )
     except Exception as exc:
         logger.warning("eligible approvers lookup failed: %s", exc)

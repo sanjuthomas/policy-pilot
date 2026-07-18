@@ -5,6 +5,7 @@ from typing import Any
 
 import httpx
 
+from chat_application.auth.service_identity import service_identity
 from chat_application.config import settings
 from chat_application.formatting import (
     format_eligible_approvers_section,
@@ -34,6 +35,32 @@ class EligibilityClient:
             authorization_service_url or settings.authorization_service_url
         ).rstrip("/")
 
+    async def _compliance_headers(
+        self,
+        *,
+        bearer_token: str,
+        session_id: str | None = None,
+    ) -> dict[str, str]:
+        """Build OBO headers for compliance questions (svc-chat + user JWT)."""
+        if not service_identity.token:
+            await service_identity.ensure_logged_in()
+
+        svc_token = service_identity.token
+        if not svc_token:
+            raise EligibilityClientError(
+                "chat service identity not logged in — cannot call domain services with OBO"
+            )
+        headers = {
+            "Authorization": f"Bearer {svc_token}",
+            "Accept": "application/json",
+            "X-On-Behalf-Of": bearer_token,
+        }
+        if service_identity.session_id:
+            headers["X-Session-Id"] = service_identity.session_id
+        if session_id:
+            headers["X-On-Behalf-Of-Session-Id"] = session_id
+        return headers
+
     async def eligible_approvers_for_payment(
         self,
         payment_id: str,
@@ -42,12 +69,9 @@ class EligibilityClient:
         session_id: str | None = None,
     ) -> dict[str, Any]:
         url = f"{self._payment_base}/api/v1/payments/{payment_id}/eligible-approvers"
-        headers = {
-            "Authorization": f"Bearer {bearer_token}",
-            "Accept": "application/json",
-        }
-        if session_id:
-            headers["X-Session-Id"] = session_id
+        headers = await self._compliance_headers(
+            bearer_token=bearer_token, session_id=session_id
+        )
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(url, headers=headers)
@@ -75,12 +99,9 @@ class EligibilityClient:
         url = (
             f"{self._instruction_base}/api/v1/instructions/{instruction_id}/eligible-approvers"
         )
-        headers = {
-            "Authorization": f"Bearer {bearer_token}",
-            "Accept": "application/json",
-        }
-        if session_id:
-            headers["X-Session-Id"] = session_id
+        headers = await self._compliance_headers(
+            bearer_token=bearer_token, session_id=session_id
+        )
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(url, headers=headers)
@@ -110,12 +131,9 @@ class EligibilityClient:
         from urllib.parse import quote
 
         url = f"{self._authorization_base}/api/v1/authorization/groups/{quote(group, safe='')}/members"
-        headers = {
-            "Authorization": f"Bearer {bearer_token}",
-            "Accept": "application/json",
-        }
-        if session_id:
-            headers["X-Session-Id"] = session_id
+        headers = await self._compliance_headers(
+            bearer_token=bearer_token, session_id=session_id
+        )
 
         params: dict[str, str] = {}
         if role:
@@ -144,12 +162,9 @@ class EligibilityClient:
         session_id: str | None = None,
     ) -> dict[str, Any]:
         url = f"{self._authorization_base}/api/v1/authorization/users/permission-summary"
-        headers = {
-            "Authorization": f"Bearer {bearer_token}",
-            "Accept": "application/json",
-        }
-        if session_id:
-            headers["X-Session-Id"] = session_id
+        headers = await self._compliance_headers(
+            bearer_token=bearer_token, session_id=session_id
+        )
 
         params = {"q": query}
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -173,12 +188,9 @@ class EligibilityClient:
     ) -> dict[str, Any]:
         """OPA club ceilings + absolute limit via authorization-service."""
         url = f"{self._authorization_base}/api/v1/authorization/payment-amount-limits"
-        headers = {
-            "Authorization": f"Bearer {bearer_token}",
-            "Accept": "application/json",
-        }
-        if session_id:
-            headers["X-Session-Id"] = session_id
+        headers = await self._compliance_headers(
+            bearer_token=bearer_token, session_id=session_id
+        )
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.get(url, headers=headers)
@@ -202,12 +214,9 @@ class EligibilityClient:
         session_id: str | None = None,
     ) -> dict[str, Any]:
         url = f"{self._authorization_base}/api/v1/authorization/policy-summary"
-        headers = {
-            "Authorization": f"Bearer {bearer_token}",
-            "Accept": "application/json",
-        }
-        if session_id:
-            headers["X-Session-Id"] = session_id
+        headers = await self._compliance_headers(
+            bearer_token=bearer_token, session_id=session_id
+        )
 
         params = {"domain": domain, "action": action}
         async with httpx.AsyncClient(timeout=30.0) as client:

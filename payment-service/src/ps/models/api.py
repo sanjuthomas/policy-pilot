@@ -13,6 +13,9 @@ class Subject(BaseModel):
     groups: list[str] = Field(default_factory=list)
     supervisor_id: str | None = None
     covering_lobs: list[str] = Field(default_factory=list)
+    # Set when Authorization is a service token and X-On-Behalf-Of carries the user.
+    delegated_by: str | None = None
+    delegated_by_roles: list[str] = Field(default_factory=list)
 
     def to_opa_subject(self) -> dict:
         payload: dict = {
@@ -21,6 +24,7 @@ class Subject(BaseModel):
             "roles": self.roles,
             "groups": self.groups,
             "covering_lobs": self.covering_lobs,
+            "delegated_by_roles": self.delegated_by_roles,
         }
         if self.lob is not None:
             payload["lob"] = self.lob

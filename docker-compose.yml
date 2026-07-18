@@ -568,6 +568,8 @@ services:
       ZITADEL_INTERNAL_URL: http://zitadel-proxy
       ZITADEL_HOST_HEADER: localhost
       ZITADEL_SERVICE_PAT_FILE: /zitadel/bootstrap/login-client.pat
+      SERVICE_USER_ID: svc-chat
+      SERVICE_USER_PASSWORD: Password1!
     volumes:
       - zitadel-bootstrap:/zitadel/bootstrap:ro
       - ./ssi-demo-harness/src/harness/static:/usr/local/lib/python3.12/site-packages/harness/static:ro

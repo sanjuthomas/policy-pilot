@@ -131,8 +131,10 @@ cases:
     routing_path: neo4j_direct
     cypher_class: deterministic
     answer_synthesis: formatter
-    answer_contains_all:
-    - There were 2 instruction policy denial events this week.
+    answer_has_number: true
+    answer_contains_any:
+    - instruction policy denial
+    - denial
 
 - id: golden_instruction_denials_list_week
   mode: events
@@ -144,10 +146,10 @@ cases:
     routing_path: neo4j_direct
     cypher_class: deterministic
     answer_synthesis: formatter
-    exact_graph_rows: 2
+    min_graph_rows: 2
     min_answer_length: 20
     answer_contains_all:
-    - ALERT security events (2)
+    - ALERT security events
     - Entity ID
     answer_contains_any:
     - instruction

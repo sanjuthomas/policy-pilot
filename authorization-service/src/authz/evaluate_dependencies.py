@@ -78,7 +78,7 @@ def resolve_evaluate_subject(
     """
     if not x_on_behalf_of or not str(x_on_behalf_of).strip():
         raise HTTPException(
-            status_code=401,
+            status_code=403,
             detail=(
                 "X-On-Behalf-Of user token is required for lifecycle evaluate; "
                 "inline subject alone is not accepted"

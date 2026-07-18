@@ -57,24 +57,38 @@ def _fmt_datetime(value: datetime | None) -> str | None:
     return value.isoformat() + "Z"
 
 
+def _is_middle_office(subject: Subject) -> bool:
+    return "MIDDLE_OFFICE" in subject.groups
+
+
 def _covers_payment_lob(subject: Subject, owning_lob: str) -> bool:
-    return owning_lob in subject.covering_lobs
+    """Covering LOBs apply only to middle office (no desk lob)."""
+    return _is_middle_office(subject) and owning_lob in subject.covering_lobs
+
+
+def _is_compliance(subject: Subject) -> bool:
+    """Compliance may read any payment (any LOB); no desk/covering required."""
+    roles = set(subject.roles)
+    if roles & {"COMPLIANCE_ANALYST", "COMPLIANCE_OFFICER"}:
+        return True
+    return "COMPLIANCE" in set(subject.groups)
 
 
 def _can_view_payment(subject: Subject, payment: Payment) -> bool:
     if is_platform_admin(subject):
         return True
+    if _is_compliance(subject):
+        return True
     if subject.user_id == payment.created_by.user_id:
         return True
     lob = payment.owning_lob
     roles = set(subject.roles)
-    if "PAYMENT_CREATOR" in roles and (
-        _covers_payment_lob(subject, lob) or subject.lob == lob
-    ):
-        return True
-    if "FUNDING_APPROVER" in roles and _covers_payment_lob(subject, lob):
-        return True
-    return False
+    if "PAYMENT_CREATOR" not in roles and "FUNDING_APPROVER" not in roles:
+        return False
+    # Middle office: cover LOBs via covering_lobs. Desk/FO: subject.lob must match.
+    if _is_middle_office(subject):
+        return _covers_payment_lob(subject, lob)
+    return subject.lob == lob
 
 
 def _user_ref(subject: Subject) -> UserReference:
@@ -848,10 +862,27 @@ class PaymentService:
                 visible.append(record)
         return visible
 
-    async def eligible_approvers(self, payment_id: str) -> dict:
+    async def eligible_approvers(
+        self,
+        payment_id: str,
+        *,
+        bearer_token: str | None = None,
+        session_id: str | None = None,
+    ) -> dict:
+        if not bearer_token:
+            raise PermissionError(
+                "user token required for eligible-approvers "
+                "(pass the caller's JWT for X-On-Behalf-Of)"
+            )
         record = await self._get_current_or_404(payment_id)
         payment = record.payment
-        instruction = await self.instruction_service.get_instruction_as_service(payment.instruction_id)
+        # Compliance (and other entitled callers) load instruction context with their
+        # own JWT via OBO — not the payment service account alone.
+        instruction = await self.instruction_service.get_instruction(
+            payment.instruction_id,
+            bearer_token=bearer_token,
+            session_id=session_id,
+        )
         await service_identity.ensure_logged_in()
         return await self.authz.eligible_payment_approvers(
             payment={
@@ -869,6 +900,8 @@ class PaymentService:
             instruction_end_date=str(instruction.get("end_date") or ""),
             service_token=service_identity.token,
             service_session_id=service_identity.session_id,
+            user_token=bearer_token,
+            user_session_id=session_id,
         )
 
     # ── Internal helpers ──────────────────────────────────────────────────────

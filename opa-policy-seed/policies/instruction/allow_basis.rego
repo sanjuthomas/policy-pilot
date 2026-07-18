@@ -207,6 +207,11 @@ allow_basis contains "subject is the instruction creator" if {
     input.subject.user_id == input.instruction.created_by.user_id
 }
 
+allow_basis contains "compliance read-only access (any LOB)" if {
+    input.action == "VIEW"
+    is_compliance
+}
+
 allow_basis contains "platform admin" if {
     input.action == "VIEW"
     has_role("PLATFORM_ADMIN")

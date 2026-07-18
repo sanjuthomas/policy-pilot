@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     authorization_service_url: str = "http://localhost:8094"
     mongodb_uri: str = "mongodb://localhost:27017"
     verify_security_events: bool = True
+    service_user_id: str = "svc-chat"
+    service_user_password: str = "Password1!"
 
     @model_validator(mode="after")
     def load_service_pat_from_file(self) -> Self:

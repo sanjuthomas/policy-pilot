@@ -17,36 +17,33 @@ class InstructionNotFoundError(InstructionClientError):
 
 
 class InstructionClient:
-    """Fetch instructions for skill preflight (user JWT or svc-chat OBO)."""
+    """Fetch instructions for skill preflight (svc-chat + user OBO)."""
 
     def __init__(self, base_url: str | None = None, *, timeout: float = 15.0) -> None:
         self._base = (base_url or settings.instruction_service_url).rstrip("/")
         self._timeout = timeout
 
-    def _headers(
+    async def _obo_headers(
         self,
         *,
-        user_token: str | None,
+        user_token: str,
         user_session_id: str | None,
     ) -> dict[str, str]:
-        svc_token = service_identity.token
-        if svc_token and user_token:
-            headers = {
-                "Authorization": f"Bearer {svc_token}",
-                "Accept": "application/json",
-                "X-On-Behalf-Of": user_token,
-            }
-            if service_identity.session_id:
-                headers["X-Session-Id"] = service_identity.session_id
-            if user_session_id:
-                headers["X-On-Behalf-Of-Session-Id"] = user_session_id
-            return headers
-
-        headers: dict[str, str] = {"Accept": "application/json"}
-        if user_token:
-            headers["Authorization"] = f"Bearer {user_token}"
+        if not service_identity.token:
+            await service_identity.ensure_logged_in()
+        if not service_identity.token:
+            raise InstructionClientError(
+                "chat service identity not logged in — cannot call instruction-service with OBO"
+            )
+        headers = {
+            "Authorization": f"Bearer {service_identity.token}",
+            "Accept": "application/json",
+            "X-On-Behalf-Of": user_token,
+        }
+        if service_identity.session_id:
+            headers["X-Session-Id"] = service_identity.session_id
         if user_session_id:
-            headers["X-Session-Id"] = user_session_id
+            headers["X-On-Behalf-Of-Session-Id"] = user_session_id
         return headers
 
     async def get_instruction(
@@ -56,12 +53,16 @@ class InstructionClient:
         user_token: str | None,
         user_session_id: str | None,
     ) -> dict[str, Any]:
+        if not user_token:
+            raise InstructionClientError(
+                "user token (X-On-Behalf-Of) is required for instruction-service"
+            )
         url = f"{self._base}/api/v1/instructions/{instruction_id}"
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 response = await client.get(
                     url,
-                    headers=self._headers(
+                    headers=await self._obo_headers(
                         user_token=user_token,
                         user_session_id=user_session_id,
                     ),

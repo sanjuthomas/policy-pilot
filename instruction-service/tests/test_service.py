@@ -712,10 +712,25 @@ async def test_eligible_approvers(
     )
 
     with patch("inst.service.service_identity.ensure_logged_in", AsyncMock()):
-        data = await service.eligible_approvers("instr-001")
+        data = await service.eligible_approvers(
+            "instr-001",
+            bearer_token="user-token",
+            session_id="user-sess",
+        )
 
     assert data["instruction_id"] == "instr-001"
     service.authz.eligible_instruction_approvers.assert_awaited_once()
+    kwargs = service.authz.eligible_instruction_approvers.await_args.kwargs
+    assert kwargs["user_token"] == "user-token"
+    assert kwargs["user_session_id"] == "user-sess"
+
+
+@pytest.mark.asyncio
+async def test_eligible_approvers_requires_user_token(
+    service: InstructionService,
+) -> None:
+    with pytest.raises(PermissionError, match="user token"):
+        await service.eligible_approvers("instr-001")
 
 
 @pytest.mark.asyncio

@@ -31,7 +31,7 @@ def test_resolve_evaluate_subject_requires_obo() -> None:
             x_on_behalf_of_session_id=None,
             inline_subject=_subject(),
         )
-    assert exc.value.status_code == 401
+    assert exc.value.status_code == 403
     assert "X-On-Behalf-Of" in str(exc.value.detail)
 
 

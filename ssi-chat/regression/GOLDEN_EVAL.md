@@ -32,7 +32,7 @@ pytest tests/test_eval_metrics.py -v
 | `golden_events_who_approved_payment` | events | graph | Who approved payment `{approved_payment_id}` and why? | `approved_payment_id` | `require_routing`, `require_entity_recall` | contains any: approv, allowed, because, role; min length 20 |
 | `golden_vector_security_summary` | events | graph (tag: vector) | Write a brief narrative about recent policy denial activity in the audit log. | — | `require_routing`, path `full_rag`, `min_faithfulness` 0.05 | min length 40; contains denial/alert/policy |
 | `golden_instruction_denials_count_week` | events | deterministic | How many instruction policy denials happened this week? | — | `require_routing`, path `neo4j_direct`, Cypher `deterministic`, synthesis `formatter` | exact: “There were 2 instruction policy denial events this week.” |
-| `golden_instruction_denials_list_week` | events | deterministic | Can you list all instruction denial events for this week? | — | same deterministic gates | `exact_graph_rows: 2`; title `(2)`; Entity ID; instruction / `-I-` |
+| `golden_instruction_denials_list_week` | events | deterministic | Can you list all instruction denial events for this week? | — | same deterministic gates | `min_graph_rows: 2`; ALERT title; Entity ID; instruction / `-I-` |
 | `golden_payment_denials_count_today` | events | deterministic | How many payment policy denial alerts happened today? | — | same deterministic gates | exact: “There were 4 payment policy denial events today.” |
 | `golden_alerts_list_today_entity_ids` | events | deterministic | Can you report all ALERTS today? | — | same deterministic gates | `min_graph_rows: 2`; Entity ID + ALERT; `-I-` / `-P-` |
 

@@ -122,7 +122,7 @@ Questions like _“Who can approve payment `<uuid>`?”_ or _“Who can approve 
 | Payment | `POST http://payment-service:8093/api/v1/payments/{id}/eligible-approvers` |
 | Instruction | `POST http://instruction-service:8000/api/v1/instructions/{id}/eligible-approvers` |
 
-Requires **compliance sign-in** at http://localhost:8092 (`comp-001` / `comp-002`, or platform admin). Domain services enforce the compliance JWT, load entity context, and delegate batch OPA evaluation to authorization-service.
+Requires **compliance sign-in** at http://localhost:8092 (`comp-001` / `comp-002`, or platform admin). Chat calls domain services with **svc-chat OBO** (`Authorization: svc-chat` + `X-On-Behalf-Of: compliance JWT`). Domain services resolve the compliance subject, load entity context (compliance may VIEW any LOB), and delegate batch OPA evaluation to authorization-service.
 
 ## Retrieval routing metrics
 

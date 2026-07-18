@@ -18,6 +18,7 @@ in_group(group) if {
 #   • INSTRUCTION_APPROVER — approvers can always read instructions
 #   • PAYMENT_CREATOR — payment staff must be able to read instructions
 #                       to validate them before creating a payment
+#   • COMPLIANCE_* / COMPLIANCE group — cross-LOB read-only inquiry
 # ---------------------------------------------------------------------------
 
 has_viewer_access if { has_role("INSTRUCTION_VIEWER") }
@@ -25,29 +26,38 @@ has_viewer_access if { has_role("INSTRUCTION_CREATOR") }
 has_viewer_access if { has_role("INSTRUCTION_APPROVER") }
 has_viewer_access if { has_role("PAYMENT_CREATOR") }
 has_viewer_access if { has_role("FUNDING_APPROVER") }
+has_viewer_access if { is_compliance }
 
-# A subject covers a LOB when that LOB appears in covering_lobs (ZITADEL metadata).
-# Used for middle-office / payment staff read entitlement on VIEW/USE.
+# A subject covers a LOB only when they are MIDDLE_OFFICE and that LOB is in
+# covering_lobs. Front-office / desk users do not cover LOBs — they use subject.lob.
 covers_lob(lob) if {
+	is_middle_office
 	lob in input.subject.covering_lobs
 }
 
 # Data-level entitlement for instruction read (VIEW / USE / RELEASE_USE).
-# Role alone is not enough — subject must be in the instruction's BU:
-#   • subject.lob == owning_lob (desk / profit-center users)
-#   • owning_lob in covering_lobs (middle office / funding)
+# Role alone is not enough (except compliance / admin):
+#   • MIDDLE_OFFICE → owning_lob must be in covering_lobs (no desk lob)
+#   • everyone else → subject.lob must equal owning_lob
 #   • creator of the instruction
+#   • compliance — any LOB, read-only (no desk/covering required)
 #   • platform admin
 can_view_instruction_data if {
-	same_lob_as_instruction
-}
-
-can_view_instruction_data if {
+	is_middle_office
 	covers_lob(input.instruction.owning_lob)
 }
 
 can_view_instruction_data if {
+	not is_middle_office
+	same_lob_as_instruction
+}
+
+can_view_instruction_data if {
 	input.subject.user_id == input.instruction.created_by.user_id
+}
+
+can_view_instruction_data if {
+	is_compliance
 }
 
 can_view_instruction_data if {
@@ -56,6 +66,18 @@ can_view_instruction_data if {
 
 can_view_instruction_data if {
 	in_group("ADMIN")
+}
+
+is_compliance if {
+	has_role("COMPLIANCE_ANALYST")
+}
+
+is_compliance if {
+	has_role("COMPLIANCE_OFFICER")
+}
+
+is_compliance if {
+	in_group("COMPLIANCE")
 }
 
 is_middle_office if {

@@ -39,35 +39,48 @@ def _async_client(response=None, error=None):
     return context, client
 
 
-def test_instruction_headers_use_service_obo_or_user_identity() -> None:
+@pytest.mark.asyncio
+async def test_instruction_headers_use_service_obo() -> None:
     client = InstructionClient("http://instruction.test")
     with patch("chat_application.skills.instruction_client.service_identity") as identity:
         identity.token = "service-token"
         identity.session_id = "service-session"
-        assert client._headers(user_token="user-token", user_session_id="user-session") == {
-            "Authorization": "Bearer service-token",
-            "Accept": "application/json",
-            "X-On-Behalf-Of": "user-token",
-            "X-Session-Id": "service-session",
-            "X-On-Behalf-Of-Session-Id": "user-session",
-        }
-        identity.token = None
-        assert client._headers(user_token="user-token", user_session_id="user-session") == {
-            "Accept": "application/json",
-            "Authorization": "Bearer user-token",
-            "X-Session-Id": "user-session",
-        }
+        identity.ensure_logged_in = AsyncMock()
+        headers = await client._obo_headers(
+            user_token="user-token", user_session_id="user-session"
+        )
+    assert headers == {
+        "Authorization": "Bearer service-token",
+        "Accept": "application/json",
+        "X-On-Behalf-Of": "user-token",
+        "X-Session-Id": "service-session",
+        "X-On-Behalf-Of-Session-Id": "user-session",
+    }
 
 
 @pytest.mark.asyncio
 async def test_instruction_client_success_and_errors() -> None:
     context, mock_client = _async_client(_response(200, json={"instruction_id": "i1"}))
-    with patch("chat_application.skills.instruction_client.httpx.AsyncClient", return_value=context):
+    with (
+        patch("chat_application.skills.instruction_client.httpx.AsyncClient", return_value=context),
+        patch("chat_application.skills.instruction_client.service_identity") as identity,
+    ):
+        identity.token = "svc"
+        identity.session_id = "sid"
+        identity.ensure_logged_in = AsyncMock()
         result = await InstructionClient("http://instruction.test").get_instruction(
-            "i1", user_token=None, user_session_id=None
+            "i1", user_token="user", user_session_id="usid"
         )
     assert result == {"instruction_id": "i1"}
     assert mock_client.get.await_args.args[0].endswith("/i1")
+    headers = mock_client.get.await_args.kwargs["headers"]
+    assert headers["Authorization"] == "Bearer svc"
+    assert headers["X-On-Behalf-Of"] == "user"
+
+    with pytest.raises(InstructionClientError, match="user token"):
+        await InstructionClient("http://instruction.test").get_instruction(
+            "i1", user_token=None, user_session_id=None
+        )
 
     for response, expected in [
         (_response(404), InstructionNotFoundError),
@@ -79,10 +92,14 @@ async def test_instruction_client_success_and_errors() -> None:
                 "chat_application.skills.instruction_client.httpx.AsyncClient",
                 return_value=context,
             ),
+            patch("chat_application.skills.instruction_client.service_identity") as identity,
             pytest.raises(expected),
         ):
+            identity.token = "svc"
+            identity.session_id = None
+            identity.ensure_logged_in = AsyncMock()
             await InstructionClient("http://instruction.test").get_instruction(
-                "i1", user_token=None, user_session_id=None
+                "i1", user_token="user", user_session_id=None
             )
 
     context, _ = _async_client(error=httpx.ConnectError("down"))
@@ -91,17 +108,27 @@ async def test_instruction_client_success_and_errors() -> None:
             "chat_application.skills.instruction_client.httpx.AsyncClient",
             return_value=context,
         ),
+        patch("chat_application.skills.instruction_client.service_identity") as identity,
         pytest.raises(InstructionClientError, match="unreachable"),
     ):
+        identity.token = "svc"
+        identity.session_id = None
+        identity.ensure_logged_in = AsyncMock()
         await InstructionClient("http://instruction.test").get_instruction(
-            "i1", user_token=None, user_session_id=None
+            "i1", user_token="user", user_session_id=None
         )
 
 
 @pytest.mark.asyncio
 async def test_payment_client_success_denied_and_errors() -> None:
     context, mock_client = _async_client(_response(201, json={"payment_id": "p1"}))
-    with patch("chat_application.skills.payment_client.httpx.AsyncClient", return_value=context):
+    with (
+        patch("chat_application.skills.payment_client.httpx.AsyncClient", return_value=context),
+        patch("chat_application.skills.payment_client.service_identity") as identity,
+    ):
+        identity.token = "svc"
+        identity.session_id = "svc-session"
+        identity.ensure_logged_in = AsyncMock()
         result = await PaymentClient("http://payment.test").create_payment(
             instruction_id="i1",
             amount=12.0,
@@ -110,7 +137,11 @@ async def test_payment_client_success_denied_and_errors() -> None:
             user_session_id="session",
         )
     assert result == {"payment_id": "p1"}
-    assert mock_client.post.await_args.kwargs["headers"]["X-Session-Id"] == "session"
+    headers = mock_client.post.await_args.kwargs["headers"]
+    assert headers["Authorization"] == "Bearer svc"
+    assert headers["X-On-Behalf-Of"] == "token"
+    assert headers["X-On-Behalf-Of-Session-Id"] == "session"
+    assert headers["X-Session-Id"] == "svc-session"
 
     for response, expected in [
         (_response(403, json={"detail": "not allowed"}), PaymentCreateDenied),
@@ -122,8 +153,12 @@ async def test_payment_client_success_denied_and_errors() -> None:
                 "chat_application.skills.payment_client.httpx.AsyncClient",
                 return_value=context,
             ),
+            patch("chat_application.skills.payment_client.service_identity") as identity,
             pytest.raises(expected),
         ):
+            identity.token = "svc"
+            identity.session_id = None
+            identity.ensure_logged_in = AsyncMock()
             await PaymentClient("http://payment.test").create_payment(
                 instruction_id="i1",
                 amount=12.0,
@@ -138,8 +173,12 @@ async def test_payment_client_success_denied_and_errors() -> None:
             "chat_application.skills.payment_client.httpx.AsyncClient",
             return_value=context,
         ),
+        patch("chat_application.skills.payment_client.service_identity") as identity,
         pytest.raises(PaymentClientError, match="unreachable"),
     ):
+        identity.token = "svc"
+        identity.session_id = None
+        identity.ensure_logged_in = AsyncMock()
         await PaymentClient("http://payment.test").create_payment(
             instruction_id="i1",
             amount=12.0,
@@ -154,9 +193,15 @@ async def test_payment_client_cancel_success_denied_and_errors() -> None:
     context, mock_client = _async_client(
         _response(200, json={"payment_id": "p1", "status": "CANCELLED"})
     )
-    with patch(
-        "chat_application.skills.payment_client.httpx.AsyncClient", return_value=context
+    with (
+        patch(
+            "chat_application.skills.payment_client.httpx.AsyncClient", return_value=context
+        ),
+        patch("chat_application.skills.payment_client.service_identity") as identity,
     ):
+        identity.token = "svc"
+        identity.session_id = None
+        identity.ensure_logged_in = AsyncMock()
         result = await PaymentClient("http://payment.test").cancel_payment(
             "p1",
             user_token="token",
@@ -178,8 +223,12 @@ async def test_payment_client_cancel_success_denied_and_errors() -> None:
                 "chat_application.skills.payment_client.httpx.AsyncClient",
                 return_value=context,
             ),
+            patch("chat_application.skills.payment_client.service_identity") as identity,
             pytest.raises(expected),
         ):
+            identity.token = "svc"
+            identity.session_id = None
+            identity.ensure_logged_in = AsyncMock()
             await PaymentClient("http://payment.test").cancel_payment(
                 "p1",
                 user_token="token",
@@ -192,8 +241,12 @@ async def test_payment_client_cancel_success_denied_and_errors() -> None:
             "chat_application.skills.payment_client.httpx.AsyncClient",
             return_value=context,
         ),
+        patch("chat_application.skills.payment_client.service_identity") as identity,
         pytest.raises(PaymentClientError, match="unreachable"),
     ):
+        identity.token = "svc"
+        identity.session_id = None
+        identity.ensure_logged_in = AsyncMock()
         await PaymentClient("http://payment.test").cancel_payment(
             "p1",
             user_token="token",
