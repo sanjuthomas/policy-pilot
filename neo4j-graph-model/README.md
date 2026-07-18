@@ -215,7 +215,7 @@ Application services use dedicated least-privilege accounts (Neo4j Enterprise RB
 
 | User | Used by | Privileges (summary) |
 |------|---------|----------------------|
-| `svc_chat` | ssi-chat | Read (`MATCH`), show indexes, execute procedures (vector search) |
+| `svc_chat` | ssi-chat | Read (`MATCH`), show indexes/constraints, **`EXECUTE PROCEDURE db.index.vector.queryNodes` only** (no `*` / no BOOSTED / no `FUNCTION *`) |
 | `svc_indexer` | ssi-indexer | Read/write, create labels/types/properties, index + constraint management, procedures |
 | `svc_harness` | demo seed scripts | Read/write + create labels/types/properties (no schema management) |
 

@@ -181,6 +181,8 @@ async def test_apply_schema_applies_statements(tmp_path):
     schema_file.write_text(
         "CREATE INDEX idx IF NOT EXISTS FOR (n:User) ON (n.user_id);\n"
         "// comment only\n"
+        ";\n"
+        "// header comment\n"
         "CREATE CONSTRAINT c IF NOT EXISTS FOR (n:User) REQUIRE n.user_id IS UNIQUE;",
         encoding="utf-8",
     )
@@ -190,7 +192,13 @@ async def test_apply_schema_applies_statements(tmp_path):
     session = AsyncMock()
     session.__aenter__ = AsyncMock(return_value=session)
     session.__aexit__ = AsyncMock(return_value=False)
-    session.run = AsyncMock()
+
+    async def _run(_statement: str):
+        result = AsyncMock()
+        result.consume = AsyncMock()
+        return result
+
+    session.run = AsyncMock(side_effect=_run)
     writer._driver.session = MagicMock(return_value=session)
 
     with patch("etl.neo4j_client.settings") as mock_settings:
@@ -198,8 +206,30 @@ async def test_apply_schema_applies_statements(tmp_path):
         await writer._apply_schema()
 
     assert writer._schema_applied is True
-    # comment-only chunk skipped; one schema statement applied
-    assert session.run.await_count == 1
+    # comment-only chunk skipped; index + constraint-under-header both applied
+    assert session.run.await_count == 2
+
+
+def test_schema_statements_keep_constraints_under_comment_headers() -> None:
+    from etl.neo4j_client import schema_statements_from_cypher
+
+    text = (
+        "// Constraints — one node per business key\n"
+        "CREATE CONSTRAINT instruction_id_unique IF NOT EXISTS\n"
+        "FOR (i:Instruction) REQUIRE i.instruction_id IS UNIQUE;\n"
+        "\n"
+        "CREATE CONSTRAINT instruction_version_key_unique IF NOT EXISTS\n"
+        "FOR (v:InstructionVersion) REQUIRE v.version_key IS UNIQUE;\n"
+        "\n"
+        "// Payment constraints\n"
+        "CREATE CONSTRAINT payment_id_unique IF NOT EXISTS\n"
+        "FOR (p:Payment) REQUIRE p.payment_id IS UNIQUE;\n"
+    )
+    statements = schema_statements_from_cypher(text)
+    assert any("instruction_id_unique" in s for s in statements)
+    assert any("payment_id_unique" in s for s in statements)
+    assert any("instruction_version_key_unique" in s for s in statements)
+    assert len(statements) == 3
 
 
 async def test_upsert_sets_instruction_id_even_without_version(

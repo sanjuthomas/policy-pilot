@@ -4,7 +4,7 @@
 // are substituted by the init script.
 //
 // Accounts:
-//   svc_chat     — read graph + execute procedures (vector search) — ssi-chat
+//   svc_chat     — read graph + vector.queryNodes only — ssi-chat
 //   svc_indexer  — write graph + schema (indexes/constraints) + procedures — ssi-indexer
 //   svc_harness  — write graph for demo seed scripts (no schema management)
 //
@@ -15,9 +15,12 @@ GRANT ACCESS ON DATABASE neo4j TO role_ssi_chat;
 GRANT MATCH {*} ON GRAPH neo4j TO role_ssi_chat;
 GRANT SHOW INDEX ON DATABASE neo4j TO role_ssi_chat;
 GRANT SHOW CONSTRAINT ON DATABASE neo4j TO role_ssi_chat;
-GRANT EXECUTE PROCEDURE * ON DBMS TO role_ssi_chat;
-GRANT EXECUTE BOOSTED PROCEDURE * ON DBMS TO role_ssi_chat;
-GRANT EXECUTE FUNCTION * ON DBMS TO role_ssi_chat;
+// Tighten from earlier demo grants (REVOKE is a no-op when the privilege is absent).
+REVOKE EXECUTE PROCEDURE * ON DBMS FROM role_ssi_chat;
+REVOKE EXECUTE BOOSTED PROCEDURE * ON DBMS FROM role_ssi_chat;
+REVOKE EXECUTE FUNCTION * ON DBMS FROM role_ssi_chat;
+// Chat vector path: CALL db.index.vector.queryNodes(...) — no BOOSTED, no FUNCTION *.
+GRANT EXECUTE PROCEDURE db.index.vector.queryNodes ON DBMS TO role_ssi_chat;
 
 CREATE ROLE role_ssi_indexer IF NOT EXISTS;
 GRANT ACCESS ON DATABASE neo4j TO role_ssi_indexer;

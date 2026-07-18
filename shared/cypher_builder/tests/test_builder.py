@@ -285,6 +285,16 @@ def test_alert_list_entity_id_prefers_security_event_property() -> None:
     assert "e.instruction_id" in queries[0][1]
 
 
+def test_instruction_denial_alert_list_does_not_fan_out_on_duplicate_instructions() -> None:
+    """Duplicate Instruction nodes must not multiply ALERT list rows."""
+    from cypher_builder.query_engine import _security_event_alert_list_queries
+
+    cypher = _security_event_alert_list_queries(time_filter="", domain="instructions")[0][1]
+    assert "head(collect(DISTINCT i))" in cypher
+    assert "head(collect(DISTINCT actor))" in cypher
+    assert "OPTIONAL MATCH (i:Instruction {instruction_id: v.instruction_id})" not in cypher
+
+
 def test_plan_graph_queries_alert_group_by_lob() -> None:
     planned = plan_graph_queries(
         "Can you group alerts by LOB?",
