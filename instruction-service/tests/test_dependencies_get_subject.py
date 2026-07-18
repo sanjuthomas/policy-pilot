@@ -51,3 +51,22 @@ def test_get_subject_jwt_mode_requires_bearer(monkeypatch) -> None:
             x_subject_supervisor_id=None,
         )
     assert exc_info.value.status_code == 401
+
+
+def test_get_subject_rejects_without_obo(monkeypatch) -> None:
+    monkeypatch.setattr("inst.dependencies.settings.auth_mode", "jwt")
+    monkeypatch.setattr("inst.dependencies.settings.oidc_issuer_url", "http://localhost:8080")
+    with pytest.raises(HTTPException) as exc_info:
+        get_subject(
+            authorization="Bearer svc-token",
+            x_session_id="svc-sess",
+            x_on_behalf_of=None,
+            x_on_behalf_of_session_id=None,
+            x_subject_user_id=None,
+            x_subject_title=None,
+            x_subject_roles=None,
+            x_subject_lob=None,
+            x_subject_supervisor_id=None,
+        )
+    assert exc_info.value.status_code == 403
+    assert "X-On-Behalf-Of" in str(exc_info.value.detail)

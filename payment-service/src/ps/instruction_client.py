@@ -40,36 +40,31 @@ class InstructionServiceClient:
     ) -> dict[str, str]:
         """Build auth headers using the OBO delegation pattern.
 
-        If the service has its own session token (from ``service_identity``):
-          - ``Authorization: Bearer <service-token>``  — service identity
-          - ``X-On-Behalf-Of: <user-token>``           — original user
-          - ``X-On-Behalf-Of-Session-Id: <session>``   — user's session ID
-
-        If the service has no token yet (startup race / misconfiguration):
-          - Fall back to forwarding the user's token directly in ``Authorization``
-            so the call still works, just without delegation metadata.
-        """
+    Requires:
+      - ``Authorization: Bearer <svc-payment token>``
+      - ``X-On-Behalf-Of: <user-token>``
+    """
         from ps.service_identity import service_identity
 
         if bearer_token and not service_identity.token:
             await service_identity.ensure_logged_in()
 
         svc_token = service_identity.token
+        if not svc_token:
+            raise InstructionServiceClientError(
+                "payment service identity not logged in — cannot call instruction-service with OBO"
+            )
+        if not bearer_token:
+            raise InstructionServiceClientError(
+                "user token (X-On-Behalf-Of) is required for instruction-service"
+            )
 
-        if svc_token and bearer_token:
-            headers: dict[str, str] = {"Authorization": f"Bearer {svc_token}"}
-            if service_identity.session_id:
-                headers["X-Session-Id"] = service_identity.session_id
-            headers["X-On-Behalf-Of"] = bearer_token
-            if session_id:
-                headers["X-On-Behalf-Of-Session-Id"] = session_id
-            return headers
-
-        headers = {}
-        if bearer_token:
-            headers["Authorization"] = f"Bearer {bearer_token}"
+        headers: dict[str, str] = {"Authorization": f"Bearer {svc_token}"}
+        if service_identity.session_id:
+            headers["X-Session-Id"] = service_identity.session_id
+        headers["X-On-Behalf-Of"] = bearer_token
         if session_id:
-            headers["X-Session-Id"] = session_id
+            headers["X-On-Behalf-Of-Session-Id"] = session_id
         return headers
 
     async def get_instruction(
@@ -84,26 +79,6 @@ class InstructionServiceClient:
             resp = await client.get(
                 url, headers=await self._auth_headers(bearer_token, session_id)
             )
-
-        if resp.status_code == 404:
-            raise InstructionNotFoundError(f"instruction {instruction_id} not found")
-        resp.raise_for_status()
-        return resp.json()
-
-    async def get_instruction_as_service(self, instruction_id: str) -> dict[str, Any]:
-        """Read instruction context using the payment-service service account only."""
-        from ps.service_identity import service_identity
-
-        await service_identity.ensure_logged_in()
-        headers: dict[str, str] = {}
-        if service_identity.token:
-            headers["Authorization"] = f"Bearer {service_identity.token}"
-        if service_identity.session_id:
-            headers["X-Session-Id"] = service_identity.session_id
-
-        url = f"{self._base}/api/v1/instructions/{instruction_id}"
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(url, headers=headers)
 
         if resp.status_code == 404:
             raise InstructionNotFoundError(f"instruction {instruction_id} not found")

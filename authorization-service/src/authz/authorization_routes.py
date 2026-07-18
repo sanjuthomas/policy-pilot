@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
-from authz.dependencies import get_compliance_subject
+from authz.dependencies import get_compliance_subject, require_obo_subject
 from authz.directory import build_group_member_rows, build_user_directory_rows
 from authz.evaluate_dependencies import get_service_caller, resolve_evaluate_subject
 from authz.models import (
@@ -251,7 +251,7 @@ async def evaluate_instruction(
 @router.post("/payments/eligible-approvers", response_model=PaymentEligibleApproversResponse)
 async def evaluate_payment_eligible_approvers(
     request: PaymentEligibleApproversEvaluateRequest,
-    _service_caller: Subject = Depends(get_service_caller),
+    _obo_subject: Subject = Depends(require_obo_subject),
     service=Depends(_eligibility_service),
 ) -> PaymentEligibleApproversResponse:
     try:
@@ -263,7 +263,7 @@ async def evaluate_payment_eligible_approvers(
 @router.post("/payments/eligible-submitters", response_model=PaymentEligibleSubmittersResponse)
 async def evaluate_payment_eligible_submitters(
     request: PaymentEligibleApproversEvaluateRequest,
-    _service_caller: Subject = Depends(get_service_caller),
+    _obo_subject: Subject = Depends(require_obo_subject),
     service=Depends(_eligibility_service),
 ) -> PaymentEligibleSubmittersResponse:
     try:
@@ -275,7 +275,7 @@ async def evaluate_payment_eligible_submitters(
 @router.post("/instructions/eligible-approvers", response_model=InstructionEligibleApproversResponse)
 async def evaluate_instruction_eligible_approvers(
     request: InstructionEligibleApproversEvaluateRequest,
-    _service_caller: Subject = Depends(get_service_caller),
+    _obo_subject: Subject = Depends(require_obo_subject),
     service=Depends(_eligibility_service),
 ) -> InstructionEligibleApproversResponse:
     try:

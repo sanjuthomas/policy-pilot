@@ -18,6 +18,7 @@ in_group(group) if {
 #   • INSTRUCTION_APPROVER — approvers can always read instructions
 #   • PAYMENT_CREATOR — payment staff must be able to read instructions
 #                       to validate them before creating a payment
+#   • COMPLIANCE_* / COMPLIANCE group — cross-LOB read-only inquiry
 # ---------------------------------------------------------------------------
 
 has_viewer_access if { has_role("INSTRUCTION_VIEWER") }
@@ -25,6 +26,7 @@ has_viewer_access if { has_role("INSTRUCTION_CREATOR") }
 has_viewer_access if { has_role("INSTRUCTION_APPROVER") }
 has_viewer_access if { has_role("PAYMENT_CREATOR") }
 has_viewer_access if { has_role("FUNDING_APPROVER") }
+has_viewer_access if { is_compliance }
 
 # A subject covers a LOB only when they are MIDDLE_OFFICE and that LOB is in
 # covering_lobs. Front-office / desk users do not cover LOBs — they use subject.lob.
@@ -34,10 +36,11 @@ covers_lob(lob) if {
 }
 
 # Data-level entitlement for instruction read (VIEW / USE / RELEASE_USE).
-# Role alone is not enough:
+# Role alone is not enough (except compliance / admin):
 #   • MIDDLE_OFFICE → owning_lob must be in covering_lobs (no desk lob)
 #   • everyone else → subject.lob must equal owning_lob
 #   • creator of the instruction
+#   • compliance — any LOB, read-only (no desk/covering required)
 #   • platform admin
 can_view_instruction_data if {
 	is_middle_office
@@ -54,11 +57,27 @@ can_view_instruction_data if {
 }
 
 can_view_instruction_data if {
+	is_compliance
+}
+
+can_view_instruction_data if {
 	has_role("PLATFORM_ADMIN")
 }
 
 can_view_instruction_data if {
 	in_group("ADMIN")
+}
+
+is_compliance if {
+	has_role("COMPLIANCE_ANALYST")
+}
+
+is_compliance if {
+	has_role("COMPLIANCE_OFFICER")
+}
+
+is_compliance if {
+	in_group("COMPLIANCE")
 }
 
 is_middle_office if {

@@ -40,19 +40,6 @@ class AuthzClient:
             headers["X-On-Behalf-Of-Session-Id"] = user_session_id
         return headers
 
-    @staticmethod
-    def _service_headers(
-        *,
-        service_token: str | None,
-        service_session_id: str | None,
-    ) -> dict[str, str]:
-        headers: dict[str, str] = {}
-        if service_token:
-            headers["Authorization"] = f"Bearer {service_token}"
-        if service_session_id:
-            headers["X-Session-Id"] = service_session_id
-        return headers
-
     async def _post(
         self,
         path: str,
@@ -199,15 +186,25 @@ class AuthzClient:
         instruction_end_date: str = "",
         service_token: str | None = None,
         service_session_id: str | None = None,
+        user_token: str | None = None,
+        user_session_id: str | None = None,
     ) -> dict[str, Any]:
+        if not service_token:
+            raise AuthzClientError("service_token is required for eligible-approvers")
+        if not user_token:
+            raise AuthzClientError(
+                "user_token (X-On-Behalf-Of) is required for eligible-approvers"
+            )
         payload = {
             "payment": payment,
             "instruction_status": instruction_status,
             "instruction_end_date": instruction_end_date,
         }
-        headers = self._service_headers(
+        headers = self._obo_headers(
             service_token=service_token,
             service_session_id=service_session_id,
+            user_token=user_token,
+            user_session_id=user_session_id,
         )
         return await self._post_json(
             "/api/v1/authorization/payments/eligible-approvers",
@@ -221,11 +218,21 @@ class AuthzClient:
         instruction: dict[str, Any],
         service_token: str | None = None,
         service_session_id: str | None = None,
+        user_token: str | None = None,
+        user_session_id: str | None = None,
     ) -> dict[str, Any]:
+        if not service_token:
+            raise AuthzClientError("service_token is required for eligible-approvers")
+        if not user_token:
+            raise AuthzClientError(
+                "user_token (X-On-Behalf-Of) is required for eligible-approvers"
+            )
         payload = {"instruction": instruction}
-        headers = self._service_headers(
+        headers = self._obo_headers(
             service_token=service_token,
             service_session_id=service_session_id,
+            user_token=user_token,
+            user_session_id=user_session_id,
         )
         return await self._post_json(
             "/api/v1/authorization/instructions/eligible-approvers",

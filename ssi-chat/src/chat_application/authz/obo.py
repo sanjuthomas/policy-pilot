@@ -110,18 +110,27 @@ class AuthzOboClient:
         instruction_end_date: str = "",
         service_token: str | None = None,
         service_session_id: str | None = None,
+        user_token: str | None = None,
+        user_session_id: str | None = None,
     ) -> dict[str, Any]:
         if not service_token:
             raise AuthzOboClientError(
                 "service token required for eligible-approvers evaluation"
             )
+        if not user_token:
+            raise AuthzOboClientError(
+                "user token (X-On-Behalf-Of) is required for eligible-approvers"
+            )
         headers = {
             "Authorization": f"Bearer {service_token}",
             "Accept": "application/json",
             "Content-Type": "application/json",
+            "X-On-Behalf-Of": user_token,
         }
         if service_session_id:
             headers["X-Session-Id"] = service_session_id
+        if user_session_id:
+            headers["X-On-Behalf-Of-Session-Id"] = user_session_id
         payload = {
             "payment": payment,
             "instruction_status": instruction_status,
@@ -155,18 +164,27 @@ class AuthzOboClient:
         instruction_end_date: str = "",
         service_token: str | None = None,
         service_session_id: str | None = None,
+        user_token: str | None = None,
+        user_session_id: str | None = None,
     ) -> dict[str, Any]:
         if not service_token:
             raise AuthzOboClientError(
                 "service token required for eligible-submitters evaluation"
             )
+        if not user_token:
+            raise AuthzOboClientError(
+                "user token (X-On-Behalf-Of) is required for eligible-submitters"
+            )
         headers = {
             "Authorization": f"Bearer {service_token}",
             "Accept": "application/json",
             "Content-Type": "application/json",
+            "X-On-Behalf-Of": user_token,
         }
         if service_session_id:
             headers["X-Session-Id"] = service_session_id
+        if user_session_id:
+            headers["X-On-Behalf-Of-Session-Id"] = user_session_id
         payload = {
             "payment": payment,
             "instruction_status": instruction_status,

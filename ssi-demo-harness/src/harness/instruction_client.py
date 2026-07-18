@@ -5,6 +5,7 @@ from typing import Any
 import httpx
 
 from harness.config import Settings
+from harness.service_identity import obo_headers
 from harness.zitadel_auth import SessionCredentials
 
 
@@ -28,12 +29,7 @@ class InstructionServiceClient:
             return client.request(
                 method,
                 self._url(path),
-                headers={
-                    "Authorization": f"Bearer {session.session_token}",
-                    "X-Session-Id": session.session_id,
-                    "Accept": "application/json",
-                    "Content-Type": "application/json",
-                },
+                headers=obo_headers(session),
                 json=json_body,
             )
 
@@ -62,11 +58,7 @@ class InstructionServiceClient:
         with httpx.Client(timeout=30.0) as client:
             return client.get(
                 url,
-                headers={
-                    "Authorization": f"Bearer {session.session_token}",
-                    "X-Session-Id": session.session_id,
-                    "Accept": "application/json",
-                },
+                headers=obo_headers(session),
                 params=params,
             )
 

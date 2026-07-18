@@ -203,11 +203,27 @@ async def get_instruction(
 @router.post("/{instruction_id}/eligible-approvers", response_model=InstructionEligibleApproversResponse)
 async def instruction_eligible_approvers(
     instruction_id: str,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    x_on_behalf_of: str | None = Header(default=None, alias="X-On-Behalf-Of"),
+    x_on_behalf_of_session_id: str | None = Header(
+        default=None, alias="X-On-Behalf-Of-Session-Id"
+    ),
     _subject: Subject = Depends(get_compliance_subject),
     service: InstructionService = Depends(get_service),
 ) -> InstructionEligibleApproversResponse:
+    ctx = resolve_evaluate_token_context(
+        authorization=authorization,
+        x_session_id=x_session_id,
+        x_on_behalf_of=x_on_behalf_of,
+        x_on_behalf_of_session_id=x_on_behalf_of_session_id,
+    )
     try:
-        data = await service.eligible_approvers(instruction_id)
+        data = await service.eligible_approvers(
+            instruction_id,
+            bearer_token=ctx.user_token,
+            session_id=ctx.user_session_id,
+        )
         return InstructionEligibleApproversResponse.model_validate(data)
     except InstructionNotFoundError as exc:
         raise HTTPException(status_code=404, detail="instruction not found") from exc

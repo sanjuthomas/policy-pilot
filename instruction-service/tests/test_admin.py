@@ -21,6 +21,14 @@ def test_get_compliance_subject_denies_other_roles(sample_subject: Subject) -> N
     assert exc_info.value.status_code == 403
 
 
-def test_get_admin_subject_delegates(sample_subject: Subject) -> None:
+def test_get_admin_subject_uses_direct_jwt(
+    sample_subject: Subject, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from unittest.mock import patch
+
+    monkeypatch.setattr("inst.admin.settings.oidc_issuer_url", "http://localhost:8080")
     admin = sample_subject.model_copy(update={"roles": ["PLATFORM_ADMIN"]})
-    assert get_admin_subject(admin) is admin
+    with patch("inst.admin.subject_from_bearer_token", return_value=admin):
+        assert (
+            get_admin_subject(authorization="Bearer token", x_session_id="sess") is admin
+        )

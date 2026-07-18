@@ -73,6 +73,19 @@ def test_payment_client_update_payment(monkeypatch) -> None:
 
     monkeypatch.setattr(httpx, "Client", lambda **kwargs: FakeHttpxClient())
     session = MagicMock(session_token="tok", session_id="sid")
+    identity = MagicMock()
+    identity.token = "svc-token"
+    identity.session_id = "svc-sess"
+    identity.ensure_logged_in = MagicMock()
+    monkeypatch.setattr(
+        "harness.payment_client.obo_headers",
+        lambda sess: {
+            "Authorization": "Bearer svc-token",
+            "X-On-Behalf-Of": sess.session_token,
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        },
+    )
     response = client.update_payment(session, "p1", "instr-1", 2_000_000.0, "2026-07-01")
 
     assert response.status_code == 200

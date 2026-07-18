@@ -7,7 +7,11 @@ from typing import Any, Callable
 
 import httpx
 
-from regression.auth_helpers import admin_auth_headers, compliance_auth_headers
+from regression.auth_helpers import (
+    admin_auth_headers,
+    compliance_auth_headers,
+    login_headers,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -497,6 +501,233 @@ def run_api_smoke(
             "instruction-service",
             "POST /api/v1/instructions/{id}/eligible-approvers (compliance)",
             instruction_eligible,
+        )
+
+        # --- LOB / covering entitlement (FO vs MO) -------------------------
+        demo_password = "Password1!"
+        ficc_instruction_id = context.get("ficc_standing_instruction_id") or context.get(
+            "approved_instruction_id"
+        )
+        ficc_payment_id = context.get("draft_payment_id") or context.get(
+            "submitted_payment_id"
+        ) or context.get("approved_payment_id")
+
+        def _service_login(base_url: str, user_id: str) -> dict[str, str]:
+            return login_headers(
+                client,
+                base_url,
+                user_id=user_id,
+                password=demo_password,
+            )
+
+        def instruction_view_fo_positive() -> None:
+            if not ficc_instruction_id:
+                raise SkipCheck("no FICC instruction id in context (run with --seed first)")
+            headers = _service_login(instruction_service_url, "fo-ficc-101")
+            response = client.get(
+                f"{instruction_service_url.rstrip('/')}/api/v1/instructions/{ficc_instruction_id}",
+                headers=headers,
+            )
+            if response.status_code != 200:
+                raise RuntimeError(
+                    f"FO FICC expected 200 on FICC instruction, got {response.status_code}: "
+                    f"{response.text[:200]}"
+                )
+
+        _run_check(
+            result,
+            "instruction_view_fo_positive",
+            "instruction-service",
+            "GET instruction FICC allowed for fo-ficc-101 (matching lob)",
+            instruction_view_fo_positive,
+        )
+
+        def instruction_view_fo_negative() -> None:
+            if not ficc_instruction_id:
+                raise SkipCheck("no FICC instruction id in context (run with --seed first)")
+            headers = _service_login(instruction_service_url, "fo-fx-101")
+            response = client.get(
+                f"{instruction_service_url.rstrip('/')}/api/v1/instructions/{ficc_instruction_id}",
+                headers=headers,
+            )
+            if response.status_code != 403:
+                raise RuntimeError(
+                    f"FO FX expected 403 on FICC instruction, got {response.status_code}: "
+                    f"{response.text[:200]}"
+                )
+
+        _run_check(
+            result,
+            "instruction_view_fo_negative",
+            "instruction-service",
+            "GET instruction FICC denied for fo-fx-101 (wrong lob)",
+            instruction_view_fo_negative,
+        )
+
+        def instruction_view_mo_positive() -> None:
+            if not ficc_instruction_id:
+                raise SkipCheck("no FICC instruction id in context (run with --seed first)")
+            headers = _service_login(instruction_service_url, "pay-101")
+            response = client.get(
+                f"{instruction_service_url.rstrip('/')}/api/v1/instructions/{ficc_instruction_id}",
+                headers=headers,
+            )
+            if response.status_code != 200:
+                raise RuntimeError(
+                    f"MO pay-101 expected 200 on FICC instruction, got {response.status_code}: "
+                    f"{response.text[:200]}"
+                )
+
+        _run_check(
+            result,
+            "instruction_view_mo_positive",
+            "instruction-service",
+            "GET instruction FICC allowed for pay-101 (covering includes FICC)",
+            instruction_view_mo_positive,
+        )
+
+        def instruction_view_mo_negative() -> None:
+            if not ficc_instruction_id:
+                raise SkipCheck("no FICC instruction id in context (run with --seed first)")
+            headers = _service_login(instruction_service_url, "pay-203")
+            response = client.get(
+                f"{instruction_service_url.rstrip('/')}/api/v1/instructions/{ficc_instruction_id}",
+                headers=headers,
+            )
+            if response.status_code != 403:
+                raise RuntimeError(
+                    f"MO pay-203 (covers FX only) expected 403 on FICC instruction, "
+                    f"got {response.status_code}: {response.text[:200]}"
+                )
+
+        _run_check(
+            result,
+            "instruction_view_mo_negative",
+            "instruction-service",
+            "GET instruction FICC denied for pay-203 (covering misses FICC)",
+            instruction_view_mo_negative,
+        )
+
+        def payment_view_fo_positive() -> None:
+            if not ficc_payment_id:
+                raise SkipCheck("no payment id in context (run with --seed first)")
+            admin = admin_auth_headers(client, payment_url)
+            probe = client.get(
+                f"{payment_url.rstrip('/')}/api/v1/payments/{ficc_payment_id}",
+                headers=admin,
+            )
+            if probe.status_code != 200 or probe.json().get("owning_lob") != "FICC":
+                raise SkipCheck("need a FICC payment in context for FO positive")
+            headers = _service_login(payment_url, "fo-ficc-101")
+            response = client.get(
+                f"{payment_url.rstrip('/')}/api/v1/payments/{ficc_payment_id}",
+                headers=headers,
+            )
+            if response.status_code != 200:
+                raise RuntimeError(
+                    f"FO FICC expected 200 on FICC payment, got {response.status_code}: "
+                    f"{response.text[:200]}"
+                )
+
+        _run_check(
+            result,
+            "payment_view_fo_positive",
+            "payment-service",
+            "GET payment allowed for fo-ficc-101 when owning_lob matches",
+            payment_view_fo_positive,
+        )
+
+        def payment_view_fo_negative() -> None:
+            if not ficc_payment_id:
+                raise SkipCheck("no payment id in context (run with --seed first)")
+            # Confirm payment is FICC first via admin, then FO FX must be denied.
+            admin = admin_auth_headers(client, payment_url)
+            probe = client.get(
+                f"{payment_url.rstrip('/')}/api/v1/payments/{ficc_payment_id}",
+                headers=admin,
+            )
+            if probe.status_code != 200:
+                raise SkipCheck(f"admin could not load payment {ficc_payment_id}")
+            if probe.json().get("owning_lob") != "FICC":
+                raise SkipCheck(
+                    f"payment {ficc_payment_id} owning_lob="
+                    f"{probe.json().get('owning_lob')!r}, need FICC for FO negative"
+                )
+            headers = _service_login(payment_url, "fo-fx-101")
+            response = client.get(
+                f"{payment_url.rstrip('/')}/api/v1/payments/{ficc_payment_id}",
+                headers=headers,
+            )
+            if response.status_code != 403:
+                raise RuntimeError(
+                    f"FO FX expected 403 on FICC payment, got {response.status_code}: "
+                    f"{response.text[:200]}"
+                )
+
+        _run_check(
+            result,
+            "payment_view_fo_negative",
+            "payment-service",
+            "GET FICC payment denied for fo-fx-101 (wrong lob)",
+            payment_view_fo_negative,
+        )
+
+        def payment_view_mo_positive() -> None:
+            if not ficc_payment_id:
+                raise SkipCheck("no payment id in context (run with --seed first)")
+            admin = admin_auth_headers(client, payment_url)
+            probe = client.get(
+                f"{payment_url.rstrip('/')}/api/v1/payments/{ficc_payment_id}",
+                headers=admin,
+            )
+            if probe.status_code != 200 or probe.json().get("owning_lob") != "FICC":
+                raise SkipCheck("need a FICC payment in context for MO positive")
+            headers = _service_login(payment_url, "pay-101")
+            response = client.get(
+                f"{payment_url.rstrip('/')}/api/v1/payments/{ficc_payment_id}",
+                headers=headers,
+            )
+            if response.status_code != 200:
+                raise RuntimeError(
+                    f"MO pay-101 expected 200 on FICC payment, got {response.status_code}: "
+                    f"{response.text[:200]}"
+                )
+
+        _run_check(
+            result,
+            "payment_view_mo_positive",
+            "payment-service",
+            "GET FICC payment allowed for pay-101 (covering includes FICC)",
+            payment_view_mo_positive,
+        )
+
+        def payment_view_mo_negative() -> None:
+            if not ficc_payment_id:
+                raise SkipCheck("no payment id in context (run with --seed first)")
+            admin = admin_auth_headers(client, payment_url)
+            probe = client.get(
+                f"{payment_url.rstrip('/')}/api/v1/payments/{ficc_payment_id}",
+                headers=admin,
+            )
+            if probe.status_code != 200 or probe.json().get("owning_lob") != "FICC":
+                raise SkipCheck("need a FICC payment in context for MO negative")
+            headers = _service_login(payment_url, "pay-203")
+            response = client.get(
+                f"{payment_url.rstrip('/')}/api/v1/payments/{ficc_payment_id}",
+                headers=headers,
+            )
+            if response.status_code != 403:
+                raise RuntimeError(
+                    f"MO pay-203 (covers FX only) expected 403 on FICC payment, "
+                    f"got {response.status_code}: {response.text[:200]}"
+                )
+
+        _run_check(
+            result,
+            "payment_view_mo_negative",
+            "payment-service",
+            "GET FICC payment denied for pay-203 (covering misses FICC)",
+            payment_view_mo_negative,
         )
 
     return result

@@ -80,7 +80,7 @@ Harness seed runs by default. Opt out with `CHAT_REGRESSION_SEED=0` on a warm st
 
 ## API smoke (cross-service)
 
-Before chat cases, the runner executes **API smoke checks** across services (health, auth gates, admin UI APIs, indexer search/graph/intent extract, payment/instruction eligible-approvers). Use:
+Before chat cases, the runner executes **API smoke checks** across services (health, auth gates, admin UI APIs, indexer search/graph/intent extract, payment/instruction eligible-approvers, FO/MO LOB view entitlement). Use:
 
 ```bash
 # Smoke only (fast, skips Vertex-dependent indexer checks)
@@ -106,12 +106,12 @@ RUN_API_SMOKE=1 pytest tests/test_api_smoke.py -v
 | Service | What regression covers |
 |---------|------------------------|
 | **ssi-demo-harness** | Seed actions, `/api/status`, auth on lifecycle actions (incl. suspend/reactivate) |
-| **instruction-service** | UI list (admin), REST auth gate; lifecycle via harness seed |
-| **payment-service** | UI list (admin), REST auth gate; lifecycle via harness seed |
+| **instruction-service** | UI list (admin), REST auth gate; FO/MO GET LOB view (+/−); lifecycle via harness seed |
+| **payment-service** | UI list (admin), REST auth gate; FO/MO GET LOB view (+/−); lifecycle via harness seed |
 | **ssi-indexer** | Stats, vector search, graph events, intent extract, cypher run, auth gates |
 | **PolicyPilot** (`ssi-chat`) | Compliance + operational persona login, `/api/chat` (65 YAML cases incl. skills), compliance-users |
 | **authorization-service** | Health, service-auth gate on evaluate endpoints |
-| **payment-service** / **instruction-service** | Payment/instruction eligible-approvers (compliance JWT), auth gate |
+| **payment-service** / **instruction-service** | Eligible-approvers (compliance JWT); FO (`fo-ficc-101` / `fo-fx-101`) and MO (`pay-101` / `pay-203`) FICC view allow/deny |
 
 Chat cases exercise RAG end-to-end; they do not call instruction-service/payment REST APIs directly. Indexer and authz are covered by API smoke, not chat YAML.
 

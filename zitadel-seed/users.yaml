@@ -419,8 +419,8 @@ users:
   # ═══════════════════════════════════════════════════════════════════════════
   # COMPLIANCE — policy inquiry users for chat eligibility questions
   #
-  # COMPLIANCE_ANALYST may call payment-service / instruction-service to ask who can approve
-  # a payment (live OPA evaluation). No payment or instruction mutation rights.
+  # COMPLIANCE_ANALYST may read any instruction/payment (any LOB) and call
+  # eligible-approvers / directory APIs. No mutation rights; no lob/covering required.
   # ═══════════════════════════════════════════════════════════════════════════
 
   - user_id: comp-001

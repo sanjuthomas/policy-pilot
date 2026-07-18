@@ -54,7 +54,7 @@ users:
 
 def test_group_members_requires_auth(client: TestClient) -> None:
     response = client.get("/api/v1/authorization/groups/UP_TO_100_BILLION_CLUB/members")
-    assert response.status_code == 401
+    assert response.status_code == 403
 
 
 def test_group_members_returns_groups_and_covering_lobs(

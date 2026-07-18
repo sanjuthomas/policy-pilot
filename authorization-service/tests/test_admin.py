@@ -6,14 +6,19 @@ import pytest
 from authz.admin import get_admin_subject
 from authz.auth_routes import router as auth_router
 from authz.models import Subject
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 
-def test_get_admin_subject_requires_platform_admin() -> None:
+def test_get_admin_subject_requires_platform_admin(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("authz.admin.settings.oidc_issuer_url", "http://localhost:8080")
     subject = Subject(user_id="u1", title="User", roles=["COMPLIANCE_ANALYST"])
-    with pytest.raises(Exception) as exc:
-        get_admin_subject(subject)
+    with patch("authz.admin.subject_from_bearer_token", return_value=subject):
+        with pytest.raises(HTTPException) as exc:
+            get_admin_subject(
+                authorization="Bearer token",
+                x_session_id="sess",
+            )
     assert exc.value.status_code == 403
 
 

@@ -251,13 +251,11 @@ def fetch_payment_amount_club_limits(
     import httpx
 
     base = settings.authorization_service_url.rstrip("/")
+    from harness.service_identity import obo_headers
+
     response = httpx.get(
         f"{base}/api/v1/authorization/payment-amount-limits",
-        headers={
-            "Authorization": f"Bearer {session.session_token}",
-            "X-Session-Id": session.session_id,
-            "Accept": "application/json",
-        },
+        headers=obo_headers(session),
         timeout=30.0,
     )
     response.raise_for_status()

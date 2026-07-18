@@ -612,7 +612,18 @@ class InstructionService:
             visible.append(_to_response(record))
         return visible
 
-    async def eligible_approvers(self, instruction_id: str) -> dict:
+    async def eligible_approvers(
+        self,
+        instruction_id: str,
+        *,
+        bearer_token: str | None = None,
+        session_id: str | None = None,
+    ) -> dict:
+        if not bearer_token:
+            raise PermissionError(
+                "user token required for eligible-approvers "
+                "(pass the caller's JWT for X-On-Behalf-Of)"
+            )
         record = await self.repository.get_current(instruction_id)
         instruction = record.instruction.model_dump(mode="json")
         await service_identity.ensure_logged_in()
@@ -620,6 +631,8 @@ class InstructionService:
             instruction=instruction,
             service_token=service_identity.token,
             service_session_id=service_identity.session_id,
+            user_token=bearer_token,
+            user_session_id=session_id,
         )
 
     async def submit(

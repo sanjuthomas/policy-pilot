@@ -3,7 +3,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from ps.admin import get_admin_subject
 from ps.auth_routes import router as auth_router
@@ -19,16 +19,23 @@ def admin_client() -> TestClient:
     return TestClient(app)
 
 
-def test_get_admin_subject_requires_platform_admin() -> None:
+def test_get_admin_subject_requires_platform_admin(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("ps.admin.settings.oidc_issuer_url", "http://localhost:8080")
     subject = Subject(user_id="u1", title="User", roles=["PAYMENT_CREATOR"])
-    with pytest.raises(Exception) as exc:
-        get_admin_subject(subject)
+    with patch("ps.admin.subject_from_bearer_token", return_value=subject):
+        with pytest.raises(HTTPException) as exc:
+            get_admin_subject(authorization="Bearer token", x_session_id="sess")
     assert exc.value.status_code == 403
 
 
-def test_get_admin_subject_allows_platform_admin() -> None:
+def test_get_admin_subject_allows_platform_admin(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("ps.admin.settings.oidc_issuer_url", "http://localhost:8080")
     subject = Subject(user_id="admin-001", title="Admin", roles=["PLATFORM_ADMIN"])
-    assert get_admin_subject(subject).user_id == "admin-001"
+    with patch("ps.admin.subject_from_bearer_token", return_value=subject):
+        assert (
+            get_admin_subject(authorization="Bearer token", x_session_id="sess").user_id
+            == "admin-001"
+        )
 
 
 def test_admin_login_not_configured() -> None:

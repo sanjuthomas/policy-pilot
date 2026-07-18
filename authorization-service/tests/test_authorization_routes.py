@@ -4,8 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from authz.authorization_routes import _eligibility_service, _user_directory
-from authz.dependencies import get_compliance_subject
-from authz.evaluate_dependencies import get_service_caller
+from authz.dependencies import require_obo_subject
 from authz.main import app
 from authz.models import PaymentEligibilityContext, Subject
 from fastapi.testclient import TestClient
@@ -29,9 +28,10 @@ def test_evaluate_instruction_requires_service_auth(client: TestClient) -> None:
     assert response.status_code == 401
 
 
-def test_payment_eligible_approvers_requires_service_auth(client: TestClient) -> None:
+def test_payment_eligible_approvers_requires_obo(client: TestClient) -> None:
     response = client.post(
         "/api/v1/authorization/payments/eligible-approvers",
+        headers={"Authorization": "Bearer svc-token"},
         json={
             "payment": {
                 "payment_id": "p1",
@@ -46,11 +46,17 @@ def test_payment_eligible_approvers_requires_service_auth(client: TestClient) ->
             "instruction_status": "APPROVED",
         },
     )
-    assert response.status_code == 401
+    assert response.status_code == 403
+    assert "X-On-Behalf-Of" in response.json()["detail"]
 
 
 def test_payment_eligible_approvers_success(client: TestClient) -> None:
-    service_subject = Subject(user_id="svc-payment", title="Service Account", roles=["R"])
+    obo_subject = Subject(
+        user_id="comp-001",
+        title="Compliance Analyst",
+        roles=["COMPLIANCE_ANALYST"],
+        delegated_by="svc-payment",
+    )
     response_payload = {
         "payment_id": "p1",
         "instruction_id": "i1",
@@ -67,12 +73,15 @@ def test_payment_eligible_approvers_success(client: TestClient) -> None:
     mock_service = AsyncMock()
     mock_service.eligible_approvers_for_payment.return_value = response_payload
 
-    app.dependency_overrides[get_service_caller] = lambda: service_subject
+    app.dependency_overrides[require_obo_subject] = lambda: obo_subject
     app.dependency_overrides[_eligibility_service] = lambda: mock_service
     try:
         response = client.post(
             "/api/v1/authorization/payments/eligible-approvers",
-            headers={"Authorization": "Bearer svc-token"},
+            headers={
+                "Authorization": "Bearer svc-token",
+                "X-On-Behalf-Of": "user-token",
+            },
             json={
                 "payment": PaymentEligibilityContext(
                     payment_id="p1",
@@ -94,9 +103,10 @@ def test_payment_eligible_approvers_success(client: TestClient) -> None:
     assert response.json()["payment_id"] == "p1"
 
 
-def test_payment_eligible_submitters_requires_service_auth(client: TestClient) -> None:
+def test_payment_eligible_submitters_requires_obo(client: TestClient) -> None:
     response = client.post(
         "/api/v1/authorization/payments/eligible-submitters",
+        headers={"Authorization": "Bearer svc-token"},
         json={
             "payment": {
                 "payment_id": "p1",
@@ -111,11 +121,18 @@ def test_payment_eligible_submitters_requires_service_auth(client: TestClient) -
             "instruction_status": "APPROVED",
         },
     )
-    assert response.status_code == 401
+    assert response.status_code == 403
+    assert "X-On-Behalf-Of" in response.json()["detail"]
 
 
 def test_payment_eligible_submitters_success(client: TestClient) -> None:
-    service_subject = Subject(user_id="svc-chat", title="Service Account", roles=["R"])
+    obo_subject = Subject(
+        user_id="pay-101",
+        title="Analyst",
+        roles=["PAYMENT_CREATOR"],
+        groups=["MIDDLE_OFFICE"],
+        delegated_by="svc-chat",
+    )
     response_payload = {
         "payment_id": "p1",
         "instruction_id": "i1",
@@ -133,12 +150,15 @@ def test_payment_eligible_submitters_success(client: TestClient) -> None:
     mock_service = AsyncMock()
     mock_service.eligible_submitters_for_payment.return_value = response_payload
 
-    app.dependency_overrides[get_service_caller] = lambda: service_subject
+    app.dependency_overrides[require_obo_subject] = lambda: obo_subject
     app.dependency_overrides[_eligibility_service] = lambda: mock_service
     try:
         response = client.post(
             "/api/v1/authorization/payments/eligible-submitters",
-            headers={"Authorization": "Bearer svc-token"},
+            headers={
+                "Authorization": "Bearer svc-token",
+                "X-On-Behalf-Of": "user-token",
+            },
             json={
                 "payment": PaymentEligibilityContext(
                     payment_id="p1",

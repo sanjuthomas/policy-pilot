@@ -29,6 +29,23 @@ test_view_allowed_same_lob if {
 	}
 }
 
+test_view_allowed_fo_matching_desk_lob if {
+	# Front office: subject.lob must match owning_lob (covering ignored).
+	allow with input as {
+		"action": "VIEW",
+		"subject": {
+			"user_id": "fo-ficc-101",
+			"title": "Desk Analyst",
+			"roles": ["PAYMENT_CREATOR"],
+			"groups": [],
+			"lob": "FICC",
+			"covering_lobs": ["FX"],
+		},
+		"instruction": _instruction,
+		"account": {"owning_lob": "FICC"},
+	}
+}
+
 test_view_denied_wrong_desk_lob if {
 	input_data := {
 		"action": "VIEW",
@@ -157,6 +174,22 @@ test_view_allowed_platform_admin if {
 			"title": "Platform Administrator",
 			"roles": ["PLATFORM_ADMIN", "INSTRUCTION_VIEWER"],
 			"groups": ["ADMIN"],
+			"covering_lobs": [],
+		},
+		"instruction": _instruction,
+		"account": {"owning_lob": "FICC"},
+	}
+}
+
+test_view_allowed_compliance_any_lob if {
+	# Compliance may read any instruction without lob / covering_lobs.
+	allow with input as {
+		"action": "VIEW",
+		"subject": {
+			"user_id": "comp-001",
+			"title": "Compliance Analyst",
+			"roles": ["COMPLIANCE_ANALYST"],
+			"groups": ["COMPLIANCE"],
 			"covering_lobs": [],
 		},
 		"instruction": _instruction,

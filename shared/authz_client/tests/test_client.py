@@ -156,10 +156,13 @@ async def test_eligible_approvers() -> None:
             instruction_status="APPROVED",
             service_token="svc",
             service_session_id="sess",
+            user_token="user-token",
+            user_session_id="user-sess",
         )
         instruction = await client.eligible_instruction_approvers(
             instruction={"instruction_id": "I-1"},
             service_token="svc",
+            user_token="user-token",
         )
 
     assert payment["approvers"][0]["user_id"] == "pay-201"
@@ -176,16 +179,26 @@ async def test_post_json_error_paths() -> None:
             await client.eligible_payment_approvers(
                 payment={},
                 instruction_status="APPROVED",
+                service_token="svc",
+                user_token="user",
             )
 
     server = httpx.Response(500, text="err", request=httpx.Request("POST", "http://x"))
     with patch("authz_client.client.httpx.AsyncClient") as mock_cls:
         mock_cls.return_value = _mock_async_client(server)
         with pytest.raises(AuthzServiceUnavailable):
-            await client.eligible_instruction_approvers(instruction={})
+            await client.eligible_instruction_approvers(
+                instruction={},
+                service_token="svc",
+                user_token="user",
+            )
 
     client_err = httpx.Response(400, text="bad", request=httpx.Request("POST", "http://x"))
     with patch("authz_client.client.httpx.AsyncClient") as mock_cls:
         mock_cls.return_value = _mock_async_client(client_err)
         with pytest.raises(AuthzClientError):
-            await client.eligible_instruction_approvers(instruction={})
+            await client.eligible_instruction_approvers(
+                instruction={},
+                service_token="svc",
+                user_token="user",
+            )

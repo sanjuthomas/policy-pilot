@@ -16,9 +16,9 @@ Domain services (instruction-service, payment-service) call authz for lifecycle 
 
 | Caller | Endpoints | Auth |
 |--------|-----------|------|
-| **instruction-service** | `POST …/instructions/evaluate`, `POST …/instructions/eligible-approvers` | `svc-instruction` bearer token; user JWT in `X-On-Behalf-Of` for lifecycle evaluate |
-| **payment-service** | `POST …/payments/evaluate`, `POST …/payments/eligible-approvers` | `svc-payment` bearer token; user JWT in `X-On-Behalf-Of` for lifecycle evaluate |
-| **ssi-chat** | `GET …/groups/{group}/members`, `GET …/policy-summary` | Compliance analyst JWT |
+| **instruction-service** | `POST …/instructions/evaluate`, `POST …/instructions/eligible-approvers` | `svc-instruction` + **required** `X-On-Behalf-Of` user JWT |
+| **payment-service** | `POST …/payments/evaluate`, `POST …/payments/eligible-approvers` / `eligible-submitters` | `svc-payment` + **required** `X-On-Behalf-Of` user JWT |
+| **ssi-chat** | evaluate, eligible-*, groups, policy-summary | `svc-chat` + **required** `X-On-Behalf-Of` (compliance or operational user) |
 | **Platform admin** | `/ui/*`, `/api/ui/users` | `admin-001` (ZITADEL JWT) |
 
 **Not callers:** ssi-indexer (Kafka consumer only; projects graph from streamed events), demo harness, Kafka Connect, sequence-service.
@@ -27,7 +27,7 @@ Policy denials evaluated here surface as `ALERT` security events in Mongo and, a
 
 ## Service API (programmatic)
 
-All routes under `/api/v1/authorization` require a bearer token for an authorized service account (`svc-instruction` or `svc-payment`).
+All routes under `/api/v1/authorization` require an **authorized service account** bearer **and** `X-On-Behalf-Of` (user JWT). Service-only calls are rejected **before** OPA is contacted.
 
 ### Lifecycle evaluate (On-Behalf-Of)
 
@@ -47,16 +47,17 @@ X-On-Behalf-Of-Session-Id: <user session>   # optional
 
 Lifecycle evaluate **requires** `X-On-Behalf-Of` (verified user JWT). An optional inline `subject` may also be sent; when present, identity fields must match the OBO-derived subject. Inline subject alone is rejected (see issue #14).
 
-### Eligible approvers (service-only)
+### Eligible / discovery (service + OBO)
 
-Batch OPA evaluation over candidates from the live ZITADEL directory ("who can approve?"). No user OBO — service account auth only; compliance auth is enforced on the domain service before it calls authz. This is discovery/reporting, not an approval action.
+Batch OPA evaluation over candidates from the live ZITADEL directory ("who can approve/submit?"). **Requires** service bearer + `X-On-Behalf-Of` (user or compliance JWT). Domain services forward the operational user's token; chat skills do the same. Without OBO, authz denies **before** contacting OPA.
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | POST | `/instructions/eligible-approvers` | Who can approve this instruction? |
 | POST | `/payments/eligible-approvers` | Who can approve this payment? |
-| GET | `/groups/{group}/members` | Members of a ZITADEL group (compliance JWT) — includes `lob` and `covering_lobs` |
-| GET | `/policy-summary` | Normative OPA policy summary for `payment` or `instruction` (compliance JWT) |
+| POST | `/payments/eligible-submitters` | Who can submit this payment? |
+| GET | `/groups/{group}/members` | Members of a ZITADEL group — includes `lob` and `covering_lobs` |
+| GET | `/policy-summary` | Normative OPA policy summary for `payment` or `instruction` |
 
 Query params for group members: `role`, `covering_lob`.
 
@@ -78,7 +79,7 @@ OPA itself is **unauthenticated** in this demo — see root README for productio
 |----------|---------|
 | `EMAIL_DOMAIN` | `ssi.local` (login name suffix for directory UI) |
 | `USER_DIRECTORY_CACHE_TTL_SECONDS` | `60` |
-| `AUTHORIZED_SERVICE_USER_IDS` | `svc-instruction,svc-payment` |
+| `AUTHORIZED_SERVICE_USER_IDS` | `svc-instruction,svc-payment,svc-chat` |
 | `OIDC_ISSUER_URL` | `http://localhost:8080` |
 | `OIDC_AUDIENCE` | unset locally; Docker Compose uses `policy-pilot` |
 | `ZITADEL_SERVICE_PAT_FILE` | `/zitadel/bootstrap/login-client.pat` |

@@ -85,7 +85,7 @@ sequenceDiagram
         P->>A: CREATE evaluate (domain path)
         P->>M: Insert payment + security event<br/>(one transaction)
         P-->>C: PaymentResponse (DRAFT)
-        C->>A: eligible-submitters (svc-chat)
+        C->>A: eligible-submitters (svc-chat + user OBO)
         C-->>UI: Created report + who can submit
     end
 

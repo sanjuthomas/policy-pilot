@@ -114,3 +114,25 @@ async def test_evaluate_payment_http_error() -> None:
                 service_token="svc",
                 user_token="user",
             )
+
+
+@pytest.mark.asyncio
+async def test_eligible_submitters_requires_user_token() -> None:
+    client = AuthzOboClient(base_url="http://authz.test")
+    with pytest.raises(AuthzOboClientError, match="user token"):
+        await client.eligible_payment_submitters(
+            payment={"payment_id": "p1"},
+            instruction_status="APPROVED",
+            service_token="svc-token",
+        )
+
+
+@pytest.mark.asyncio
+async def test_eligible_approvers_requires_user_token() -> None:
+    client = AuthzOboClient(base_url="http://authz.test")
+    with pytest.raises(AuthzOboClientError, match="user token"):
+        await client.eligible_payment_approvers(
+            payment={"payment_id": "p1"},
+            instruction_status="APPROVED",
+            service_token="svc-token",
+        )

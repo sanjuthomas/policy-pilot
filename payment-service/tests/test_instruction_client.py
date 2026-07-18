@@ -42,31 +42,33 @@ async def test_auth_headers_obo_delegation(
 async def test_auth_headers_retries_login_when_service_token_missing(
     instruction_service_client: InstructionServiceClient,
 ) -> None:
+    from ps.instruction_client import InstructionServiceClientError
+
     service_identity = MagicMock()
     service_identity.token = None
     service_identity.ensure_logged_in = AsyncMock()
 
     with patch("ps.service_identity.service_identity", service_identity):
-        headers = await instruction_service_client._auth_headers("user-token", "user-session")
+        with pytest.raises(InstructionServiceClientError, match="not logged in"):
+            await instruction_service_client._auth_headers("user-token", "user-session")
 
     service_identity.ensure_logged_in.assert_awaited_once()
-    assert headers["Authorization"] == "Bearer user-token"
-    assert headers["X-Session-Id"] == "user-session"
 
 
 @pytest.mark.asyncio
-async def test_auth_headers_fallback_user_token(
+async def test_auth_headers_requires_user_token(
     instruction_service_client: InstructionServiceClient,
 ) -> None:
+    from ps.instruction_client import InstructionServiceClientError
+
     service_identity = MagicMock()
-    service_identity.token = None
+    service_identity.token = "svc-token"
+    service_identity.session_id = "svc-session"
     service_identity.ensure_logged_in = AsyncMock()
 
     with patch("ps.service_identity.service_identity", service_identity):
-        headers = await instruction_service_client._auth_headers("user-token", "user-session")
-
-    assert headers["Authorization"] == "Bearer user-token"
-    assert headers["X-Session-Id"] == "user-session"
+        with pytest.raises(InstructionServiceClientError, match="user token"):
+            await instruction_service_client._auth_headers(None, None)
 
 
 @pytest.mark.asyncio
@@ -75,8 +77,15 @@ async def test_get_instruction_success(
 ) -> None:
     payload = {"instruction_id": "i1", "status": "APPROVED"}
     mock_response = httpx.Response(200, json=payload, request=_REQUEST)
+    service_identity = MagicMock()
+    service_identity.token = "svc"
+    service_identity.session_id = "sid"
+    service_identity.ensure_logged_in = AsyncMock()
 
-    with patch("ps.instruction_client.httpx.AsyncClient") as mock_client_cls:
+    with (
+        patch("ps.instruction_client.httpx.AsyncClient") as mock_client_cls,
+        patch("ps.service_identity.service_identity", service_identity),
+    ):
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.get = AsyncMock(return_value=mock_response)
@@ -92,15 +101,22 @@ async def test_get_instruction_not_found(
     instruction_service_client: InstructionServiceClient,
 ) -> None:
     mock_response = httpx.Response(404, request=_REQUEST)
+    service_identity = MagicMock()
+    service_identity.token = "svc"
+    service_identity.session_id = None
+    service_identity.ensure_logged_in = AsyncMock()
 
-    with patch("ps.instruction_client.httpx.AsyncClient") as mock_client_cls:
+    with (
+        patch("ps.instruction_client.httpx.AsyncClient") as mock_client_cls,
+        patch("ps.service_identity.service_identity", service_identity),
+    ):
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client_cls.return_value = mock_client
 
         with pytest.raises(InstructionNotFoundError):
-            await instruction_service_client.get_instruction("missing")
+            await instruction_service_client.get_instruction("missing", bearer_token="tok")
 
 
 @pytest.mark.asyncio
@@ -109,14 +125,23 @@ async def test_mark_used_success(
 ) -> None:
     payload = {"status": "USED"}
     mock_response = httpx.Response(200, json=payload, request=_POST_REQUEST)
+    service_identity = MagicMock()
+    service_identity.token = "svc"
+    service_identity.session_id = None
+    service_identity.ensure_logged_in = AsyncMock()
 
-    with patch("ps.instruction_client.httpx.AsyncClient") as mock_client_cls:
+    with (
+        patch("ps.instruction_client.httpx.AsyncClient") as mock_client_cls,
+        patch("ps.service_identity.service_identity", service_identity),
+    ):
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.post = AsyncMock(return_value=mock_response)
         mock_client_cls.return_value = mock_client
 
-        result = await instruction_service_client.mark_used("i1", "pay-1")
+        result = await instruction_service_client.mark_used(
+            "i1", "pay-1", bearer_token="tok"
+        )
 
     assert result == payload
 
@@ -126,15 +151,24 @@ async def test_mark_used_conflict(
     instruction_service_client: InstructionServiceClient,
 ) -> None:
     mock_response = httpx.Response(409, text="already used", request=_POST_REQUEST)
+    service_identity = MagicMock()
+    service_identity.token = "svc"
+    service_identity.session_id = None
+    service_identity.ensure_logged_in = AsyncMock()
 
-    with patch("ps.instruction_client.httpx.AsyncClient") as mock_client_cls:
+    with (
+        patch("ps.instruction_client.httpx.AsyncClient") as mock_client_cls,
+        patch("ps.service_identity.service_identity", service_identity),
+    ):
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.post = AsyncMock(return_value=mock_response)
         mock_client_cls.return_value = mock_client
 
         with pytest.raises(InstructionStateError):
-            await instruction_service_client.mark_used("i1", "pay-1")
+            await instruction_service_client.mark_used(
+                "i1", "pay-1", bearer_token="tok"
+            )
 
 
 @pytest.mark.asyncio
@@ -147,59 +181,22 @@ async def test_release_use_success(
         "http://instruction-service.test/api/v1/instructions/i1/release-use",
     )
     mock_response = httpx.Response(200, json=payload, request=request)
+    service_identity = MagicMock()
+    service_identity.token = "svc"
+    service_identity.session_id = None
+    service_identity.ensure_logged_in = AsyncMock()
 
-    with patch("ps.instruction_client.httpx.AsyncClient") as mock_client_cls:
+    with (
+        patch("ps.instruction_client.httpx.AsyncClient") as mock_client_cls,
+        patch("ps.service_identity.service_identity", service_identity),
+    ):
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.post = AsyncMock(return_value=mock_response)
         mock_client_cls.return_value = mock_client
 
-        result = await instruction_service_client.release_use("i1", "pay-1")
+        result = await instruction_service_client.release_use(
+            "i1", "pay-1", bearer_token="tok"
+        )
 
     assert result == payload
-
-
-@pytest.mark.asyncio
-async def test_get_instruction_as_service_success(
-    instruction_service_client: InstructionServiceClient,
-) -> None:
-    payload = {"instruction_id": "i1", "status": "APPROVED"}
-    mock_response = httpx.Response(200, json=payload, request=_REQUEST)
-    service_identity = MagicMock()
-    service_identity.token = "svc-token"
-    service_identity.session_id = "svc-session"
-    service_identity.ensure_logged_in = AsyncMock()
-
-    with patch("ps.instruction_client.httpx.AsyncClient") as mock_client_cls, patch(
-        "ps.service_identity.service_identity", service_identity
-    ):
-        mock_client = AsyncMock()
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.get = AsyncMock(return_value=mock_response)
-        mock_client_cls.return_value = mock_client
-
-        result = await instruction_service_client.get_instruction_as_service("i1")
-
-    assert result == payload
-
-
-@pytest.mark.asyncio
-async def test_get_instruction_as_service_not_found(
-    instruction_service_client: InstructionServiceClient,
-) -> None:
-    mock_response = httpx.Response(404, request=_REQUEST)
-    service_identity = MagicMock()
-    service_identity.token = "svc-token"
-    service_identity.session_id = "svc-session"
-    service_identity.ensure_logged_in = AsyncMock()
-
-    with patch("ps.instruction_client.httpx.AsyncClient") as mock_client_cls, patch(
-        "ps.service_identity.service_identity", service_identity
-    ):
-        mock_client = AsyncMock()
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.get = AsyncMock(return_value=mock_response)
-        mock_client_cls.return_value = mock_client
-
-        with pytest.raises(InstructionNotFoundError):
-            await instruction_service_client.get_instruction_as_service("missing")

@@ -4,6 +4,7 @@ from typing import Any
 
 import httpx
 
+from chat_application.auth.service_identity import service_identity
 from chat_application.config import settings
 
 
@@ -40,22 +41,31 @@ class PaymentNotFoundError(PaymentClientError):
 
 
 class PaymentClient:
-    """Payment reads/mutations as the logged-in chat user."""
+    """Payment reads/mutations via svc-chat + user OBO."""
 
     def __init__(self, base_url: str | None = None, *, timeout: float = 30.0) -> None:
         self._base = (base_url or settings.payment_service_url).rstrip("/")
         self._timeout = timeout
 
-    def _user_headers(
+    async def _obo_headers(
         self, *, user_token: str, user_session_id: str | None
     ) -> dict[str, str]:
+        if not service_identity.token:
+            await service_identity.ensure_logged_in()
+        if not service_identity.token:
+            raise PaymentClientError(
+                "chat service identity not logged in — cannot call payment-service with OBO"
+            )
         headers = {
-            "Authorization": f"Bearer {user_token}",
+            "Authorization": f"Bearer {service_identity.token}",
             "Accept": "application/json",
             "Content-Type": "application/json",
+            "X-On-Behalf-Of": user_token,
         }
+        if service_identity.session_id:
+            headers["X-Session-Id"] = service_identity.session_id
         if user_session_id:
-            headers["X-Session-Id"] = user_session_id
+            headers["X-On-Behalf-Of-Session-Id"] = user_session_id
         return headers
 
     @staticmethod
@@ -79,7 +89,7 @@ class PaymentClient:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 response = await client.get(
                     url,
-                    headers=self._user_headers(
+                    headers=await self._obo_headers(
                         user_token=user_token,
                         user_session_id=user_session_id,
                     ),
@@ -118,7 +128,7 @@ class PaymentClient:
                 response = await client.post(
                     url,
                     json=payload,
-                    headers=self._user_headers(
+                    headers=await self._obo_headers(
                         user_token=user_token,
                         user_session_id=user_session_id,
                     ),
@@ -150,7 +160,7 @@ class PaymentClient:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 response = await client.post(
                     url,
-                    headers=self._user_headers(
+                    headers=await self._obo_headers(
                         user_token=user_token,
                         user_session_id=user_session_id,
                     ),
@@ -183,7 +193,7 @@ class PaymentClient:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 response = await client.post(
                     url,
-                    headers=self._user_headers(
+                    headers=await self._obo_headers(
                         user_token=user_token,
                         user_session_id=user_session_id,
                     ),
@@ -219,7 +229,7 @@ class PaymentClient:
                 response = await client.post(
                     url,
                     json=payload,
-                    headers=self._user_headers(
+                    headers=await self._obo_headers(
                         user_token=user_token,
                         user_session_id=user_session_id,
                     ),

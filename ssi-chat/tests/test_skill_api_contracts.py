@@ -200,10 +200,16 @@ async def test_payment_client_posts_create_schema_and_parses_response() -> None:
         request=httpx.Request("POST", "http://payment.test/api/v1/payments"),
     )
     context, mock_client = _async_client(response)
-    with patch(
-        "chat_application.skills.payment_client.httpx.AsyncClient",
-        return_value=context,
+    with (
+        patch(
+            "chat_application.skills.payment_client.httpx.AsyncClient",
+            return_value=context,
+        ),
+        patch("chat_application.skills.payment_client.service_identity") as identity,
     ):
+        identity.token = "svc"
+        identity.session_id = "svc-sess"
+        identity.ensure_logged_in = AsyncMock()
         body = await PaymentClient("http://payment.test").create_payment(
             instruction_id="20260715-FICC-I-1",
             amount=12_000_000.0,
@@ -227,10 +233,16 @@ async def test_instruction_client_parses_instruction_service_response() -> None:
         ),
     )
     context, _ = _async_client(response)
-    with patch(
-        "chat_application.skills.instruction_client.httpx.AsyncClient",
-        return_value=context,
+    with (
+        patch(
+            "chat_application.skills.instruction_client.httpx.AsyncClient",
+            return_value=context,
+        ),
+        patch("chat_application.skills.instruction_client.service_identity") as identity,
     ):
+        identity.token = "svc"
+        identity.session_id = "svc-sess"
+        identity.ensure_logged_in = AsyncMock()
         body = await InstructionClient("http://instruction.test").get_instruction(
             "20260715-FICC-I-1",
             user_token="user-token",
