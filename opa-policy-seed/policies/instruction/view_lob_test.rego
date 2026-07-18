@@ -111,6 +111,44 @@ test_view_denied_role_only_no_bu if {
 	violations["INSTRUCTION_LOB_ACCESS_DENIED"] with input as input_data
 }
 
+test_view_denied_fo_covering_ignored if {
+	# Front office must match subject.lob; covering_lobs alone is not enough.
+	input_data := {
+		"action": "VIEW",
+		"subject": {
+			"user_id": "fo-ficc-101",
+			"title": "Desk Analyst",
+			"roles": ["PAYMENT_CREATOR"],
+			"groups": [],
+			"lob": "FX",
+			"covering_lobs": ["FICC"],
+		},
+		"instruction": _instruction,
+		"account": {"owning_lob": "FICC"},
+	}
+	not allow with input as input_data
+	violations["INSTRUCTION_LOB_ACCESS_DENIED"] with input as input_data
+}
+
+test_view_denied_mo_lob_without_covering if {
+	# Middle office has no desk lob entitlement — covering_lobs is required.
+	input_data := {
+		"action": "VIEW",
+		"subject": {
+			"user_id": "mo-orphan",
+			"title": "Analyst",
+			"roles": ["INSTRUCTION_CREATOR"],
+			"groups": ["MIDDLE_OFFICE"],
+			"lob": "FICC",
+			"covering_lobs": [],
+		},
+		"instruction": _instruction,
+		"account": {"owning_lob": "FICC"},
+	}
+	not allow with input as input_data
+	violations["INSTRUCTION_LOB_ACCESS_DENIED"] with input as input_data
+}
+
 test_view_allowed_platform_admin if {
 	allow with input as {
 		"action": "VIEW",

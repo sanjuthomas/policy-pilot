@@ -37,12 +37,12 @@ policies/
 
 | Actor | Roles | Scope |
 |-------|-------|-------|
-| Middle office | `INSTRUCTION_CREATOR`, `MIDDLE_OFFICE` | Create/update/submit/cancel; **VIEW** only for LOBs in `covering_lobs` (or own creations) |
-| Profit center | `INSTRUCTION_APPROVER` + `lob` | Approve/reject/suspend; **VIEW** when `subject.lob` matches `owning_lob` |
-| Payment staff | `PAYMENT_CREATOR` / `FUNDING_APPROVER` + `covering_lobs` | **VIEW**/USE when covering includes instruction LOB |
+| Middle office | `INSTRUCTION_CREATOR`, `MIDDLE_OFFICE` | Create/update/submit/cancel; **VIEW** when `owning_lob` ∈ `covering_lobs` (MO has no desk `lob`) |
+| Profit center / FO | `INSTRUCTION_APPROVER` or `PAYMENT_CREATOR` + `lob` | Approve/reject/suspend; **VIEW** when `subject.lob` matches `owning_lob` (covering ignored) |
+| Payment staff (MO) | `PAYMENT_CREATOR` / `FUNDING_APPROVER` + `covering_lobs` | **VIEW**/USE when covering includes instruction LOB |
 | Platform admin | `PLATFORM_ADMIN` / `ADMIN` | Cross-LOB **VIEW** for operators |
 
-`VIEW` / `USE` / `RELEASE_USE` require both a viewer role **and** data-level BU entitlement (`can_view_instruction_data`). Role alone is not enough.
+`covering_lobs` is meaningful **only** for `MIDDLE_OFFICE`. Desk/FO users never cover another LOB — they match `subject.lob`. `VIEW` / `USE` / `RELEASE_USE` require a viewer role **and** that data entitlement (`can_view_instruction_data`).
 
 Valid LOB values: `FICC`, `FX`, or `DESK_<name>`.
 

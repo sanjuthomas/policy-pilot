@@ -7,8 +7,9 @@
 #   UP_TO_1_BILLION_CLUB   — may create/approve payments up to $1 B
 #   UP_TO_100_BILLION_CLUB — may create/approve payments up to $100 B
 #   ADMIN                 — platform operator; required for secured admin UIs
-# covering_lobs — LOBs the user is assigned to cover (payment create/approve
-# and instruction VIEW/USE data entitlement for middle-office users)
+# covering_lobs — LOBs a MIDDLE_OFFICE user is assigned to cover (payment
+# create/approve and instruction VIEW/USE). Desk/FO users use `lob` instead
+# and must not rely on covering_lobs.
 
 defaults:
   password: "Password1!"

@@ -57,8 +57,13 @@ def _fmt_datetime(value: datetime | None) -> str | None:
     return value.isoformat() + "Z"
 
 
+def _is_middle_office(subject: Subject) -> bool:
+    return "MIDDLE_OFFICE" in subject.groups
+
+
 def _covers_payment_lob(subject: Subject, owning_lob: str) -> bool:
-    return owning_lob in subject.covering_lobs
+    """Covering LOBs apply only to middle office (no desk lob)."""
+    return _is_middle_office(subject) and owning_lob in subject.covering_lobs
 
 
 def _can_view_payment(subject: Subject, payment: Payment) -> bool:
@@ -68,13 +73,12 @@ def _can_view_payment(subject: Subject, payment: Payment) -> bool:
         return True
     lob = payment.owning_lob
     roles = set(subject.roles)
-    if "PAYMENT_CREATOR" in roles and (
-        _covers_payment_lob(subject, lob) or subject.lob == lob
-    ):
-        return True
-    if "FUNDING_APPROVER" in roles and _covers_payment_lob(subject, lob):
-        return True
-    return False
+    if "PAYMENT_CREATOR" not in roles and "FUNDING_APPROVER" not in roles:
+        return False
+    # Middle office: cover LOBs via covering_lobs. Desk/FO: subject.lob must match.
+    if _is_middle_office(subject):
+        return _covers_payment_lob(subject, lob)
+    return subject.lob == lob
 
 
 def _user_ref(subject: Subject) -> UserReference:

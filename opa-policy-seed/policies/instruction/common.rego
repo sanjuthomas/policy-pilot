@@ -26,24 +26,27 @@ has_viewer_access if { has_role("INSTRUCTION_APPROVER") }
 has_viewer_access if { has_role("PAYMENT_CREATOR") }
 has_viewer_access if { has_role("FUNDING_APPROVER") }
 
-# A subject covers a LOB when that LOB appears in covering_lobs (ZITADEL metadata).
-# Used for middle-office / payment staff read entitlement on VIEW/USE.
+# A subject covers a LOB only when they are MIDDLE_OFFICE and that LOB is in
+# covering_lobs. Front-office / desk users do not cover LOBs — they use subject.lob.
 covers_lob(lob) if {
+	is_middle_office
 	lob in input.subject.covering_lobs
 }
 
 # Data-level entitlement for instruction read (VIEW / USE / RELEASE_USE).
-# Role alone is not enough — subject must be in the instruction's BU:
-#   • subject.lob == owning_lob (desk / profit-center users)
-#   • owning_lob in covering_lobs (middle office / funding)
+# Role alone is not enough:
+#   • MIDDLE_OFFICE → owning_lob must be in covering_lobs (no desk lob)
+#   • everyone else → subject.lob must equal owning_lob
 #   • creator of the instruction
 #   • platform admin
 can_view_instruction_data if {
-	same_lob_as_instruction
+	is_middle_office
+	covers_lob(input.instruction.owning_lob)
 }
 
 can_view_instruction_data if {
-	covers_lob(input.instruction.owning_lob)
+	not is_middle_office
+	same_lob_as_instruction
 }
 
 can_view_instruction_data if {
