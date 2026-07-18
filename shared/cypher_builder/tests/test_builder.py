@@ -146,7 +146,8 @@ def test_instruction_type_synonym_taxonomy() -> None:
     )
     assert planned is not None
     assert planned[0][0] == "instruction_inventory"
-    assert "instruction_type: 'SINGLE_USE'" in planned[0][1]
+    assert "instruction_type = 'SINGLE_USE'" in planned[0][1]
+    assert "status = 'APPROVED'" in planned[0][1]
 
 
 def test_plans_from_lookup_without_id_remaps_to_inventory() -> None:
@@ -166,7 +167,8 @@ def test_plans_from_lookup_without_id_remaps_to_inventory() -> None:
     )
     assert planned is not None
     assert planned[0][0] == "instruction_inventory"
-    assert "instruction_type: 'SINGLE_USE'" in planned[0][1]
+    assert "instruction_type = 'SINGLE_USE'" in planned[0][1]
+    assert "status = 'APPROVED'" in planned[0][1]
 
 
 def test_plans_from_lookup_without_filters_still_none() -> None:

@@ -39,6 +39,15 @@ class TestParseKeyValueRecord:
         assert record["owning_lob"] == "FICC"
         assert record["status"] == "APPROVED"
 
+    def test_does_not_mid_match_title_case_labels(self) -> None:
+        """Downvote: Title:/Roles: must not become Itle/Oles via mid-word match."""
+        assert parse_key_value_record("Title: Vice President") == {}
+        assert parse_key_value_record("- **Title:** Vice President") == {}
+        assert parse_key_value_record("- **Roles:** FUNDING_APPROVER") == {}
+        assert parse_key_value_record("- **Groups:** MIDDLE_OFFICE") == {}
+        assert parse_key_value_record("- **Supervisor:** mo-010") == {}
+        assert parse_key_value_record("- **LOB:** FICC") == {}
+
 
 class TestFormatChatResponse:
     def test_formats_numbered_instruction_list_as_table(self) -> None:
@@ -64,6 +73,19 @@ class TestFormatChatResponse:
         assert formatted.startswith("Found 2 STANDING instructions for FICC:")
         assert "| Instruction ID" in formatted
         assert formatted.endswith("All are domestic USD wires.")
+
+    def test_leaves_who_am_i_title_case_bullets_unchanged(self) -> None:
+        text = (
+            "Here is your identity:\n\n"
+            "- **Title:** Vice President\n"
+            "- **Roles:** FUNDING_APPROVER\n"
+            "- **Groups:** MIDDLE_OFFICE\n"
+            "- **LOB:** FICC\n"
+            "- **Supervisor:** mo-010"
+        )
+        assert format_chat_response(text) == text
+        assert "Itle" not in format_chat_response(text)
+        assert "Oles" not in format_chat_response(text)
 
     def test_leaves_who_when_why_answers_unchanged(self) -> None:
         text = (

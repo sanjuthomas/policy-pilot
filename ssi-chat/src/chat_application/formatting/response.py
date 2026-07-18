@@ -12,7 +12,13 @@ from collections.abc import Callable
 from chat_application.formatting.common import format_markdown_table
 
 # Gemini often emits key: value or **key:** value; older paths use key=value.
-_KV_FIELD_RE = re.compile(r"(?:\*\*)?([a-z][a-z0-9_]*)(?:\*\*)?\s*[:=]\s*")
+# Keys must start at a token boundary so Title-case labels (Title:, Roles:) are
+# not mid-matched as "itle" / "oles".
+_KV_FIELD_RE = re.compile(
+    r"(?:(?<=^)|(?<=\s)|(?<=,)|(?<=\*\*))(?:\*\*)?"
+    r"([a-z][a-z0-9_]*)"
+    r"(?:\*\*)?\s*[:=]\s*"
+)
 _NUMBERED_LINE_RE = re.compile(r"^\s*\d+\.\s+(.+)$")
 _MARKDOWN_TABLE_SEPARATOR_RE = re.compile(r"^\|?\s*[-:| ]+\|")
 _MARKDOWN_EMPHASIS_RE = re.compile(r"\*+")
