@@ -47,7 +47,7 @@ The security-critical spine — one policy engine, fail-closed OBO, atomic state
 |----|----------|------|---------|--------------------------|
 | F-1 | **P2** (+Question) | Chat data plane | Graph/vector retrieval is **not scoped** by caller identity or LOB. Operational users can read cross-LOB data via NL questions. | Intentional for compliance demo? If not, inject LOB/role into Cypher plans and vector filters. |
 | F-2 | **P2** (+Question) | Identity / JWT | OIDC **audience not validated** (`verify_aud=False` when unset). | Set and enforce `oidc_audience` before non-demo deployment. |
-| F-3 | **P2** | Neo4j | `svc_chat` has `EXECUTE BOOSTED PROCEDURE *` — latent privilege beyond read-only graph grants. | Restrict to the specific procedures chat needs. |
+| F-3 | **P2** | Neo4j | `svc_chat` has `EXECUTE BOOSTED PROCEDURE *` — latent privilege beyond read-only graph grants. | Restrict to the specific procedures chat needs. **Fixed 2026-07-18:** `role_ssi_chat` now grants only `EXECUTE PROCEDURE db.index.vector.queryNodes` (see #65). |
 | F-4 | Question | Audit labeling | `SELF_APPROVAL` is not `ALERT_`-prefixed, so `is_alert` may disagree with stored severity. | Confirm intent for four-eyes denials. |
 | F-5 | Question | Instruction policy | Instruction `SUBMIT` checks role/group/transition but not same-LOB / creator identity. | Is cross-LOB submit intended? |
 | F-6 | Question | Skills | Confirm-phase OPA re-check fails open on transport error; payment-service remains authoritative. | Formalize “client recheck advisory / service authoritative”; optional skipped-recheck audit signal. |

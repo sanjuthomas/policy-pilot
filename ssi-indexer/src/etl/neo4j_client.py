@@ -26,6 +26,26 @@ from etl.multimodal_write import MultimodalWrite, upsert_multimodal_writes_in_tx
 logger = logging.getLogger(__name__)
 
 
+def schema_statements_from_cypher(text: str) -> list[str]:
+    """Split schema.cypher into executable statements.
+
+    Leading ``//`` comment lines inside a semicolon chunk are stripped so that
+    constraints introduced under a comment header (e.g. ``instruction_id_unique``)
+    are not dropped. Comment-only chunks are skipped.
+    """
+    statements: list[str] = []
+    for chunk in text.split(";"):
+        lines = [
+            line
+            for line in chunk.splitlines()
+            if line.strip() and not line.strip().startswith("//")
+        ]
+        statement = "\n".join(lines).strip()
+        if statement:
+            statements.append(statement)
+    return statements
+
+
 def _roles_json(roles: list | None) -> str | None:
     if not roles:
         return None
@@ -91,15 +111,14 @@ class Neo4jGraphWriter:
             logger.warning("Neo4j schema file not found: %s", schema_path)
             return
 
-        statements = [
-            chunk.strip()
-            for chunk in schema_path.read_text(encoding="utf-8").split(";")
-            if chunk.strip() and not chunk.strip().startswith("//")
-        ]
+        statements = schema_statements_from_cypher(
+            schema_path.read_text(encoding="utf-8")
+        )
         async with self._driver.session() as session:
             for statement in statements:
                 try:
-                    await session.run(statement)
+                    result = await session.run(statement)
+                    await result.consume()
                 except Exception as exc:
                     logger.warning("Neo4j schema statement failed: %s | %s", exc, statement[:120])
         self._schema_applied = True

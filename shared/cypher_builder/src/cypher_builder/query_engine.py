@@ -218,9 +218,17 @@ LIMIT 1"""
 _SECURITY_EVENT_GRAPH_OPTIONAL_MATCHES = """
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
 OPTIONAL MATCH (e)-[:FOR]->(v:InstructionVersion)
-OPTIONAL MATCH (i:Instruction {instruction_id: v.instruction_id})
 OPTIONAL MATCH (e)-[:FOR]->(pv:PaymentVersion)
-OPTIONAL MATCH (pay:Payment {payment_id: pv.payment_id})"""
+WITH e,
+     head(collect(DISTINCT actor)) AS actor,
+     head(collect(DISTINCT v)) AS v,
+     head(collect(DISTINCT pv)) AS pv
+OPTIONAL MATCH (i:Instruction {instruction_id: coalesce(e.instruction_id, v.instruction_id)})
+OPTIONAL MATCH (pay:Payment {payment_id: coalesce(e.payment_id, pv.payment_id)})
+WITH e, actor, v, pv,
+     head(collect(DISTINCT i)) AS i,
+     head(collect(DISTINCT pay)) AS pay
+"""
 
 _INSTRUCTION_ID_COALESCE = (
     "coalesce(v.instruction_id, i.instruction_id, pv.instruction_id, pay.instruction_id, '')"
