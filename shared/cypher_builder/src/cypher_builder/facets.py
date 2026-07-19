@@ -775,9 +775,14 @@ def build_facet_aggregate_cypher(spec: FacetAggregateSpec) -> str:
     if spec.status_filter:
         field = "v.status" if spec.entity == FacetEntity.INSTRUCTION else "p.status"
         filters.append(f"AND {field} = '{spec.status_filter}'")
-    if spec.lob_filter:
-        field = "v.owning_lob" if spec.entity == FacetEntity.INSTRUCTION else "p.owning_lob"
-        filters.append(f"AND {field} = '{spec.lob_filter}'")
+    from cypher_builder.lob_scope import owning_lob_and_clause
+
+    field_alias = "v" if spec.entity == FacetEntity.INSTRUCTION else "p"
+    lob_clause = owning_lob_and_clause(
+        alias=field_alias, explicit_lob=spec.lob_filter
+    )
+    if lob_clause:
+        filters.append(lob_clause.strip())
     if spec.instruction_type_filter and spec.entity == FacetEntity.INSTRUCTION:
         filters.append(f"AND v.instruction_type = '{spec.instruction_type_filter}'")
     if spec.date_range is not None:

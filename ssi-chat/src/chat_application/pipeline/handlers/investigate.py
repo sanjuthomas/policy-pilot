@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from chat_application.auth.retrieval_scope import allowed_retrieval_lobs
 from chat_application.config import settings
 from chat_application.formatting.response import format_chat_response
 from chat_application.graph.cypher import extract_entity_ids, extract_uuids
@@ -45,6 +46,7 @@ class InvestigateHandler:
             search_source=search_source,
             event_ids=event_ids,
             entity_ids=entity_ids,
+            allowed_lobs=allowed_retrieval_lobs(ctx.subject),
         )
         retrieval_ms = ctx.elapsed_ms()
 

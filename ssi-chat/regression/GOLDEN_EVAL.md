@@ -39,6 +39,9 @@ pytest tests/test_eval_metrics.py -v
 | `golden_instruction_denials_list_week` | events | deterministic | Can you list all instruction denial events for this week? | — | same deterministic gates | `exact_graph_rows: 4`; title `(4)`; Entity ID; instruction / `-I-` |
 | `golden_payment_denials_count_today` | events | deterministic | How many payment policy denial alerts happened today? | — | same deterministic gates | exact: “There were 3 payment policy denial events today.” (pay-203 APPROVE is an instruction VIEW ALERT) |
 | `golden_alerts_list_today_entity_ids` | events | deterministic | Can you report all ALERTS today? | — | same deterministic gates | `min_graph_rows: 2`; Entity ID + ALERT; `-I-` / `-P-` |
+| `golden_fo_fx_instruction_denials_scoped` | events | deterministic | How many instruction policy denials happened this week? | persona `fo-fx-101` | same deterministic gates | exact: “There were no…” (LOB-scoped retrieval, issue #63) |
+| `golden_fo_fx_payment_denials_scoped` | events | deterministic | How many payment policy denial alerts happened today? | persona `fo-fx-101` | same | exact: “There were no…” |
+| `golden_fo_ficc_instruction_denials_positive` | events | deterministic | How many instruction policy denials happened this week? | persona `fo-ficc-101` | same | exact: “There were 4…” (FICC desk sees FICC events) |
 
 Pinned exact totals assume the shared harness seed in `eval_golden.yaml` / `questions.yaml` after truncate+reload. Golden runs **before** API smoke in the default suite so FO/MO VIEW denial ALERTs do not inflate counts. Do not re-seed on a warm graph before golden runs (`--no-seed`) or counts inflate.
 
@@ -57,7 +60,7 @@ Pinned exact totals assume the shared harness seed in `eval_golden.yaml` / `ques
 
 | Retrieval | Count | Case IDs |
 |-----------|------:|----------|
-| deterministic | 10 | `golden_payment_creator`, `golden_payment_status`, `golden_events_top_denial_user`, `golden_instruction_status`, `golden_instruction_view_fo_ficc`, `golden_instruction_view_mo_covering_ficc`, `golden_instruction_denials_count_week`, `golden_instruction_denials_list_week`, `golden_payment_denials_count_today`, `golden_alerts_list_today_entity_ids` |
+| deterministic | 13 | prior ten + `golden_fo_fx_instruction_denials_scoped`, `golden_fo_fx_payment_denials_scoped`, `golden_fo_ficc_instruction_denials_positive` |
 | graph | 3 | `golden_events_count_today`, `golden_events_who_approved_payment`, `golden_vector_security_summary` |
 | vector | 0 | (vector channel gate deferred; narrative case tagged graph for routing defaults) |
 

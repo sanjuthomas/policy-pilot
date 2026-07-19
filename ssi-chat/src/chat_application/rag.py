@@ -640,9 +640,15 @@ class RagService:
         message: str,
         *,
         mode: SearchMode,
+        allowed_lobs: frozenset[str] | None = None,
     ):
         try:
-            result = await try_neo4j_direct_answer(self.neo4j, message, mode=mode)
+            result = await try_neo4j_direct_answer(
+                self.neo4j,
+                message,
+                mode=mode,
+                allowed_lobs=allowed_lobs,
+            )
         except Exception as exc:
             logger.warning("neo4j direct answer failed: %s", exc)
             return None
@@ -763,60 +769,74 @@ class RagService:
         return (exact_ranked + remainder)[: settings.max_context_hits]
 
     async def _search_graph(
-        self, question: str, *, mode: SearchMode = "events"
+        self,
+        question: str,
+        *,
+        mode: SearchMode = "events",
+        allowed_lobs: frozenset[str] | None = None,
     ) -> dict[str, Any]:
-        planned = plan_graph_queries(question, mode=mode)
-        cypher_provenance: str = "predefined_planned" if planned else "none"
+        from cypher_builder import retrieval_lob_scope
 
-        if planned is None:
-            try:
-                graph_plan = await self.ml_client.extract_graph_query_plan(
-                    question, mode=mode
-                )
-                planned = plans_from_graph_query(
-                    graph_plan, mode=mode, question=question
-                )
-                if planned:
-                    cypher_provenance = "llm_graph_plan"
-            except Exception as exc:
-                logger.warning("graph plan extraction failed: %s", exc)
-                from chat_application.gemini.errors import is_gemini_rate_limit_error
+        from chat_application.auth.retrieval_scope import filter_rows_by_retrieval_lobs
 
-                return {
-                    "cypher": None,
-                    "rows": [],
-                    "cypher_provenance": "none",
-                    "graph_unavailable": True,
-                    "planned": None,
-                    "llm_rate_limited": is_gemini_rate_limit_error(exc),
-                }
+        with retrieval_lob_scope(allowed_lobs):
+            planned = plan_graph_queries(question, mode=mode)
+            cypher_provenance: str = "predefined_planned" if planned else "none"
 
-        if planned is not None:
-            try:
-                result = await self._run_planned_graph_queries(planned)
-                return {
-                    **result,
-                    "cypher_provenance": cypher_provenance,
-                    "graph_unavailable": False,
-                }
-            except Exception as exc:
-                logger.warning("planned graph query failed: %s", exc)
-                return {
-                    "cypher": None,
-                    "rows": [],
-                    "cypher_provenance": cypher_provenance,
-                    "graph_unavailable": True,
-                    "planned": planned,
-                }
+            if planned is None:
+                try:
+                    graph_plan = await self.ml_client.extract_graph_query_plan(
+                        question, mode=mode
+                    )
+                    planned = plans_from_graph_query(
+                        graph_plan, mode=mode, question=question
+                    )
+                    if planned:
+                        cypher_provenance = "llm_graph_plan"
+                except Exception as exc:
+                    logger.warning("graph plan extraction failed: %s", exc)
+                    from chat_application.gemini.errors import (
+                        is_gemini_rate_limit_error,
+                    )
 
-        # Graph was attempted but no executable plan was produced.
-        return {
-            "cypher": None,
-            "rows": [],
-            "cypher_provenance": "none",
-            "graph_unavailable": True,
-            "planned": None,
-        }
+                    return {
+                        "cypher": None,
+                        "rows": [],
+                        "cypher_provenance": "none",
+                        "graph_unavailable": True,
+                        "planned": None,
+                        "llm_rate_limited": is_gemini_rate_limit_error(exc),
+                    }
+
+            if planned is not None:
+                try:
+                    result = await self._run_planned_graph_queries(planned)
+                    rows = filter_rows_by_retrieval_lobs(
+                        list(result.get("rows") or []), allowed_lobs
+                    )
+                    return {
+                        **result,
+                        "rows": rows,
+                        "cypher_provenance": cypher_provenance,
+                        "graph_unavailable": False,
+                    }
+                except Exception as exc:
+                    logger.warning("planned graph query failed: %s", exc)
+                    return {
+                        "cypher": None,
+                        "rows": [],
+                        "cypher_provenance": cypher_provenance,
+                        "graph_unavailable": True,
+                        "planned": planned,
+                    }
+
+            return {
+                "cypher": None,
+                "rows": [],
+                "cypher_provenance": "none",
+                "graph_unavailable": True,
+                "planned": None,
+            }
 
     async def _run_planned_graph_queries(
         self, planned: list[tuple[str, str]]
