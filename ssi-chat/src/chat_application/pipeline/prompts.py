@@ -21,8 +21,12 @@ Paths (set `path` to exactly one):
   Set person_query to the name or id.
 - eligibility: forward-looking who can approve/authorize/green-light a specific payment or instruction.
   Set eligibility_target. Also set strategy=eligibility.
-- graph: counts, totals, rankings, lists, timelines, ID lookups, who already approved/when.
-  Set strategy=graph.
+- neo4j_direct: known deterministic graph shapes — exact counts, rankings, show/get by id,
+  inventory lists, creator/approver/status by id, denial/alert lists that match predefined
+  YAML or planned Cypher. Prefer this over graph when a structured list/count/id lookup
+  can be answered without open-ended Cypher.
+- graph: ad-hoc structured investigation that still needs LLM Cypher planning (unusual
+  graph shapes not covered by neo4j_direct). Set strategy=graph.
 - vector: open-ended policy explanation without exact counts/lists; "why was X denied";
   brief narratives / audit-log overviews of recent denial activity (no id, no how-many).
   Set strategy=vector.
@@ -45,7 +49,8 @@ Rules:
   "Who can create payments for FICC / FX / DESK_RATES?" → me (me_kind=who_can_create,
   me_action=CREATE, me_entity_type=payment). Desk codes like DESK_RATES are LOBs.
   "Who covers LOB FICC?" → me (me_kind=who_covers_lob) — covering_lobs directory, not create.
-- eligibility vs graph: future/potential approvers → eligibility; past "who approved" → graph.
+- eligibility vs neo4j_direct/graph: future/potential approvers → eligibility;
+  past "who approved" / show-by-id / how-many → neo4j_direct (preferred) or graph.
 - eligibility vs skill: "who can approve payment Y?" → eligibility; "please approve payment Y" → skill + approve_payment.
   "who can cancel payment Y?" → eligibility; "please cancel payment Y" → skill + cancel_payment.
 - eligibility vs policy_directory: specific entity id / who can approve this payment → eligibility;
@@ -53,7 +58,8 @@ Rules:
 - who covers LOB X (covering_lobs directory) → me with me_kind=who_covers_lob — not vector, not graph.
 - When search mode is Policies, prefer policy_summary / policy_directory / eligibility / person_permissions
   over vector unless the question is purely explanatory.
-- Prefer graph over hybrid when structured data alone can answer.
-- Prefer vector (not graph/hybrid) for brief narratives, audit-log overviews, or
+- Prefer neo4j_direct over graph for how-many / which-user / list / show-by-id shapes.
+- Prefer graph over hybrid when structured data alone can answer but neo4j_direct does not fit.
+- Prefer vector (not graph/hybrid/neo4j_direct) for brief narratives, audit-log overviews, or
   "recent policy denial activity" prose when there is no entity id and no count/list ask.
 """

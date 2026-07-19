@@ -37,8 +37,11 @@ RetrievalPath = Literal[
     "neo4j_direct",
     "eligibility",
     "policy_directory",
+    "policy_summary",
+    "person_permissions",
     "full_rag",
     "skill",
+    "me",
 ]
 
 RetrievalStrategy = Literal[
@@ -135,8 +138,12 @@ def classify_retrieval_strategy(
         return "eligibility"
     if path == "policy_directory":
         return "policy_directory"
+    if path in ("policy_summary", "person_permissions"):
+        return "eligibility"
     if path == "skill":
         return "skill"
+    if path == "me":
+        return "deterministic"
     if path == "neo4j_direct":
         return "deterministic"
 

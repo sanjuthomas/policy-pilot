@@ -9,6 +9,7 @@ from chat_application.pipeline.heuristic_strategy import (
     infer_execution_strategy_heuristic,
     is_graph_structured_question,
     is_open_narrative_question,
+    prefer_neo4j_direct_when_matched,
     prefer_vector_for_open_narrative,
 )
 from chat_application.pipeline.models import RouterDecision
@@ -53,6 +54,18 @@ class TestHeuristicStrategy:
         assert not is_open_narrative_question(question, mode="events")
         decision = RouterDecision(path="graph", strategy="graph")
         assert prefer_vector_for_open_narrative(decision, question, mode="events") is decision
+
+    def test_yaml_match_clamps_graph_to_neo4j_direct(self) -> None:
+        question = "Who created 20260703-FICC-I-1?"
+        decision = RouterDecision(path="graph", strategy="graph", reasoning="llm")
+        forced = prefer_neo4j_direct_when_matched(decision, question, mode="events")
+        assert forced.path == "neo4j_direct"
+        assert "clamped neo4j_direct" in (forced.reasoning or "")
+
+    def test_yaml_match_does_not_clamp_vector(self) -> None:
+        question = "Who created 20260703-FICC-I-1?"
+        decision = RouterDecision(path="vector", strategy="vector")
+        assert prefer_neo4j_direct_when_matched(decision, question, mode="events") is decision
 
     def test_eligibility_heuristic(self) -> None:
         decision = heuristic_router_decision(
@@ -153,7 +166,12 @@ class TestRouteQuestion:
         set_router_decision(mock_ml_client, GRAPH)
         from chat_application.pipeline.route import route_question
 
-        decision = await route_question(mock_ml_client, "How many alerts?", mode="events")
+        # Ad-hoc wording with no YAML match stays graph.
+        decision = await route_question(
+            mock_ml_client,
+            "unusual alert wording with no planned match",
+            mode="events",
+        )
         assert decision.strategy == "graph"
         assert decision.path == "graph"
         mock_ml_client.route_query.assert_awaited_once()
@@ -163,8 +181,12 @@ class TestRouteQuestion:
         mock_ml_client.route_query = AsyncMock(side_effect=RuntimeError("router down"))
         from chat_application.pipeline.route import route_question
 
-        decision = await route_question(mock_ml_client, "How many alerts?", mode="events")
-        assert decision.strategy == "graph"
+        decision = await route_question(
+            mock_ml_client,
+            "How many ALERT events happened today?",
+            mode="events",
+        )
+        assert decision.path == "neo4j_direct"
 
     def test_router_decision_normalizes_legacy_strategy(self) -> None:
         decision = RouterDecision(strategy="vector", reasoning="legacy")

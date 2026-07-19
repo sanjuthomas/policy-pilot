@@ -17,12 +17,13 @@ TOOL_PATHS = frozenset(
 )
 SKILL_PATHS = frozenset({"skill"})
 ME_PATHS = frozenset({"me"})
+NEO4J_DIRECT_PATHS = frozenset({"neo4j_direct"})
 
 # Mutations stay on Payments (+ all). Investigation modes never run skills.
 SKILL_MODES = frozenset({"payments", "all"})
 # Live OPA / directory / person tools stay on Policies mode.
 TOOL_MODES = frozenset({"policies"})
-# Neo4j + vector investigation.
+# Neo4j + vector investigation (and path-owned neo4j_direct).
 INVESTIGATE_MODES = frozenset({"events", "instructions", "payments", "all"})
 
 
@@ -30,6 +31,7 @@ class HandlerLane(str, Enum):
     SKILL = "skill"
     ME = "me"
     TOOLS = "tools"
+    NEO4J_DIRECT = "neo4j_direct"
     INVESTIGATE = "investigate"
 
 
@@ -57,6 +59,8 @@ def lane_for_path(path: str | None) -> HandlerLane:
         return HandlerLane.ME
     if path in TOOL_PATHS:
         return HandlerLane.TOOLS
+    if path in NEO4J_DIRECT_PATHS:
+        return HandlerLane.NEO4J_DIRECT
     return HandlerLane.INVESTIGATE
 
 
@@ -66,7 +70,7 @@ def resolve_lane_access(
     mode: SearchMode,
     capabilities: ChatCapabilities,
 ) -> LaneAccess:
-    """Hard fence: skills / tools / investigate are separate surfaces."""
+    """Hard fence: skills / tools / neo4j_direct / investigate are separate surfaces."""
     lane = lane_for_path(path)
 
     if lane == HandlerLane.SKILL:
@@ -88,22 +92,19 @@ def resolve_lane_access(
         return LaneAccess(True, lane)
 
     if lane == HandlerLane.ME:
-        # Me-intents are available in any mode once the subject is authenticated;
-        # policies mode still allows me-centric questions for FO/MO analysts.
         return LaneAccess(True, lane)
 
-    # Investigate (or policies-mode fallthrough after tools)
+    # neo4j_direct + investigate share investigation modes
     if mode == "policies":
         if capabilities.can_use_policies:
-            # Tools lane should have handled dedicated paths;
-            # guidance / empty policies fallthrough is allowed.
+            # Dedicated tool paths already handled above; policies fallthrough → tools guidance.
             return LaneAccess(True, HandlerLane.TOOLS)
         return LaneAccess(False, HandlerLane.TOOLS, DenialReason.POLICIES_MODE_OPERATIONAL)
 
     if mode not in INVESTIGATE_MODES:
         return LaneAccess(False, lane, DenialReason.TOOLS_WRONG_MODE)
 
-    return LaneAccess(True, HandlerLane.INVESTIGATE)
+    return LaneAccess(True, lane)
 
 
 def denial_message(reason: DenialReason) -> tuple[str, Literal["skill", "eligibility", "formatter"]]:

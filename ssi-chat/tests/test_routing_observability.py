@@ -256,7 +256,7 @@ class TestRequestedVsExecutedPath:
             message="Who created i1?",
             history=[],
             mode="events",
-            decision=RouterDecision(path="graph", strategy="graph"),
+            decision=RouterDecision(path="neo4j_direct"),
             subject=None,
             capabilities=MagicMock(),
             bearer_token=None,
@@ -267,7 +267,8 @@ class TestRequestedVsExecutedPath:
         assert response is not None
         assert response.routing is not None
         assert response.routing.path == "neo4j_direct"
-        assert response.routing.requested_path == "graph"
+        # Same requested/executed → finalize clears requested_path (path is law).
+        assert response.routing.requested_path is None
 
 
 class TestRagRoutingIntegration:
@@ -299,7 +300,9 @@ class TestRagRoutingIntegration:
         assert response.routing.cypher_provenance == "predefined_yaml"
         assert response.routing.answer_synthesis == "formatter"
         assert response.routing.intent_id == "instruction.creator_by_id"
-        assert response.routing.requested_path == "graph"
+        # GRAPH fixture is clamped to neo4j_direct when YAML matches (path is law).
+        # Same requested/executed → finalize clears requested_path.
+        assert response.routing.requested_path is None
 
     @pytest.mark.asyncio
     async def test_ask_full_rag_formatter_includes_routing(

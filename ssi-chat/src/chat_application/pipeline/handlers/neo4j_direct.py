@@ -9,24 +9,16 @@ from chat_application.observability.routing import (
 )
 from chat_application.pipeline.handlers.base import HandlerContext
 
-# Dedicated tool/skill/me paths must not be stolen by Neo4j direct.
-_SKIP_DIRECT_PATHS = frozenset(
-    {
-        "skill",
-        "me",
-        "policy_summary",
-        "policy_directory",
-        "person_permissions",
-        "eligibility",
-    }
-)
-
 
 class Neo4jDirectHandler:
-    """Latency fast-path: YAML + planned Cypher formatters (not primary NLU)."""
+    """Path-owned deterministic fast path: YAML + planned Cypher formatters.
+
+    Only runs when ``RouterDecision.path == neo4j_direct`` (path is law).
+    No longer steals investigate turns that routed to graph/vector/hybrid.
+    """
 
     async def handle(self, ctx: HandlerContext) -> ChatResponse | None:
-        if ctx.path in _SKIP_DIRECT_PATHS:
+        if ctx.path != "neo4j_direct":
             return None
 
         direct = await ctx.service._try_neo4j_direct_answer(

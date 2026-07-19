@@ -19,7 +19,11 @@ from chat_application.pipeline.models import RouterDecision
 GRAPH = RouterDecision(
     path="graph",
     strategy="graph",
-    reasoning="fixture: structured graph/count/list question",
+    reasoning="fixture: ad-hoc structured graph / LLM Cypher",
+)
+NEO4J_DIRECT = RouterDecision(
+    path="neo4j_direct",
+    reasoning="fixture: YAML/planned deterministic graph shape",
 )
 VECTOR = RouterDecision(
     path="vector",
@@ -84,6 +88,7 @@ def set_router_decision(ml_client, decision: RouterDecision) -> RouterDecision:
 # Paths that must stay fixture-covered in unit tests (issue #13).
 REQUIRED_PATH_FIXTURES: tuple[RouterDecision, ...] = (
     GRAPH,
+    NEO4J_DIRECT,
     VECTOR,
     HYBRID,
     ELIGIBILITY_PAYMENT,

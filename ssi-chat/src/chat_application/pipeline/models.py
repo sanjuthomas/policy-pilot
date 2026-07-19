@@ -14,6 +14,7 @@ IntentPath = Literal[
     "policy_directory",
     "person_permissions",
     "eligibility",
+    "neo4j_direct",
     "graph",
     "vector",
     "hybrid",
@@ -51,6 +52,7 @@ class RouterDecision(BaseModel):
         default=None,
         description=(
             "Primary intent path. Use skill/me/policy_* for dedicated handlers; "
+            "neo4j_direct for known YAML/planned deterministic shapes; "
             "eligibility/graph/vector/hybrid for retrieval."
         ),
     )
@@ -58,7 +60,7 @@ class RouterDecision(BaseModel):
         default=None,
         description=(
             "Retrieval strategy when path is eligibility/graph/vector/hybrid. "
-            "Ignored for skill/me/policy_* paths. Legacy field — prefer path."
+            "Ignored for skill/me/policy_*/neo4j_direct paths. Legacy field — prefer path."
         ),
     )
     eligibility_target: EligibilityTarget | None = Field(

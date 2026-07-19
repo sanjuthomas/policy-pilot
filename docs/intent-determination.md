@@ -6,9 +6,9 @@ This document describes how **ssi-chat** decides what to do with a natural-langu
 
 | Layer | Mechanism | Purpose |
 |-------|-----------|---------|
-| **Route** | Gemini Flash + structured `RouterDecision` JSON (**9** paths; **4** retrieval strategies) | Pick intent / backends from question meaning |
-| **Fast paths** | Neo4j direct YAML intents, live OPA eligibility API | Skip full RAG when a specialized handler applies |
-| **Retrieve** | Selective backends (graph, vector, or both) | Avoid merging unrelated search results |
+| **Route** | Gemini Flash + structured `RouterDecision` JSON (**10** paths; **4** retrieval strategies) | Pick intent / backends from question meaning |
+| **Path-owned handlers** | skill / me / policy tools / `neo4j_direct` / investigate — no steal | One handler per path |
+| **Retrieve** | Selective backends (graph, vector, or both) on investigate only | Avoid merging unrelated search results |
 | **Synthesize** | Deterministic formatters or Gemini | Produce the final answer from retrieved context |
 
 We do **not** use fuzzy ML text classification for routing. Intent is expressed as a strict Pydantic schema returned by Gemini structured output.
@@ -25,7 +25,7 @@ People can express the same intent with many wordings. Regex and keyword heurist
 | Regex / extractors for **slots** once intent is known (ids, amounts, dates, person name) | Fuzzy keyword scoring as the classifier |
 | Heuristic router **only** when the LLM call fails (resilience) | New regex-first skill or me-intent detectors |
 
-`RouterDecision.path` is the primary dispatch key (`skill`, `me`, `policy_summary`, `policy_directory`, `person_permissions`, `eligibility`, `graph`, `vector`, `hybrid`). See `.cursor/rules/intent-semantic-routing.mdc`.
+`RouterDecision.path` is the primary dispatch key (`skill`, `me`, `policy_summary`, `policy_directory`, `person_permissions`, `eligibility`, `neo4j_direct`, `graph`, `vector`, `hybrid`). **Path is law:** handlers do not silently override another path's execution (issue #8). After Gemini routes, a documented clamp may upgrade `graph`/`hybrid` → `neo4j_direct` when the Neo4j YAML matcher hits (never upgrades pure `vector`). See `.cursor/rules/intent-semantic-routing.mdc`.
 
 ## End-to-end flow
 

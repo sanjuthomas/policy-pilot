@@ -9,10 +9,7 @@ import pytest
 from chat_application.pipeline.models import RouterDecision
 from chat_application.pipeline.route import route_question
 from tests.fixtures import router_decisions as fixtures
-from tests.fixtures.router_decisions import (
-    REQUIRED_PATH_FIXTURES,
-    set_router_decision,
-)
+from tests.fixtures.router_decisions import REQUIRED_PATH_FIXTURES, set_router_decision
 
 
 class TestRouterDecisionFixtures:
@@ -36,10 +33,11 @@ class TestRouteFallbackOnly:
         client.route_query = AsyncMock(side_effect=RuntimeError("gemini down"))
         decision = await route_question(
             client,
-            "How many alerts today?",
+            "How many ALERT events happened today?",
             mode="events",
         )
-        assert decision.retrieval_strategy == "graph"
+        # Structured count → neo4j_direct (path is law) via heuristic + YAML match.
+        assert decision.path == "neo4j_direct"
         assert "heuristic fallback" in (decision.reasoning or "")
 
     @pytest.mark.asyncio
@@ -53,3 +51,26 @@ class TestRouteFallbackOnly:
         )
         assert decision.path == "eligibility"
         assert decision.eligibility_target == "payment"
+
+    @pytest.mark.asyncio
+    async def test_route_clamps_graph_to_neo4j_direct_when_yaml_matches(self) -> None:
+        client = MagicMock()
+        set_router_decision(client, fixtures.GRAPH)
+        decision = await route_question(
+            client,
+            "Who created 20260703-FICC-I-1?",
+            mode="events",
+        )
+        assert decision.path == "neo4j_direct"
+        assert "clamped neo4j_direct" in (decision.reasoning or "")
+
+    @pytest.mark.asyncio
+    async def test_route_does_not_clamp_vector_to_neo4j_direct(self) -> None:
+        client = MagicMock()
+        set_router_decision(client, fixtures.VECTOR)
+        decision = await route_question(
+            client,
+            "Who created 20260703-FICC-I-1?",
+            mode="events",
+        )
+        assert decision.path == "vector"
