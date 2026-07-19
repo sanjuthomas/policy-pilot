@@ -14,6 +14,7 @@ from chat_application.me.who_am_i import answer_who_am_i
 from chat_application.pipeline.handlers.base import HandlerContext
 from chat_application.pipeline.handlers.me import MeIntentHandler
 from chat_application.pipeline.models import RouterDecision
+from tests.fixtures.router_decisions import ME_WHO_AM_I, set_router_decision
 
 
 def _subject() -> Subject:
@@ -77,9 +78,7 @@ class TestWhoAmIFormatting:
         self, rag_service, mock_ml_client, mock_vector_search, mock_neo4j
     ) -> None:
         subject = _subject()
-        mock_ml_client.route_query = AsyncMock(
-            return_value=RouterDecision(path="me", me_kind="who_am_i")
-        )
+        set_router_decision(mock_ml_client, ME_WHO_AM_I)
         mock_neo4j.run_cypher = AsyncMock(return_value=[])
         mock_vector_search.search_vector = AsyncMock(return_value=[])
 

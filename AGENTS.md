@@ -42,9 +42,17 @@ done
 
 Do **not** commit or push if any service still reports errors.
 
-### Test coverage (minimum 80%)
+### Test coverage (minimum 80%, except ssi-chat 70%)
 
-Every Python service **except** `ssi-demo-harness` must maintain **≥ 80% line coverage** on its application package. The harness is integration/demo tooling and is exempt. Package `[tool.coverage.report] fail_under` must be **80** (not lower) so local `pytest --cov` matches CI.
+Every Python service **except** `ssi-demo-harness` must maintain line coverage on its application package. The harness is integration/demo tooling and is exempt.
+
+| Target | Gate |
+|--------|------|
+| Most application + `shared/*` packages | **≥ 80%** |
+| `ssi-chat` (`chat_application`) | **≥ 70%** — hermetic fixture `RouterDecision` contract; no Gemini in CI ([issue #13](https://github.com/sanjuthomas/policy-pilot/issues/13)). Do not pad coverage with heuristic-as-NLU tests. |
+| `ssi-demo-harness` | exempt |
+
+Package `[tool.coverage.report] fail_under` must match the gate above so local `pytest --cov` matches CI.
 
 | Target | Coverage package (`--cov`) |
 |--------|----------------------------|
@@ -62,7 +70,7 @@ Every Python service **except** `ssi-demo-harness` must maintain **≥ 80% line 
 | `shared/vertex_client` | `vertex_client` |
 | `shared/zitadel_directory` | `zitadel_directory` |
 
-When you add or change code in a service or shared package, **add or update tests** so coverage stays at or above 80%. Do not commit or push if coverage on a touched target falls below the threshold.
+When you add or change code in a service or shared package, **add or update tests** so coverage stays at or above the gate. Do not commit or push if coverage on a touched target falls below the threshold.
 
 #### One command (required before every commit/push)
 
@@ -72,28 +80,30 @@ From the repository root — run tests with coverage for each gated package:
 pip install pytest pytest-cov
 
 for spec in \
-  "instruction-service:inst" \
-  "payment-service:ps" \
-  "authorization-service:authz" \
-  "sequence-service:seq" \
-  "ssi-indexer:etl" \
-  "ssi-chat:chat_application" \
-  "shared/telemetry:telemetry" \
-  "shared/platform_auth:platform_auth" \
-  "shared/sequence_client:sequence_client" \
-  "shared/authz_client:authz_client" \
-  "shared/cypher_builder:cypher_builder" \
-  "shared/vertex_client:vertex_client" \
-  "shared/zitadel_directory:zitadel_directory"
+  "instruction-service:inst:80" \
+  "payment-service:ps:80" \
+  "authorization-service:authz:80" \
+  "sequence-service:seq:80" \
+  "ssi-indexer:etl:80" \
+  "ssi-chat:chat_application:70" \
+  "shared/telemetry:telemetry:80" \
+  "shared/platform_auth:platform_auth:80" \
+  "shared/sequence_client:sequence_client:80" \
+  "shared/authz_client:authz_client:80" \
+  "shared/cypher_builder:cypher_builder:80" \
+  "shared/vertex_client:vertex_client:80" \
+  "shared/zitadel_directory:zitadel_directory:80"
 do
   svc="${spec%%:*}"
-  pkg="${spec##*:}"
-  echo "=== $svc (≥80% on $pkg) ==="
+  rest="${spec#*:}"
+  pkg="${rest%%:*}"
+  gate="${rest##*:}"
+  echo "=== $svc (≥${gate}% on $pkg) ==="
   (
     cd "$svc"
     pip install -q -e .
     pip install -q pytest pytest-cov
-    pytest --cov="$pkg" --cov-report=term-missing --cov-fail-under=80
+    pytest --cov="$pkg" --cov-report=term-missing --cov-fail-under="$gate"
   )
 done
 ```
@@ -153,14 +163,14 @@ inside each service directory listed in the lint matrix:
 
 It also builds Docker images for those application services (including `payment-service`) and runs Rego unit tests under `opa-policy-seed/policies` via the official OPA image.
 
-The same workflow runs **unit test coverage** (≥ 80% line coverage) for:
+The same workflow runs **unit test coverage** (≥ 80% line coverage, **ssi-chat ≥ 70%**) for:
 
 - `instruction-service` (`inst`)
 - `payment-service` (`ps`)
 - `authorization-service` (`authz`)
 - `sequence-service` (`seq`)
 - `ssi-indexer` (`etl`)
-- `ssi-chat` (`chat_application`)
+- `ssi-chat` (`chat_application`, gate **70%**)
 - `shared/telemetry` (`telemetry`)
 - `shared/platform_auth` (`platform_auth`)
 - `shared/sequence_client` (`sequence_client`)
@@ -207,7 +217,7 @@ When removing a symbol from code, **remove its import** in the same edit (`F401`
 
 1. Make code changes.
 2. Run the **required** lint loop (`--fix` then verify) on every touched Python service.
-3. Run the **required** coverage loop (≥ 80%) on every touched non-harness service; add tests when needed.
+3. Run the **required** coverage loop (gate per package: 80%, or 70% for `ssi-chat`) on every touched non-harness service; add tests when needed.
 4. Fix any remaining errors manually — do not push with lint failures or sub-threshold coverage.
 5. Commit only when the user asks; if committing, ensure all touched Python services pass lint and all non-harness application services meet coverage.
 6. After push, confirm the GitHub Actions **Build** workflow succeeds (lint, coverage, and Docker build jobs).
@@ -230,7 +240,7 @@ See the root [README.md](README.md) for architecture, storage names, and demo UR
 
 - Match existing code style in each service (imports, naming, FastAPI patterns).
 - Keep changes focused; avoid unrelated refactors.
-- Maintain **≥ 80% test coverage** on application packages (`inst`, `ps`, `authz`, `seq`, `etl`, `chat_application`) and all `shared/*` packages listed above; `ssi-demo-harness` is exempt.
+- Maintain gated test coverage on application packages (`inst`, `ps`, `authz`, `seq`, `etl`, `chat_application` at **70%**, others **80%**) and all `shared/*` packages listed above; `ssi-demo-harness` is exempt.
 - **ssi-chat intent thumb rule:** determine natural-language intent with Gemini structured output / LLM semantic routing (`RouterDecision.path`) — not regex or fuzzy classification. Regex is OK for slot parsing (ids, amounts) and LLM-failure fallback only. Details: [docs/intent-determination.md](docs/intent-determination.md) and `.cursor/rules/intent-semantic-routing.mdc`.
 - Do not commit secrets (`.env`, PAT files, credentials).
 - Only create git commits when the user explicitly asks.

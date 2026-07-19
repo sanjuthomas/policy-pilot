@@ -37,7 +37,7 @@ jobs:
         working-directory: ${{ matrix.service }}
         run: ruff check src/ --select E,F,W,I --ignore E501
 
-  # ── Unit test coverage (≥80%, excludes test harness) ───────────────────────
+  # ── Unit test coverage (≥80% except ssi-chat 70%; excludes test harness) ──
   test-coverage:
     name: Coverage — ${{ matrix.service }}
     runs-on: ubuntu-latest
@@ -48,42 +48,56 @@ jobs:
           - service: instruction-service
             package: inst
             extra: dev
+            fail_under: 80
           - service: payment-service
             package: ps
             extra: dev
+            fail_under: 80
           - service: authorization-service
             package: authz
             extra: dev
+            fail_under: 80
           - service: sequence-service
             package: seq
             extra: dev
+            fail_under: 80
           - service: ssi-indexer
             package: etl
             extra: dev
+            fail_under: 80
           - service: ssi-chat
             package: chat_application
             extra: regression
+            # Fixture RouterDecision contract; no Gemini in CI (issue #13).
+            fail_under: 70
           - service: shared/telemetry
             package: telemetry
             extra: dev
+            fail_under: 80
           - service: shared/platform_auth
             package: platform_auth
             extra: dev
+            fail_under: 80
           - service: shared/sequence_client
             package: sequence_client
             extra: dev
+            fail_under: 80
           - service: shared/authz_client
             package: authz_client
             extra: dev
+            fail_under: 80
           - service: shared/cypher_builder
             package: cypher_builder
             extra: dev
+            fail_under: 80
           - service: shared/vertex_client
             package: vertex_client
             extra: dev
+            fail_under: 80
           - service: shared/zitadel_directory
             package: zitadel_directory
             extra: dev
+            fail_under: 80
 
     steps:
       - uses: actions/checkout@v4
@@ -108,7 +122,7 @@ jobs:
         working-directory: ${{ matrix.service }}
         run: |
           pip install --quiet -e ".[${{ matrix.extra }}]"
-          pytest --cov=${{ matrix.package }} --cov-report=term-missing --cov-fail-under=80
+          pytest --cov=${{ matrix.package }} --cov-report=term-missing --cov-fail-under=${{ matrix.fail_under }}
 
   # ── Docker build ───────────────────────────────────────────────────────────
   docker-build:

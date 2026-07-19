@@ -220,6 +220,16 @@ docker compose up -d ssi-chat
 
 Ensure `GCP_SA_KEY_PATH` in `.env` points to a valid service account key (same as ssi-indexer).
 
+## Unit tests (CI, no Gemini)
+
+Hermetic coverage uses fixture `RouterDecision` values
+([`tests/fixtures/router_decisions.py`](tests/fixtures/router_decisions.py)) as the
+production routing contract. Happy-path tests must **not** treat
+`heuristic_router_decision` as Gemini NLU — heuristics are LLM-failure fallback only
+([issue #13](https://github.com/sanjuthomas/policy-pilot/issues/13)).
+
+Coverage gate for `chat_application` is **70%** (other packages remain 80%).
+
 ## Regression suite
 
 Harness seed from `questions.yaml` runs **by default** (use `--no-seed` to skip):

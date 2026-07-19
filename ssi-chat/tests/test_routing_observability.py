@@ -16,6 +16,7 @@ from chat_application.observability.routing import (
     record_answer_routing_metrics,
     reset_routing_distribution,
 )
+from tests.fixtures.router_decisions import GRAPH, set_router_decision
 
 
 @pytest.fixture(autouse=True)
@@ -274,6 +275,7 @@ class TestRagRoutingIntegration:
     async def test_ask_neo4j_direct_includes_routing(
         self, rag_service, mock_ml_client, mock_vector_search, mock_neo4j
     ) -> None:
+        set_router_decision(mock_ml_client, GRAPH)
         mock_neo4j.run_cypher = AsyncMock(
             return_value=[
                 {
@@ -297,11 +299,13 @@ class TestRagRoutingIntegration:
         assert response.routing.cypher_provenance == "predefined_yaml"
         assert response.routing.answer_synthesis == "formatter"
         assert response.routing.intent_id == "instruction.creator_by_id"
+        assert response.routing.requested_path == "graph"
 
     @pytest.mark.asyncio
     async def test_ask_full_rag_formatter_includes_routing(
         self, rag_service, mock_ml_client, mock_vector_search, mock_neo4j
     ) -> None:
+        set_router_decision(mock_ml_client, GRAPH)
         rag_service._try_neo4j_direct_answer = AsyncMock(return_value=None)
         mock_vector_search.search_vector = AsyncMock(return_value=[])
         mock_neo4j.run_cypher = AsyncMock(return_value=[{"total": 0}])

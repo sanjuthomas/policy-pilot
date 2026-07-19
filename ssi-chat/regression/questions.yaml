@@ -2,12 +2,15 @@
 #
 # retrieval — primary engine expected to produce the answer:
 #   deterministic  Neo4j planned query + formatter (skips LLM synthesis)
-#   graph          Neo4j planned or LLM Cypher is authoritative (vector runs but de-prioritized)
-#   vector         Neo4j dense vector hits are primary for open-ended event-log questions
-#   eligibility    Live OPA via authorization-service (no case in this bank yet)
+#   graph          Neo4j planned or LLM Cypher is authoritative (vector skipped)
+#   vector         Dense vector hits are primary for open-ended event-log questions
+#   eligibility    Live OPA via authorization-service (no case in this bank yet — issue #13)
+#   policy_directory  ZITADEL / covering_lobs directory (no case in this bank yet — issue #13)
 #   skill          Mutation skill phase-1 (+ optional confirm Go / No Go) under a persona
 #
-# Note: PolicyPilot still invokes dense vector search in parallel for all cases except eligibility.
+# Selective retrieval (pipeline/retrieve.py): vector runs only for strategy in
+# {vector, hybrid}; graph-only skips vector. Unit CI uses fixture RouterDecisions
+# (tests/fixtures/router_decisions.py), not live Gemini.
 #
 # Skill cases use ``persona`` (ZITADEL user id) and optional ``confirm.decision``.
 # Each skill case setups its own fixture via harness setup-skill-fixture and
