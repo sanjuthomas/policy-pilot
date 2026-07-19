@@ -3,6 +3,12 @@ from cypher_builder.builder import (
     CypherQueryBuilder,
     plans_from_graph_query,
 )
+from cypher_builder.entity_id import (
+    ParsedEntityId,
+    find_entity_ids,
+    normalize_sequence_entity_id,
+    parse_entity_id,
+)
 from cypher_builder.extraction import (
     GRAPH_QUERY_EXTRACTION_SYSTEM,
     build_extraction_user_prompt,
@@ -76,6 +82,7 @@ __all__ = [
     "GraphQueryPlan",
     "LOOKUP_INSTRUCTION_BY_EVENT_CYPHER",
     "MIN_GRAPH_QUERY_PLAN_CONFIDENCE",
+    "ParsedEntityId",
     "build_extraction_user_prompt",
     "canonicalize_instruction_type",
     "extract_entity_ids",
@@ -83,6 +90,7 @@ __all__ = [
     "extract_instruction_ids",
     "extract_payment_ids",
     "extract_uuids",
+    "find_entity_ids",
     "format_facet_aggregate_answer",
     "instruction_count_filters_from_question",
     "instruction_id_from_list_payments_question",
@@ -116,7 +124,9 @@ __all__ = [
     "is_security_event_group_by_lob_question",
     "lob_filter_from_question",
     "normalize_read_only_cypher",
+    "normalize_sequence_entity_id",
     "owning_lob_and_clause",
+    "parse_entity_id",
     "parse_graph_query_plan",
     "retrieval_lob_scope",
     "payment_aggregate_period_label",

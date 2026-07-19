@@ -115,6 +115,28 @@ class TestRoutingDistributionTracker:
         assert snapshot.by_strategy == {"deterministic": 1, "graph": 1}
         assert snapshot.by_path == {"neo4j_direct": 1, "full_rag": 1}
         assert snapshot.by_source_channel == {"vector": 2, "neo4j": 1}
+        assert snapshot.route_honored_total == 2
+        assert snapshot.route_override_total == 0
+        assert snapshot.by_path_pair == {
+            "neo4j_direct->neo4j_direct": 1,
+            "full_rag->full_rag": 1,
+        }
+
+    def test_distribution_tracks_requested_vs_executed_override(self) -> None:
+        log_answer_routing(
+            AnswerRouting(
+                path="neo4j_direct",
+                cypher_provenance="predefined_yaml",
+                answer_synthesis="formatter",
+                mode="events",
+                retrieval_strategy="deterministic",
+                requested_path="graph",
+            )
+        )
+        snapshot = get_routing_distribution()
+        assert snapshot.route_override_total == 1
+        assert snapshot.route_honored_total == 0
+        assert snapshot.by_path_pair == {"graph->neo4j_direct": 1}
 
     def test_finalize_populates_retrieval_strategy(self) -> None:
         response = finalize_chat_response(
@@ -156,3 +178,6 @@ class TestRoutingStatsEndpoint:
         payload = response.json()
         assert payload["total"] == 1
         assert payload["by_strategy"]["deterministic"] == 1
+        assert payload["route_honored_total"] == 1
+        assert payload["route_override_total"] == 0
+        assert payload["by_path_pair"]["neo4j_direct->neo4j_direct"] == 1

@@ -224,25 +224,33 @@ def extract_user_ids(text: str) -> list[str]:
 
 
 def build_match_context(question: str) -> dict[str, Any]:
-    instruction_ids = list(extract_instruction_ids(question))
-    if not instruction_ids:
-        mentions_instruction = bool(re.search(r"\binstruction\b", question, re.IGNORECASE))
-        for entity_id in extract_entity_ids(question):
-            if "-I-" in entity_id.upper():
-                instruction_ids.append(entity_id)
-            elif mentions_instruction and "-P-" not in entity_id.upper():
-                instruction_ids.append(entity_id)
-    instruction_ids = list(dict.fromkeys(instruction_ids))
-    payment_ids = extract_payment_ids(question) or [
-        entity_id
-        for entity_id in extract_entity_ids(question)
-        if "-P-" in entity_id.upper()
-    ]
+    from cypher_builder.entity_id import find_entity_ids
+
+    parsed = find_entity_ids(question)
+    instruction_ids = [p.normalized for p in parsed if p.is_instruction]
+    payment_ids = [p.normalized for p in parsed if p.is_payment]
+    # Legacy UUID / odd tokens still surface via extract_entity_ids when no I/P code.
+    if not instruction_ids and not payment_ids:
+        instruction_ids = list(extract_instruction_ids(question))
+        if not instruction_ids:
+            mentions_instruction = bool(re.search(r"\binstruction\b", question, re.IGNORECASE))
+            for entity_id in extract_entity_ids(question):
+                if "-I-" in entity_id.upper():
+                    instruction_ids.append(entity_id)
+                elif mentions_instruction and "-P-" not in entity_id.upper():
+                    instruction_ids.append(entity_id)
+            instruction_ids = list(dict.fromkeys(instruction_ids))
+        payment_ids = extract_payment_ids(question) or [
+            entity_id
+            for entity_id in extract_entity_ids(question)
+            if "-P-" in entity_id.upper()
+        ]
     user_ids = extract_user_ids(question)
     return {
         "instruction_ids": instruction_ids,
         "payment_ids": payment_ids,
         "user_id": user_ids[0] if user_ids else None,
+        "entity_stories": [p.story() for p in parsed],
     }
 
 

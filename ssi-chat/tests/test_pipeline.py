@@ -8,6 +8,8 @@ from chat_application.pipeline.heuristic_strategy import (
     heuristic_router_decision,
     infer_execution_strategy_heuristic,
     is_graph_structured_question,
+    is_open_narrative_question,
+    prefer_vector_for_open_narrative,
 )
 from chat_application.pipeline.models import RouterDecision
 
@@ -21,6 +23,29 @@ class TestHeuristicStrategy:
             "Why was payment X denied by policy?",
             mode="events",
         ) == "vector"
+
+    def test_open_narrative_routes_vector(self) -> None:
+        question = (
+            "Write a brief narrative about recent policy denial activity in the audit log."
+        )
+        assert is_open_narrative_question(question, mode="events")
+        assert infer_execution_strategy_heuristic(question, mode="events") == "vector"
+
+    def test_open_narrative_forces_vector_over_graph_router(self) -> None:
+        question = (
+            "Write a brief narrative about recent policy denial activity in the audit log."
+        )
+        decision = RouterDecision(path="graph", strategy="graph", reasoning="llm guess")
+        forced = prefer_vector_for_open_narrative(decision, question, mode="events")
+        assert forced.path == "vector"
+        assert forced.strategy == "vector"
+        assert forced.retrieval_strategy == "vector"
+
+    def test_open_narrative_does_not_steal_id_lookup(self) -> None:
+        question = "Write a brief narrative about instruction 20260719-FICC-I-14"
+        assert not is_open_narrative_question(question, mode="events")
+        decision = RouterDecision(path="graph", strategy="graph")
+        assert prefer_vector_for_open_narrative(decision, question, mode="events") is decision
 
     def test_eligibility_heuristic(self) -> None:
         decision = heuristic_router_decision(

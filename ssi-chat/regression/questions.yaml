@@ -395,6 +395,53 @@ cases:
     answer_contains_any:
     - creat
     - approv
+# Issue #52 / show-by-id: bare id must take the same Neo4j-direct path as with the noun.
+- id: instructions_show_by_id_with_noun
+  mode: instructions
+  retrieval: deterministic
+  tags:
+  - show
+  - id_lookup
+  - regression_guard
+  question: Can you show me the instruction {approved_instruction_id}?
+  expect:
+    requires_context:
+    - approved_instruction_id
+    require_routing: true
+    routing_path: neo4j_direct
+    cypher_class: deterministic
+    answer_synthesis: formatter
+    intent_id: instruction.show_by_id
+    require_entity_recall: true
+    min_answer_length: 10
+    answer_contains_any:
+    - instruction
+    - status
+    - ficc
+    - fx
+- id: instructions_show_by_id_bare
+  mode: instructions
+  retrieval: deterministic
+  tags:
+  - show
+  - id_lookup
+  - regression_guard
+  question: Can you show me {approved_instruction_id}?
+  expect:
+    requires_context:
+    - approved_instruction_id
+    require_routing: true
+    routing_path: neo4j_direct
+    cypher_class: deterministic
+    answer_synthesis: formatter
+    intent_id: instruction.show_by_id
+    require_entity_recall: true
+    min_answer_length: 10
+    answer_contains_any:
+    - instruction
+    - status
+    - ficc
+    - fx
 - id: instructions_created_by_mo100
   mode: instructions
   retrieval: graph
@@ -615,6 +662,50 @@ cases:
     - pay-
     - laurent
     - user
+- id: payments_show_by_id_with_noun
+  mode: payments
+  retrieval: deterministic
+  tags:
+  - show
+  - id_lookup
+  - regression_guard
+  question: Can you show me the payment {approved_payment_id}?
+  expect:
+    requires_context:
+    - approved_payment_id
+    require_routing: true
+    routing_path: neo4j_direct
+    cypher_class: deterministic
+    answer_synthesis: formatter
+    intent_id: payment.show_by_id
+    require_entity_recall: true
+    min_answer_length: 10
+    answer_contains_any:
+    - payment
+    - status
+    - amount
+- id: payments_show_by_id_bare
+  mode: payments
+  retrieval: deterministic
+  tags:
+  - show
+  - id_lookup
+  - regression_guard
+  question: Can you show me {approved_payment_id}?
+  expect:
+    requires_context:
+    - approved_payment_id
+    require_routing: true
+    routing_path: neo4j_direct
+    cypher_class: deterministic
+    answer_synthesis: formatter
+    intent_id: payment.show_by_id
+    require_entity_recall: true
+    min_answer_length: 10
+    answer_contains_any:
+    - payment
+    - status
+    - amount
 - id: payments_approved_by_pay201_week
   mode: payments
   retrieval: graph

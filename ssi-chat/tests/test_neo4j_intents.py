@@ -57,6 +57,21 @@ class TestNeo4jDirectMatching:
         assert "instruction_detail" in match.planned[0][0]
         assert "[:CURRENT]->" in match.planned[0][1]
 
+    def test_matches_show_instruction_by_id_without_noun(self) -> None:
+        """Bare 'show me <I-id>' is semantically the same as with 'the instruction'."""
+        question = "Can you show me 20260719-FICC-I-14?"
+        match = match_neo4j_direct_intent(question, mode="instructions")
+        assert match is not None
+        assert match.intent_id == "instruction.show_by_id"
+        assert match.formatter_name == "instruction_detail_by_id"
+
+    def test_matches_show_payment_by_id_without_noun(self) -> None:
+        question = "Can you show me 20260712-FICC-P-2?"
+        match = match_neo4j_direct_intent(question, mode="payments")
+        assert match is not None
+        assert match.intent_id == "payment.show_by_id"
+        assert match.formatter_name == "payment_detail_by_id"
+
     def test_matches_show_instruction_by_id_in_events_mode(self) -> None:
         question = "Can you show me instruction 20260717-FICC-I-19?"
         match = match_neo4j_direct_intent(question, mode="events")

@@ -55,6 +55,16 @@ _ELIGIBILITY_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Open prose / audit narratives — must stay on vector (no LLM Cypher planning).
+_OPEN_NARRATIVE_PATTERN = re.compile(
+    r"\b(brief\s+)?narrative\b|"
+    r"\bwrite\s+(me\s+)?(a\s+)?(brief\s+)?(narrative|summary|overview|story)\b|"
+    r"\brecent\s+policy\s+denial\s+activity\b|"
+    r"\bdenial\s+activity\b.+\baudit\s+log\b|"
+    r"\baudit\s+log\b.+\b(denial|activity)\b",
+    re.IGNORECASE,
+)
+
 _CREATE_PAYMENT_SKILL = re.compile(
     r"\b("
     r"(please\s+)?(create|draft)\s+(a\s+)?payment|"
@@ -193,7 +203,49 @@ def is_vector_semantic_question(question: str, *, mode: str) -> bool:
         return True
     if re.search(r"\bexplain\b|\bpolicy\b|\bdenied because\b", lowered):
         return True
+    if is_open_narrative_question(question, mode=mode):
+        return True
     return False
+
+
+def is_open_narrative_question(question: str, *, mode: str) -> bool:
+    """Prose narrative / audit-log overview — not counts, lists, or id lookups.
+
+    These must execute as ``vector`` so Neo4j LLM Cypher planning does not run
+    (golden ``cypher_class: none`` / vector-only path).
+    """
+    if is_graph_structured_question(question, mode=mode):
+        return False
+    from cypher_builder.entity_id import find_entity_ids
+
+    if find_entity_ids(question):
+        return False
+    return bool(_OPEN_NARRATIVE_PATTERN.search(question.strip()))
+
+
+def prefer_vector_for_open_narrative(
+    decision: RouterDecision,
+    message: str,
+    *,
+    mode: str,
+) -> RouterDecision:
+    """Clamp graph/hybrid router choices to vector for open narratives."""
+    if decision.path not in ("graph", "vector", "hybrid", "eligibility"):
+        return decision
+    if decision.retrieval_strategy not in ("graph", "hybrid"):
+        return decision
+    if not is_open_narrative_question(message, mode=mode):
+        return decision
+    prior = decision.retrieval_strategy
+    reasoning = (decision.reasoning or "").strip()
+    note = f"forced vector for open narrative (was {prior})"
+    return decision.model_copy(
+        update={
+            "path": "vector",
+            "strategy": "vector",
+            "reasoning": f"{reasoning}; {note}".strip("; "),
+        }
+    )
 
 
 def infer_execution_strategy_heuristic(question: str, *, mode: str) -> ExecutionStrategy:

@@ -128,9 +128,9 @@ Requires **compliance sign-in** at http://localhost:8092 (`comp-001` / `comp-002
 
 Every `POST /api/chat` answer records retrieval routing:
 
-- **Structured log** — `chat.answer.completed strategy=… path=… cypher=… synthesis=…` plus `chat.retrieval_strategy`, source channel counts, and timing fields on the log record.
-- **OTel counters** — `chat.retrieval.route.count` (by strategy/path/mode), `chat.retrieval.source.channel.count` (vector/neo4j/exact hits), duration histograms.
-- **Live distribution** — `GET /api/routing-stats` returns in-process counts since startup:
+- **Structured log** — `chat.answer.completed strategy=… path=… requested=… override=… cypher=… synthesis=…` plus `chat.retrieval_strategy`, source channel counts, and timing fields on the log record.
+- **OTel counters** — `chat.retrieval.route.count` (by strategy/path/mode), `chat.routing.path_decision.count` (requested vs executed path + `chat.route_override`), `chat.retrieval.source.channel.count` (vector/neo4j/exact hits), duration histograms.
+- **Live distribution** — `GET /api/routing-stats` returns in-process counts since startup (`route_override_total`, `route_honored_total`, `by_path_pair`, …):
 
 ```bash
 curl -s http://localhost:8092/api/routing-stats | jq

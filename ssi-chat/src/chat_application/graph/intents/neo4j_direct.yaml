@@ -53,7 +53,9 @@ intents:
   - id: instruction.show_by_id
     priority: 90
     modes: [instructions, all, events]
-    match: '\b(show|get|display|look\s*up|find|fetch|open|pull\s+up)\b.*\binstruction\b|\b(tell\s+me\s+about|details?\s+(?:for|of|on)|what\s+about)\b.*\binstruction\b|\binstruction\b\s+(?:id\s+)?\d{8}-[A-Z_]+-I-\d+'
+    # Noun optional: "show me <I-id>" is the same lookup as "show me the instruction <I-id>"
+    # (requires: instruction_id still gates on an extracted *-I-* id).
+    match: '\b(show|get|display|look\s*up|find|fetch|open|pull\s+up)\b.*\binstruction\b|\b(tell\s+me\s+about|details?\s+(?:for|of|on)|what\s+about)\b.*\binstruction\b|\binstruction\b\s+(?:id\s+)?\d{8}-[A-Z_]+-I-\d+|\b(show|get|display|look\s*up|find|fetch|open|pull\s+up|tell\s+me\s+about|details?\s+(?:for|of|on)|what\s+about)\b.*\d{8}-[A-Z_]+-I-\d+'
     exclude: '\bversions?\b|\bwho\s+created\b|\bwho\s+approv|\bstatus of\b|\bwhat is\s+the\s+status\b|\bcreate\b|\bdraft\b|\bpayments?\b|\beligible\b|\bcan\s+approv'
     requires:
       instruction_id: true
@@ -92,8 +94,9 @@ intents:
   - id: payment.show_by_id
     priority: 90
     modes: [payments, all, events]
-    match: '\b(show|get|display|look\s*up|find|fetch|open|pull\s+up)\b.*\bpayment\b|\b(tell\s+me\s+about|details?\s+(?:for|of|on)|what\s+about)\b.*\bpayment\b|\bpayment\b\s+(?:id\s+)?\d{8}-[A-Z]+-P-\d+'
-    exclude: '\bversions?\b|\bwho\s+created\b|\bwho\s+approv|\bstatus of\b|\bwhat is\s+the\s+status\b|\bcreate\b|\bdraft\b'
+    # Noun optional: "show me <P-id>" matches the same as "show me the payment <P-id>".
+    match: '\b(show|get|display|look\s*up|find|fetch|open|pull\s+up)\b.*\bpayment\b|\b(tell\s+me\s+about|details?\s+(?:for|of|on)|what\s+about)\b.*\bpayment\b|\bpayment\b\s+(?:id\s+)?\d{8}-[A-Z]+-P-\d+|\b(show|get|display|look\s*up|find|fetch|open|pull\s+up|tell\s+me\s+about|details?\s+(?:for|of|on)|what\s+about)\b.*\d{8}-[A-Z]+-P-\d+'
+    exclude: '\bversions?\b|\bwho\s+created\b|\bwho\s+approv|\bstatus of\b|\bwhat is\s+the\s+status\b|\bcreate\b|\bdraft\b|\binstructions?\b'
     requires:
       payment_id: true
     query: payment_detail_by_id

@@ -45,11 +45,29 @@ def test_regression_cases_all_have_retrieval():
 def test_regression_retrieval_distribution():
     suite = load_suite()
     counts = Counter(case.retrieval for case in suite.cases)
-    assert counts["deterministic"] == 24
+    assert counts["deterministic"] == 28
     assert counts["graph"] == 31
     assert counts["vector"] == 3
     assert counts.get("eligibility", 0) == 0
     assert counts["skill"] == 8
+
+
+def test_regression_show_by_id_bare_parity_cases():
+    """Guard: bare `show me <id>` must stay on the same neo4j_direct intent as with noun."""
+    suite = load_suite()
+    by_id = {case.id: case for case in suite.cases}
+    for case_id, intent in (
+        ("instructions_show_by_id_with_noun", "instruction.show_by_id"),
+        ("instructions_show_by_id_bare", "instruction.show_by_id"),
+        ("payments_show_by_id_with_noun", "payment.show_by_id"),
+        ("payments_show_by_id_bare", "payment.show_by_id"),
+    ):
+        case = by_id[case_id]
+        assert case.retrieval == "deterministic"
+        assert case.expect.require_routing is True
+        assert case.expect.routing_path == "neo4j_direct"
+        assert case.expect.intent_id == intent
+        assert case.expect.answer_synthesis == "formatter"
 
 
 def test_regression_seed_leaves_draft_for_submit_skill():

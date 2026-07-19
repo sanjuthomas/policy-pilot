@@ -794,13 +794,9 @@ def payment_aggregate_period_label(question: str) -> str:
 
 def normalize_sequence_entity_id(entity_id: str) -> str:
     """Normalize demo sequence IDs; repair common 7-digit date typos (0260704 → 20260704)."""
-    match = re.match(r"^(\d{7,8})-([A-Z0-9_]+)-([IP])-(\d+)$", entity_id.strip(), re.IGNORECASE)
-    if not match:
-        return entity_id.strip()
-    date_part, lob, kind, seq = match.groups()
-    if len(date_part) == 7 and date_part.startswith("0"):
-        date_part = f"2{date_part}"
-    return f"{date_part}-{lob.upper()}-{kind.upper()}-{seq}"
+    from cypher_builder.entity_id import normalize_sequence_entity_id as _normalize
+
+    return _normalize(entity_id)
 
 
 def is_max_payments_per_instruction_question(question: str) -> bool:
@@ -1116,22 +1112,16 @@ def _is_subordinate_approver_question(question: str) -> bool:
 
 def extract_payment_ids(text: str) -> list[str]:
     """Return sequence payment IDs (-P-) in order of appearance."""
-    return list(dict.fromkeys(match.group(0) for match in _SEQUENCE_PAYMENT_ID_PATTERN.finditer(text)))
+    from cypher_builder.entity_id import find_entity_ids
+
+    return [p.normalized for p in find_entity_ids(text) if p.is_payment]
 
 
 def extract_instruction_ids(text: str) -> list[str]:
     """Return sequence instruction IDs (-I-) in order of appearance."""
-    ids = list(
-        dict.fromkeys(match.group(0) for match in _SEQUENCE_INSTRUCTION_ID_PATTERN.finditer(text))
-    )
-    if not ids:
-        ids = [
-            match.group(1)
-            for match in _RELAXED_SEQUENCE_ENTITY_ID.finditer(text)
-            if re.search(r"-I-\d+$", match.group(1), re.IGNORECASE)
-        ]
-        ids = list(dict.fromkeys(ids))
-    return [normalize_sequence_entity_id(item) for item in ids]
+    from cypher_builder.entity_id import find_entity_ids
+
+    return [p.normalized for p in find_entity_ids(text) if p.is_instruction]
 
 
 def is_instruction_approver_via_payment_question(question: str) -> bool:
@@ -2253,10 +2243,22 @@ def extract_uuids(text: str) -> list[str]:
 
 def extract_entity_ids(text: str) -> list[str]:
     """Return unique instruction/payment business IDs (sequence or legacy UUID)."""
+    from cypher_builder.entity_id import find_entity_ids, parse_entity_id
+
+    sequence = [p.normalized for p in find_entity_ids(text)]
+    if sequence:
+        # Prefer structured sequence ids when present; still append legacy UUIDs.
+        uuids = list(dict.fromkeys(match.group(0) for match in _UUID_PATTERN.finditer(text)))
+        return list(dict.fromkeys([*sequence, *uuids]))
+
     ids = list(dict.fromkeys(match.group(1) for match in _ENTITY_ID_PATTERN.finditer(text)))
     if not ids:
         ids = list(dict.fromkeys(match.group(1) for match in _RELAXED_SEQUENCE_ENTITY_ID.finditer(text)))
-    return [normalize_sequence_entity_id(item) for item in ids]
+    normalized: list[str] = []
+    for item in ids:
+        parsed = parse_entity_id(item)
+        normalized.append(parsed.normalized if parsed else item.strip())
+    return list(dict.fromkeys(normalized))
 
 
 def extract_event_id(row: dict[str, Any]) -> str | None:

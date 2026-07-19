@@ -167,13 +167,24 @@ def test_summarize_suite_quality():
 def test_golden_eval_yaml_loads():
     raw = yaml.safe_load(GOLDEN.read_text(encoding="utf-8"))
     suite = RegressionSuite.model_validate({"seed": {}, **raw})
-    assert len(suite.cases) >= 16
+    assert len(suite.cases) >= 20
     for case in suite.cases:
         assert case.expect.require_routing is True
     p0 = {c.id for c in suite.cases if "p0" in c.tags}
     assert "golden_instruction_denials_count_week" in p0
     assert "golden_payment_denials_count_today" in p0
     assert suite.seed.steps, "golden suite must carry the harness seed plan"
+    by_id = {c.id: c for c in suite.cases}
+    for case_id, intent in (
+        ("golden_instruction_show_by_id_with_noun", "instruction.show_by_id"),
+        ("golden_instruction_show_by_id_bare", "instruction.show_by_id"),
+        ("golden_payment_show_by_id_with_noun", "payment.show_by_id"),
+        ("golden_payment_show_by_id_bare", "payment.show_by_id"),
+    ):
+        case = by_id[case_id]
+        assert case.expect.routing_path == "neo4j_direct"
+        assert case.expect.intent_id == intent
+        assert "regression_guard" in case.tags
 
 
 @pytest.mark.parametrize(
