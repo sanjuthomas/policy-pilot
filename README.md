@@ -107,14 +107,59 @@ Prerequisites and GCP Vertex setup: **[How it works — Quick start](docs/how-it
 
 ## Go deeper
 
+### Governance and product
+
 | Document | Contents |
 |----------|----------|
-| **[How it works](docs/how-it-works.md)** | Integration, data flow, intent pipelines, graph model, ETL, local run |
-| **[OPA policy controls](docs/opa-controls.md)** | Four-eyes, reporting lines, LOB, amount clubs — the decision vocabulary |
-| **[Sample questions](docs/sample-questions.md)** | Demo prompts by path (graph, policies, skills, events) |
-| **[Data flow](docs/data-flow.md)** | Mutation → CDC → index → chat |
-| **[Intent determination](docs/intent-determination.md)** | Route → Retrieve → Synthesize |
-| **[Architecture decisions](docs/architecture-decisions.md)** | Technology choices behind the reference stack |
-| **[Local development](docs/local-development.md)** | Day-to-day ops and regression |
+| **[How it works](docs/how-it-works.md)** | Integration picture, data flow, intent pipelines, graph model, ETL, quick start |
+| **[OPA policy controls](docs/opa-controls.md)** | Four-eyes, reporting-line inversion, LOB boundaries, amount clubs |
+| **[Authorization audit trail](docs/authorization-audit-trail.md)** | Who / when / why on past approvals; live eligibility |
+| **[OBO call paths](docs/obo-call-paths.md)** | Service JWT + on-behalf-of matrix across chat and domain APIs |
+| **[Architecture review](docs/architecture-review-2026-07-18.md)** | Adversarial review (score and residual risks) |
+| **[Sample questions](docs/sample-questions.md)** | Demo prompts by path (`graph`, `tools`, `skill`, `vector`) |
+| **[Domain models and demo users](docs/domain-models.md)** | Instruction / payment models and persona logins |
 
-Service READMEs live under each application directory (`ssi-chat`, `authorization-service`, `payment-service`, …).
+### Architecture and data plane
+
+| Document | Contents |
+|----------|----------|
+| **[Architecture decisions](docs/architecture-decisions.md)** | Why ZITADEL, OPA, MongoDB, Kafka, Neo4j, Vertex, `cypher_builder` |
+| **[Data flow](docs/data-flow.md)** | Mutation → Mongo transaction → Kafka CDC → indexer → Neo4j → chat |
+| **[Intent determination](docs/intent-determination.md)** | Route → Retrieve → Synthesize; `RouterDecision` |
+| **[Neo4j graph model](neo4j-graph-model/README.md)** | Shared graph schema, writer roles, example Cypher |
+| **[Indexer Mongo DLQ](ssi-indexer/src/etl/dlq/README.md)** | DLQ-before-commit, pause-on-failure, replay, integrity banner |
+| **[OPA policy seed](opa-policy-seed/README.md)** | Rego package layout and local evaluation |
+| **[ZITADEL seed](zitadel-seed/README.md)** | Demo users, groups, amount clubs |
+
+### Governed capabilities (skills)
+
+| Document | Contents |
+|----------|----------|
+| **[Create-payment skill](docs/create-payment-skill.md)** | Draft payment: OPA `CREATE` preflight, Go / No Go |
+| **[Submit-payment skill](docs/submit-payment-skill.md)** | Desk submits DRAFT for funding approval |
+| **[Approve-payment skill](docs/approve-payment-skill.md)** | Funding approve of SUBMITTED payment |
+| **[Cancel-payment skill](docs/cancel-payment-skill.md)** | Middle-office cancel of DRAFT or SUBMITTED |
+
+### Operations
+
+| Document | Contents |
+|----------|----------|
+| **[Local development](docs/local-development.md)** | Run services, logs, regression, URLs |
+| **[GCP / Vertex setup](docs/gcp-setup.md)** | Credentials, smoke test, embeddings / Gemini |
+| **[Observability](docs/observability.md)** | OTLP → Prometheus / Loki / Tempo; OpenSLO catalog, Sloth rules, Grafana |
+
+### Applications and libraries
+
+| Directory | README | Port |
+|-----------|--------|------|
+| Policy Pilot chat | [ssi-chat](ssi-chat/README.md) | 8092 |
+| Demo harness | [ssi-demo-harness](ssi-demo-harness/README.md) | 8091 |
+| Indexer | [ssi-indexer](ssi-indexer/README.md) | 8090 |
+| Instruction service | [instruction-service](instruction-service/README.md) | 8000 |
+| Payment service | [payment-service](payment-service/README.md) | 8093 |
+| Authorization service | [authorization-service](authorization-service/README.md) | 8094 |
+| Sequence service | [sequence-service](sequence-service/README.md) | 8095 |
+| Kafka Connect | [kafka-connect](kafka-connect/README.md) | 8083 |
+| Cypher builder | [shared/cypher_builder](shared/cypher_builder/README.md) | — |
+| Authz client | [shared/authz_client](shared/authz_client/README.md) | — |
+| ZITADEL directory | [shared/zitadel_directory](shared/zitadel_directory/README.md) | — |
