@@ -7,7 +7,10 @@ from chat_application.auth.capabilities import capabilities_for
 from chat_application.auth.service_identity import service_identity
 from chat_application.auth.subject import Subject
 from chat_application.authz.obo import AuthzOboClient, AuthzOboClientError
-from chat_application.formatting import format_policy_basis_cell
+from chat_application.formatting import (
+    format_policy_basis_cell,
+    format_policy_violations,
+)
 from chat_application.skills.detect import parse_approve_payment_params
 from chat_application.skills.format import (
     confirmation_card_from_instruction,
@@ -244,8 +247,9 @@ async def run_approve_payment_phase1(
         )
 
     if not decision.allowed:
-        reasons = "; ".join(decision.violations) or "policy denied"
-        activities.append(f"**Denied** — {reasons}")
+        reasons = format_policy_violations(decision.violations)
+        plain = "; ".join(decision.violations) or reasons
+        activities.append(f"**Denied** — {plain}")
         return SkillRunResult(
             answer=(
                 f"**No** — `{subject.user_id}` may not approve this payment under policy.\n\n"
@@ -404,8 +408,9 @@ async def confirm_approve_payment(
             subject=subject.model_dump(),
         )
         if not decision_result.allowed:
-            reasons = "; ".join(decision_result.violations) or "policy denied"
-            activities.append(f"Re-check denied APPROVE: {reasons}")
+            reasons = format_policy_violations(decision_result.violations)
+            plain = "; ".join(decision_result.violations) or reasons
+            activities.append(f"Re-check denied APPROVE: {plain}")
             return SkillRunResult(
                 answer=(
                     f"**Stopped before approve** — policy no longer allows APPROVE "

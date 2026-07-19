@@ -183,6 +183,19 @@ def format_policy_basis_cell(basis: list[str] | None) -> str:
     return "; ".join(humanize_policy_basis_point(point) for point in basis)
 
 
+def format_policy_violations(violations: list[str] | None) -> str:
+    """Join violation codes for markdown answers without losing underscores.
+
+    Chat renders answers as markdown; codes like ``ALERT_UNAPPROVED_INSTRUCTION``
+    contain ``_token_`` segments that italicize and strip the underscores unless
+    wrapped in backticks.
+    """
+    cleaned = [str(item).strip() for item in (violations or []) if str(item).strip()]
+    if not cleaned:
+        return "policy denied"
+    return "; ".join(f"`{item}`" for item in cleaned)
+
+
 def format_eligible_approvers_section(
     *,
     header: str,

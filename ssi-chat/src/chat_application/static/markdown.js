@@ -8,9 +8,18 @@ function escapeHtml(text) {
 
 function formatInlineMarkdown(text) {
   let html = escapeHtml(text);
-  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+  const codeSlots = [];
+  html = html.replace(/`([^`]+)`/g, (_match, code) => {
+    const token = `\u0000CODE${codeSlots.length}\u0000`;
+    codeSlots.push(`<code>${code}</code>`);
+    return token;
+  });
   html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  // Underscore italics must not run inside protected code spans (e.g. ALERT_UNAPPROVED_INSTRUCTION).
   html = html.replace(/_([^_\n]+)_/g, "<em>$1</em>");
+  codeSlots.forEach((snippet, index) => {
+    html = html.replace(`\u0000CODE${index}\u0000`, snippet);
+  });
   return html;
 }
 
