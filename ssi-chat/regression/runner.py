@@ -488,14 +488,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--payment-url", default="http://localhost:8093")
     parser.add_argument("--indexer-url", default="http://localhost:8090")
     parser.add_argument("--authz-url", default="http://localhost:8094")
-    parser.add_argument("--mode", choices=["events", "instructions", "payments", "all"], default="all")
+    parser.add_argument(
+        "--mode",
+        choices=["events", "instructions", "payments", "policies", "all"],
+        default="all",
+    )
     parser.add_argument("--tags", default="", help="Comma-separated tag filter")
     parser.add_argument(
         "--retrieval",
         default="",
         help=(
             "Comma-separated retrieval filter: deterministic, graph, vector, "
-            "eligibility, skill"
+            "eligibility, policy_directory, skill"
         ),
     )
     parser.add_argument("--ids", default="", help="Comma-separated case id filter")

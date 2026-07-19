@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-SearchMode = Literal["events", "instructions", "payments", "all"]
+SearchMode = Literal["events", "instructions", "payments", "policies", "all"]
 
 # Primary retrieval path the answer is expected to use (see pipeline/retrieve.py;
 # vector runs only for strategy in {vector, hybrid}).

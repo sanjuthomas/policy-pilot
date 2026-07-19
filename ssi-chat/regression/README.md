@@ -11,8 +11,8 @@ Each case also declares a **`retrieval`** tag — the primary engine the answer 
 | `deterministic` | Neo4j planned query + formatter; skips LLM synthesis | 28 |
 | `graph` | Neo4j planned or LLM Cypher is authoritative (vector skipped) | 31 |
 | `vector` | Dense vector hits drive open-ended security-event answers | 3 |
-| `eligibility` | Live OPA via authorization-service | 0 (gap — issue #13) |
-| `policy_directory` | ZITADEL / covering_lobs directory | 0 (gap — issue #13) |
+| `eligibility` | Live OPA via authorization-service (`mode: policies`) | 2 |
+| `policy_directory` | ZITADEL / covering_lobs / amount-club directory (`mode: policies`) | 2 |
 | `skill` | Mutation skill phase-1 + optional confirm/forbidden checks (`persona` login) | 8 |
 
 Selective retrieval (`pipeline/retrieve.py`) runs vector only when strategy is `vector` or `hybrid`. Unit CI does **not** call Gemini; it injects fixture `RouterDecision` values (`tests/fixtures/router_decisions.py`).

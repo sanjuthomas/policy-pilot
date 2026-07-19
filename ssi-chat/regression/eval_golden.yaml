@@ -329,3 +329,76 @@ cases:
     answer_synthesis: formatter
     answer_contains_all:
     - There were 4 instruction policy denial events this week.
+
+# ── Policies mode: eligibility + policy directory (issue #13) ───────────────
+
+- id: golden_policies_eligible_approvers_payment
+  mode: policies
+  retrieval: eligibility
+  tags: [golden, policies, eligibility]
+  question: Who can approve payment {submitted_payment_id}?
+  expect:
+    requires_context: [submitted_payment_id]
+    require_routing: true
+    routing_path: eligibility
+    cypher_class: none
+    answer_synthesis: eligibility_api
+    min_answer_length: 40
+    answer_contains_any:
+    - Live OPA
+    - Users who can approve
+    - already APPROVED
+    - payment
+
+- id: golden_policies_eligible_approvers_instruction
+  mode: policies
+  retrieval: eligibility
+  tags: [golden, policies, eligibility]
+  question: Who can approve instruction {pending_instruction_id}?
+  expect:
+    requires_context: [pending_instruction_id]
+    require_routing: true
+    routing_path: eligibility
+    cypher_class: none
+    answer_synthesis: eligibility_api
+    min_answer_length: 40
+    answer_contains_any:
+    - Live OPA
+    - Users who can approve
+    - already APPROVED
+    - instruction
+
+- id: golden_policies_amount_club_directory
+  mode: policies
+  retrieval: policy_directory
+  tags: [golden, policies, policy_directory]
+  question: Who has permission to approve payments worth more than $25 billion?
+  expect:
+    require_routing: true
+    routing_path: policy_directory
+    cypher_class: none
+    answer_synthesis: policy_directory_api
+    min_answer_length: 40
+    answer_contains_any:
+    - policy directory
+    - UP_TO_
+    - User ID
+    - covering
+
+- id: golden_policies_covering_lob_directory
+  mode: policies
+  retrieval: policy_directory
+  tags: [golden, policies, policy_directory]
+  question: Which users have permission to approve payments covering FICC?
+  expect:
+    require_routing: true
+    routing_path: policy_directory
+    cypher_class: none
+    answer_synthesis: policy_directory_api
+    min_answer_length: 40
+    answer_contains_any:
+    - policy directory
+    - FICC
+    - FUNDING_APPROVER
+    - User ID
+    - covering

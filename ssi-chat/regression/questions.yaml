@@ -4,13 +4,14 @@
 #   deterministic  Neo4j planned query + formatter (skips LLM synthesis)
 #   graph          Neo4j planned or LLM Cypher is authoritative (vector skipped)
 #   vector         Dense vector hits are primary for open-ended event-log questions
-#   eligibility    Live OPA via authorization-service (no case in this bank yet — issue #13)
-#   policy_directory  ZITADEL / covering_lobs directory (no case in this bank yet — issue #13)
+#   eligibility    Live OPA via authorization-service
+#   policy_directory  ZITADEL / covering_lobs / amount-club directory
 #   skill          Mutation skill phase-1 (+ optional confirm Go / No Go) under a persona
 #
 # Selective retrieval (pipeline/retrieve.py): vector runs only for strategy in
 # {vector, hybrid}; graph-only skips vector. Unit CI uses fixture RouterDecisions
 # (tests/fixtures/router_decisions.py), not live Gemini.
+# Policies-mode cases (eligibility / policy_directory) use mode: policies.
 #
 # Skill cases use ``persona`` (ZITADEL user id) and optional ``confirm.decision``.
 # Each skill case setups its own fixture via harness setup-skill-fixture and
@@ -1170,3 +1171,80 @@ cases:
     routing_path: skill
     answer_synthesis: formatter
     cypher_class: none
+
+# ── Policies mode: eligibility + policy directory (issue #13) ───────────────
+# Default persona is compliance (comp-001). Prefer submitted/pending entity ids
+# so "who can approve" is a live OPA evaluate, not an already-APPROVED short-circuit.
+
+- id: policies_eligible_approvers_payment
+  mode: policies
+  retrieval: eligibility
+  tags: [policies, eligibility, payments]
+  question: Who can approve payment {submitted_payment_id}?
+  expect:
+    requires_context:
+    - submitted_payment_id
+    require_routing: true
+    routing_path: eligibility
+    cypher_class: none
+    answer_synthesis: eligibility_api
+    min_answer_length: 40
+    answer_contains_any:
+    - Live OPA
+    - Users who can approve
+    - already APPROVED
+    - payment
+
+- id: policies_eligible_approvers_instruction
+  mode: policies
+  retrieval: eligibility
+  tags: [policies, eligibility, instructions]
+  question: Who can approve instruction {pending_instruction_id}?
+  expect:
+    requires_context:
+    - pending_instruction_id
+    require_routing: true
+    routing_path: eligibility
+    cypher_class: none
+    answer_synthesis: eligibility_api
+    min_answer_length: 40
+    answer_contains_any:
+    - Live OPA
+    - Users who can approve
+    - already APPROVED
+    - instruction
+
+- id: policies_amount_club_directory
+  mode: policies
+  retrieval: policy_directory
+  tags: [policies, policy_directory, amount_club]
+  question: Who has permission to approve payments worth more than $25 billion?
+  expect:
+    require_routing: true
+    routing_path: policy_directory
+    cypher_class: none
+    answer_synthesis: policy_directory_api
+    min_answer_length: 40
+    answer_contains_any:
+    - policy directory
+    - UP_TO_
+    - User ID
+    - covering
+
+- id: policies_covering_lob_directory
+  mode: policies
+  retrieval: policy_directory
+  tags: [policies, policy_directory, covering_lob]
+  question: Which users have permission to approve payments covering FICC?
+  expect:
+    require_routing: true
+    routing_path: policy_directory
+    cypher_class: none
+    answer_synthesis: policy_directory_api
+    min_answer_length: 40
+    answer_contains_any:
+    - policy directory
+    - FICC
+    - FUNDING_APPROVER
+    - User ID
+    - covering
