@@ -229,12 +229,32 @@ class AnswerRouting:
             "chat.question_length": self.question_length,
             "chat.question_hash": self.question_hash,
         }
+        fields["chat.route_override"] = (
+            "true" if self.requested_path and self.requested_path != self.path else "false"
+        )
         if self.requested_path and self.requested_path != self.path:
             fields["chat.requested_path"] = self.requested_path
+            fields["chat.executed_path"] = self.path
         for channel, count in self.source_channels.items():
             if count:
                 fields[f"chat.source_{channel}"] = count
         return fields
+
+
+def path_decision_labels(routing: AnswerRouting) -> dict[str, str]:
+    """LLM/router requested path vs handler executed path for override SLIs."""
+    requested = routing.requested_path or routing.path
+    overridden = bool(routing.requested_path and routing.requested_path != routing.path)
+    return {
+        "chat.requested_path": requested,
+        "chat.executed_path": routing.path,
+        "chat.route_override": "true" if overridden else "false",
+        "chat.mode": routing.mode,
+    }
+
+
+def path_pair_key(*, requested: str, executed: str) -> str:
+    return f"{requested}->{executed}"
 
 
 @dataclass
@@ -246,6 +266,9 @@ class RoutingDistributionSnapshot:
     by_synthesis: dict[str, int] = field(default_factory=dict)
     by_mode: dict[str, int] = field(default_factory=dict)
     by_source_channel: dict[str, int] = field(default_factory=dict)
+    route_override_total: int = 0
+    route_honored_total: int = 0
+    by_path_pair: dict[str, int] = field(default_factory=dict)
     updated_at: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -257,6 +280,9 @@ class RoutingDistributionSnapshot:
             "by_synthesis": dict(self.by_synthesis),
             "by_mode": dict(self.by_mode),
             "by_source_channel": dict(self.by_source_channel),
+            "route_override_total": self.route_override_total,
+            "route_honored_total": self.route_honored_total,
+            "by_path_pair": dict(self.by_path_pair),
             "updated_at": self.updated_at,
         }
 
@@ -271,10 +297,19 @@ class RoutingDistributionTracker:
         self._by_synthesis: Counter[str] = Counter()
         self._by_mode: Counter[str] = Counter()
         self._by_source_channel: Counter[str] = Counter()
+        self._route_override_total = 0
+        self._route_honored_total = 0
+        self._by_path_pair: Counter[str] = Counter()
         self._updated_at: datetime | None = None
 
     def record(self, routing: AnswerRouting) -> None:
         cypher_class = cypher_class_for_provenance(routing.cypher_provenance)
+        labels = path_decision_labels(routing)
+        pair = path_pair_key(
+            requested=labels["chat.requested_path"],
+            executed=labels["chat.executed_path"],
+        )
+        overridden = labels["chat.route_override"] == "true"
         with self._lock:
             self._total += 1
             self._by_strategy[routing.retrieval_strategy] += 1
@@ -282,6 +317,11 @@ class RoutingDistributionTracker:
             self._by_cypher_class[cypher_class] += 1
             self._by_synthesis[routing.answer_synthesis] += 1
             self._by_mode[routing.mode] += 1
+            self._by_path_pair[pair] += 1
+            if overridden:
+                self._route_override_total += 1
+            else:
+                self._route_honored_total += 1
             for channel, count in routing.source_channels.items():
                 if count:
                     self._by_source_channel[channel] += count
@@ -297,6 +337,9 @@ class RoutingDistributionTracker:
                 by_synthesis=dict(self._by_synthesis),
                 by_mode=dict(self._by_mode),
                 by_source_channel=dict(self._by_source_channel),
+                route_override_total=self._route_override_total,
+                route_honored_total=self._route_honored_total,
+                by_path_pair=dict(self._by_path_pair),
                 updated_at=self._updated_at.isoformat() if self._updated_at else None,
             )
 
@@ -309,6 +352,9 @@ class RoutingDistributionTracker:
             self._by_synthesis.clear()
             self._by_mode.clear()
             self._by_source_channel.clear()
+            self._route_override_total = 0
+            self._route_honored_total = 0
+            self._by_path_pair.clear()
             self._updated_at = None
 
 
@@ -336,6 +382,11 @@ def record_answer_routing_metrics(routing: AnswerRouting) -> None:
     meter = _get_routing_meter()
     record_counter(meter, "chat.answer.count", attributes=metric_attrs)
     record_counter(meter, "chat.retrieval.route.count", attributes=metric_attrs)
+    record_counter(
+        meter,
+        "chat.routing.path_decision.count",
+        attributes=path_decision_labels(routing),
+    )
     record_counter(
         meter,
         "chat.cypher.route.count",
@@ -392,14 +443,17 @@ def log_answer_routing(routing: AnswerRouting) -> None:
         for channel, count in routing.source_channels.items()
         if count
     ) or "-"
+    decision = path_decision_labels(routing)
     _logger.info(
         (
-            "chat.answer.completed strategy=%s path=%s cypher=%s synthesis=%s "
-            "mode=%s intent=%s sources=%s graph_rows=%s channels=%s "
-            "retrieval_ms=%s generation_ms=%s"
+            "chat.answer.completed strategy=%s path=%s requested=%s override=%s "
+            "cypher=%s synthesis=%s mode=%s intent=%s sources=%s graph_rows=%s "
+            "channels=%s retrieval_ms=%s generation_ms=%s"
         ),
         routing.retrieval_strategy,
         routing.path,
+        decision["chat.requested_path"],
+        decision["chat.route_override"],
         routing.cypher_provenance,
         routing.answer_synthesis,
         routing.mode,

@@ -34,7 +34,7 @@ pytest tests/test_eval_metrics.py -v
 | `golden_instruction_view_fo_ficc` | instructions | deterministic | What is the status of instruction `{ficc_standing_instruction_id}`? | `ficc_standing_instruction_id`; persona `fo-ficc-101` | `require_routing`, path `neo4j_direct`, `require_entity_recall` | positive FO FICC VIEW; contains any: approved, status, instruction, ficc |
 | `golden_instruction_view_mo_covering_ficc` | instructions | deterministic | What is the status of instruction `{ficc_standing_instruction_id}`? | `ficc_standing_instruction_id`; persona `pay-101` | same | positive MO covering-FICC VIEW; same answer tokens |
 | `golden_events_who_approved_payment` | events | graph | Who approved payment `{approved_payment_id}` and why? | `approved_payment_id` | `require_routing`, `require_entity_recall` | contains any: approv, allowed, because, role; min length 20 |
-| `golden_vector_security_summary` | events | graph (tag: vector) | Write a brief narrative about recent policy denial activity in the audit log. | — | `require_routing`, path `full_rag`, `cypher_class: none`, `min_faithfulness` 0.05 | min length 40; contains denial/alert/policy |
+| `golden_vector_security_summary` | events | vector | Write a brief narrative about recent policy denial activity in the audit log. | — | `require_routing`, path `full_rag`, `cypher_class: none`, `min_faithfulness` 0.05 | min length 40; contains denial/alert/policy |
 | `golden_instruction_denials_count_week` | events | deterministic | How many instruction policy denials happened this week? | — | `require_routing`, path `neo4j_direct`, Cypher `deterministic`, synthesis `formatter` | exact: “There were 4 instruction policy denial events this week.” |
 | `golden_instruction_denials_list_week` | events | deterministic | Can you list all instruction denial events for this week? | — | same deterministic gates | `exact_graph_rows: 4`; title `(4)`; Entity ID; instruction / `-I-` |
 | `golden_payment_denials_count_today` | events | deterministic | How many payment policy denial alerts happened today? | — | same deterministic gates | exact: “There were 3 payment policy denial events today.” (pay-203 APPROVE is an instruction VIEW ALERT) |
@@ -61,8 +61,8 @@ Pinned exact totals assume the shared harness seed in `eval_golden.yaml` / `ques
 | Retrieval | Count | Case IDs |
 |-----------|------:|----------|
 | deterministic | 13 | prior ten + `golden_fo_fx_instruction_denials_scoped`, `golden_fo_fx_payment_denials_scoped`, `golden_fo_ficc_instruction_denials_positive` |
-| graph | 3 | `golden_events_count_today`, `golden_events_who_approved_payment`, `golden_vector_security_summary` |
-| vector | 0 | (vector channel gate deferred; narrative case tagged graph for routing defaults) |
+| graph | 2 | `golden_events_count_today`, `golden_events_who_approved_payment` |
+| vector | 1 | `golden_vector_security_summary` (open narrative forced onto vector / no Cypher) |
 
 ## Gate reference
 

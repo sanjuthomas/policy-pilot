@@ -78,7 +78,7 @@ Grafana folder **Policy Pilot** (anonymous viewer enabled):
 | [SLO Catalog](http://localhost:3000/d/policy-pilot-slo-catalog) | `policy-pilot-slo-catalog` | All defined SLOs: fleet budget/burn overview + per-SLO objective, remaining budget, burn, and SLI error ratios |
 | [SLO Overview](http://localhost:3000/d/policy-pilot-slo-overview) | `policy-pilot-slo-overview` | Compact Sloth SLI error ratio, burn rate, 30-day budget remaining |
 | [HTTP SLIs](http://localhost:3000/d/policy-pilot-http-slis) | `policy-pilot-http-slis` | Per-service request rate, success ratio, p95 latency, 5xx |
-| [Domain SLIs](http://localhost:3000/d/policy-pilot-domain) | `policy-pilot-domain` | Chat route mix + latency, feedback non-downvote rate, OPA decisions/deny rate/latency, skill funnel, indexer throughput + DLQ |
+| [Domain SLIs](http://localhost:3000/d/policy-pilot-domain) | `policy-pilot-domain` | Chat route mix + latency, **requested vs executed path** (honored / override rate + pairs), feedback non-downvote rate, OPA decisions/deny rate/latency, skill funnel, indexer throughput + DLQ |
 
 ## SLOs
 
@@ -126,6 +126,7 @@ Most SLIs are derived from the shared HTTP histogram (`http.server.request.durat
 - **`authz.evaluate.count` / `authz.evaluate.duration`** — emitted from `OpaClient._evaluate` (`authorization-service/src/authz/metrics.py`) with an `authz.decision` (`allow`/`deny`) and `authz.package` attribute. Powers the deny-rate panel and the evaluate-latency SLO.
 - **`chat.skill.outcome.count`** — emitted from `finalize_chat_response` for every `path="skill"` response (`ssi-chat/src/chat_application/observability/skills.py`). The `skill.<name>.<outcome>` intent id is split into `chat.skill`, `chat.skill.outcome`, and `chat.skill.status` (`error` only for `*_error` outcomes). Powers the skill funnel and the skill-success SLO.
 - **`chat.feedback.count`** — existing thumbs-up/down feedback counter tagged by `chat.feedback_rating`. Downvotes burn the non-downvote SLO; upvotes and no-votes are good outcomes. No-vote is approximated in Prometheus as `chat_answer_count - chat_feedback_count`.
+- **`chat.routing.path_decision.count`** — every completed answer tagged with `chat.requested_path` (RouterDecision / LLM path), `chat.executed_path` (handler path), `chat.route_override` (`true` when they differ), and `chat.mode`. Powers the **Routing — requested vs executed** panels on [Domain SLIs](http://localhost:3000/d/policy-pilot-domain). Today Neo4j-direct can still override a confident LLM route on the happy path; once [#52](https://github.com/sanjuthomas/policy-pilot/issues/52) flips that, honored rate becomes the routing SLO signal.
 
 ## Kafka lag (follow-up)
 

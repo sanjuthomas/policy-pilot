@@ -10,6 +10,7 @@ from chat_application.observability.routing import (
     cypher_provenance_for_direct_intent,
     finalize_chat_response,
     format_routing_label,
+    get_routing_distribution,
     log_answer_routing,
     question_fingerprint,
     record_answer_routing_metrics,
@@ -80,6 +81,7 @@ class TestAnswerRoutingMetrics:
         counter_names = [call.args[1] for call in mock_record_counter.call_args_list]
         assert "chat.answer.count" in counter_names
         assert "chat.retrieval.route.count" in counter_names
+        assert "chat.routing.path_decision.count" in counter_names
         assert "chat.cypher.route.count" in counter_names
 
         route_call = next(
@@ -88,9 +90,50 @@ class TestAnswerRoutingMetrics:
         assert route_call.kwargs["attributes"]["chat.cypher_class"] == "llm"
         assert route_call.kwargs["attributes"]["chat.cypher_provenance"] == "llm_graph_plan"
 
+        decision_call = next(
+            call
+            for call in mock_record_counter.call_args_list
+            if call.args[1] == "chat.routing.path_decision.count"
+        )
+        assert decision_call.kwargs["attributes"] == {
+            "chat.requested_path": "full_rag",
+            "chat.executed_path": "full_rag",
+            "chat.route_override": "false",
+            "chat.mode": "events",
+        }
+
         hist_names = [call.args[1] for call in mock_record_histogram.call_args_list]
         assert "chat.answer.retrieval.duration" in hist_names
         assert "chat.answer.generation.duration" in hist_names
+
+    @patch("chat_application.observability.routing.record_histogram")
+    @patch("chat_application.observability.routing.record_counter")
+    def test_record_path_decision_metrics_when_overridden(
+        self,
+        mock_record_counter,
+        mock_record_histogram,
+    ) -> None:
+        del mock_record_histogram
+        routing = AnswerRouting(
+            path="neo4j_direct",
+            cypher_provenance="predefined_yaml",
+            answer_synthesis="formatter",
+            mode="events",
+            retrieval_strategy="deterministic",
+            requested_path="graph",
+        )
+        record_answer_routing_metrics(routing)
+        decision_call = next(
+            call
+            for call in mock_record_counter.call_args_list
+            if call.args[1] == "chat.routing.path_decision.count"
+        )
+        assert decision_call.kwargs["attributes"] == {
+            "chat.requested_path": "graph",
+            "chat.executed_path": "neo4j_direct",
+            "chat.route_override": "true",
+            "chat.mode": "events",
+        }
 
     @patch("chat_application.observability.routing.record_answer_routing_metrics")
     def test_finalize_chat_response_records_metrics(self, mock_record_metrics) -> None:
@@ -171,6 +214,10 @@ class TestRequestedVsExecutedPath:
         assert response.routing.path == "neo4j_direct"
         assert response.routing.requested_path == "graph"
         assert response.routing.retrieval_strategy == "deterministic"
+        snapshot = get_routing_distribution()
+        assert snapshot.route_override_total == 1
+        assert snapshot.route_honored_total == 0
+        assert snapshot.by_path_pair == {"graph->neo4j_direct": 1}
 
     def test_finalize_clears_requested_path_when_same_as_executed(self) -> None:
         response = finalize_chat_response(

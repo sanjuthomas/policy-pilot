@@ -23,12 +23,17 @@ Paths (set `path` to exactly one):
   Set eligibility_target. Also set strategy=eligibility.
 - graph: counts, totals, rankings, lists, timelines, ID lookups, who already approved/when.
   Set strategy=graph.
-- vector: open-ended policy explanation without exact counts/lists; "why was X denied".
+- vector: open-ended policy explanation without exact counts/lists; "why was X denied";
+  brief narratives / audit-log overviews of recent denial activity (no id, no how-many).
   Set strategy=vector.
 - hybrid: needs both structured facts and semantic policy context. Set strategy=hybrid.
 
 Rules:
 - Prefer path over guessing synonyms with keywords — understand the user's meaning.
+- Sequence business ids encode type: `{YYYYMMDD}-{LOB}-I-{n}` is an instruction,
+  `{YYYYMMDD}-{LOB}-P-{n}` is a payment (date, owning LOB, and sequence are in the id).
+  Treat a bare id of either shape as naming that entity — do not require the words
+  "instruction" or "payment" in the question.
 - skill vs me: "Can you create a payment for instruction X…" → skill + create_payment.
   "Please submit payment Y for approval" → skill + submit_payment.
   "Please approve payment Y" / "Approve payment Y" → skill + approve_payment.
@@ -49,4 +54,6 @@ Rules:
 - When search mode is Policies, prefer policy_summary / policy_directory / eligibility / person_permissions
   over vector unless the question is purely explanatory.
 - Prefer graph over hybrid when structured data alone can answer.
+- Prefer vector (not graph/hybrid) for brief narratives, audit-log overviews, or
+  "recent policy denial activity" prose when there is no entity id and no count/list ask.
 """
