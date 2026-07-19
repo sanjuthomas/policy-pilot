@@ -5,26 +5,17 @@ from unittest.mock import AsyncMock
 import pytest
 from cypher_builder import GraphIntent, GraphQueryPlan
 
+from tests.fixtures.router_decisions import GRAPH, set_router_decision
+
 
 class TestRagServiceAsk:
-    @pytest.mark.asyncio
-    async def test_ask_returns_chat_response(
-        self, rag_service, mock_ml_client, mock_vector_search, mock_neo4j
-    ) -> None:
-        mock_vector_search.search_vector = AsyncMock(return_value=[])
-        mock_neo4j.run_cypher = AsyncMock(return_value=[{"total": 0}])
-        mock_ml_client.synthesize_answer = AsyncMock(return_value="There were 0 alerts.")
-
-        response = await rag_service.ask("How many alerts?", [], mode="events")
-        assert response.answer == "There were no ALERT events."
-        mock_ml_client.synthesize_answer.assert_not_called()
-        assert response.retrieval_ms is not None
-        assert response.generation_ms is not None
+    """ask() tests that require an explicit fixture RouterDecision (issue #13)."""
 
     @pytest.mark.asyncio
     async def test_ask_with_event_uuid_triggers_exact_lookup(
         self, rag_service, mock_vector_search, mock_neo4j, mock_ml_client
     ) -> None:
+        set_router_decision(mock_ml_client, GRAPH)
         event_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
         mock_vector_search.fetch_by_event_id = AsyncMock(
             return_value={
@@ -47,92 +38,10 @@ class TestRagServiceAsk:
         )
 
     @pytest.mark.asyncio
-    async def test_ask_instruction_approval_synthesis(
-        self, rag_service, mock_ml_client, mock_vector_search, mock_neo4j
-    ) -> None:
-        iid = "2846a7c0-4734-4626-bb58-13a966f935a1"
-        mock_vector_search.search_vector = AsyncMock(return_value=[])
-        mock_vector_search.fetch_by_instruction_id = AsyncMock(
-            return_value={
-                "source": "exact_instruction",
-                "instruction_id": iid,
-                "merged": {
-                    "source": "instruction_state",
-                    "instruction_id": iid,
-                    "approver_display": "Torres, Michael (ficc-201)",
-                    "approved_at": "2026-01-01",
-                    "authorization_summary": "OPA allowed",
-                    "authorization_basis": ["role match"],
-                    "instruction_snapshot": {"status": "APPROVED"},
-                },
-            }
-        )
-        mock_neo4j.run_cypher = AsyncMock(
-            return_value=[
-                {
-                    "instruction_id": iid,
-                    "approver_display": "Torres, Michael (ficc-201)",
-                    "approved_at": "2026-01-01",
-                    "authorization_summary": "OPA allowed",
-                    "authorization_basis": '["role match"]',
-                }
-            ]
-        )
-        mock_ml_client.summarize_authorization_why = AsyncMock(return_value="Readable why.")
-
-        response = await rag_service.ask(f"Who approved instruction {iid}?", [], mode="instructions")
-        assert response.answer.startswith("WHO:")
-        assert "WHY:" in response.answer
-        assert "OPA allowed" in response.answer
-        mock_ml_client.summarize_authorization_why.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_ask_instruction_approval_synthesis_sequence_id(
-        self, rag_service, mock_ml_client, mock_vector_search, mock_neo4j
-    ) -> None:
-        iid = "20260628-FICC-I-13"
-        mock_vector_search.search_vector = AsyncMock(return_value=[])
-        mock_vector_search.fetch_by_instruction_id = AsyncMock(
-            return_value={
-                "source": "exact_instruction",
-                "instruction_id": iid,
-                "merged": {
-                    "source": "instruction_state",
-                    "instruction_id": iid,
-                    "approver_display": "Vasquez, Elena (ficc-300)",
-                    "approved_at": "2026-06-28T10:00:00Z",
-                    "authorization_summary": "OPA allowed supervisor approval",
-                    "authorization_basis": ["role FICC_SUPERVISOR"],
-                    "instruction_snapshot": {"status": "APPROVED"},
-                },
-            }
-        )
-        mock_neo4j.run_cypher = AsyncMock(
-            return_value=[
-                {
-                    "instruction_id": iid,
-                    "approver_display": "Vasquez, Elena (ficc-300)",
-                    "approved_at": "2026-06-28T10:00:00Z",
-                    "authorization_summary": "OPA allowed supervisor approval",
-                    "authorization_basis": '["role FICC_SUPERVISOR"]',
-                }
-            ]
-        )
-        mock_ml_client.summarize_authorization_why = AsyncMock(return_value="Elena was allowed as FICC supervisor.")
-
-        response = await rag_service.ask(
-            f"Who approved instructions like {iid} in the past?",
-            [],
-            mode="instructions",
-        )
-        assert response.answer.startswith("WHO:")
-        assert "Vasquez, Elena (ficc-300)" in response.answer
-        mock_ml_client.synthesize_answer.assert_not_called()
-
-    @pytest.mark.asyncio
     async def test_ask_payment_approval_synthesis(
         self, rag_service, mock_ml_client, mock_vector_search, mock_neo4j
     ) -> None:
+        set_router_decision(mock_ml_client, GRAPH)
         pid = "9b3251c9-d28e-4ad5-9bf4-dbc3c4fc13d8"
         mock_vector_search.search_vector = AsyncMock(return_value=[])
         mock_vector_search.fetch_by_payment_id = AsyncMock(
@@ -195,132 +104,8 @@ class TestRagServiceAsk:
         assert "Policy basis (" not in response.answer
         mock_ml_client.synthesize_answer.assert_not_called()
 
-    @pytest.mark.asyncio
-    async def test_ask_max_payments_per_instruction(
-        self, rag_service, mock_ml_client, mock_vector_search, mock_neo4j
-    ) -> None:
-        iid = "3bcb9b9a-9415-44ce-b707-4cc4c8281bb9"
-        mock_vector_search.search_vector = AsyncMock(return_value=[])
-        mock_neo4j.run_cypher = AsyncMock(
-            return_value=[
-                {
-                    "instruction_id": iid,
-                    "payment_count": 2,
-                    "payment_id": "pay-1",
-                    "created_at": "2026-06-27T10:00:00Z",
-                    "creator_display": "Creator One (c-1)",
-                    "approver_display": "Approver One (a-1)",
-                },
-                {
-                    "instruction_id": iid,
-                    "payment_count": 2,
-                    "payment_id": "pay-2",
-                    "created_at": "2026-06-27T11:00:00Z",
-                    "creator_display": "Creator Two (c-2)",
-                    "approver_display": "Approver Two (a-2)",
-                },
-            ]
-        )
 
-        response = await rag_service.ask(
-            "Which instruction has the maximum number of payments?",
-            [],
-            mode="payments",
-        )
-        assert response.answer.startswith(f"Instruction: {iid}")
-        assert "Total payments: 2" in response.answer
-        assert "Payment ID" in response.answer
-        assert "| pay-1" in response.answer
-        mock_ml_client.synthesize_answer.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_ask_payments_for_instruction(
-        self, rag_service, mock_ml_client, mock_vector_search, mock_neo4j
-    ) -> None:
-        iid = "3bcb9b9a-9415-44ce-b707-4cc4c8281bb9"
-        mock_vector_search.search_vector = AsyncMock(return_value=[])
-        mock_neo4j.run_cypher = AsyncMock(
-            return_value=[
-                {
-                    "payment_id": "92831268-b1d0-44c8-a24a-b84a912cb051",
-                    "instruction_id": iid,
-                    "status": "APPROVED",
-                    "amount": 10_000_000,
-                    "currency": "USD",
-                    "value_date": "2026-06-28",
-                    "owning_lob": "FICC",
-                    "creator_display": "Nakamura, Kenji (pay-102)",
-                    "approver_display": "Laurent, Sophie (pay-201)",
-                }
-            ]
-        )
-
-        response = await rag_service.ask(
-            f"Can you list the payments for instruction {iid}?",
-            [],
-            mode="payments",
-        )
-        assert response.answer.startswith(f"There are 1 payments in total for instruction {iid}.")
-        assert "Payment ID" in response.answer
-        assert "92831268-b1d0-44c8-a24a-b84a912cb051" in response.answer
-        assert "10,000,000.00 USD" in response.answer
-        mock_ml_client.synthesize_answer.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_ask_payment_total_amount_ficc_today(
-        self, rag_service, mock_ml_client, mock_vector_search, mock_neo4j
-    ) -> None:
-        mock_vector_search.search_vector = AsyncMock(return_value=[])
-        mock_neo4j.run_cypher = AsyncMock(
-            return_value=[
-                {
-                    "currency": "USD",
-                    "payment_count": 18,
-                    "total_amount": 125_000_000,
-                }
-            ]
-        )
-
-        response = await rag_service.ask(
-            "What is the total approved payment amount for FICC today?",
-            [],
-            mode="payments",
-        )
-        assert "125,000,000.00 USD" in response.answer
-        assert "18 payments" in response.answer
-        assert "LOB FICC" in response.answer
-        mock_ml_client.synthesize_answer.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_ask_alert_ranking(
-        self, rag_service, mock_ml_client, mock_vector_search, mock_neo4j
-    ) -> None:
-        mock_vector_search.search_vector = AsyncMock(return_value=[])
-        mock_neo4j.run_cypher = AsyncMock(
-            side_effect=[
-                [
-                    {
-                        "user_id": "fx-201",
-                        "actor_display": "Hassan, Amira (fx-201)",
-                        "alert_count": 12,
-                        "payment_alerts": 4,
-                        "instruction_alerts": 8,
-                    }
-                ],
-                [],
-            ]
-        )
-
-        response = await rag_service.ask(
-            "Which user triggered the most policy denial alerts this week?",
-            [],
-            mode="events",
-        )
-        assert "policy denial alerts (this week)" in response.answer
-        assert "Hassan, Amira (fx-201)" in response.answer
-        assert "Total Alerts" in response.answer
-        mock_ml_client.synthesize_answer.assert_not_called()
-
+class TestRagServiceSearchHelpers:
     @pytest.mark.asyncio
     async def test_search_vector_handles_embed_failure(self, rag_service, mock_ml_client) -> None:
         mock_ml_client.embed = AsyncMock(side_effect=RuntimeError("embed down"))

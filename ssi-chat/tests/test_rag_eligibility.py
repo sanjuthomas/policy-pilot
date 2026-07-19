@@ -5,6 +5,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from chat_application.rag import RagService
+from tests.fixtures.router_decisions import (
+    ELIGIBILITY_INSTRUCTION,
+    ELIGIBILITY_PAYMENT,
+    POLICY_DIRECTORY,
+    set_router_decision,
+)
 
 
 @pytest.fixture
@@ -73,17 +79,9 @@ async def test_answer_payment_eligible_approvers_calls_authorization_client(
 @pytest.mark.asyncio
 async def test_ask_short_circuits_eligibility_question(rag_service: RagService) -> None:
     from chat_application.auth.subject import Subject
-    from chat_application.pipeline.models import RouterDecision
 
     payment_id = "22222222-2222-2222-2222-222222222222"
-    rag_service.ml_client.route_query = AsyncMock(
-        return_value=RouterDecision(
-            path="eligibility",
-            strategy="eligibility",
-            eligibility_target="payment",
-            reasoning="who can approve payment",
-        )
-    )
+    set_router_decision(rag_service.ml_client, ELIGIBILITY_PAYMENT)
     rag_service._eligibility = AsyncMock()
     rag_service._eligibility.eligible_approvers_for_payment.return_value = {
         "payment_id": payment_id,
@@ -160,17 +158,9 @@ async def test_ask_short_circuits_instruction_eligibility_question(
     rag_service: RagService,
 ) -> None:
     from chat_application.auth.subject import Subject
-    from chat_application.pipeline.models import RouterDecision
 
     instruction_id = "22222222-2222-2222-2222-222222222222"
-    rag_service.ml_client.route_query = AsyncMock(
-        return_value=RouterDecision(
-            path="eligibility",
-            strategy="eligibility",
-            eligibility_target="instruction",
-            reasoning="who can approve instruction",
-        )
-    )
+    set_router_decision(rag_service.ml_client, ELIGIBILITY_INSTRUCTION)
     rag_service._eligibility = AsyncMock()
     rag_service._eligibility.eligible_approvers_for_instruction.return_value = {
         "instruction_id": instruction_id,
@@ -205,14 +195,8 @@ async def test_ask_policy_directory_uses_distinct_routing_labels(
     rag_service: RagService,
 ) -> None:
     from chat_application.auth.subject import Subject
-    from chat_application.pipeline.models import RouterDecision
 
-    rag_service.ml_client.route_query = AsyncMock(
-        return_value=RouterDecision(
-            path="policy_directory",
-            reasoning="amount club directory",
-        )
-    )
+    set_router_decision(rag_service.ml_client, POLICY_DIRECTORY)
     rag_service._eligibility = AsyncMock()
     rag_service._eligibility.payment_amount_limits.return_value = {
         "absolute_limit": 100_000_000_000.0,

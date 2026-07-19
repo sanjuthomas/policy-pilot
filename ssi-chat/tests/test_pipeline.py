@@ -12,6 +12,7 @@ from chat_application.pipeline.heuristic_strategy import (
     prefer_vector_for_open_narrative,
 )
 from chat_application.pipeline.models import RouterDecision
+from tests.fixtures.router_decisions import GRAPH, VECTOR, set_router_decision
 
 
 class TestHeuristicStrategy:
@@ -149,9 +150,7 @@ class TestSelectiveRetrieval:
 class TestRouteQuestion:
     @pytest.mark.asyncio
     async def test_route_question_uses_llm(self, mock_ml_client) -> None:
-        mock_ml_client.route_query = AsyncMock(
-            return_value=RouterDecision(strategy="graph", reasoning="count question")
-        )
+        set_router_decision(mock_ml_client, GRAPH)
         from chat_application.pipeline.route import route_question
 
         decision = await route_question(mock_ml_client, "How many alerts?", mode="events")
@@ -215,9 +214,7 @@ class TestGraphUnavailableShortCircuit:
     async def test_ask_skips_gemini_when_graph_unavailable(
         self, rag_service, mock_ml_client, mock_neo4j
     ) -> None:
-        mock_ml_client.route_query = AsyncMock(
-            return_value=RouterDecision(strategy="graph", reasoning="structured count")
-        )
+        set_router_decision(mock_ml_client, GRAPH)
         mock_neo4j.run_cypher = AsyncMock(side_effect=RuntimeError("neo4j down"))
 
         response = await rag_service.ask("How many alerts today?", [])
@@ -232,9 +229,7 @@ class TestGraphUnavailableShortCircuit:
     async def test_ask_returns_rate_limit_when_graph_plan_exhausted(
         self, rag_service, mock_ml_client, mock_neo4j
     ) -> None:
-        mock_ml_client.route_query = AsyncMock(
-            return_value=RouterDecision(strategy="graph", reasoning="list instructions")
-        )
+        set_router_decision(mock_ml_client, GRAPH)
         mock_ml_client.extract_graph_query_plan = AsyncMock(
             side_effect=RuntimeError(
                 "429 RESOURCE_EXHAUSTED. Resource exhausted. Please try again later."
@@ -258,9 +253,7 @@ class TestGraphUnavailableShortCircuit:
     async def test_ask_returns_rate_limit_when_synthesis_exhausted(
         self, rag_service, mock_ml_client, mock_neo4j, mock_vector_search
     ) -> None:
-        mock_ml_client.route_query = AsyncMock(
-            return_value=RouterDecision(strategy="vector", reasoning="semantic")
-        )
+        set_router_decision(mock_ml_client, VECTOR)
         mock_vector_search.search_vector = AsyncMock(
             return_value=[
                 {
@@ -293,9 +286,7 @@ class TestGraphUnavailableShortCircuit:
     ) -> None:
         from cypher_builder import GraphIntent, GraphQueryPlan
 
-        mock_ml_client.route_query = AsyncMock(
-            return_value=RouterDecision(strategy="graph", reasoning="list instructions")
-        )
+        set_router_decision(mock_ml_client, GRAPH)
         mock_ml_client.extract_graph_query_plan = AsyncMock(
             return_value=GraphQueryPlan(
                 intent=GraphIntent.INSTRUCTION_INVENTORY,
