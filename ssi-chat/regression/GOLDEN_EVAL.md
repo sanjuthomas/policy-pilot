@@ -22,7 +22,7 @@ Seed runs by default (`--no-seed` if the graph is already warm). Offline schema 
 pytest tests/test_eval_metrics.py -v
 ```
 
-## Case catalog (13)
+## Case catalog (24)
 
 | ID | Mode | Retrieval | Question | Context | Quality gates | Answer expects |
 |----|------|-----------|----------|---------|---------------|----------------|
@@ -42,6 +42,10 @@ pytest tests/test_eval_metrics.py -v
 | `golden_fo_fx_instruction_denials_scoped` | events | deterministic | How many instruction policy denials happened this week? | persona `fo-fx-101` | same deterministic gates | exact: “There were no…” (LOB-scoped retrieval, issue #63) |
 | `golden_fo_fx_payment_denials_scoped` | events | deterministic | How many payment policy denial alerts happened today? | persona `fo-fx-101` | same | exact: “There were no…” |
 | `golden_fo_ficc_instruction_denials_positive` | events | deterministic | How many instruction policy denials happened this week? | persona `fo-ficc-101` | same | exact: “There were 4…” (FICC desk sees FICC events) |
+| `golden_policies_eligible_approvers_payment` | policies | eligibility | Who can approve payment `{submitted_payment_id}`? | `submitted_payment_id` | `require_routing`, path `eligibility`, synthesis `eligibility_api`, `cypher_class: none` | Live OPA / users who can approve |
+| `golden_policies_eligible_approvers_instruction` | policies | eligibility | Who can approve instruction `{pending_instruction_id}`? | `pending_instruction_id` | same | Live OPA / instruction |
+| `golden_policies_amount_club_directory` | policies | policy_directory | Who has permission to approve payments worth more than $25 billion? | — | path `policy_directory`, synthesis `policy_directory_api` | policy directory / UP_TO_ / User ID |
+| `golden_policies_covering_lob_directory` | policies | policy_directory | Which users have permission to approve payments covering FICC? | — | same | policy directory / FICC / FUNDING_APPROVER |
 
 Pinned exact totals assume the shared harness seed in `eval_golden.yaml` / `questions.yaml` after truncate+reload. Golden runs **before** API smoke in the default suite so FO/MO VIEW denial ALERTs do not inflate counts. Do not re-seed on a warm graph before golden runs (`--no-seed`) or counts inflate.
 
@@ -55,14 +59,18 @@ Pinned exact totals assume the shared harness seed in `eval_golden.yaml` / `ques
 | Other alert counts | `golden_events_count_today` |
 | Auth narrative (who / why) | `golden_events_who_approved_payment` |
 | Vector / full RAG | `golden_vector_security_summary` |
+| Policies eligibility | `golden_policies_eligible_approvers_payment`, `golden_policies_eligible_approvers_instruction` |
+| Policies directory | `golden_policies_amount_club_directory`, `golden_policies_covering_lob_directory` |
 
 ### By retrieval tag
 
 | Retrieval | Count | Case IDs |
 |-----------|------:|----------|
-| deterministic | 13 | prior ten + `golden_fo_fx_instruction_denials_scoped`, `golden_fo_fx_payment_denials_scoped`, `golden_fo_ficc_instruction_denials_positive` |
+| deterministic | 17 | entity lookups, denial counts/lists, LOB-scope trio, show-by-id guards |
 | graph | 2 | `golden_events_count_today`, `golden_events_who_approved_payment` |
-| vector | 1 | `golden_vector_security_summary` (open narrative forced onto vector / no Cypher) |
+| vector | 1 | `golden_vector_security_summary` |
+| eligibility | 2 | `golden_policies_eligible_approvers_payment`, `golden_policies_eligible_approvers_instruction` |
+| policy_directory | 2 | `golden_policies_amount_club_directory`, `golden_policies_covering_lob_directory` |
 
 ## Gate reference
 
@@ -148,18 +156,16 @@ Denial / alert count & list goldens (former P0) now live only in the **Case cata
 | `golden_events_who_approved_payment_why` | `events_who_approved_payment_why` (retag); strengthen soft `golden_events_who_approved_payment` | Who approved payment `{id}` and why were they allowed? | Path + formatter; entity recall; require funding / role tokens **without** allowing empty escapes | Drop `no`/`0` soft escapes |
 | `golden_events_when_instruction_approved_why` | `events_when_instruction_approved_why` | When was instruction `{id}` approved, and authorization basis? | Timestamp presence from graph row + basis keywords | Measure formatter output shape first |
 
-### P4 — Policies-mode tools (deterministic, no RAG)
+### P4 — Policies-mode tools (live AuthZ; gated by routing tags)
 
-Not in `questions.yaml` today; answers come from live policy / AuthZ tools (static catalogs + seed directory). Still **deterministic** if we lock persona (`comp-001`) and OPA/seed fixtures.
+| ID | Question | Asserts |
+|----|----------|---------|
+| `golden_policies_eligible_approvers_payment` | Who can approve payment `{submitted_payment_id}`? | `retrieval: eligibility`, path `eligibility`, Live OPA tokens |
+| `golden_policies_eligible_approvers_instruction` | Who can approve instruction `{pending_instruction_id}`? | same for instruction |
+| `golden_policies_amount_club_directory` | Who has permission to approve payments worth more than $25 billion? | `retrieval: policy_directory`, directory table tokens |
+| `golden_policies_covering_lob_directory` | Which users have permission to approve payments covering FICC? | same + FICC / FUNDING_APPROVER |
 
-| Proposed ID | Question (sketch) | Deterministic asserts to add | Notes |
-|-------------|-------------------|------------------------------|-------|
-| `golden_policies_payment_approve_summary` | What are the payment APPROVE policy rules? | Routing to policy tools; stable section headings / key rule phrases from Rego catalog | Normative summary |
-| `golden_policies_amount_club_directory` | Which users are in amount clubs that cover 10M? | Exact user id set from seed directory for a fixed club | Directory tool |
-| `golden_policies_person_permissions` | What can user `pay-101` create / approve? | Exact capability list for that subject | Person permissions |
-| `golden_policies_eligible_approvers_payment` | Who can approve payment `{approved_payment_id}`? | Exact eligible user set vs instruction/payment services | Eligibility-via-chat |
-
-### Explicitly not on this list
+Bank twins live in `questions.yaml` (`policies_*`). Soft content asserts — routing / synthesis gates are the hard quality bar (issue #13).
 
 | Topic | Why excluded from deterministic golden |
 |-------|----------------------------------------|
@@ -173,4 +179,4 @@ Not in `questions.yaml` today; answers come from live policy / AuthZ tools (stat
 
 1. P1–P2 inventory counts (cheapest asserts: `answer_contains_all` for the digit / facet lines, or a future `exact_total` expect field).
 2. P3 once formatter strings for who/why are frozen.
-3. P4 once runner supports `mode: policies` and compliance session in golden runs.
+3. P4 policies eligibility / directory goldens are in `eval_golden.yaml` (routing-gated; soft answer tokens).

@@ -48,8 +48,35 @@ def test_regression_retrieval_distribution():
     assert counts["deterministic"] == 28
     assert counts["graph"] == 31
     assert counts["vector"] == 3
-    assert counts.get("eligibility", 0) == 0
+    assert counts["eligibility"] == 2
+    assert counts["policy_directory"] == 2
     assert counts["skill"] == 8
+
+
+def test_regression_policies_mode_cases_present():
+    suite = load_suite()
+    by_id = {case.id: case for case in suite.cases}
+    payment = by_id["policies_eligible_approvers_payment"]
+    instruction = by_id["policies_eligible_approvers_instruction"]
+    amount = by_id["policies_amount_club_directory"]
+    covering = by_id["policies_covering_lob_directory"]
+
+    assert payment.mode == "policies"
+    assert payment.retrieval == "eligibility"
+    assert payment.expect.routing_path == "eligibility"
+    assert "submitted_payment_id" in payment.expect.requires_context
+
+    assert instruction.mode == "policies"
+    assert instruction.retrieval == "eligibility"
+    assert "pending_instruction_id" in instruction.expect.requires_context
+
+    assert amount.mode == "policies"
+    assert amount.retrieval == "policy_directory"
+    assert amount.expect.routing_path == "policy_directory"
+
+    assert covering.mode == "policies"
+    assert covering.retrieval == "policy_directory"
+    assert covering.expect.routing_path == "policy_directory"
 
 
 def test_regression_show_by_id_bare_parity_cases():

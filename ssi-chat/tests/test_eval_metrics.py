@@ -167,7 +167,7 @@ def test_summarize_suite_quality():
 def test_golden_eval_yaml_loads():
     raw = yaml.safe_load(GOLDEN.read_text(encoding="utf-8"))
     suite = RegressionSuite.model_validate({"seed": {}, **raw})
-    assert len(suite.cases) >= 20
+    assert len(suite.cases) >= 24
     for case in suite.cases:
         assert case.expect.require_routing is True
     p0 = {c.id for c in suite.cases if "p0" in c.tags}
@@ -185,6 +185,17 @@ def test_golden_eval_yaml_loads():
         assert case.expect.routing_path == "neo4j_direct"
         assert case.expect.intent_id == intent
         assert "regression_guard" in case.tags
+
+    for case_id, retrieval, path in (
+        ("golden_policies_eligible_approvers_payment", "eligibility", "eligibility"),
+        ("golden_policies_eligible_approvers_instruction", "eligibility", "eligibility"),
+        ("golden_policies_amount_club_directory", "policy_directory", "policy_directory"),
+        ("golden_policies_covering_lob_directory", "policy_directory", "policy_directory"),
+    ):
+        case = by_id[case_id]
+        assert case.mode == "policies"
+        assert case.retrieval == retrieval
+        assert case.expect.routing_path == path
 
 
 @pytest.mark.parametrize(
