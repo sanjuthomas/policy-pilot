@@ -48,7 +48,11 @@ async def execute_selective_retrieval(
     run_graph = strategy in ("graph", "hybrid")
 
     vector_task = (
-        asyncio.create_task(service._search_vector(message, limit, source=search_source))
+        asyncio.create_task(
+            service._search_vector(
+                message, limit, source=search_source, allowed_lobs=allowed_lobs
+            )
+        )
         if run_vector
         else None
     )
@@ -67,17 +71,27 @@ async def execute_selective_retrieval(
         from chat_application.rag import _should_lookup_payment_ids
 
         exact_task = (
-            asyncio.create_task(service._lookup_exact_event_ids(event_ids))
+            asyncio.create_task(
+                service._lookup_exact_event_ids(event_ids, allowed_lobs=allowed_lobs)
+            )
             if event_ids and mode != "instructions"
             else None
         )
         instruction_exact_task = (
-            asyncio.create_task(service._lookup_exact_instruction_ids(entity_ids, message))
+            asyncio.create_task(
+                service._lookup_exact_instruction_ids(
+                    entity_ids, message, allowed_lobs=allowed_lobs
+                )
+            )
             if entity_ids and mode == "instructions"
             else None
         )
         payment_exact_task = (
-            asyncio.create_task(service._lookup_exact_payment_ids(entity_ids, message))
+            asyncio.create_task(
+                service._lookup_exact_payment_ids(
+                    entity_ids, message, allowed_lobs=allowed_lobs
+                )
+            )
             if entity_ids and _should_lookup_payment_ids(message, entity_ids, mode)
             else None
         )
@@ -108,6 +122,7 @@ async def execute_selective_retrieval(
             seen_graph.add(key)
     graph_rows = filter_rows_by_retrieval_lobs(graph_rows, allowed_lobs)
     exact_hits = filter_rows_by_retrieval_lobs(exact_hits, allowed_lobs)
+    vector_hits = filter_rows_by_retrieval_lobs(vector_hits, allowed_lobs)
     graph_result = {**graph_result, "rows": graph_rows}
 
     if run_graph:

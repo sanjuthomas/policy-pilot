@@ -77,9 +77,10 @@ class EligibilityClient:
             response = await client.post(url, headers=headers)
 
         if response.status_code == 401:
-            raise EligibilityClientError("authentication required — log in as a compliance analyst")
+            raise EligibilityClientError("authentication required — sign in to PolicyPilot")
         if response.status_code == 403:
-            raise EligibilityClientError("COMPLIANCE_ANALYST role required for this question")
+            detail = response.json().get("detail", response.text)
+            raise EligibilityClientError(str(detail) or "not authorized for this question")
         if response.status_code == 404:
             detail = response.json().get("detail", response.text)
             raise EligibilityClientError(str(detail))
@@ -107,9 +108,10 @@ class EligibilityClient:
             response = await client.post(url, headers=headers)
 
         if response.status_code == 401:
-            raise EligibilityClientError("authentication required — log in as a compliance analyst")
+            raise EligibilityClientError("authentication required — sign in to PolicyPilot")
         if response.status_code == 403:
-            raise EligibilityClientError("COMPLIANCE_ANALYST role required for this question")
+            detail = response.json().get("detail", response.text)
+            raise EligibilityClientError(str(detail) or "not authorized for this question")
         if response.status_code == 404:
             detail = response.json().get("detail", response.text)
             raise EligibilityClientError(str(detail))
@@ -145,9 +147,10 @@ class EligibilityClient:
             response = await client.get(url, headers=headers, params=params or None)
 
         if response.status_code == 401:
-            raise EligibilityClientError("authentication required — log in as a compliance analyst")
+            raise EligibilityClientError("authentication required — sign in to PolicyPilot")
         if response.status_code == 403:
-            raise EligibilityClientError("COMPLIANCE_ANALYST role required for this question")
+            detail = response.json().get("detail", response.text)
+            raise EligibilityClientError(str(detail) or "not authorized for this question")
         if not response.is_success:
             detail = response.json().get("detail", response.text)
             raise EligibilityClientError(f"authorization service error: {detail}")
@@ -171,9 +174,10 @@ class EligibilityClient:
             response = await client.get(url, headers=headers, params=params)
 
         if response.status_code == 401:
-            raise EligibilityClientError("authentication required — log in as a compliance analyst")
+            raise EligibilityClientError("authentication required — sign in to PolicyPilot")
         if response.status_code == 403:
-            raise EligibilityClientError("COMPLIANCE_ANALYST role required for this question")
+            detail = response.json().get("detail", response.text)
+            raise EligibilityClientError(str(detail) or "not authorized for this question")
         if not response.is_success:
             detail = response.json().get("detail", response.text)
             raise EligibilityClientError(f"authorization service error: {detail}")
@@ -196,9 +200,10 @@ class EligibilityClient:
             response = await client.get(url, headers=headers)
 
         if response.status_code == 401:
-            raise EligibilityClientError("authentication required — log in as a compliance analyst")
+            raise EligibilityClientError("authentication required — sign in to PolicyPilot")
         if response.status_code == 403:
-            raise EligibilityClientError("COMPLIANCE_ANALYST role required for this question")
+            detail = response.json().get("detail", response.text)
+            raise EligibilityClientError(str(detail) or "not authorized for this question")
         if not response.is_success:
             detail = response.json().get("detail", response.text)
             raise EligibilityClientError(f"authorization service error: {detail}")
@@ -223,9 +228,10 @@ class EligibilityClient:
             response = await client.get(url, headers=headers, params=params)
 
         if response.status_code == 401:
-            raise EligibilityClientError("authentication required — log in as a compliance analyst")
+            raise EligibilityClientError("authentication required — sign in to PolicyPilot")
         if response.status_code == 403:
-            raise EligibilityClientError("COMPLIANCE_ANALYST role required for this question")
+            detail = response.json().get("detail", response.text)
+            raise EligibilityClientError(str(detail) or "not authorized for this question")
         if response.status_code == 404:
             detail = response.json().get("detail", response.text)
             raise EligibilityClientError(str(detail))

@@ -32,6 +32,7 @@ def _caps(
         can_create_payment=creator,
         can_approve_payment=approver,
         can_cancel_payment=canceller,
+        is_instruction_analyst=False,
     )
 
 

@@ -56,7 +56,7 @@ async def resolve_and_handle(ctx: HandlerContext):
         if response is not None:
             return response
         if ctx.mode == "policies":
-            if ctx.capabilities.is_compliance:
+            if ctx.capabilities.can_use_policies:
                 return await _tools.handle(ctx)
             return await DenialHandler(DenialReason.POLICIES_MODE_OPERATIONAL).handle(ctx)
         return await _ChainHandler(_direct, _investigate).handle(ctx)

@@ -42,7 +42,9 @@ class TestRagServiceAsk:
 
         response = await rag_service.ask(f"What about event {event_id}?", [], mode="events")
         assert "Found event" in response.answer
-        mock_vector_search.fetch_by_event_id.assert_awaited_once_with(event_id)
+        mock_vector_search.fetch_by_event_id.assert_awaited_once_with(
+            event_id, allowed_lobs=None
+        )
 
     @pytest.mark.asyncio
     async def test_ask_instruction_approval_synthesis(

@@ -64,9 +64,17 @@ function isOperationalAudience() {
   );
 }
 
+function isInstructionAnalystAudience() {
+  const audiences = sessionAudiences();
+  return (
+    audiences.includes("instruction_creator") ||
+    audiences.includes("instruction_approver")
+  );
+}
+
 function canUsePoliciesMode() {
-  // Unsigned: show all modes. Signed: compliance / admin only.
-  return !session || isComplianceAudience();
+  // Policies mode is available to every PolicyPilot user (signed or unsigned preview).
+  return true;
 }
 
 function canUseEventsMode() {

@@ -73,10 +73,11 @@ def test_payload_helpers() -> None:
     fields = _denormalized_fields(
         {
             "event_id": "e1",
-            "merged": {"action": "READ", "outcome": "ALLOW"},
+            "merged": {"action": "READ", "outcome": "ALLOW", "owning_lob": "fx"},
         }
     )
     assert fields["action"] == "READ"
+    assert fields["owning_lob"] == "FX"
     node = {
         "search_text": "wire transfer",
         "payload_json": json.dumps({"event_id": "e1", "search_text": "wire transfer"}),
@@ -141,6 +142,25 @@ async def test_search_dense_returns_hits(store: MultimodalNeo4jStore, neo4j_sess
     hits = await store.search_dense([0.1, 0.2], limit=5)
     assert hits[0]["event_id"] == "evt-1"
     assert hits[0]["score"] == 0.88
+    assert neo4j_session.run.await_args.kwargs["allowed_lobs"] is None
+
+
+async def test_search_dense_empty_allowed_lobs(
+    store: MultimodalNeo4jStore, neo4j_session: AsyncMock
+) -> None:
+    hits = await store.search_dense([0.1, 0.2], limit=5, allowed_lobs=frozenset())
+    assert hits == []
+    neo4j_session.run.assert_not_called()
+
+
+async def test_search_dense_passes_allowed_lobs(
+    store: MultimodalNeo4jStore, neo4j_session: AsyncMock
+) -> None:
+    neo4j_session.run = AsyncMock(return_value=_AsyncRecords([]))
+    await store.search_dense(
+        [0.1, 0.2], limit=5, allowed_lobs=frozenset({"FX", "FICC"})
+    )
+    assert neo4j_session.run.await_args.kwargs["allowed_lobs"] == ["FICC", "FX"]
 
 
 async def test_search_text_chunk_stats(store: MultimodalNeo4jStore, neo4j_session: AsyncMock) -> None:

@@ -27,12 +27,14 @@ def _caps(
     creator: bool = False,
     approver: bool = False,
     canceller: bool = False,
+    instruction_analyst: bool = False,
 ) -> ChatCapabilities:
     return ChatCapabilities(
         is_compliance=compliance,
         can_create_payment=creator,
         can_approve_payment=approver,
         can_cancel_payment=canceller,
+        is_instruction_analyst=instruction_analyst,
     )
 
 
@@ -85,7 +87,7 @@ class TestLaneAccess:
         assert ok_approver.allowed
         assert ok_approver.lane == HandlerLane.SKILL
 
-    def test_tools_require_policies_mode_and_compliance(self) -> None:
+    def test_tools_require_policies_mode_and_eligible_role(self) -> None:
         denied_mode = resolve_lane_access(
             path="policy_summary",
             mode="payments",
@@ -94,28 +96,50 @@ class TestLaneAccess:
         assert not denied_mode.allowed
         assert denied_mode.denial == DenialReason.TOOLS_WRONG_MODE
 
+        no_policies = ChatCapabilities(
+            is_compliance=False,
+            can_create_payment=False,
+            can_approve_payment=False,
+            can_cancel_payment=False,
+            is_instruction_analyst=False,
+            can_use_policies=False,
+        )
         denied_role = resolve_lane_access(
             path="eligibility",
             mode="policies",
-            capabilities=_caps(creator=True),
+            capabilities=no_policies,
         )
         assert not denied_role.allowed
         assert denied_role.denial == DenialReason.TOOLS_NOT_COMPLIANCE
 
-        ok = resolve_lane_access(
+        ok_any_user = resolve_lane_access(
             path="policy_directory",
             mode="policies",
-            capabilities=_caps(compliance=True),
+            capabilities=_caps(),
         )
-        assert ok.allowed
-        assert ok.lane == HandlerLane.TOOLS
+        assert ok_any_user.allowed
+        assert ok_any_user.lane == HandlerLane.TOOLS
 
-    def test_investigate_blocked_in_policies_for_operational(self) -> None:
+        ok_mo = resolve_lane_access(
+            path="eligibility",
+            mode="policies",
+            capabilities=_caps(creator=True),
+        )
+        assert ok_mo.allowed
+
+        ok_fo = resolve_lane_access(
+            path="policy_summary",
+            mode="policies",
+            capabilities=_caps(instruction_analyst=True),
+        )
+        assert ok_fo.allowed
+
+    def test_policies_mode_allowed_for_operational(self) -> None:
         access = resolve_lane_access(
             path="graph", mode="policies", capabilities=_caps(creator=True)
         )
-        assert not access.allowed
-        assert access.denial == DenialReason.POLICIES_MODE_OPERATIONAL
+        assert access.allowed
+        assert access.lane == HandlerLane.TOOLS
 
     def test_investigate_ok_in_events(self) -> None:
         access = resolve_lane_access(

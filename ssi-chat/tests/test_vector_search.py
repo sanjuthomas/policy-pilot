@@ -97,6 +97,7 @@ async def test_search_vector_returns_normalized_hits() -> None:
             "event_id": "event-1",
             "instruction_id": None,
             "payment_id": None,
+            "owning_lob": None,
             "search_text": "payment",
             "merged": {"amount": 3},
             "security_event": {},
@@ -108,6 +109,7 @@ async def test_search_vector_returns_normalized_hits() -> None:
         }
     ]
     assert session.run.call_args_list[1].kwargs["sources"] == ["payment_fact"]
+    assert session.run.call_args_list[1].kwargs["allowed_lobs"] is None
 
 
 @pytest.mark.asyncio
@@ -115,6 +117,31 @@ async def test_search_vector_short_circuits_without_documents() -> None:
     client, session = _client(_Result(single={"count": 0}))
     assert await client.search_vector([0.1], limit=3) == []
     assert session.run.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_search_vector_empty_allowed_lobs_short_circuits() -> None:
+    client, session = _client()
+    assert await client.search_vector([0.1], limit=3, allowed_lobs=frozenset()) == []
+    assert session.run.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_search_vector_passes_allowed_lobs_filter() -> None:
+    node = {
+        "payload_json": '{"event_id":"event-1","owning_lob":"FX"}',
+        "owning_lob": "FX",
+        "search_text": "fx payment",
+    }
+    client, session = _client(
+        _Result(single={"count": 1}),
+        _Result(rows=[{"node": node, "score": 0.9}]),
+    )
+    hits = await client.search_vector(
+        [0.1], limit=3, allowed_lobs=frozenset({"FX", "FICC"})
+    )
+    assert hits[0]["owning_lob"] == "FX"
+    assert session.run.call_args_list[1].kwargs["allowed_lobs"] == ["FICC", "FX"]
 
 
 @pytest.mark.asyncio
@@ -149,3 +176,14 @@ async def test_fetches_exact_documents_and_approval_events() -> None:
 async def test_fetch_returns_none_when_document_does_not_exist() -> None:
     client, _ = _client(_Result(single=None))
     assert await client.fetch_by_event_id("missing") is None
+
+
+@pytest.mark.asyncio
+async def test_fetch_empty_allowed_lobs_returns_none() -> None:
+    client, session = _client()
+    assert await client.fetch_by_event_id("e1", allowed_lobs=frozenset()) is None
+    assert (
+        await client.fetch_instruction_approve_events("i1", allowed_lobs=frozenset())
+        == []
+    )
+    assert session.run.call_count == 0

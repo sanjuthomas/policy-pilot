@@ -45,7 +45,9 @@ class Settings(BaseSettings):
     oidc_internal_url: str | None = None
     oidc_audience: str | None = None
     compliance_roles: str = "COMPLIANCE_ANALYST,COMPLIANCE_OFFICER,PLATFORM_ADMIN"
-    operational_roles: str = "PAYMENT_CREATOR,FUNDING_APPROVER"
+    operational_roles: str = (
+        "PAYMENT_CREATOR,FUNDING_APPROVER,INSTRUCTION_CREATOR,INSTRUCTION_APPROVER"
+    )
     service_user_id: str = "svc-chat"
     service_user_password: str = "Password1!"
 

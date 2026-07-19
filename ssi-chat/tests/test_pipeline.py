@@ -106,9 +106,13 @@ class TestSelectiveRetrieval:
             search_source="security_events",
             event_ids=[],
             entity_ids=[],
+            allowed_lobs=frozenset({"FX"}),
         )
         rag_service._search_graph.assert_not_called()
         mock_vector_search.search_vector.assert_called_once()
+        assert mock_vector_search.search_vector.call_args.kwargs["allowed_lobs"] == frozenset(
+            {"FX"}
+        )
 
 
 class TestRouteQuestion:
