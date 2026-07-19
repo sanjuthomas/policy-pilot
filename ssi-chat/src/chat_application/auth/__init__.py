@@ -7,6 +7,10 @@ from chat_application.auth.capabilities import (
     capabilities_for,
 )
 from chat_application.auth.dependencies import get_chat_subject
+from chat_application.auth.retrieval_scope import (
+    allowed_retrieval_lobs,
+    filter_rows_by_retrieval_lobs,
+)
 from chat_application.auth.service_identity import service_identity
 from chat_application.auth.subject import Subject
 from chat_application.auth.users import (
@@ -22,10 +26,12 @@ __all__ = [
     "SeedUser",
     "Subject",
     "ZitadelAuthClient",
+    "allowed_retrieval_lobs",
     "audience_labels",
     "capabilities_for",
     "chat_users",
     "compliance_users",
+    "filter_rows_by_retrieval_lobs",
     "get_chat_subject",
     "load_users",
     "login_name_for_user",

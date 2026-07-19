@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from typing import Any, Literal
 
+from cypher_builder.lob_scope import owning_lob_and_clause
+
 # ── Cypher validation patterns ─────────────────────────────────────────────
 
 # Strip comment styles before keyword analysis
@@ -946,8 +948,7 @@ def _payment_aggregate_queries(
     *,
     sum_amount: bool,
 ) -> list[tuple[str, str]]:
-    lob = lob_filter_from_question(question)
-    lob_filter = f"AND p.owning_lob = '{lob}'" if lob else ""
+    lob_filter = owning_lob_and_clause(alias="p", question=question)
     status_filter = _payment_status_filter_cypher(question)
     time_filter = _payment_time_filter_cypher(
         flags,
@@ -985,8 +986,7 @@ def _payments_above_amount_queries(
     *,
     min_amount: float,
 ) -> list[tuple[str, str]]:
-    lob = lob_filter_from_question(question)
-    lob_filter = f"AND p.owning_lob = '{lob}'" if lob else ""
+    lob_filter = owning_lob_and_clause(alias="p", question=question)
     status_filter = _payment_status_filter_cypher(question)
     time_filter = _payment_time_filter_cypher(
         flags,
@@ -1018,8 +1018,7 @@ def _largest_payment_queries(
     question: str,
     flags: dict[str, bool],
 ) -> list[tuple[str, str]]:
-    lob = lob_filter_from_question(question)
-    lob_filter = f"AND p.owning_lob = '{lob}'" if lob else ""
+    lob_filter = owning_lob_and_clause(alias="p", question=question)
     status_filter = _payment_status_filter_cypher(question)
     time_filter = _payment_time_filter_cypher(
         flags,
@@ -1058,12 +1057,13 @@ def _alert_ranking_queries(
         domain_filter = "AND e.payment_id IS NOT NULL"
     elif instructions_only:
         domain_filter = "AND e.payment_id IS NULL"
+    lob_scope = owning_lob_and_clause(alias="e")
 
     return [
         (
             "ranking",
             f"""MATCH (e:SecurityEvent {{severity: 'ALERT'}})
-WHERE true {domain_filter} {time_filter}
+WHERE true {domain_filter} {time_filter}{lob_scope}
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
 WITH actor.user_id AS user_id,
      coalesce(actor.display_name, actor.user_id, '') AS actor_display,
@@ -1078,7 +1078,7 @@ LIMIT 20""",
         (
             "details",
             f"""MATCH (e:SecurityEvent {{severity: 'ALERT'}})
-WHERE true {domain_filter} {time_filter}{_SECURITY_EVENT_GRAPH_OPTIONAL_MATCHES}
+WHERE true {domain_filter} {time_filter}{lob_scope}{_SECURITY_EVENT_GRAPH_OPTIONAL_MATCHES}
 RETURN e.event_id, e.timestamp, e.action, e.message, e.severity,
        CASE WHEN e.payment_id IS NOT NULL THEN 'payment' ELSE 'instruction' END AS domain,
        coalesce(e.payment_id, '') AS payment_id,
@@ -1279,8 +1279,7 @@ LIMIT 200""",
 
 
 def _payment_list_queries(question: str, flags: dict[str, bool]) -> list[tuple[str, str]]:
-    lob = lob_filter_from_question(question)
-    lob_filter = f"AND p.owning_lob = '{lob}'" if lob else ""
+    lob_filter = owning_lob_and_clause(alias="p", question=question)
     status_filter = _payment_status_filter_cypher(question)
     time_filter = _payment_time_filter_cypher(
         flags,
@@ -1416,10 +1415,12 @@ LIMIT 1""",
 
 def _payment_detail_by_id_queries(payment_id: str) -> list[tuple[str, str]]:
     safe_id = _escape_cypher_literal(payment_id)
+    lob_scope = owning_lob_and_clause(alias="p")
     return [
         (
             "payment_detail",
             f"""MATCH (pay:Payment {{payment_id: '{safe_id}'}})-[:CURRENT]->(p:PaymentVersion)
+WHERE true{lob_scope}
 OPTIONAL MATCH (creator:User)-[:CREATED_PV]->(p)
 OPTIONAL MATCH (approver:User)-[:APPROVED_PV]->(p)
 RETURN p.payment_id AS payment_id,
@@ -1454,10 +1455,9 @@ def _instruction_count_queries(
 ) -> list[tuple[str, str]]:
     """Count distinct instructions at their latest version with lifecycle status."""
     status, instruction_type = instruction_count_filters_from_question(question)
-    lob = lob_filter_from_question(question)
     status_clause = f"AND v.status = '{status}'" if status else ""
     type_clause = f"AND v.instruction_type = '{instruction_type}'" if instruction_type else ""
-    lob_clause = f"AND v.owning_lob = '{lob}'" if lob else ""
+    lob_clause = owning_lob_and_clause(alias="v", question=question)
 
     time_clause = ""
     if flags["today"]:
@@ -1517,10 +1517,12 @@ def _escape_cypher_literal(value: str) -> str:
 
 def _instruction_detail_by_id_queries(instruction_id: str) -> list[tuple[str, str]]:
     safe_id = _escape_cypher_literal(instruction_id)
+    lob_scope = owning_lob_and_clause(alias="v")
     return [
         (
             "instruction_detail",
             f"""MATCH (i:Instruction {{instruction_id: '{safe_id}'}})-[:CURRENT]->(v:InstructionVersion)
+WHERE true{lob_scope}
 OPTIONAL MATCH (creator:User {{user_id: v.creator_user_id}})
 OPTIONAL MATCH (approver:User {{user_id: v.approver_user_id}})
 OPTIONAL MATCH (rejector:User {{user_id: v.rejector_user_id}})
@@ -1560,8 +1562,9 @@ def _instruction_list_inventory_queries(
         clauses.append(
             f"AND v.instruction_type = '{_escape_cypher_literal(instruction_type)}'"
         )
-    if lob:
-        clauses.append(f"AND v.owning_lob = '{_escape_cypher_literal(lob)}'")
+    lob_clause = owning_lob_and_clause(alias="v", explicit_lob=lob)
+    if lob_clause:
+        clauses.append(lob_clause.strip())
     where_extra = " ".join(clauses)
     return [
         (
@@ -1699,9 +1702,7 @@ LIMIT 50""",
 
 
 def _instruction_duplicate_routes_queries(*, lob: str | None = None) -> list[tuple[str, str]]:
-    lob_clause = ""
-    if lob:
-        lob_clause = f"AND v1.owning_lob = '{_escape_cypher_literal(lob)}'"
+    lob_clause = owning_lob_and_clause(alias="v1", explicit_lob=lob)
     return [
         (
             "duplicate_routes",
@@ -1804,11 +1805,12 @@ MATCH (event:SecurityEvent)-[:FOR]->(v)
 
 
 def _alert_count_today_queries() -> list[tuple[str, str]]:
+    lob_scope = owning_lob_and_clause(alias="e")
     return [
         (
             "alert_count_today",
-            """MATCH (e:SecurityEvent {severity: 'ALERT'})
-WHERE date(datetime(e.timestamp)) = date()
+            f"""MATCH (e:SecurityEvent {{severity: 'ALERT'}})
+WHERE date(datetime(e.timestamp)) = date(){lob_scope}
 RETURN count(e) AS total
 LIMIT 1""",
         ),
@@ -1816,11 +1818,12 @@ LIMIT 1""",
 
 
 def _security_event_domain_where(*, domain: str, time_filter: str) -> str:
+    lob_scope = owning_lob_and_clause(alias="e")
     if domain == "payments":
-        return f"e.payment_id IS NOT NULL {time_filter}"
+        return f"e.payment_id IS NOT NULL {time_filter}{lob_scope}"
     if domain == "instructions":
-        return f"e.payment_id IS NULL {time_filter}"
-    return f"true {time_filter}"
+        return f"e.payment_id IS NULL {time_filter}{lob_scope}"
+    return f"true {time_filter}{lob_scope}"
 
 
 def _security_event_count_queries(
@@ -1848,8 +1851,11 @@ def _security_event_alert_count_queries(
     time_filter: str,
     domain: str,
 ) -> list[tuple[str, str]]:
+    lob_scope = owning_lob_and_clause(alias="e")
     if domain == "payments":
-        count_where = f"e.payment_id IS NOT NULL AND e.severity = 'ALERT' {time_filter}"
+        count_where = (
+            f"e.payment_id IS NOT NULL AND e.severity = 'ALERT' {time_filter}{lob_scope}"
+        )
         detail_optional = """
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
 OPTIONAL MATCH (e)-[:FOR]->(pv:PaymentVersion)
@@ -1862,7 +1868,9 @@ OPTIONAL MATCH (pay:Payment {payment_id: pv.payment_id})"""
        coalesce(pv.owning_lob, e.owning_lob, '') AS owning_lob,
        coalesce(actor.display_name, actor.user_id, '') AS actor_display"""
     elif domain == "instructions":
-        count_where = f"e.payment_id IS NULL AND e.severity = 'ALERT' {time_filter}"
+        count_where = (
+            f"e.payment_id IS NULL AND e.severity = 'ALERT' {time_filter}{lob_scope}"
+        )
         detail_optional = """
 OPTIONAL MATCH (e)-[:FOR]->(v:InstructionVersion)
 OPTIONAL MATCH (i:Instruction {instruction_id: v.instruction_id})
@@ -1872,7 +1880,7 @@ OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)"""
        coalesce(e.owning_lob, v.owning_lob, '') AS lob,
        coalesce(actor.display_name, actor.user_id, '') AS actor_display"""
     else:
-        count_where = f"true {time_filter}"
+        count_where = f"true {time_filter}{lob_scope}"
         detail_optional = _SECURITY_EVENT_GRAPH_OPTIONAL_MATCHES
         detail_return = f"""RETURN e.event_id, e.timestamp, e.action, e.message, e.severity,
        CASE WHEN e.payment_id IS NOT NULL THEN 'payment' ELSE 'instruction' END AS domain,
@@ -1918,12 +1926,13 @@ def _security_event_alert_list_queries(
     action_filter = ""
     if approval_only:
         action_filter = "AND e.action IN ['APPROVE', 'APPROVE_PAYMENT']"
+    lob_scope = owning_lob_and_clause(alias="e")
 
     return [
         (
             "security_event_alert_list",
             f"""MATCH (e:SecurityEvent {{severity: 'ALERT'}})
-WHERE true {domain_filter} {time_filter} {action_filter}{_SECURITY_EVENT_GRAPH_OPTIONAL_MATCHES}
+WHERE true {domain_filter} {time_filter} {action_filter}{lob_scope}{_SECURITY_EVENT_GRAPH_OPTIONAL_MATCHES}
 RETURN e.event_id AS event_id,
        e.timestamp AS timestamp,
        e.action AS action,
@@ -1947,6 +1956,7 @@ def _security_event_group_by_lob_queries(
         domain_filter = "AND e.payment_id IS NOT NULL"
     elif domain == "instructions":
         domain_filter = "AND e.payment_id IS NULL"
+    lob_scope = owning_lob_and_clause(alias="e")
 
     lob_resolution = """
 OPTIONAL MATCH (e)-[:INVOLVES_LOB]->(pc:ProfitCenter)
@@ -1959,7 +1969,7 @@ WITH coalesce(pc.lob, e.owning_lob, v.owning_lob, pv.owning_lob, 'unknown') AS l
             (
                 "security_event_alert_group_by_lob",
                 f"""MATCH (e:SecurityEvent {{severity: 'ALERT'}})
-WHERE true {domain_filter} {time_filter}
+WHERE true {domain_filter} {time_filter}{lob_scope}
 {lob_resolution}
 WITH lob, count(e) AS alert_count
 RETURN lob, alert_count
@@ -1972,7 +1982,7 @@ LIMIT 50""",
         (
             "security_event_group_by_lob",
             f"""MATCH (e:SecurityEvent)
-WHERE true {domain_filter} {time_filter}
+WHERE true {domain_filter} {time_filter}{lob_scope}
 {lob_resolution}
 WITH lob,
      count(e) AS event_count,

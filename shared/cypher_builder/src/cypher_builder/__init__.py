@@ -12,6 +12,10 @@ from cypher_builder.facets import (
     format_facet_aggregate_answer,
     is_analytics_question,
 )
+from cypher_builder.lob_scope import (
+    owning_lob_and_clause,
+    retrieval_lob_scope,
+)
 from cypher_builder.models import GraphIntent, GraphQueryPlan
 from cypher_builder.query_engine import (
     LOOKUP_INSTRUCTION_BY_EVENT_CYPHER,
@@ -112,7 +116,9 @@ __all__ = [
     "is_security_event_group_by_lob_question",
     "lob_filter_from_question",
     "normalize_read_only_cypher",
+    "owning_lob_and_clause",
     "parse_graph_query_plan",
+    "retrieval_lob_scope",
     "payment_aggregate_period_label",
     "payment_amount_threshold_from_question",
     "payment_status_filter_from_question",

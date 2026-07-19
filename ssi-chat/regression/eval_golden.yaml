@@ -220,3 +220,48 @@ cases:
     answer_contains_any:
     - -I-
     - -P-
+
+# ── Issue #63 phase 2: operational chat retrieval LOB scope ──
+# Compliance goldens above stay unscoped. FO FX must not see FICC-owned denial events.
+
+- id: golden_fo_fx_instruction_denials_scoped
+  mode: events
+  retrieval: deterministic
+  tags: [golden, lob_scope, fo, negative]
+  persona: fo-fx-101
+  question: How many instruction policy denials happened this week?
+  expect:
+    require_routing: true
+    routing_path: neo4j_direct
+    cypher_class: deterministic
+    answer_synthesis: formatter
+    answer_contains_all:
+    - There were no instruction policy denial events this week.
+
+- id: golden_fo_fx_payment_denials_scoped
+  mode: events
+  retrieval: deterministic
+  tags: [golden, lob_scope, fo, negative]
+  persona: fo-fx-101
+  question: How many payment policy denial alerts happened today?
+  expect:
+    require_routing: true
+    routing_path: neo4j_direct
+    cypher_class: deterministic
+    answer_synthesis: formatter
+    answer_contains_all:
+    - There were no payment policy denial events today.
+
+- id: golden_fo_ficc_instruction_denials_positive
+  mode: events
+  retrieval: deterministic
+  tags: [golden, lob_scope, fo, positive]
+  persona: fo-ficc-101
+  question: How many instruction policy denials happened this week?
+  expect:
+    require_routing: true
+    routing_path: neo4j_direct
+    cypher_class: deterministic
+    answer_synthesis: formatter
+    answer_contains_all:
+    - There were 4 instruction policy denial events this week.

@@ -370,14 +370,22 @@ async def try_neo4j_direct_answer(
     question: str,
     *,
     mode: SearchMode,
+    allowed_lobs: frozenset[str] | None = None,
 ) -> Neo4jDirectResult | None:
-    match = match_neo4j_direct_intent(question, mode=mode)
-    if match is None:
-        match = match_planned_graph_intent(question, mode=mode)
-    if match is None:
-        return None
+    from cypher_builder import retrieval_lob_scope
 
-    rows, cyphers = await run_neo4j_direct_queries(neo4j, match)
+    from chat_application.auth.retrieval_scope import filter_rows_by_retrieval_lobs
+
+    with retrieval_lob_scope(allowed_lobs):
+        match = match_neo4j_direct_intent(question, mode=mode)
+        if match is None:
+            match = match_planned_graph_intent(question, mode=mode)
+        if match is None:
+            return None
+
+        rows, cyphers = await run_neo4j_direct_queries(neo4j, match)
+
+    rows = filter_rows_by_retrieval_lobs(rows, allowed_lobs)
     answer = format_neo4j_direct_answer(match, question, rows, mode=mode)
     if answer is None:
         return None

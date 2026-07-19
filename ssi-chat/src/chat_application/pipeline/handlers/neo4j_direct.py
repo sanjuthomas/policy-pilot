@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from chat_application.auth.retrieval_scope import allowed_retrieval_lobs
 from chat_application.formatting.response import format_chat_response
 from chat_application.models import ChatResponse
 from chat_application.observability.routing import (
@@ -28,7 +29,11 @@ class Neo4jDirectHandler:
         if ctx.path in _SKIP_DIRECT_PATHS:
             return None
 
-        direct = await ctx.service._try_neo4j_direct_answer(ctx.message, mode=ctx.mode)
+        direct = await ctx.service._try_neo4j_direct_answer(
+            ctx.message,
+            mode=ctx.mode,
+            allowed_lobs=allowed_retrieval_lobs(ctx.subject),
+        )
         if direct is None:
             return None
 

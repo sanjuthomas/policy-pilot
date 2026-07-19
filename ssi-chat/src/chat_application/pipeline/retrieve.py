@@ -5,6 +5,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+from chat_application.auth.retrieval_scope import filter_rows_by_retrieval_lobs
 from chat_application.models import SearchMode
 from chat_application.pipeline.models import ExecutionStrategy
 from chat_application.vector.reranker import RankedHit, graph_rows_to_hits
@@ -40,6 +41,7 @@ async def execute_selective_retrieval(
     search_source: str | None,
     event_ids: list[str],
     entity_ids: list[str],
+    allowed_lobs: frozenset[str] | None = None,
 ) -> SelectiveRetrievalResult:
     """Run only the retrieval backends required for the chosen strategy."""
     run_vector = strategy in ("vector", "hybrid")
@@ -51,7 +53,9 @@ async def execute_selective_retrieval(
         else None
     )
     cypher_task = (
-        asyncio.create_task(service._search_graph(message, mode=mode))
+        asyncio.create_task(
+            service._search_graph(message, mode=mode, allowed_lobs=allowed_lobs)
+        )
         if run_graph
         else None
     )
@@ -102,6 +106,8 @@ async def execute_selective_retrieval(
         if key not in seen_graph:
             graph_rows.append(row)
             seen_graph.add(key)
+    graph_rows = filter_rows_by_retrieval_lobs(graph_rows, allowed_lobs)
+    exact_hits = filter_rows_by_retrieval_lobs(exact_hits, allowed_lobs)
     graph_result = {**graph_result, "rows": graph_rows}
 
     if run_graph:
