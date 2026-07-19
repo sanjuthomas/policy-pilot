@@ -4,6 +4,7 @@ from chat_application.formatting import (
     format_approval_auth_lines,
     format_markdown_table,
     format_money_amount,
+    format_policy_violations,
     format_usd_compact,
     humanize_policy_basis_point,
 )
@@ -76,3 +77,18 @@ class TestFormatApprovalAuthLines:
         assert len(lines) == 1
         assert lines[0].startswith("WHY:")
         assert "BASIS:" not in lines[0]
+
+
+class TestFormatPolicyViolations:
+    def test_backticks_preserve_alert_underscores_in_markdown(self) -> None:
+        formatted = format_policy_violations(["ALERT_UNAPPROVED_INSTRUCTION"])
+        assert formatted == "`ALERT_UNAPPROVED_INSTRUCTION`"
+
+    def test_joins_multiple_codes(self) -> None:
+        assert format_policy_violations(["SELF_APPROVAL", "LOB_MISMATCH"]) == (
+            "`SELF_APPROVAL`; `LOB_MISMATCH`"
+        )
+
+    def test_empty_falls_back(self) -> None:
+        assert format_policy_violations([]) == "policy denied"
+        assert format_policy_violations(None) == "policy denied"
