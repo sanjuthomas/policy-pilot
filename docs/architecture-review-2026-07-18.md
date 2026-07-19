@@ -1,9 +1,10 @@
 # Policy Pilot — Critical Architecture Review
 
-**Date:** 2026-07-18  
+**Date:** 2026-07-18 (evening re-pass)  
 **Reviewer model:** Claude Opus (adversarial / critical architecture pass)  
+**HEAD:** `main` @ `4f6fc91` (post PR #75 — chat vector LOB scope)  
 **Scope:** Identity → OPA → domain writes → CDC/indexer → Neo4j → chat skills → observability / trust boundaries  
-**Method:** Code- and policy-grounded review (`docker-compose`, `authorization-service`, Rego packs, domain services, Kafka Connect, `ssi-indexer` DLQ, `ssi-chat` skills/retrieve). No files modified during the review.
+**Method:** Code- and policy-grounded review. Prior F-1…F-6 re-validated against current code. No files modified during the review.
 
 ---
 
@@ -11,9 +12,9 @@
 
 Policy Pilot is an event-driven, policy-aware knowledge platform for the cash leg of Standard Settlement Instructions. Domain services enforce OPA policy and write versioned state **and** an immutable security event to MongoDB in a single transaction; CDC streams inserts through Kafka into `ssi-indexer`, which builds a shared Neo4j graph plus a dense vector index; `ssi-chat` answers questions via Route → Retrieve → Synthesize and runs scripted mutation skills.
 
-**Strongest parts:** a single OPA gateway (`authorization-service`) on every mutation and live-policy path; a clean identity↔policy bridge where OPA evaluates only injected `input` and **never** contacts ZITADEL; fail-closed OBO (token-derived subject only); atomic co-persistence of state + audit; layered SoD / four-eyes / reporting-line / LOB / amount-club Rego; mature ETL resilience (DLQ-before-commit, pause-on-quarantine-failure, integrity banner).
+**Strongest parts:** a single OPA gateway (`authorization-service`) on every mutation and live-policy path; a clean identity↔policy bridge where OPA evaluates only injected `input` and **never** contacts ZITADEL; fail-closed OBO (token-derived subject only); atomic co-persistence of state + audit; layered SoD / four-eyes / reporting-line / LOB / amount-club Rego; mature ETL resilience (DLQ-before-commit, pause-on-quarantine-failure, integrity banner); **chat graph + vector + REST VIEW LOB scoping** for operational personas (issue #63 2a/2b/2c).
 
-**Weakest residual risk:** chat graph/vector retrieval is not LOB/row-scoped, so an operational single-LOB user can read cross-LOB data through natural-language questions (P2; likely intentional for the demo, a real production gap).
+**Weakest residual risk (updated):** parked **by-id** chat lookups (approval / versions / timeline) that neither inject `owning_lob_and_clause` nor `RETURN … AS owning_lob`, so the graph post-filter cannot drop cross-LOB rows on id paste (F-1b). Detail-by-id and vector paths are already scoped. Tracked on `park/issue-63-2d-hardening`.
 
 **No P0 or P1 issues found.**
 
@@ -21,9 +22,9 @@ Policy Pilot is an event-driven, policy-aware knowledge platform for the cash le
 
 ## Overall score
 
-### 8.5 / 10
+### 9.0 / 10 *(proposed — pending owner confirmation)*
 
-The security-critical spine — one policy engine, fail-closed OBO, atomic state+audit, resilient indexing — is designed correctly and defensively, with defense-in-depth (chat preflight **and** independent service-side OPA). Points are deducted primarily for missing read-side row/LOB authorization in chat retrieval, plus two production-hardening items (OIDC audience validation off; over-broad Neo4j boosted-procedure grant). Unauthenticated OPA behind authz, local ZITADEL, and demo credentials are treated as **intentional demo posture**, not defects.
+Up from 8.5 because F-1 graph/vector/REST read-side authorization, F-2 audience, F-3 Neo4j grants, and F-6 skill confirm fail-closed are verified closed; F-4 resolved as by-design. Held below ~9.5 by F-1b (parked 2d) and open F-5 SUBMIT LOB design question. Demo posture is not scored as defects.
 
 ---
 
@@ -35,9 +36,10 @@ The security-critical spine — one policy engine, fail-closed OBO, atomic state
 | Fail-closed OBO with identity binding | `resolve_evaluate_subject` requires service caller + `X-On-Behalf-Of`; inline subject can only match, never substitute |
 | Atomic state + audit in one store | Domain services write version + security event in one Mongo transaction; CDC is insert-only |
 | Layered, realistic SoD controls | Four-eyes, reporting-line inversion, LOB coverage, amount clubs + ceiling, instruction seniority matrix |
+| Chat + REST LOB scope | `allowed_retrieval_lobs` + `owning_lob_and_clause` + vector `IN $allowed_lobs` + OPA `VIEW` |
 | ETL resilience is real | DLQ-before-commit, pause when quarantine unavailable, replay, chat integrity banner |
-| Least-privilege Neo4j accounts | `svc_chat` MATCH-only; `svc_indexer` write; admin separate |
-| Defense-in-depth in skills | OPA preflight + Go/No Go + payment-service re-authorizes via OPA/OBO |
+| Least-privilege Neo4j accounts | `svc_chat` MATCH-only + `db.index.vector.queryNodes`; `svc_indexer` write; admin separate |
+| Defense-in-depth in skills | OPA preflight + Go/No Go + confirm fail-closed; payment-service re-authorizes via OPA/OBO |
 
 ---
 
@@ -45,12 +47,13 @@ The security-critical spine — one policy engine, fail-closed OBO, atomic state
 
 | ID | Severity | Area | Finding | Suggested fix / question |
 |----|----------|------|---------|--------------------------|
-| F-1 | **P2** (+Question) | Chat data plane | Graph/vector retrieval is **not scoped** by caller identity or LOB. Operational users can read cross-LOB data via NL questions. | Intentional for compliance demo? If not, inject LOB/role into Cypher plans and vector filters. **Partial (REST):** instruction `VIEW`/`USE` now require LOB/`covering_lobs` entitlement (issue #63 follow-on for chat). |
-| F-2 | **P2** (+Question) | Identity / JWT | OIDC **audience not validated** (`verify_aud=False` when unset). | Set and enforce `oidc_audience` before non-demo deployment. **Fixed 2026-07-18:** compose sets `OIDC_AUDIENCE=policy-pilot`; JWT path fail-closes on `InvalidAudienceError` (issue #64). Session login unaffected. |
-| F-3 | **P2** | Neo4j | `svc_chat` has `EXECUTE BOOSTED PROCEDURE *` — latent privilege beyond read-only graph grants. | Restrict to the specific procedures chat needs. **Fixed 2026-07-18:** `role_ssi_chat` now grants only `EXECUTE PROCEDURE db.index.vector.queryNodes` (see #65). |
-| F-4 | Question | Audit labeling | `SELF_APPROVAL` is not `ALERT_`-prefixed, so `is_alert` may disagree with stored severity. | Confirm intent for four-eyes denials. |
-| F-5 | Question | Instruction policy | Instruction `SUBMIT` checks role/group/transition but not same-LOB / creator identity. | Is cross-LOB submit intended? |
-| F-6 | Question | Skills | Confirm-phase OPA re-check fails open on transport error; payment-service remains authoritative. | Formalize “client recheck advisory / service authoritative”; optional skipped-recheck audit signal. |
+| F-1a | **Closed** | Chat / REST data plane | Graph, vector, and REST `VIEW` paths are LOB-scoped by caller identity (#63 2a/2b/2c, #75). | — |
+| F-1b | **P2** (parked) | Chat by-id | Approval / versions / timeline / approver-via-payment templates lack LOB `WHERE` and `owning_lob` RETURN; post-filter keeps null-LOB rows → id-paste cross-LOB metadata. | Land `park/issue-63-2d-hardening`, and/or fail-closed post-filter when scoped subject + missing `owning_lob`. |
+| F-2 | **Closed** | Identity / JWT | Compose sets `OIDC_AUDIENCE=policy-pilot`; JWT path fail-closes on audience mismatch. Opaque/userinfo fallback remains demo-shaped. | — |
+| F-3 | **Closed** | Neo4j | `role_ssi_chat` grants only `EXECUTE PROCEDURE db.index.vector.queryNodes`. | — |
+| F-4 | **Closed (by design)** | Audit labeling | Denials → `severity=ALERT`; `is_alert` only for `ALERT_`-prefixed codes. `SELF_APPROVAL` → ALERT severity, `is_alert=false`. | Document convention; do not re-raise as defect. |
+| F-5 | Question | Instruction policy | Instruction `SUBMIT` checks role/group/transition but not same-LOB / covering. | Confirm intent; add gate if needed. |
+| F-6 | **Closed** | Skills | Confirm-phase OPA recheck fails closed on transport error; payment-service remains authoritative. | — |
 
 ---
 
@@ -58,6 +61,8 @@ The security-critical spine — one policy engine, fail-closed OBO, atomic state
 
 ```
 User JWT  →  ssi-chat / Classic UI
+                │
+                ├─(allowed_retrieval_lobs)─→ Neo4j graph/vector  [LOB scoped; F-1b by-id residual]
                 │
                 ├─(service token + X-On-Behalf-Of)─→  authorization-service
                 │                                         │
@@ -82,21 +87,22 @@ User JWT  →  ssi-chat / Classic UI
 
 | Item | Label |
 |------|-------|
-| Chat read-side not LOB-scoped (F-1) | Real gap for operational personas in production |
-| Audience validation off (F-2) | Hardening before multi-client deploy |
+| By-id chat LOB gap (F-1b) | Real gap — parked on `park/issue-63-2d-hardening` |
+| Graph post-filter fail-open on missing `owning_lob` | Real gap (enables F-1b); vector path is fail-closed |
+| Instruction SUBMIT not LOB-scoped (F-5) | Design question |
+| Opaque token userinfo skips audience | Demo / minor |
 | Unauthenticated OPA, local ZITADEL, demo passwords, PLAINTEXT Kafka | Intentional demo posture |
 | Cross-service submit → mark_used is compensating saga, not 2PC | Correct for single-store design |
-| Boosted-procedure grant (F-3) | Latent; mitigated by parameterized planned Cypher today |
 
 ---
 
 ## What would raise the score
 
-1. Add read-side authorization to chat retrieval (or document unfiltered read as compliance-only and restrict operational personas).
-2. Enable OIDC audience validation with per-service expected audiences.
-3. Tighten `svc_chat` Neo4j grants to specific procedures/functions.
-4. Resolve `is_alert` labeling for four-eyes denials.
-5. Confirm SUBMIT LOB scoping and formalize the advisory-vs-authoritative skill recheck contract.
+1. Land parked 2d: inject `owning_lob_and_clause` + `RETURN … AS owning_lob` on F-1b by-id templates.
+2. Make `filter_rows_by_retrieval_lobs` fail-closed for scoped subjects when a detail row lacks `owning_lob`.
+3. Resolve F-5 SUBMIT LOB/covering policy.
+4. Optionally enforce audience on opaque/userinfo fallback for non-demo deploys.
+5. Add FO cross-LOB id-paste golden negatives (approval / versions / timeline).
 
 ---
 
@@ -105,4 +111,5 @@ User JWT  →  ssi-chat / Classic UI
 | Date | Model | Score | Notes |
 |------|-------|-------|-------|
 | Prior | Claude Opus + GPT peer (owner-corrected) | ~8.0 / 10 | GPT over-flagged intentional design; owner-aligned to Opus |
-| **2026-07-18** | **Claude Opus** | **8.5 / 10** | Fresh pass on current `main`; 0 P0 / 0 P1; residual P2s above |
+| 2026-07-18 (morning) | Claude Opus | **8.5 / 10** | F-1 open (chat read-side); F-2/F-3 open then later fixed |
+| **2026-07-18 (evening)** | **Claude Opus** | **9.0 / 10 (proposed)** | Post #75; F-1a/F-2/F-3/F-6 closed; residual F-1b parked; F-5 question |
