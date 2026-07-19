@@ -15,6 +15,12 @@ from chat_application.pipeline.models import RouterDecision
 
 
 class TestHeuristicStrategy:
+    """Fallback-only: exercises ``heuristic_router_decision`` / helpers.
+
+    Happy-path routing in unit tests must use fixture ``RouterDecision`` values
+    (see ``tests/fixtures/router_decisions.py``), not these heuristics.
+    """
+
     def test_count_question_routes_graph(self) -> None:
         assert infer_execution_strategy_heuristic("How many alerts today?", mode="events") == "graph"
 

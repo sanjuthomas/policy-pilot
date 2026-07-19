@@ -8,6 +8,7 @@ from cypher_builder import GraphIntent, GraphQueryPlan
 from fastapi.testclient import TestClient
 
 from chat_application.rag import RagService
+from tests.fixtures.router_decisions import GRAPH, set_router_decision
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -17,17 +18,18 @@ def disable_open_telemetry_for_tests() -> None:
 
 @pytest.fixture
 def mock_ml_client():
-    from chat_application.pipeline.heuristic_strategy import heuristic_router_decision
+    """ML boundary mock. ``route_query`` returns a fixture ``RouterDecision``.
 
+    Happy-path tests must not rely on ``heuristic_router_decision``. Override
+    with ``set_router_decision(...)`` when the case needs a specific path.
+    Default is ``GRAPH`` so Neo4j-direct + investigate unit tests still run the
+    post-route production chain without simulating Gemini NLU via heuristics.
+    """
     client = MagicMock()
     client.dimension = 768
     client.embed = AsyncMock(return_value=[0.1, 0.2, 0.3])
     client.warmup = AsyncMock()
-    client.route_query = AsyncMock(
-        side_effect=lambda question, *, mode="events": heuristic_router_decision(
-            question, mode=mode
-        )
-    )
+    set_router_decision(client, GRAPH)
     client.extract_graph_query_plan = AsyncMock(
         return_value=GraphQueryPlan(intent=GraphIntent.SECURITY_EVENT_AGGREGATE)
     )
