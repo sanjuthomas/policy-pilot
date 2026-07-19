@@ -98,6 +98,9 @@ FOR (d:MultimodalDocument) ON (d.instruction_id);
 CREATE INDEX multimodal_payment_id IF NOT EXISTS
 FOR (d:MultimodalDocument) ON (d.payment_id);
 
+CREATE INDEX multimodal_owning_lob IF NOT EXISTS
+FOR (d:MultimodalDocument) ON (d.owning_lob);
+
 CREATE INDEX instruction_current_status IF NOT EXISTS
 FOR (i:Instruction) ON (i.current_status);
 

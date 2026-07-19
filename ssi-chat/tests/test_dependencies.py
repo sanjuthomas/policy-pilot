@@ -24,7 +24,7 @@ def test_get_chat_subject_rejects_missing_bearer(auth_client: TestClient) -> Non
 
 
 def test_get_chat_subject_rejects_unrelated_role(auth_client: TestClient) -> None:
-    subject = Subject(user_id="fo-001", title="Trader", roles=["INSTRUCTION_CREATOR"])
+    subject = Subject(user_id="viewer-001", title="Viewer", roles=["INSTRUCTION_VIEWER"])
     with patch("chat_application.auth.dependencies.subject_from_bearer_token", return_value=subject):
         response = auth_client.post(
             "/api/chat",
@@ -32,6 +32,45 @@ def test_get_chat_subject_rejects_unrelated_role(auth_client: TestClient) -> Non
             json={"message": "hello"},
         )
     assert response.status_code == 403
+
+
+def test_get_chat_subject_allows_instruction_creator(auth_client: TestClient) -> None:
+    import chat_application.main as main_module
+
+    subject = Subject(
+        user_id="mo-100",
+        title="Analyst",
+        roles=["INSTRUCTION_CREATOR"],
+        groups=["MIDDLE_OFFICE"],
+        covering_lobs=["FICC"],
+    )
+    main_module.rag_service = None
+    with patch("chat_application.auth.dependencies.subject_from_bearer_token", return_value=subject):
+        response = auth_client.post(
+            "/api/chat",
+            headers={"Authorization": "Bearer test-token"},
+            json={"message": "hello"},
+        )
+    assert response.status_code == 503
+
+
+def test_get_chat_subject_allows_instruction_approver(auth_client: TestClient) -> None:
+    import chat_application.main as main_module
+
+    subject = Subject(
+        user_id="ficc-300",
+        title="Vice President",
+        roles=["INSTRUCTION_APPROVER"],
+        lob="FICC",
+    )
+    main_module.rag_service = None
+    with patch("chat_application.auth.dependencies.subject_from_bearer_token", return_value=subject):
+        response = auth_client.post(
+            "/api/chat",
+            headers={"Authorization": "Bearer test-token"},
+            json={"message": "hello"},
+        )
+    assert response.status_code == 503
 
 
 def test_get_chat_subject_allows_compliance_analyst(auth_client: TestClient) -> None:

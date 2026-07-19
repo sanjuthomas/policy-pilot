@@ -8,6 +8,9 @@ COMPLIANCE_ROLES = frozenset(
     {"COMPLIANCE_ANALYST", "COMPLIANCE_OFFICER", "PLATFORM_ADMIN"}
 )
 OPERATIONAL_ROLES = frozenset({"PAYMENT_CREATOR", "FUNDING_APPROVER"})
+INSTRUCTION_ANALYST_ROLES = frozenset(
+    {"INSTRUCTION_CREATOR", "INSTRUCTION_APPROVER"}
+)
 
 
 @dataclass(frozen=True)
@@ -18,6 +21,7 @@ class ChatCapabilities:
     can_create_payment: bool
     can_approve_payment: bool
     can_cancel_payment: bool
+    is_instruction_analyst: bool
 
     @property
     def is_operational(self) -> bool:
@@ -26,6 +30,11 @@ class ChatCapabilities:
             or self.can_approve_payment
             or self.can_cancel_payment
         )
+
+    @property
+    def can_use_policies(self) -> bool:
+        """Policies mode: compliance, MO/FO payment actors, instruction analysts."""
+        return self.is_compliance or self.is_operational or self.is_instruction_analyst
 
 
 def capabilities_for(subject: Subject) -> ChatCapabilities:
@@ -39,6 +48,7 @@ def capabilities_for(subject: Subject) -> ChatCapabilities:
         can_cancel_payment=(
             "PAYMENT_CREATOR" in roles and "MIDDLE_OFFICE" in groups
         ),
+        is_instruction_analyst=bool(roles & INSTRUCTION_ANALYST_ROLES),
     )
 
 
@@ -52,4 +62,8 @@ def audience_labels(roles: list[str]) -> list[str]:
         labels.append("payment_creator")
     if "FUNDING_APPROVER" in role_set:
         labels.append("funding_approver")
+    if "INSTRUCTION_CREATOR" in role_set:
+        labels.append("instruction_creator")
+    if "INSTRUCTION_APPROVER" in role_set:
+        labels.append("instruction_approver")
     return labels

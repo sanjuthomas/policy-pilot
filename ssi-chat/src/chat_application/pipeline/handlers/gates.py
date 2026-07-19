@@ -83,19 +83,19 @@ def resolve_lane_access(
     if lane == HandlerLane.TOOLS:
         if mode not in TOOL_MODES:
             return LaneAccess(False, lane, DenialReason.TOOLS_WRONG_MODE)
-        if not capabilities.is_compliance:
+        if not capabilities.can_use_policies:
             return LaneAccess(False, lane, DenialReason.TOOLS_NOT_COMPLIANCE)
         return LaneAccess(True, lane)
 
     if lane == HandlerLane.ME:
         # Me-intents are available in any mode once the subject is authenticated;
-        # policies mode still allows me-centric questions for operational users.
+        # policies mode still allows me-centric questions for FO/MO analysts.
         return LaneAccess(True, lane)
 
     # Investigate (or policies-mode fallthrough after tools)
     if mode == "policies":
-        if capabilities.is_compliance:
-            # Compliance tools lane should have handled dedicated paths;
+        if capabilities.can_use_policies:
+            # Tools lane should have handled dedicated paths;
             # guidance / empty policies fallthrough is allowed.
             return LaneAccess(True, HandlerLane.TOOLS)
         return LaneAccess(False, HandlerLane.TOOLS, DenialReason.POLICIES_MODE_OPERATIONAL)
@@ -129,9 +129,9 @@ def denial_message(reason: DenialReason) -> tuple[str, Literal["skill", "eligibi
         )
     if reason in (DenialReason.TOOLS_NOT_COMPLIANCE, DenialReason.POLICIES_MODE_OPERATIONAL):
         return (
-            "Policies mode is available to compliance analysts. "
-            "As an operational user, ask me-centric questions such as "
-            "“Are there any other users like me?” or switch to Payments / Events mode.",
+            "Policies mode is available to compliance, middle-office, and front-office "
+            "analysts. Sign in with an eligible role, or switch to Payments / Events / "
+            "Instructions mode.",
             "eligibility",
         )
     return ("This action is not available for your role or mode.", "formatter")

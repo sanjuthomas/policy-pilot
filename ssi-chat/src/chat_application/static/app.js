@@ -64,9 +64,22 @@ function isOperationalAudience() {
   );
 }
 
+function isInstructionAnalystAudience() {
+  const audiences = sessionAudiences();
+  return (
+    audiences.includes("instruction_creator") ||
+    audiences.includes("instruction_approver")
+  );
+}
+
 function canUsePoliciesMode() {
-  // Unsigned: show all modes. Signed: compliance / admin only.
-  return !session || isComplianceAudience();
+  // Unsigned: show all modes. Signed: compliance, MO/FO payment, instruction analysts.
+  return (
+    !session ||
+    isComplianceAudience() ||
+    isOperationalAudience() ||
+    isInstructionAnalystAudience()
+  );
 }
 
 function canUseEventsMode() {

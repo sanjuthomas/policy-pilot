@@ -83,6 +83,14 @@ def test_chat_users_includes_audiences() -> None:
             groups=["MIDDLE_OFFICE"],
         ),
         SeedUser(
+            user_id="ficc-300",
+            given_name="Elena",
+            family_name="Vasquez",
+            title="Vice President",
+            roles=["INSTRUCTION_APPROVER"],
+            lob="FICC",
+        ),
+        SeedUser(
             user_id="svc-chat",
             given_name="Service",
             family_name="Chat",
@@ -92,13 +100,18 @@ def test_chat_users_includes_audiences() -> None:
     )
     rows = chat_users(
         seed=seed,
-        allowed_roles={"COMPLIANCE_ANALYST", "PAYMENT_CREATOR"},
+        allowed_roles={
+            "COMPLIANCE_ANALYST",
+            "PAYMENT_CREATOR",
+            "INSTRUCTION_APPROVER",
+        },
     )
     ids = {row["user_id"] for row in rows}
-    assert ids == {"comp-001", "pay-101"}
+    assert ids == {"comp-001", "pay-101", "ficc-300"}
     by_id = {row["user_id"]: row for row in rows}
     assert "compliance" in by_id["comp-001"]["audiences"]
     assert "payment_creator" in by_id["pay-101"]["audiences"]
+    assert "instruction_approver" in by_id["ficc-300"]["audiences"]
 
 
 def test_clear_directory_cache() -> None:

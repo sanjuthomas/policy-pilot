@@ -677,23 +677,38 @@ class RagService:
         )
 
     async def _search_vector(
-        self, query: str, limit: int, source: str | None = None
+        self,
+        query: str,
+        limit: int,
+        source: str | None = None,
+        *,
+        allowed_lobs: frozenset[str] | None = None,
     ) -> list[dict[str, Any]]:
         try:
             vector = await self.ml_client.embed(query)
-            return await self.vector_search.search_vector(vector, limit=limit, source=source)
+            return await self.vector_search.search_vector(
+                vector,
+                limit=limit,
+                source=source,
+                allowed_lobs=allowed_lobs,
+            )
         except Exception as exc:
             logger.warning("vector search failed: %s", exc)
             return []
 
     async def _lookup_exact_event_ids(
-        self, event_ids: list[str]
+        self,
+        event_ids: list[str],
+        *,
+        allowed_lobs: frozenset[str] | None = None,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         hits: list[dict[str, Any]] = []
         graph_rows: list[dict[str, Any]] = []
 
         for event_id in event_ids:
-            store_hit = await self.vector_search.fetch_by_event_id(event_id)
+            store_hit = await self.vector_search.fetch_by_event_id(
+                event_id, allowed_lobs=allowed_lobs
+            )
             if store_hit is not None:
                 hits.append(store_hit)
 
@@ -710,33 +725,45 @@ class RagService:
         return hits, graph_rows
 
     async def _lookup_exact_instruction_ids(
-        self, instruction_ids: list[str], message: str
+        self,
+        instruction_ids: list[str],
+        message: str,
+        *,
+        allowed_lobs: frozenset[str] | None = None,
     ) -> list[dict[str, Any]]:
         hits: list[dict[str, Any]] = []
         approval_question = "approv" in message.lower()
 
         for instruction_id in instruction_ids:
-            state_hit = await self.vector_search.fetch_by_instruction_id(instruction_id)
+            state_hit = await self.vector_search.fetch_by_instruction_id(
+                instruction_id, allowed_lobs=allowed_lobs
+            )
             if state_hit is not None:
                 hits.append(state_hit)
 
             if approval_question:
                 approve_hits = await self.vector_search.fetch_instruction_approve_events(
-                    instruction_id
+                    instruction_id, allowed_lobs=allowed_lobs
                 )
                 hits.extend(approve_hits)
 
         return hits
 
     async def _lookup_exact_payment_ids(
-        self, payment_ids: list[str], message: str
+        self,
+        payment_ids: list[str],
+        message: str,
+        *,
+        allowed_lobs: frozenset[str] | None = None,
     ) -> list[dict[str, Any]]:
         hits: list[dict[str, Any]] = []
         approval_question = "approv" in message.lower()
         via_instruction = is_instruction_approver_via_payment_question(message)
 
         for payment_id in payment_ids:
-            fact_hit = await self.vector_search.fetch_by_payment_id(payment_id)
+            fact_hit = await self.vector_search.fetch_by_payment_id(
+                payment_id, allowed_lobs=allowed_lobs
+            )
             if fact_hit is not None:
                 hits.append(fact_hit)
 
@@ -744,11 +771,13 @@ class RagService:
                 instruction_id = (fact_hit or {}).get("instruction_id")
                 if instruction_id:
                     approve_hits = await self.vector_search.fetch_instruction_approve_events(
-                        instruction_id
+                        instruction_id, allowed_lobs=allowed_lobs
                     )
                     hits.extend(approve_hits)
             elif approval_question:
-                approve_hits = await self.vector_search.fetch_payment_approve_events(payment_id)
+                approve_hits = await self.vector_search.fetch_payment_approve_events(
+                    payment_id, allowed_lobs=allowed_lobs
+                )
                 hits.extend(approve_hits)
 
         return hits

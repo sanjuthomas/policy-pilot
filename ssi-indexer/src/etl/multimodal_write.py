@@ -15,6 +15,7 @@ SET d.search_text = $search_text,
     d.payment_id = $payment_id,
     d.action = $action,
     d.outcome = $outcome,
+    d.owning_lob = $owning_lob,
     d.updated_at = datetime()
 """
 
@@ -27,6 +28,30 @@ class MultimodalWrite:
     search_text: str
     payload: dict[str, Any]
     dense_vector: list[float]
+
+
+def resolve_owning_lob(payload: dict[str, Any]) -> str | None:
+    """Lift owning_lob for MultimodalDocument node property (issue #63 phase 2c)."""
+    security_event = payload.get("security_event") or {}
+    resource = security_event.get("resource") or {}
+    instruction_snapshot = (
+        security_event.get("instruction_snapshot")
+        or payload.get("instruction_snapshot")
+        or {}
+    )
+    instruction = payload.get("instruction") or {}
+    merged = payload.get("merged") or {}
+    candidates = (
+        payload.get("owning_lob"),
+        merged.get("owning_lob"),
+        resource.get("owning_lob"),
+        instruction_snapshot.get("owning_lob"),
+        instruction.get("owning_lob"),
+    )
+    for value in candidates:
+        if isinstance(value, str) and value.strip():
+            return value.strip().upper()
+    return None
 
 
 def multimodal_upsert_params(write: MultimodalWrite) -> dict[str, Any]:
@@ -43,6 +68,7 @@ def multimodal_upsert_params(write: MultimodalWrite) -> dict[str, Any]:
         "payment_id": fields.get("payment_id"),
         "action": fields.get("action"),
         "outcome": fields.get("outcome"),
+        "owning_lob": fields.get("owning_lob"),
     }
 
 
@@ -56,6 +82,7 @@ def _denormalized_fields(payload: dict[str, Any]) -> dict[str, Any]:
         "payment_id": payload.get("payment_id"),
         "action": payload.get("action") or merged.get("action") or event_ctx.get("action"),
         "outcome": payload.get("outcome") or merged.get("outcome") or event_ctx.get("outcome"),
+        "owning_lob": resolve_owning_lob(payload),
     }
 
 

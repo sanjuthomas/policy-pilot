@@ -27,6 +27,7 @@ def test_capabilities_for_creator() -> None:
     assert not caps.can_cancel_payment
     assert caps.is_operational
     assert not caps.is_compliance
+    assert caps.can_use_policies
 
 
 def test_capabilities_for_mo_creator_can_cancel() -> None:
@@ -41,6 +42,7 @@ def test_capabilities_for_mo_creator_can_cancel() -> None:
     assert caps.can_create_payment
     assert caps.can_cancel_payment
     assert caps.is_operational
+    assert caps.can_use_policies
 
 
 def test_capabilities_for_dual_role() -> None:
@@ -55,12 +57,31 @@ def test_capabilities_for_dual_role() -> None:
     assert caps.can_approve_payment
     assert not caps.can_cancel_payment
     assert caps.is_operational
+    assert caps.can_use_policies
+
+
+def test_capabilities_for_instruction_approver() -> None:
+    caps = capabilities_for(
+        Subject(
+            user_id="ficc-300",
+            title="Vice President",
+            roles=["INSTRUCTION_APPROVER"],
+            lob="FICC",
+        )
+    )
+    assert caps.is_instruction_analyst
+    assert caps.can_use_policies
+    assert not caps.is_operational
 
 
 def test_audience_labels() -> None:
     assert audience_labels(["PAYMENT_CREATOR", "FUNDING_APPROVER"]) == [
         "payment_creator",
         "funding_approver",
+    ]
+    assert audience_labels(["INSTRUCTION_CREATOR", "INSTRUCTION_APPROVER"]) == [
+        "instruction_creator",
+        "instruction_approver",
     ]
 
 

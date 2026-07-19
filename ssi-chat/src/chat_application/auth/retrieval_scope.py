@@ -11,7 +11,7 @@ _LOB_KEYS = ("owning_lob", "lob", "instruction_owning_lob")
 
 
 def allowed_retrieval_lobs(subject: Subject | None) -> frozenset[str] | None:
-    """LOBs the subject may see in graph/direct retrieval.
+    """LOBs the subject may see in graph/vector/direct retrieval.
 
     Returns:
         ``None`` — unscoped (compliance / platform admin / missing subject)

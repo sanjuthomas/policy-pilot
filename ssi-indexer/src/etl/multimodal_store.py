@@ -61,6 +61,8 @@ def _payload_from_node(node: dict[str, Any]) -> dict[str, Any]:
 
 
 def _denormalized_fields(payload: dict[str, Any]) -> dict[str, Any]:
+    from etl.multimodal_write import resolve_owning_lob
+
     merged = payload.get("merged") or {}
     security_event = payload.get("security_event") or {}
     event_ctx = security_event.get("event") or {}
@@ -70,6 +72,7 @@ def _denormalized_fields(payload: dict[str, Any]) -> dict[str, Any]:
         "payment_id": payload.get("payment_id"),
         "action": payload.get("action") or merged.get("action") or event_ctx.get("action"),
         "outcome": payload.get("outcome") or merged.get("outcome") or event_ctx.get("outcome"),
+        "owning_lob": resolve_owning_lob(payload),
     }
 
 
@@ -209,8 +212,12 @@ class MultimodalNeo4jStore:
         *,
         limit: int,
         source: str | None = None,
+        allowed_lobs: frozenset[str] | None = None,
     ) -> list[dict]:
+        if allowed_lobs is not None and not allowed_lobs:
+            return []
         sources = _source_filter_values(source)
+        allowed_list = sorted(allowed_lobs) if allowed_lobs is not None else None
         async with self._driver.session() as session:
             result = await session.run(
                 f"""
@@ -220,7 +227,8 @@ class MultimodalNeo4jStore:
                   $embedding
                 )
                 YIELD node, score
-                WHERE $sources IS NULL OR node.source IN $sources
+                WHERE ($sources IS NULL OR node.source IN $sources)
+                  AND ($allowed_lobs IS NULL OR node.owning_lob IN $allowed_lobs)
                 RETURN node, score
                 ORDER BY score DESC
                 LIMIT $limit
@@ -228,6 +236,7 @@ class MultimodalNeo4jStore:
                 embedding=query_vector,
                 limit=limit,
                 sources=sources,
+                allowed_lobs=allowed_list,
             )
             rows = [record async for record in result]
         if rows:
