@@ -159,7 +159,7 @@ A **knowledge graph** makes those relationships first-class:
 
 The chat pipeline uses **planned Cypher** from `shared/cypher_builder` for known question shapes, and **Vertex Gemini** graph plan extraction when no planner rule matches. Graph rows are injected into LLM context alongside vector hits when the router selects hybrid or graph strategy.
 
-The root [README](../README.md#neo4j-graph-model) summarizes writer roles; see [neo4j-graph-model/README.md](../neo4j-graph-model/README.md) for diagrams, property catalog, and example Cypher.
+[How it works](how-it-works.md#neo4j-graph-model) summarizes writer roles; see [neo4j-graph-model/README.md](../neo4j-graph-model/README.md) for diagrams, property catalog, and example Cypher.
 
 ---
 

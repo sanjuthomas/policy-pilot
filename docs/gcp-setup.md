@@ -106,6 +106,6 @@ Common failures:
 
 ## 7. Start the stack
 
-Once the smoke test passes, follow [Quick start](../README.md#quick-start) in the root README: `docker compose up -d`, seed ZITADEL users, run scenarios in the harness, then open Policy Pilot.
+Once the smoke test passes, follow [Quick start](how-it-works.md#quick-start): clean slate (or compose up), seed ZITADEL users, run scenarios in the harness, then open Policy Pilot.
 
 For regression or smoke tests without Vertex (e.g. CI without GCP secrets), set `API_SMOKE_SKIP_VERTEX=1` — see `ssi-chat/regression/README.md`.
