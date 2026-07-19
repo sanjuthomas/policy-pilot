@@ -96,21 +96,29 @@ class TestLaneAccess:
         assert not denied_mode.allowed
         assert denied_mode.denial == DenialReason.TOOLS_WRONG_MODE
 
+        no_policies = ChatCapabilities(
+            is_compliance=False,
+            can_create_payment=False,
+            can_approve_payment=False,
+            can_cancel_payment=False,
+            is_instruction_analyst=False,
+            can_use_policies=False,
+        )
         denied_role = resolve_lane_access(
             path="eligibility",
             mode="policies",
-            capabilities=_caps(),
+            capabilities=no_policies,
         )
         assert not denied_role.allowed
         assert denied_role.denial == DenialReason.TOOLS_NOT_COMPLIANCE
 
-        ok_compliance = resolve_lane_access(
+        ok_any_user = resolve_lane_access(
             path="policy_directory",
             mode="policies",
-            capabilities=_caps(compliance=True),
+            capabilities=_caps(),
         )
-        assert ok_compliance.allowed
-        assert ok_compliance.lane == HandlerLane.TOOLS
+        assert ok_any_user.allowed
+        assert ok_any_user.lane == HandlerLane.TOOLS
 
         ok_mo = resolve_lane_access(
             path="eligibility",

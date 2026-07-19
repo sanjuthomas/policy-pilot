@@ -889,8 +889,7 @@ class RagService:
         if not bearer_token:
             return (
                 "This question requires a live OPA policy check. "
-                "Log in as a compliance analyst (comp-001 or comp-002) using the sign-in "
-                "panel above, then ask again with a payment ID."
+                "Sign in using the panel above, then ask again with a payment ID."
             )
 
         payment_ids = extract_entity_ids(message)
@@ -936,8 +935,7 @@ class RagService:
         if not bearer_token:
             return (
                 "This question requires policy directory access. "
-                "Log in as a compliance analyst (comp-001 or comp-002) using the sign-in "
-                "panel above, then ask again."
+                "Sign in using the panel above, then ask again."
             )
 
         covering_lob = covering_lob_filter_from_question(message)
@@ -1022,8 +1020,7 @@ class RagService:
         if not bearer_token:
             return (
                 "This question requires live OPA policy access. "
-                "Log in as a compliance analyst (comp-001 or comp-002) using the sign-in "
-                "panel above, then ask again."
+                "Sign in using the panel above, then ask again."
             )
 
         try:
@@ -1059,8 +1056,7 @@ class RagService:
         if not bearer_token:
             return (
                 "This question requires policy directory access. "
-                "Log in as a compliance analyst (comp-001 or comp-002) using the sign-in "
-                "panel above, then ask again."
+                "Sign in using the panel above, then ask again."
             )
 
         try:
@@ -1084,8 +1080,7 @@ class RagService:
         if not bearer_token:
             return (
                 "This question requires a live OPA policy check. "
-                "Log in as a compliance analyst (comp-001 or comp-002) using the sign-in "
-                "panel above, then ask again with an instruction ID."
+                "Sign in using the panel above, then ask again with an instruction ID."
             )
 
         instruction_ids = extract_entity_ids(message)

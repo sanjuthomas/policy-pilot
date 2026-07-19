@@ -129,9 +129,8 @@ def denial_message(reason: DenialReason) -> tuple[str, Literal["skill", "eligibi
         )
     if reason in (DenialReason.TOOLS_NOT_COMPLIANCE, DenialReason.POLICIES_MODE_OPERATIONAL):
         return (
-            "Policies mode is available to compliance, middle-office, and front-office "
-            "analysts. Sign in with an eligible role, or switch to Payments / Events / "
-            "Instructions mode.",
+            "Policies mode requires a signed-in PolicyPilot session. "
+            "Sign in and ask again, or switch to Payments / Events / Instructions mode.",
             "eligibility",
         )
     return ("This action is not available for your role or mode.", "formatter")

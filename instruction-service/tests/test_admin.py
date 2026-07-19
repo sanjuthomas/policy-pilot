@@ -1,5 +1,4 @@
 import pytest
-from fastapi import HTTPException
 from inst.admin import get_admin_subject
 from inst.dependencies import get_compliance_subject
 from inst.models.api import Subject
@@ -15,10 +14,8 @@ def test_get_compliance_subject_allows_compliance_role(sample_subject: Subject) 
     assert get_compliance_subject(analyst) is analyst
 
 
-def test_get_compliance_subject_denies_other_roles(sample_subject: Subject) -> None:
-    with pytest.raises(HTTPException) as exc_info:
-        get_compliance_subject(sample_subject)
-    assert exc_info.value.status_code == 403
+def test_get_compliance_subject_allows_other_roles(sample_subject: Subject) -> None:
+    assert get_compliance_subject(sample_subject) is sample_subject
 
 
 def test_get_admin_subject_uses_direct_jwt(

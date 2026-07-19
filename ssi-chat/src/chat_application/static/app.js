@@ -73,13 +73,8 @@ function isInstructionAnalystAudience() {
 }
 
 function canUsePoliciesMode() {
-  // Unsigned: show all modes. Signed: compliance, MO/FO payment, instruction analysts.
-  return (
-    !session ||
-    isComplianceAudience() ||
-    isOperationalAudience() ||
-    isInstructionAnalystAudience()
-  );
+  // Policies mode is available to every PolicyPilot user (signed or unsigned preview).
+  return true;
 }
 
 function canUseEventsMode() {

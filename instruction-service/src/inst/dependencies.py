@@ -1,5 +1,4 @@
 from fastapi import Depends, Header, HTTPException
-from platform_auth import is_platform_admin
 
 from inst.auth import subject_from_obo_call
 from inst.config import settings
@@ -99,11 +98,5 @@ def get_subject(
 
 
 def get_compliance_subject(subject: Subject = Depends(get_subject)) -> Subject:
-    if is_platform_admin(subject):
-        return subject
-    if not settings.compliance_role_set.intersection(subject.roles):
-        raise HTTPException(
-            status_code=403,
-            detail="COMPLIANCE_ANALYST role required for policy inquiry",
-        )
+    """Policy inquiry routes: any authenticated subject (Policies mode is open)."""
     return subject

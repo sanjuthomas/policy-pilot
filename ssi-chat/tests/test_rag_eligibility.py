@@ -26,7 +26,7 @@ async def test_answer_payment_eligible_approvers_without_token(
         session_id=None,
     )
     assert answer is not None
-    assert "Log in as a compliance analyst" in answer
+    assert "Sign in using the panel above" in answer
 
 
 @pytest.mark.asyncio

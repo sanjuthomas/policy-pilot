@@ -80,12 +80,7 @@ def require_obo_subject(
 def get_compliance_subject(
     subject: Subject = Depends(require_obo_subject),
 ) -> Subject:
-    """Compliance inquiry routes: OBO required, then compliance role check."""
-    if not settings.compliance_role_set.intersection(subject.roles):
-        raise HTTPException(
-            status_code=403,
-            detail="COMPLIANCE_ANALYST role required for policy inquiry",
-        )
+    """Policy inquiry routes: any authenticated OBO subject (Policies mode is open)."""
     return subject
 
 

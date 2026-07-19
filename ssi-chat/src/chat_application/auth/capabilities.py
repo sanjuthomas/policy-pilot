@@ -22,6 +22,7 @@ class ChatCapabilities:
     can_approve_payment: bool
     can_cancel_payment: bool
     is_instruction_analyst: bool
+    can_use_policies: bool = True
 
     @property
     def is_operational(self) -> bool:
@@ -30,11 +31,6 @@ class ChatCapabilities:
             or self.can_approve_payment
             or self.can_cancel_payment
         )
-
-    @property
-    def can_use_policies(self) -> bool:
-        """Policies mode: compliance, MO/FO payment actors, instruction analysts."""
-        return self.is_compliance or self.is_operational or self.is_instruction_analyst
 
 
 def capabilities_for(subject: Subject) -> ChatCapabilities:
@@ -49,6 +45,8 @@ def capabilities_for(subject: Subject) -> ChatCapabilities:
             "PAYMENT_CREATOR" in roles and "MIDDLE_OFFICE" in groups
         ),
         is_instruction_analyst=bool(roles & INSTRUCTION_ANALYST_ROLES),
+        # Policies mode / live policy tools are open to every chat user.
+        can_use_policies=True,
     )
 
 
