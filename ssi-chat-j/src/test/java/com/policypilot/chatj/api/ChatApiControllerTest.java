@@ -13,10 +13,16 @@ import com.policypilot.chatj.auth.FakeSubjectResolver;
 import com.policypilot.chatj.auth.FakeZitadelAuthClient;
 import com.policypilot.chatj.auth.SessionCredentials;
 import com.policypilot.chatj.auth.Subject;
+import com.policypilot.chatj.api.ApiModels.ChatFeedbackRequest;
 import com.policypilot.chatj.config.AppConfig.ZitadelPatProvider;
 import com.policypilot.chatj.config.ChatJProperties;
+import com.policypilot.chatj.observability.FeedbackDistributionTracker;
+import com.policypilot.chatj.observability.FeedbackMetrics;
+import com.policypilot.chatj.observability.RoutingDistributionTracker;
 import com.policypilot.chatj.service.FakeChatService;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -30,6 +36,8 @@ class ChatApiControllerTest {
   private FakeSubjectResolver subjectResolver;
   private FakeChatService chatService;
   private ChatUsersDirectory chatUsersDirectory;
+  private FeedbackDistributionTracker feedbackDistributionTracker;
+  private RoutingDistributionTracker routingDistributionTracker;
   private ChatApiController controller;
 
   @BeforeEach
@@ -40,6 +48,10 @@ class ChatApiControllerTest {
     subjectResolver = new FakeSubjectResolver(zitadelAuthClient);
     chatService = new FakeChatService();
     chatUsersDirectory = new ChatUsersDirectory(properties);
+    feedbackDistributionTracker = new FeedbackDistributionTracker();
+    routingDistributionTracker = new RoutingDistributionTracker();
+    FeedbackMetrics feedbackMetrics =
+        new FeedbackMetrics(new SimpleMeterRegistry(), feedbackDistributionTracker);
     controller =
         new ChatApiController(
             zitadelAuthClient,
@@ -47,7 +59,10 @@ class ChatApiControllerTest {
             subjectResolver,
             chatService,
             properties,
-            chatUsersDirectory);
+            chatUsersDirectory,
+            feedbackMetrics,
+            routingDistributionTracker,
+            feedbackDistributionTracker);
   }
 
   @Test
@@ -64,7 +79,10 @@ class ChatApiControllerTest {
             subjectResolver,
             chatService,
             TestFixtures.propertiesWithoutPat(),
-            chatUsersDirectory);
+            chatUsersDirectory,
+            new FeedbackMetrics(new SimpleMeterRegistry(), feedbackDistributionTracker),
+            routingDistributionTracker,
+            feedbackDistributionTracker);
     ResponseStatusException ex =
         assertThrows(
             ResponseStatusException.class,
@@ -181,5 +199,77 @@ class ChatApiControllerTest {
   void chatUsersReturnsSeedRoster() {
     var body = controller.chatUsers();
     assertTrue(((java.util.List<?>) body.get("users")).size() > 0);
+  }
+
+  @Test
+  void routingStatsStartsEmpty() {
+    Map<String, Object> stats = controller.routingStats();
+    assertEquals(0L, stats.get("total"));
+  }
+
+  @Test
+  void feedbackRecordsUpVote() {
+    Subject subject =
+        new Subject(
+            "comp-001",
+            "A",
+            "B",
+            "Analyst",
+            "FICC",
+            List.of("COMPLIANCE_ANALYST"),
+            List.of(),
+            null,
+            List.of(),
+            "tok",
+            "sess");
+    subjectResolver.returning(subject);
+
+    Map<String, String> body =
+        controller.chatFeedback(
+            new ChatFeedbackRequest(
+                "up",
+                "events",
+                "eligibility",
+                "none",
+                "eligibility_api",
+                "eligibility",
+                null,
+                "abc"),
+            "Bearer tok",
+            "sess");
+
+    assertEquals("recorded", body.get("status"));
+    Map<String, Object> stats = controller.feedbackStats();
+    assertEquals(1L, stats.get("up"));
+    assertEquals(0L, stats.get("down"));
+  }
+
+  @Test
+  void feedbackRejectsInvalidRating() {
+    Subject subject =
+        new Subject(
+            "comp-001",
+            "A",
+            "B",
+            "Analyst",
+            "FICC",
+            List.of("COMPLIANCE_ANALYST"),
+            List.of(),
+            null,
+            List.of(),
+            "tok",
+            "sess");
+    subjectResolver.returning(subject);
+
+    ResponseStatusException ex =
+        assertThrows(
+            ResponseStatusException.class,
+            () ->
+                controller.chatFeedback(
+                    new ChatFeedbackRequest(
+                        "meh", "events", "eligibility", "none", "eligibility_api", null, null, null),
+                    "Bearer tok",
+                    "sess"));
+    assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
   }
 }

@@ -16,9 +16,14 @@ import com.policypilot.chatj.formatting.AnswerTemplateConfig;
 import com.policypilot.chatj.formatting.MoneyFormat;
 import com.policypilot.chatj.formatting.PolicyBasisFormat;
 import com.policypilot.chatj.pipeline.RouterDecision;
+import com.policypilot.chatj.observability.ChatAnswerFinalizer;
+import com.policypilot.chatj.observability.RoutingDistributionTracker;
+import com.policypilot.chatj.observability.RoutingMetrics;
+import com.policypilot.chatj.observability.SkillMetrics;
 import com.policypilot.chatj.policydirectory.PolicyDirectoryAnswerFormatter;
 import com.policypilot.chatj.policydirectory.PolicyDirectoryService;
 import com.policypilot.chatj.routing.IntentRouter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,11 +63,17 @@ class ChatServiceTest {
   }
 
   private ChatService chatService(FakeEligibilityClient eligibilityClient) {
+    SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    ChatAnswerFinalizer finalizer =
+        new ChatAnswerFinalizer(
+            new RoutingMetrics(registry, new RoutingDistributionTracker()),
+            new SkillMetrics(registry));
     return new ChatService(
         intentRouter,
         eligibilityClient,
         eligibilityAnswerFormatter,
-        new PolicyDirectoryService(eligibilityClient, policyDirectoryAnswerFormatter));
+        new PolicyDirectoryService(eligibilityClient, policyDirectoryAnswerFormatter),
+        finalizer);
   }
 
   private static Subject subject() {
