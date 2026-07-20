@@ -22,4 +22,14 @@ class RouterDecisionTest {
     assertEquals("", d.getReasoning());
     assertNull(new RouterDecision().getPath());
   }
+
+  @Test
+  void directoryAmountSlotsRoundTrip() {
+    RouterDecision d = new RouterDecision();
+    d.setPath("policy_directory");
+    d.setDirectoryAmount(1_000_000_000.0);
+    d.setDirectoryAmountStrict(false);
+    assertEquals(1_000_000_000.0, d.getDirectoryAmount());
+    assertEquals(false, d.getDirectoryAmountStrict());
+  }
 }

@@ -87,3 +87,20 @@ cases:
     - Users who can approve
     - already APPROVED
     - instruction
+
+- id: golden_policies_amount_club_directory
+  mode: policies
+  retrieval: policy_directory
+  tags: [golden, policies, policy_directory, amount_club, ssi-chat-j]
+  question: Who has permission to approve payments worth more than $25 billion?
+  expect:
+    require_routing: true
+    routing_path: policy_directory
+    cypher_class: none
+    answer_synthesis: policy_directory_api
+    min_answer_length: 40
+    answer_contains_any:
+    - policy directory
+    - UP_TO_
+    - User ID
+    - covering

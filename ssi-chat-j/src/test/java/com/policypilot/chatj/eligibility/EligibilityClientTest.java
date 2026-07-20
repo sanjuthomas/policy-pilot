@@ -167,4 +167,36 @@ class EligibilityClientTest {
             () -> client.eligibleApproversForPayment("PAY-1", "user-tok", "user-sess"));
     assertEquals(HttpStatus.BAD_GATEWAY, ex.getStatusCode());
   }
+
+  @Test
+  void paymentAmountLimitsReturnsBody() {
+    server
+        .expect(requestTo("http://authz:8094/api/v1/authorization/payment-amount-limits"))
+        .andExpect(method(HttpMethod.GET))
+        .andRespond(
+            withSuccess(
+                "{\"absolute_limit\":100000000000,\"club_limits\":{\"UP_TO_100_BILLION_CLUB\":100000000000}}",
+                MediaType.APPLICATION_JSON));
+
+    var body = client.paymentAmountLimits("user-tok", "user-sess");
+    assertEquals(100_000_000_000.0, ((Number) body.get("absolute_limit")).doubleValue());
+  }
+
+  @Test
+  void groupMembersEncodesPathAndQuery() {
+    server
+        .expect(
+            requestTo(
+                "http://authz:8094/api/v1/authorization/groups/UP_TO_100_BILLION_CLUB/members?role=FUNDING_APPROVER"))
+        .andExpect(method(HttpMethod.GET))
+        .andRespond(
+            withSuccess(
+                "{\"group\":\"UP_TO_100_BILLION_CLUB\",\"members\":[{\"user_id\":\"pay-204\"}]}",
+                MediaType.APPLICATION_JSON));
+
+    var body =
+        client.groupMembers(
+            "UP_TO_100_BILLION_CLUB", "user-tok", "user-sess", "FUNDING_APPROVER", null);
+    assertEquals("UP_TO_100_BILLION_CLUB", body.get("group"));
+  }
 }

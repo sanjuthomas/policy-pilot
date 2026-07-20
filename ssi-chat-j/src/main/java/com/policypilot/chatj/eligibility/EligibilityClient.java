@@ -2,7 +2,10 @@ package com.policypilot.chatj.eligibility;
 
 import com.policypilot.chatj.auth.ServiceIdentity;
 import com.policypilot.chatj.config.ChatJProperties;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
@@ -15,6 +18,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.util.UriUtils;
 
 @Component
 public class EligibilityClient {
@@ -125,6 +129,44 @@ public class EligibilityClient {
         trimSlash(properties.authorizationServiceUrl())
             + "/api/v1/authorization/payments/eligible-submitters";
     return postJson(authzUrl, body, headers, "authorization service error: ");
+  }
+
+  /** OPA club ceilings + absolute limit via authorization-service. */
+  public Map<String, Object> paymentAmountLimits(String userBearerToken, String userSessionId) {
+    String url =
+        trimSlash(properties.authorizationServiceUrl())
+            + "/api/v1/authorization/payment-amount-limits";
+    return getJson(url, oboHeaders(userBearerToken, userSessionId), "authorization service error: ");
+  }
+
+  /**
+   * ZITADEL group members via authorization-service, optionally filtered by role / covering LOB.
+   */
+  public Map<String, Object> groupMembers(
+      String group,
+      String userBearerToken,
+      String userSessionId,
+      String role,
+      String coveringLob) {
+    StringBuilder url =
+        new StringBuilder(
+            trimSlash(properties.authorizationServiceUrl())
+                + "/api/v1/authorization/groups/"
+                + UriUtils.encodePathSegment(group, StandardCharsets.UTF_8)
+                + "/members");
+    List<String> params = new ArrayList<>();
+    if (StringUtils.hasText(role)) {
+      params.add("role=" + UriUtils.encodeQueryParam(role, StandardCharsets.UTF_8));
+    }
+    if (StringUtils.hasText(coveringLob)) {
+      params.add(
+          "covering_lob=" + UriUtils.encodeQueryParam(coveringLob, StandardCharsets.UTF_8));
+    }
+    if (!params.isEmpty()) {
+      url.append('?').append(String.join("&", params));
+    }
+    return getJson(
+        url.toString(), oboHeaders(userBearerToken, userSessionId), "authorization service error: ");
   }
 
   private Map<String, Object> postEmpty(
