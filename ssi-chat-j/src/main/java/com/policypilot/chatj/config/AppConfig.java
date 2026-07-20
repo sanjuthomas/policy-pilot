@@ -27,7 +27,7 @@ public class AppConfig {
     return new ZitadelPatProvider(properties);
   }
 
-  public static final class ZitadelPatProvider {
+  public static class ZitadelPatProvider {
     private final ChatJProperties properties;
     private volatile String cached;
 

@@ -39,4 +39,5 @@ cd ssi-chat-j
 mvn -q spring-boot:run
 ```
 
-Plan / todo: [`docs/ssi-chat-j-plan.md`](../docs/ssi-chat-j-plan.md), [`docs/ssi-chat-j-todo.md`](../docs/ssi-chat-j-todo.md).
+Plan / todo: [`docs/ssi-chat-j-plan.md`](../docs/ssi-chat-j-plan.md), [`docs/ssi-chat-j-todo.md`](../docs/ssi-chat-j-todo.md).  
+Agent / CI coverage rules: [`AGENTS.md`](AGENTS.md) (`mvn verify`, **≥ 80%** JaCoCo).

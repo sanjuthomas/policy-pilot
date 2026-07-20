@@ -19,6 +19,9 @@ public class HomeController {
   @org.springframework.web.bind.annotation.ResponseBody
   public Map<String, Object> indexIntegrityStub() {
     // M1: no indexer wiring yet — keep UI banner quiet.
-    return Map.of("show_banner", false, "banner_message", null);
+    java.util.HashMap<String, Object> body = new java.util.HashMap<>();
+    body.put("show_banner", false);
+    body.put("banner_message", null);
+    return body;
   }
 }

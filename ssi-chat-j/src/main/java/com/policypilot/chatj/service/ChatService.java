@@ -4,8 +4,8 @@ import com.policypilot.chatj.api.ApiModels.AnswerRoutingInfo;
 import com.policypilot.chatj.api.ApiModels.ChatRequest;
 import com.policypilot.chatj.api.ApiModels.ChatResponse;
 import com.policypilot.chatj.auth.Subject;
+import com.policypilot.chatj.eligibility.EligibilityAnswerFormatter;
 import com.policypilot.chatj.eligibility.EligibilityClient;
-import com.policypilot.chatj.eligibility.EligibilityFormatter;
 import com.policypilot.chatj.pipeline.RouterDecision;
 import com.policypilot.chatj.routing.IntentRouter;
 import com.policypilot.chatj.routing.PaymentIdParser;
@@ -18,10 +18,15 @@ public class ChatService {
 
   private final IntentRouter intentRouter;
   private final EligibilityClient eligibilityClient;
+  private final EligibilityAnswerFormatter eligibilityAnswerFormatter;
 
-  public ChatService(IntentRouter intentRouter, EligibilityClient eligibilityClient) {
+  public ChatService(
+      IntentRouter intentRouter,
+      EligibilityClient eligibilityClient,
+      EligibilityAnswerFormatter eligibilityAnswerFormatter) {
     this.intentRouter = intentRouter;
     this.eligibilityClient = eligibilityClient;
+    this.eligibilityAnswerFormatter = eligibilityAnswerFormatter;
   }
 
   public ChatResponse ask(ChatRequest request, Subject subject) {
@@ -39,7 +44,7 @@ public class ChatService {
       Map<String, Object> data =
           eligibilityClient.eligibleApproversForPayment(
               paymentId.get(), subject.bearerToken(), subject.sessionId());
-      String answer = EligibilityFormatter.formatEligibleApproversAnswer(data);
+      String answer = eligibilityAnswerFormatter.formatEligibleApproversAnswer(data);
       return ChatResponse.of(answer, routing("eligibility", "eligibility_api"));
     }
 

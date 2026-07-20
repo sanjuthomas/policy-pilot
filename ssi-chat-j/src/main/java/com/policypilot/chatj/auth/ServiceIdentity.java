@@ -26,19 +26,29 @@ public class ServiceIdentity {
 
   @PostConstruct
   public void loginOnStartup() {
+    loginOnStartup(5, 2000L);
+  }
+
+  /** Test-friendly overload (avoid multi-second sleeps). */
+  public void loginOnStartup(int maxAttempts, long retryDelayMs) {
     try {
-      ensureLoggedIn();
+      ensureLoggedIn(maxAttempts, retryDelayMs);
     } catch (Exception ex) {
       log.warn("ssi-chat-j service identity login deferred: {}", ex.toString());
     }
   }
 
   public synchronized void ensureLoggedIn() {
+    ensureLoggedIn(5, 2000L);
+  }
+
+  /** Test-friendly overload (avoid multi-second sleeps). */
+  public synchronized void ensureLoggedIn(int maxAttempts, long retryDelayMs) {
     if (credentials.get() != null && StringUtils.hasText(credentials.get().sessionToken())) {
       return;
     }
     Exception last = null;
-    for (int attempt = 1; attempt <= 5; attempt++) {
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         SessionCredentials session =
             zitadelAuthClient.login(properties.serviceUserId(), properties.serviceUserPassword());
@@ -53,14 +63,16 @@ public class ServiceIdentity {
         log.warn(
             "ssi-chat-j login attempt {}/{} for {} failed: {}",
             attempt,
-            5,
+            maxAttempts,
             properties.serviceUserId(),
             ex.toString());
-        try {
-          Thread.sleep(2000L);
-        } catch (InterruptedException ie) {
-          Thread.currentThread().interrupt();
-          throw new IllegalStateException("interrupted during service login", ie);
+        if (attempt < maxAttempts && retryDelayMs > 0) {
+          try {
+            Thread.sleep(retryDelayMs);
+          } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrupted during service login", ie);
+          }
         }
       }
     }

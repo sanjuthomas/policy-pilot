@@ -137,9 +137,9 @@ jobs:
           java-version: "21"
           cache: maven
 
-      - name: Test and package
+      - name: Test, package, and coverage (≥80%)
         working-directory: ssi-chat-j
-        run: mvn -B test package
+        run: mvn -B verify
 
   # ── Docker build ───────────────────────────────────────────────────────────
   docker-build:

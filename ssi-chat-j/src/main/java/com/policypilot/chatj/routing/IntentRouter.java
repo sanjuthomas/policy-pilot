@@ -1,6 +1,7 @@
 package com.policypilot.chatj.routing;
 
 import com.policypilot.chatj.pipeline.RouterDecision;
+import com.policypilot.chatj.prompts.RouterPrompts;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -10,15 +11,6 @@ import org.springframework.stereotype.Service;
 public class IntentRouter {
 
   private static final Logger log = LoggerFactory.getLogger(IntentRouter.class);
-
-  private static final String ROUTER_SYSTEM =
-      """
-      You are the Policy Pilot chat intent router.
-      Return ONLY a RouterDecision JSON object.
-      For questions like "Who can approve payment PAY-...?" set:
-        path=eligibility, eligibilityTarget=payment, eligibilityAction=APPROVE.
-      Prefer eligibility over neo4j_direct for live OPA approver/submitter questions.
-      """;
 
   private final ChatClient chatClient;
 
@@ -31,7 +23,7 @@ public class IntentRouter {
       RouterDecision decision =
           chatClient
               .prompt()
-              .system(ROUTER_SYSTEM)
+              .system(RouterPrompts.ROUTER_SYSTEM)
               .user(question == null ? "" : question)
               .call()
               .entity(RouterDecision.class);

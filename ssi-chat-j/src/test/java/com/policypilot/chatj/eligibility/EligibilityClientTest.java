@@ -1,0 +1,119 @@
+package com.policypilot.chatj.eligibility;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+
+import com.policypilot.chatj.TestFixtures;
+import com.policypilot.chatj.auth.FakeZitadelAuthClient;
+import com.policypilot.chatj.auth.ServiceIdentity;
+import com.policypilot.chatj.config.ChatJProperties;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.server.ResponseStatusException;
+
+class EligibilityClientTest {
+
+  private RestTemplate restTemplate;
+  private MockRestServiceServer server;
+  private EligibilityClient client;
+
+  @BeforeEach
+  void setUp() {
+    ChatJProperties properties = TestFixtures.properties();
+    FakeZitadelAuthClient zitadel =
+        new FakeZitadelAuthClient()
+            .onLogin(
+                (login, password) ->
+                    new com.policypilot.chatj.auth.SessionCredentials("svc-sess", "svc-tok", "svc"));
+    ServiceIdentity serviceIdentity = new ServiceIdentity(zitadel, properties);
+    serviceIdentity.ensureLoggedIn(1, 0L);
+
+    restTemplate = new RestTemplateBuilder().build();
+    server = MockRestServiceServer.bindTo(restTemplate).build();
+    client = new EligibilityClient(restTemplate, properties, serviceIdentity);
+  }
+
+  @Test
+  void eligibleApproversForPaymentReturnsBody() {
+    server
+        .expect(requestTo("http://payment:8093/api/v1/payments/PAY-1/eligible-approvers"))
+        .andExpect(method(HttpMethod.POST))
+        .andRespond(withSuccess("{\"payment_id\":\"PAY-1\"}", MediaType.APPLICATION_JSON));
+
+    assertEquals("PAY-1", client.eligibleApproversForPayment("PAY-1", "user-tok", "user-sess").get("payment_id"));
+    server.verify();
+  }
+
+  @Test
+  void eligibleApproversForPaymentReturnsEmptyWhenBodyNull() {
+    server
+        .expect(requestTo("http://payment:8093/api/v1/payments/PAY-2/eligible-approvers"))
+        .andRespond(withSuccess("", MediaType.APPLICATION_JSON));
+
+    assertEquals(java.util.Map.of(), client.eligibleApproversForPayment("PAY-2", "user-tok", "user-sess"));
+    server.verify();
+  }
+
+  @Test
+  void maps401ToUnauthorized() {
+    server
+        .expect(requestTo("http://payment:8093/api/v1/payments/PAY-1/eligible-approvers"))
+        .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
+
+    ResponseStatusException ex =
+        assertThrows(
+            ResponseStatusException.class,
+            () -> client.eligibleApproversForPayment("PAY-1", "user-tok", "user-sess"));
+    assertEquals(HttpStatus.UNAUTHORIZED, ex.getStatusCode());
+  }
+
+  @Test
+  void maps403ToForbidden() {
+    server
+        .expect(requestTo("http://payment:8093/api/v1/payments/PAY-1/eligible-approvers"))
+        .andRespond(withStatus(HttpStatus.FORBIDDEN).body("denied"));
+
+    ResponseStatusException ex =
+        assertThrows(
+            ResponseStatusException.class,
+            () -> client.eligibleApproversForPayment("PAY-1", "user-tok", "user-sess"));
+    assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
+    assertEquals("denied", ex.getReason());
+  }
+
+  @Test
+  void maps404ToNotFound() {
+    server
+        .expect(requestTo("http://payment:8093/api/v1/payments/PAY-1/eligible-approvers"))
+        .andRespond(withStatus(HttpStatus.NOT_FOUND).body("missing"));
+
+    ResponseStatusException ex =
+        assertThrows(
+            ResponseStatusException.class,
+            () -> client.eligibleApproversForPayment("PAY-1", "user-tok", "user-sess"));
+    assertEquals(HttpStatus.NOT_FOUND, ex.getStatusCode());
+  }
+
+  @Test
+  void mapsOtherErrorsToBadGateway() {
+    server
+        .expect(requestTo("http://payment:8093/api/v1/payments/PAY-1/eligible-approvers"))
+        .andRespond(withStatus(HttpStatus.BAD_GATEWAY).body("upstream"));
+
+    ResponseStatusException ex =
+        assertThrows(
+            ResponseStatusException.class,
+            () -> client.eligibleApproversForPayment("PAY-1", "user-tok", "user-sess"));
+    assertEquals(HttpStatus.BAD_GATEWAY, ex.getStatusCode());
+  }
+}

@@ -50,6 +50,7 @@ Every Python service **except** `ssi-demo-harness` must maintain line coverage o
 |--------|------|
 | Most application + `shared/*` packages | **≥ 80%** |
 | `ssi-chat` (`chat_application`) | **≥ 70%** — hermetic fixture `RouterDecision` contract; no Gemini in CI ([issue #13](https://github.com/sanjuthomas/policy-pilot/issues/13)). Do not pad coverage with heuristic-as-NLU tests. |
+| `ssi-chat-j` (Java `com.policypilot.chatj`) | **≥ 80%** line coverage via JaCoCo — see [`ssi-chat-j/AGENTS.md`](ssi-chat-j/AGENTS.md) |
 | `ssi-demo-harness` | exempt |
 
 Package `[tool.coverage.report] fail_under` must match the gate above so local `pytest --cov` matches CI.
@@ -163,7 +164,7 @@ inside each service directory listed in the lint matrix:
 
 It also builds Docker images for those application services (including `payment-service` and `ssi-chat-j`) and runs Rego unit tests under `opa-policy-seed/policies` via the official OPA image.
 
-For **`ssi-chat-j`** (Java A/B chat), the same workflow runs **Maven** `test package` (Java 21) and a Docker image build. No Python coverage gate.
+For **`ssi-chat-j`** (Java A/B chat), the same workflow runs **Maven** `verify` (Java 21, JaCoCo **≥ 80%** line coverage) and a Docker image build. Details: [`ssi-chat-j/AGENTS.md`](ssi-chat-j/AGENTS.md).
 
 The same workflow runs **unit test coverage** (≥ 80% line coverage, **ssi-chat ≥ 70%**) for:
 
@@ -243,7 +244,7 @@ See the root [README.md](README.md) for architecture, storage names, and demo UR
 
 - Match existing code style in each service (imports, naming, FastAPI patterns).
 - Keep changes focused; avoid unrelated refactors.
-- Maintain gated test coverage on application packages (`inst`, `ps`, `authz`, `seq`, `etl`, `chat_application` at **70%**, others **80%**) and all `shared/*` packages listed above; `ssi-demo-harness` is exempt.
+- Maintain gated test coverage on application packages (`inst`, `ps`, `authz`, `seq`, `etl`, `chat_application` at **70%**, others **80%**) and all `shared/*` packages listed above; `ssi-demo-harness` is exempt. For Java `ssi-chat-j`, maintain **≥ 80%** JaCoCo line coverage (`mvn verify` in `ssi-chat-j/`).
 - **ssi-chat intent thumb rule:** determine natural-language intent with Gemini structured output / LLM semantic routing (`RouterDecision.path`) — not regex or fuzzy classification. Regex is OK for slot parsing (ids, amounts) and LLM-failure fallback only. Details: [docs/intent-determination.md](docs/intent-determination.md) and `.cursor/rules/intent-semantic-routing.mdc`.
 - Do not commit secrets (`.env`, PAT files, credentials).
 - Only create git commits when the user explicitly asks.
