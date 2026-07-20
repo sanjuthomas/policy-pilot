@@ -68,7 +68,7 @@ class ChatServiceTest {
     policyDirectoryAnswerFormatter = new PolicyDirectoryAnswerFormatter(renderer);
     policySummaryAnswerFormatter =
         new PolicySummaryAnswerFormatter(renderer, identityTokenFormat);
-    whoAmIService = new WhoAmIService(identityTokenFormat);
+    whoAmIService = new WhoAmIService(renderer, identityTokenFormat);
   }
 
   private ChatService chatService(FakeEligibilityClient eligibilityClient) {

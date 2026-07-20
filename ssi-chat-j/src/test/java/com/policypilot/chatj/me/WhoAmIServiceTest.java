@@ -4,15 +4,27 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.policypilot.chatj.auth.Subject;
+import com.policypilot.chatj.formatting.AnswerRenderer;
+import com.policypilot.chatj.formatting.AnswerTemplateConfig;
 import com.policypilot.chatj.formatting.IdentityTokenFormat;
+import com.policypilot.chatj.formatting.MoneyFormat;
+import com.policypilot.chatj.formatting.PolicyBasisFormat;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class WhoAmIServiceTest {
 
+  private static WhoAmIService service() {
+    AnswerRenderer renderer =
+        new AnswerRenderer(
+            new AnswerTemplateConfig().answerTemplateEngine(),
+            new MoneyFormat(),
+            new PolicyBasisFormat());
+    return new WhoAmIService(renderer, new IdentityTokenFormat());
+  }
+
   @Test
   void formatsPay205IdentityTokens() {
-    WhoAmIService service = new WhoAmIService(new IdentityTokenFormat());
     Subject subject =
         new Subject(
             "pay-205",
@@ -27,7 +39,7 @@ class WhoAmIServiceTest {
             "tok",
             "sess");
 
-    String answer = service.answer(subject);
+    String answer = service().answer(subject);
 
     assertTrue(answer.contains("Al-Rashid, Fatima"));
     assertTrue(answer.contains("`pay-205`") || answer.contains("(`pay-205`)"));

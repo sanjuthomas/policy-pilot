@@ -2,6 +2,7 @@ package com.policypilot.chatj.me;
 
 import com.policypilot.chatj.auth.ChatCapabilities;
 import com.policypilot.chatj.auth.Subject;
+import com.policypilot.chatj.formatting.AnswerRenderer;
 import com.policypilot.chatj.formatting.IdentityTokenFormat;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,16 +16,24 @@ public class WhoAmIService {
 
   public static final String INTENT_ID = "me.who_am_i";
 
+  private static final String TEMPLATE = "who-am-i";
+
   private static final Set<String> AMOUNT_CLUBS =
       Set.of("UP_TO_100_MILLION_CLUB", "UP_TO_1_BILLION_CLUB", "UP_TO_100_BILLION_CLUB");
 
+  private final AnswerRenderer answerRenderer;
   private final IdentityTokenFormat identityTokenFormat;
 
-  public WhoAmIService(IdentityTokenFormat identityTokenFormat) {
+  public WhoAmIService(AnswerRenderer answerRenderer, IdentityTokenFormat identityTokenFormat) {
+    this.answerRenderer = answerRenderer;
     this.identityTokenFormat = identityTokenFormat;
   }
 
   public String answer(Subject subject) {
+    return answerRenderer.render(TEMPLATE, toView(subject));
+  }
+
+  WhoAmIAnswerView toView(Subject subject) {
     ChatCapabilities caps = ChatCapabilities.forSubject(subject);
     String display =
         StringUtils.hasText(subject.familyName()) && StringUtils.hasText(subject.givenName())
@@ -61,18 +70,16 @@ public class WhoAmIService {
             ? "—"
             : String.join(", ", subject.coveringLobs());
 
-    return String.join(
-        "\n",
-        "You are signed in as **" + display + "** (`" + subject.userId() + "`).",
-        "",
-        "- **Title:** " + (StringUtils.hasText(subject.title()) ? subject.title() : "—"),
-        "- **Roles:** " + identityTokenFormat.formatTokenList(subject.roles()),
-        "- **Groups:** " + identityTokenFormat.formatTokenList(orgGroups),
-        "- **Amount clubs:** " + identityTokenFormat.formatTokenList(clubs),
-        "- **Desk LOB:** " + (StringUtils.hasText(subject.lob()) ? subject.lob() : "—"),
-        "- **Covering LOBs:** " + covering,
-        "- **Supervisor:** "
-            + (StringUtils.hasText(subject.supervisorId()) ? subject.supervisorId() : "—"),
-        "- **Chat audience:** " + audience);
+    return new WhoAmIAnswerView(
+        display,
+        subject.userId(),
+        StringUtils.hasText(subject.title()) ? subject.title() : "—",
+        identityTokenFormat.formatTokenList(subject.roles()),
+        identityTokenFormat.formatTokenList(orgGroups),
+        identityTokenFormat.formatTokenList(clubs),
+        StringUtils.hasText(subject.lob()) ? subject.lob() : "—",
+        covering,
+        StringUtils.hasText(subject.supervisorId()) ? subject.supervisorId() : "—",
+        audience);
   }
 }
