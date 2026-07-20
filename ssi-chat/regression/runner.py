@@ -468,9 +468,15 @@ def main(argv: list[str] | None = None) -> int:
         "--eval-golden",
         action="store_true",
         help=(
-            "Run labeled golden eval set only (eval_golden.yaml), then API smoke. "
+            "Run labeled golden eval set only (eval_golden.yaml or --golden), then API smoke. "
             "Skips the full questions.yaml chat bank."
         ),
+    )
+    parser.add_argument(
+        "--golden",
+        type=Path,
+        default=DEFAULT_GOLDEN,
+        help="Path to golden YAML suite (default: regression/eval_golden.yaml)",
     )
     parser.add_argument(
         "--skip-golden",
@@ -532,7 +538,7 @@ def main(argv: list[str] | None = None) -> int:
     # Stage order: golden (seed-deterministic) → API smoke → chat bank.
     # Smoke is never dropped for golden; it just runs after golden asserts.
     bank_suite = load_suite(args.questions)
-    golden_suite = load_suite(DEFAULT_GOLDEN)
+    golden_suite = load_suite(args.golden)
     seed_suite = golden_suite if args.eval_golden else bank_suite
 
     tag_filter = {tag.strip() for tag in args.tags.split(",") if tag.strip()} or None
