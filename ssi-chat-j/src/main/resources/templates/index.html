@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title th:text="'Policy Pilot — ' + ${serviceName}">Policy Pilot — ssi-chat-j</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --fg: #e7ecf1;
+      --muted: #9aa7b5;
+      --accent: #3d8bfd;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #1b2a44, var(--bg));
+      color: var(--fg);
+      display: grid;
+      place-items: center;
+      padding: 2rem;
+    }
+    main {
+      max-width: 40rem;
+      line-height: 1.5;
+    }
+    h1 {
+      font-size: 2rem;
+      margin: 0 0 0.5rem;
+      letter-spacing: -0.02em;
+    }
+    p { color: var(--muted); margin: 0.5rem 0; }
+    code {
+      color: var(--accent);
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1 th:text="${serviceName}">ssi-chat-j</h1>
+  <p>Java / Spring AI A/B chat on port <code th:text="${port}">8096</code>.</p>
+  <p>M1: health, login, and payment eligibility via live OPA (OBO).</p>
+  <p>API: <code>POST /api/auth/login</code> · <code>POST /api/chat</code> · <code>GET /health</code></p>
+</main>
+</body>
+</html>

@@ -1,0 +1,51 @@
+server:
+  port: ${SERVER_PORT:8096}
+
+spring:
+  application:
+    name: ssi-chat-j
+  thymeleaf:
+    cache: false
+  ai:
+    vertex:
+      ai:
+        gemini:
+          project-id: ${GCP_PROJECT_ID:rag-demos-501323}
+          location: ${GCP_REGION:us-central1}
+          chat:
+            options:
+              model: ${VERTEX_GEMINI_MODEL:gemini-2.5-flash}
+              temperature: 0.0
+
+chatj:
+  payment-service-url: ${PAYMENT_SERVICE_URL:http://localhost:8093}
+  instruction-service-url: ${INSTRUCTION_SERVICE_URL:http://localhost:8000}
+  authorization-service-url: ${AUTHORIZATION_SERVICE_URL:http://localhost:8094}
+  zitadel-url: ${ZITADEL_URL:http://localhost:8080}
+  zitadel-internal-url: ${ZITADEL_INTERNAL_URL:}
+  zitadel-host-header: ${ZITADEL_HOST_HEADER:}
+  zitadel-service-pat: ${ZITADEL_SERVICE_PAT:}
+  zitadel-service-pat-file: ${ZITADEL_SERVICE_PAT_FILE:}
+  oidc-issuer-url: ${OIDC_ISSUER_URL:http://localhost:8080}
+  oidc-internal-url: ${OIDC_INTERNAL_URL:}
+  oidc-audience: ${OIDC_AUDIENCE:policy-pilot}
+  email-domain: ${EMAIL_DOMAIN:ssi.local}
+  service-user-id: ${SERVICE_USER_ID:svc-chat}
+  service-user-password: ${SERVICE_USER_PASSWORD:Password1!}
+  chat-roles:
+    - COMPLIANCE_ANALYST
+    - PAYMENT_CREATOR
+    - FUNDING_APPROVER
+    - INSTRUCTION_CREATOR
+    - INSTRUCTION_APPROVER
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+logging:
+  level:
+    com.policypilot.chatj: INFO
+    org.springframework.ai: INFO
