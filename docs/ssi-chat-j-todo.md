@@ -129,6 +129,8 @@ Implement only what golden cases require; mark each golden id when green.
 | `golden_me_can_approve_instruction_no_pay205` | `done` | instruction APPROVE ≠ payment APPROVE |
 | `golden_me_can_approve_instruction_yes_ficc300` | `done` | instruction APPROVE yes (desk FO) |
 | `golden_me_can_create_instruction_no_pay205` | `done` | CREATE instruction ≠ payment CREATE |
+| `golden_me_can_create_instruction_yes_mo` | `done` | CREATE instruction yes (mo-100) |
+| `golden_me_can_approve_payment_no_fo` | `done` | FO cannot funding-approve |
 | _(remaining from full `eval_golden.yaml`)_ | `todo` | ~20 Python-only (graph / denials / vector) |
 
 ---
