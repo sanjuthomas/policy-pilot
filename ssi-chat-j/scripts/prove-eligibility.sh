@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CHAT_URL="${CHAT_BASE_URL:-http://localhost:8096}"
 GOLDEN="${ROOT}/ssi-chat-j/eval/eligibility_golden.yaml"
-IDS="${ELIGIBILITY_GOLDEN_IDS:-golden_policies_eligible_approvers_payment,golden_policies_eligible_submitters_payment,golden_policies_eligible_approvers_instruction,golden_policies_amount_club_directory,golden_policies_covering_lob_directory}"
+IDS="${ELIGIBILITY_GOLDEN_IDS:-golden_policies_eligible_approvers_payment,golden_policies_eligible_submitters_payment,golden_policies_eligible_approvers_instruction,golden_policies_amount_club_directory,golden_policies_covering_lob_directory,golden_policies_instruction_approval_summary,golden_policies_payment_approval_summary}"
 
 echo "=== health ${CHAT_URL} ==="
 curl -sf "${CHAT_URL}/health" | tee /dev/stderr | grep -q UP

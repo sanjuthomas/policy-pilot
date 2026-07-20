@@ -91,7 +91,7 @@ Implement only what golden cases require; mark each golden id when green.
 | ID | Item | Status | Notes |
 |----|------|--------|-------|
 | P3.1 | Pipeline: route → handler lanes (path is law) | `in_progress` | Eligibility lane only |
-| P3.2 | Eligibility / policy tools as needed by golden | `in_progress` | Eligibility + amount-club `policy_directory` done |
+| P3.2 | Eligibility / policy tools as needed by golden | `in_progress` | Eligibility + directory + `policy_summary` done |
 | P3.3 | Me / who-am-i if in golden | `todo` | |
 | P3.4 | neo4j_direct + formatters for golden graph cases | `todo` | Via cypher bridge |
 | P3.5 | Vector / hybrid only if a golden case needs it | `todo` | |
@@ -106,6 +106,8 @@ Implement only what golden cases require; mark each golden id when green.
 | `golden_policies_eligible_approvers_instruction` | `done` | same |
 | `golden_policies_amount_club_directory` | `done` | amount-club policy directory |
 | `golden_policies_covering_lob_directory` | `done` | covering-LOB policy directory |
+| `golden_policies_instruction_approval_summary` | `done` | `policy_summary` via authz OBO |
+| `golden_policies_payment_approval_summary` | `done` | funding / payment APPROVE summary |
 | _(remaining from full `eval_golden.yaml`)_ | `todo` | |
 
 ---

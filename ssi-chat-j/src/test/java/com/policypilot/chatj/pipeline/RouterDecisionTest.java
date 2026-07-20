@@ -34,4 +34,15 @@ class RouterDecisionTest {
     assertEquals(false, d.getDirectoryAmountStrict());
     assertEquals("FICC", d.getDirectoryCoveringLob());
   }
+
+  @Test
+  void policySummarySlotsRoundTrip() {
+    RouterDecision d = new RouterDecision();
+    d.setPath("policy_summary");
+    d.setPolicyDomain("instruction");
+    d.setPolicyAction("APPROVE");
+    assertEquals("policy_summary", d.getPath());
+    assertEquals("instruction", d.getPolicyDomain());
+    assertEquals("APPROVE", d.getPolicyAction());
+  }
 }
