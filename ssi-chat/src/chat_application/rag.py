@@ -10,6 +10,7 @@ from chat_application.authz.client import (
     EligibilityClient,
     EligibilityClientError,
     format_eligible_approvers_answer,
+    format_eligible_submitters_answer,
     format_instruction_eligible_approvers_answer,
 )
 from chat_application.config import settings
@@ -909,6 +910,37 @@ class RagService:
             return str(exc)
 
         return format_eligible_approvers_answer(data)
+
+    async def _answer_payment_eligible_submitters(
+        self,
+        message: str,
+        *,
+        bearer_token: str | None,
+        session_id: str | None,
+    ) -> str | None:
+        if not bearer_token:
+            return (
+                "This question requires a live OPA policy check. "
+                "Sign in using the panel above, then ask again with a payment ID."
+            )
+
+        payment_ids = extract_entity_ids(message)
+        if not payment_ids:
+            return (
+                "Please include the payment ID in your question, e.g. "
+                "\"Who can submit payment <payment-id> for approval?\""
+            )
+
+        try:
+            data = await self._eligibility.eligible_submitters_for_payment(
+                payment_ids[0],
+                bearer_token=bearer_token,
+                session_id=session_id,
+            )
+        except EligibilityClientError as exc:
+            return str(exc)
+
+        return format_eligible_submitters_answer(data)
 
     async def _answer_payment_approval_directory(
         self,

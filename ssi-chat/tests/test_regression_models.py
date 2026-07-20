@@ -47,7 +47,7 @@ def test_regression_retrieval_distribution():
     assert counts["deterministic"] == 28
     assert counts["graph"] == 31
     assert counts["vector"] == 3
-    assert counts["eligibility"] == 2
+    assert counts["eligibility"] == 3
     assert counts["policy_directory"] == 2
     assert counts["skill"] == 8
 
@@ -56,6 +56,7 @@ def test_regression_policies_mode_cases_present():
     suite = load_suite()
     by_id = {case.id: case for case in suite.cases}
     payment = by_id["policies_eligible_approvers_payment"]
+    submitters = by_id["policies_eligible_submitters_payment"]
     instruction = by_id["policies_eligible_approvers_instruction"]
     amount = by_id["policies_amount_club_directory"]
     covering = by_id["policies_covering_lob_directory"]
@@ -64,6 +65,11 @@ def test_regression_policies_mode_cases_present():
     assert payment.retrieval == "eligibility"
     assert payment.expect.routing_path == "eligibility"
     assert "submitted_payment_id" in payment.expect.requires_context
+
+    assert submitters.mode == "policies"
+    assert submitters.retrieval == "eligibility"
+    assert submitters.expect.routing_path == "eligibility"
+    assert "draft_payment_id" in submitters.expect.requires_context
 
     assert instruction.mode == "policies"
     assert instruction.retrieval == "eligibility"

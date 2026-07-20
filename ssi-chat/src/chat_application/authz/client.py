@@ -92,6 +92,96 @@ class EligibilityClient:
 
         return response.json()
 
+    async def eligible_submitters_for_payment(
+        self,
+        payment_id: str,
+        *,
+        bearer_token: str,
+        session_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Load payment + instruction, then ask authz who can SUBMIT (desk)."""
+        headers = await self._compliance_headers(
+            bearer_token=bearer_token, session_id=session_id
+        )
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            payment_response = await client.get(
+                f"{self._payment_base}/api/v1/payments/{payment_id}",
+                headers=headers,
+            )
+            if payment_response.status_code == 401:
+                raise EligibilityClientError(
+                    "authentication required — sign in to PolicyPilot"
+                )
+            if payment_response.status_code == 403:
+                detail = payment_response.json().get("detail", payment_response.text)
+                raise EligibilityClientError(
+                    str(detail) or "not authorized for this question"
+                )
+            if payment_response.status_code == 404:
+                detail = payment_response.json().get("detail", payment_response.text)
+                raise EligibilityClientError(str(detail) or f"payment {payment_id} not found")
+            if not payment_response.is_success:
+                detail = payment_response.json().get("detail", payment_response.text)
+                raise EligibilityClientError(f"payment service error: {detail}")
+            payment = payment_response.json()
+
+            instruction_id = str(payment.get("instruction_id") or "")
+            instruction_status = ""
+            instruction_end_date = ""
+            if instruction_id:
+                instruction_response = await client.get(
+                    f"{self._instruction_base}/api/v1/instructions/{instruction_id}",
+                    headers=headers,
+                )
+                if instruction_response.is_success:
+                    instruction = instruction_response.json()
+                    instruction_status = str(instruction.get("status") or "")
+                    instruction_end_date = str(instruction.get("end_date") or "")
+                elif instruction_response.status_code not in (401, 403, 404):
+                    detail = instruction_response.json().get(
+                        "detail", instruction_response.text
+                    )
+                    raise EligibilityClientError(f"instruction service error: {detail}")
+
+            created_by = payment.get("created_by") or {}
+            payload = {
+                "payment": {
+                    "payment_id": payment.get("payment_id") or payment_id,
+                    "instruction_id": instruction_id,
+                    "instruction_version": payment.get("instruction_version") or 1,
+                    "status": payment.get("status") or "DRAFT",
+                    "amount": payment.get("amount"),
+                    "currency": payment.get("currency"),
+                    "owning_lob": payment.get("owning_lob"),
+                    "instruction_type": payment.get("instruction_type") or "",
+                    "created_by_user_id": created_by.get("user_id") or "",
+                    "created_by_supervisor_id": created_by.get("supervisor_id"),
+                },
+                "instruction_status": instruction_status,
+                "instruction_end_date": instruction_end_date,
+            }
+            authz_response = await client.post(
+                f"{self._authorization_base}/api/v1/authorization/payments/eligible-submitters",
+                json=payload,
+                headers={**headers, "Content-Type": "application/json"},
+            )
+
+        if authz_response.status_code == 401:
+            raise EligibilityClientError(
+                "authentication required — sign in to PolicyPilot"
+            )
+        if authz_response.status_code == 403:
+            detail = authz_response.json().get("detail", authz_response.text)
+            raise EligibilityClientError(
+                str(detail) or "not authorized for this question"
+            )
+        if not authz_response.is_success:
+            detail = authz_response.json().get("detail", authz_response.text)
+            raise EligibilityClientError(f"authorization service error: {detail}")
+
+        return authz_response.json()
+
     async def eligible_approvers_for_instruction(
         self,
         instruction_id: str,
@@ -464,6 +554,37 @@ def format_eligible_approvers_answer(data: dict[str, Any]) -> str:
             instruction_id=instruction_id,
         ),
         candidate_role_label="FUNDING_APPROVER",
+        candidates_evaluated=data.get("candidates_evaluated"),
+    )
+
+
+def format_eligible_submitters_answer(data: dict[str, Any]) -> str:
+    payment_id = data.get("payment_id", "")
+    status = data.get("payment_status", "")
+    amount_text = format_money_amount(data.get("amount"), data.get("currency", ""))
+    owning_lob = data.get("owning_lob", "")
+    instruction_id = data.get("instruction_id", "")
+    instruction_status = data.get("instruction_status", "")
+    instruction_summary = _payment_instruction_summary(instruction_id, instruction_status)
+    submit_blocked_reason = data.get("submit_blocked_reason")
+
+    header = (
+        f"Live OPA evaluation for submitting payment {payment_id} "
+        f"({status}, {amount_text}, desk {owning_lob}, {instruction_summary})."
+    )
+
+    if submit_blocked_reason:
+        return "\n\n".join([header, "", str(submit_blocked_reason)])
+
+    return format_eligible_approvers_section(
+        header=header,
+        section_title="Users who can submit this payment for funding approval:",
+        eligible=data.get("eligible") or [],
+        empty_message=(
+            "No eligible desk submitters were found for this payment "
+            "(need `PAYMENT_CREATOR` with desk LOB matching the instruction)."
+        ),
+        candidate_role_label="PAYMENT_CREATOR",
         candidates_evaluated=data.get("candidates_evaluated"),
     )
 

@@ -131,3 +131,56 @@ def test_format_eligible_approvers_answer_shows_draft_block_and_prospective() ->
     assert "After the payment is submitted" in text
     assert "Osei, Victoria" in text
     assert "Users who can approve this payment" not in text
+
+
+def test_format_eligible_submitters_answer_lists_desk_creators() -> None:
+    from chat_application.authz.client import format_eligible_submitters_answer
+
+    text = format_eligible_submitters_answer(
+        {
+            "payment_id": "20260720-FICC-P-7",
+            "payment_status": "DRAFT",
+            "amount": 250_000,
+            "currency": "USD",
+            "owning_lob": "FICC",
+            "instruction_status": "APPROVED",
+            "candidates_evaluated": 2,
+            "eligible": [
+                {
+                    "user_id": "fo-ficc-101",
+                    "display_name": "Nguyen, Minh (fo-ficc-101)",
+                    "title": "Analyst",
+                    "allow_basis": ["has_role"],
+                }
+            ],
+        }
+    )
+
+    assert "Live OPA evaluation for submitting" in text
+    assert "Users who can submit this payment" in text
+    assert "fo-ficc-101" in text
+    assert "PAYMENT_CREATOR" in text
+    assert "FUNDING_APPROVER" not in text
+
+
+def test_format_eligible_submitters_answer_blocked() -> None:
+    from chat_application.authz.client import format_eligible_submitters_answer
+
+    text = format_eligible_submitters_answer(
+        {
+            "payment_id": "p1",
+            "payment_status": "SUBMITTED",
+            "amount": 100,
+            "currency": "USD",
+            "owning_lob": "FICC",
+            "instruction_status": "APPROVED",
+            "eligible": [],
+            "submit_blocked_reason": (
+                "Payment submit is not permitted while status is SUBMITTED."
+            ),
+            "candidates_evaluated": 2,
+        }
+    )
+
+    assert "not permitted while status is SUBMITTED" in text
+    assert "Users who can submit this payment" not in text
