@@ -43,10 +43,21 @@ public class CanActOnEntityService {
       return canSubmitPayment(subject);
     }
     if ("APPROVE".equals(action) && !StringUtils.hasText(intent.entityId())) {
+      if ("instruction".equals(entityType)) {
+        return canApproveInstruction(subject);
+      }
       return canApprovePayment(subject);
     }
     if (!StringUtils.hasText(intent.entityId())) {
       return render("need_id", subject, null, null, "me.can_act_on_entity.need_id");
+    }
+    if ("APPROVE".equals(action) && "instruction".equals(entityType)) {
+      return render(
+          "pending_instruction",
+          subject,
+          intent.entityId(),
+          null,
+          "me.can_act_on_entity.pending_instruction");
     }
     if (!caps.canApprovePayment() && "APPROVE".equals(action)) {
       return render(
@@ -183,6 +194,45 @@ public class CanActOnEntityService {
       gaps.add("an amount-limit club");
     }
     return render("approve_no", subject, null, null, "me.can_approve_payment.no", gaps);
+  }
+
+  /** Directory-level instruction APPROVE (desk LOB + INSTRUCTION_APPROVER). */
+  MeIntentResult canApproveInstruction(Subject subject) {
+    boolean hasRole = roles(subject).contains("INSTRUCTION_APPROVER");
+    boolean hasDesk = StringUtils.hasText(subject.lob());
+
+    if (hasRole && hasDesk) {
+      return render(
+          "approve_instruction_yes",
+          subject,
+          null,
+          subject.lob(),
+          "me.can_approve_instruction.yes");
+    }
+
+    List<String> gaps = new ArrayList<>();
+    if (!hasRole) {
+      gaps.add("role `INSTRUCTION_APPROVER`");
+    }
+    if (!hasDesk) {
+      gaps.add("desk `lob` matching the instruction owning LOB");
+    }
+    String extra = "";
+    if (roles(subject).contains("FUNDING_APPROVER")) {
+      extra =
+          "\n\nYou do hold `FUNDING_APPROVER`, which allows **payment** funding approval "
+              + "(with middle-office / covering LOBs / amount club) — not instruction approve.";
+    }
+    return render(
+        "approve_instruction_no",
+        subject,
+        null,
+        null,
+        "me.can_approve_instruction.no",
+        null,
+        null,
+        gaps,
+        extra);
   }
 
   private MeIntentResult render(

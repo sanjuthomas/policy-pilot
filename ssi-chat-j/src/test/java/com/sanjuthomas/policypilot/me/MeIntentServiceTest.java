@@ -208,6 +208,69 @@ class MeIntentServiceTest {
     assertTrue(!result.answer().contains("Al-Rashid, Fatima"));
   }
 
+  @Test
+  void canApproveInstructionDoesNotReusePaymentAnswer() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("me");
+    decision.setMeKind("can_act_on_entity");
+    decision.setMeAction("APPROVE");
+    // LLM may omit meEntityType; message text must still select instruction.
+    MeIntentResult result = service.answer(decision, "Can I approve an instruction?", pay205());
+    assertEquals("me.can_approve_instruction.no", result.intentId());
+    assertTrue(result.answer().contains("INSTRUCTION_APPROVER"));
+    assertTrue(result.answer().contains("FUNDING_APPROVER"));
+    assertTrue(!result.answer().contains("may **approve** payments"));
+  }
+
+  @Test
+  void canApproveInstructionYesForDeskApprover() {
+    Subject ficc300 =
+        new Subject(
+            "ficc-300",
+            "Elena",
+            "Vasquez",
+            "Vice President",
+            "FICC",
+            List.of("INSTRUCTION_APPROVER"),
+            List.of(),
+            null,
+            List.of(),
+            "tok",
+            "sess");
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("me");
+    decision.setMeKind("can_act_on_entity");
+    decision.setMeAction("APPROVE");
+    MeIntentResult result = service.answer(decision, "Can I approve an instruction?", ficc300);
+    assertEquals("me.can_approve_instruction.yes", result.intentId());
+    assertTrue(result.answer().contains("FICC"));
+    assertTrue(result.answer().contains("INSTRUCTION_APPROVER"));
+  }
+
+  @Test
+  void canCreateInstructionNoForPay205() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("me");
+    decision.setMeKind("can_act_on_entity");
+    decision.setMeAction("CREATE");
+    MeIntentResult result = service.answer(decision, "Can I create an instruction?", pay205());
+    assertEquals("me.can_create_instruction.no", result.intentId());
+    assertTrue(result.answer().contains("INSTRUCTION_CREATOR"));
+    assertTrue(result.answer().contains("PAYMENT_CREATOR"));
+  }
+
+  @Test
+  void canApprovePaymentStillWorksForPay205() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("me");
+    decision.setMeKind("can_act_on_entity");
+    decision.setMeAction("APPROVE");
+    decision.setMeEntityType("payment");
+    MeIntentResult result = service.answer(decision, "Can I approve a payment?", pay205());
+    assertEquals("me.can_approve_payment.yes", result.intentId());
+    assertTrue(result.answer().toLowerCase().contains("approve") && result.answer().contains("payment"));
+  }
+
   private static Subject pay205() {
     return new Subject(
         "pay-205",

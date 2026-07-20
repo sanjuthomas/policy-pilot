@@ -5,6 +5,7 @@ from chat_application.auth.capabilities import audience_labels, capabilities_for
 from chat_application.auth.subject import Subject
 from chat_application.auth.users import SeedFile, SeedUser
 from chat_application.me.can_create import (
+    answer_can_approve_instruction,
     answer_can_approve_payment,
     answer_can_create_instruction,
     answer_can_create_payment,
@@ -311,7 +312,16 @@ def test_detect_can_i_approve_generic() -> None:
     assert intent is not None
     assert intent.kind == "can_act_on_entity"
     assert intent.action == "APPROVE"
+    assert intent.entity_type == "payment"
     assert intent.entity_id is None
+
+
+def test_detect_can_i_approve_instruction() -> None:
+    intent = detect_me_intent("Can I approve an instruction?")
+    assert intent is not None
+    assert intent.kind == "can_act_on_entity"
+    assert intent.action == "APPROVE"
+    assert intent.entity_type == "instruction"
 
 
 def test_answer_can_approve_yes() -> None:
@@ -341,6 +351,40 @@ def test_answer_can_approve_no_creator_only() -> None:
     result = answer_can_approve_payment(subject)
     assert result.intent_id == "me.can_approve_payment.no"
     assert "FUNDING_APPROVER" in result.answer
+
+
+def test_answer_can_approve_instruction_no_funding_approver() -> None:
+    subject = Subject(
+        user_id="pay-205",
+        given_name="Fatima",
+        family_name="Al-Rashid",
+        title="Vice President",
+        roles=["PAYMENT_CREATOR", "FUNDING_APPROVER"],
+        groups=["MIDDLE_OFFICE", "UP_TO_1_BILLION_CLUB"],
+        covering_lobs=["FICC"],
+    )
+    result = answer_can_approve_instruction(subject)
+    assert result.intent_id == "me.can_approve_instruction.no"
+    assert "INSTRUCTION_APPROVER" in result.answer
+    assert "FUNDING_APPROVER" in result.answer
+    assert "cannot **approve** instructions" in result.answer
+
+
+def test_answer_can_approve_instruction_yes() -> None:
+    subject = Subject(
+        user_id="ficc-300",
+        given_name="Elena",
+        family_name="Vasquez",
+        title="Vice President",
+        lob="FICC",
+        roles=["INSTRUCTION_APPROVER"],
+        groups=[],
+        covering_lobs=[],
+    )
+    result = answer_can_approve_instruction(subject)
+    assert result.intent_id == "me.can_approve_instruction.yes"
+    assert "**Yes**" in result.answer
+    assert "FICC" in result.answer
 
 
 def test_detect_can_i_approve() -> None:

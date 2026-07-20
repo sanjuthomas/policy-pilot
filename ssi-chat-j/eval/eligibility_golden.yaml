@@ -527,3 +527,68 @@ cases:
     - No other users currently satisfy
     - not open for funding approval
     - excluding you
+
+- id: golden_me_can_approve_instruction_no_pay205
+  mode: all
+  retrieval: eligibility
+  tags: [golden, me, can_act_on_entity, instruction, ssi-chat-j]
+  persona: pay-205
+  question: Can I approve an instruction?
+  expect:
+    require_routing: true
+    routing_path: eligibility
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: me.can_approve_instruction.no
+    min_answer_length: 40
+    answer_contains_all:
+    - INSTRUCTION_APPROVER
+    - pay-205
+    answer_contains_any:
+    - FUNDING_APPROVER
+    - cannot **approve** instructions
+    - cannot approve instructions
+
+- id: golden_me_can_approve_instruction_yes_ficc300
+  mode: all
+  retrieval: eligibility
+  tags: [golden, me, can_act_on_entity, instruction, ssi-chat-j]
+  persona: ficc-300
+  question: Can I approve an instruction?
+  expect:
+    require_routing: true
+    routing_path: eligibility
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: me.can_approve_instruction.yes
+    min_answer_length: 40
+    answer_contains_all:
+    - "**Yes**"
+    - ficc-300
+    - "`INSTRUCTION_APPROVER`"
+    - FICC
+    answer_contains_any:
+    - desk LOB
+    - instructions
+
+- id: golden_me_can_create_instruction_no_pay205
+  mode: all
+  retrieval: eligibility
+  tags: [golden, me, can_act_on_entity, instruction, create, ssi-chat-j]
+  persona: pay-205
+  question: Can I create an instruction?
+  expect:
+    require_routing: true
+    routing_path: eligibility
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: me.can_create_instruction.no
+    min_answer_length: 40
+    answer_contains_all:
+    - "**No**"
+    - pay-205
+    - "`INSTRUCTION_CREATOR`"
+    answer_contains_any:
+    - PAYMENT_CREATOR
+    - cannot **create** instructions
+    - cannot create instructions

@@ -212,3 +212,47 @@ def answer_can_approve_payment(subject: Subject) -> MeIntentResult:
         ),
         intent_id="me.can_approve_payment.no",
     )
+
+
+def answer_can_approve_instruction(subject: Subject) -> MeIntentResult:
+    """Directory-level instruction APPROVE (desk LOB + INSTRUCTION_APPROVER)."""
+    has_role = "INSTRUCTION_APPROVER" in subject.roles
+    has_desk = bool(subject.lob)
+    name = _display(subject)
+
+    if has_role and has_desk:
+        return MeIntentResult(
+            answer=(
+                f"**Yes** — `{subject.user_id}` ({name}) may **approve** instructions "
+                f"for desk LOB **{subject.lob}** under policy "
+                f"(role `INSTRUCTION_APPROVER`, title {subject.title or '—'}).\n\n"
+                "For a specific instruction, OPA still enforces four-eyes, reporting-line, "
+                "and the approval-matrix title check. Ask "
+                "“Do I have permission to approve instruction <id>?” for a live check."
+            ),
+            intent_id="me.can_approve_instruction.yes",
+        )
+
+    gaps: list[str] = []
+    if not has_role:
+        gaps.append("role `INSTRUCTION_APPROVER`")
+    if not has_desk:
+        gaps.append("desk `lob` matching the instruction owning LOB")
+
+    extra = ""
+    if "FUNDING_APPROVER" in subject.roles:
+        extra = (
+            "\n\nYou do hold `FUNDING_APPROVER`, which allows **payment** funding approval "
+            "(with middle-office / covering LOBs / amount club) — not instruction approve."
+        )
+
+    return MeIntentResult(
+        answer=(
+            f"**No** — `{subject.user_id}` ({name}) cannot **approve** instructions. "
+            f"Missing: {', '.join(gaps)}.{extra}\n\n"
+            "Instruction APPROVE needs `INSTRUCTION_APPROVER` and desk `lob` matching "
+            "the instruction owning LOB (e.g. `ficc-300`). This is different from "
+            "**payment** funding approval (`FUNDING_APPROVER`)."
+        ),
+        intent_id="me.can_approve_instruction.no",
+    )
