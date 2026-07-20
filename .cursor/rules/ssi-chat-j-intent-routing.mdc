@@ -18,14 +18,15 @@ Same bar as Python `ssi-chat` (`intent-semantic-routing.mdc`): people phrase the
 - **Path is law:** `ChatService` dispatches on `path` only; do not silently override another path with regex “force” lanes.
 - Use regex only as **slot parsers** after path is known (payment/instruction ids, explicit
   `UP_TO_*_CLUB` tokens) — never as primary NLU.
-- For **policy_directory** money size, prefer LLM slots `directoryAmount` /
-  `directoryAmountStrict` on `RouterDecision` (worded amounts like "a billion"). Regex amount
-  parse is fallback only for `$N billion`-style text when the model omits slots.
+- For **policy_directory** money size, use LLM slots `directoryAmount` /
+  `directoryAmountStrict` on `RouterDecision` only (including worded amounts like "a billion").
+  Do not add regex amount parsers.
 
 ## Don't
 
 - Add `HeuristicRouter`, keyword/phrase lists, or fuzzy matchers that choose `path`.
 - Infer `eligibility` vs `policy_directory` vs `me` from regex before or instead of Spring AI.
-- Treat slot parsers (`PaymentIdParser`, `AmountThresholdParser`, …) as intent classifiers.
+- Treat slot parsers (`PaymentIdParser`, `InstructionIdParser`, explicit club-name tokens, …) as
+  intent classifiers.
 
 Canonical write-up: `docs/intent-determination.md`. Module notes: `ssi-chat-j/AGENTS.md`.

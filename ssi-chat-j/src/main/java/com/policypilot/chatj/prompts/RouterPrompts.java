@@ -25,8 +25,8 @@ public final class RouterPrompts {
             (more than / greater than / exceeding / over / above / worth more than);
             false for inclusive (at least / a N-dollar payment / payments of N /
             "who can approve a billion dollar payment?").
-        Do not omit directoryAmount when size is implied — never rely on the client to
-        regex-parse "a billion" / "one billion".
+        Do not omit directoryAmount when size is implied — the client does not parse
+        amounts from free text.
         Examples:
           "worth more than $25 billion?" → policy_directory, directoryAmount=2.5e10, strict=true
           "a billion dollar payment?" → policy_directory, directoryAmount=1e9, strict=false

@@ -10,9 +10,9 @@ import java.util.regex.Pattern;
 /**
  * Resolve amount-limit clubs from router slots + OPA catalog after {@code path=policy_directory}.
  *
- * <p>Amount / strictness come from {@code RouterDecision} (LLM). Explicit {@code UP_TO_*_CLUB}
+ * <p>Amount / strictness come only from {@code RouterDecision} (LLM). Explicit {@code UP_TO_*_CLUB}
  * tokens may still be read from the message as a stable id slot. Deterministic club math uses the
- * OPA catalog only — not intent classification.
+ * OPA catalog only — not intent classification and not amount regex NLU.
  */
 public final class ClubResolver {
 
@@ -25,8 +25,9 @@ public final class ClubResolver {
   public record ClubResolution(List<String> clubs, Double amount, boolean strict) {}
 
   /**
-   * @param directoryAmount LLM slot (preferred); optional regex fallback only if null
-   * @param directoryAmountStrict LLM slot; default true when amount present and strict null
+   * @param directoryAmount LLM {@code RouterDecision.directoryAmount} (required for amount clubs)
+   * @param directoryAmountStrict LLM slot; defaults to {@code true} when amount is set and strict
+   *     is null
    */
   public static ClubResolution resolve(
       String message,
@@ -36,14 +37,7 @@ public final class ClubResolver {
       double absoluteLimit) {
     Matcher clubMatch = AMOUNT_CLUB.matcher(message == null ? "" : message);
     Double amount = directoryAmount;
-    if (amount == null) {
-      // Fallback for models that omit the slot on well-formed "$N billion" text only.
-      amount = AmountThresholdParser.parseAmount(message).orElse(null);
-    }
-    boolean strict =
-        directoryAmountStrict != null
-            ? directoryAmountStrict
-            : (amount == null || AmountThresholdParser.isStrict(message));
+    boolean strict = directoryAmountStrict != null ? directoryAmountStrict : true;
     if (clubMatch.find()) {
       return new ClubResolution(List.of(clubMatch.group(1).toUpperCase()), amount, strict);
     }

@@ -45,7 +45,7 @@ Prefer hermetic unit tests (mocks for ZITADEL, payment-service, Spring AI `ChatC
 
 **Intent / `RouterDecision.path` comes from Spring AI structured output only.** Do not add regex, keyword, or fuzzy classifiers that choose the path. Grow `RouterPrompts.ROUTER_SYSTEM` and `RouterDecision` slots instead.
 
-For `policy_directory`, money size is also an LLM slot (`directoryAmount`, `directoryAmountStrict`) — not primary regex NLU. Regex remains OK for **stable tokens** (sequence ids, explicit `UP_TO_*_CLUB`) and as a narrow `$N billion` fallback when the model omits amount slots.
+For `policy_directory`, money size is an LLM slot only (`directoryAmount`, `directoryAmountStrict`) — no regex amount NLU. Regex remains OK for **stable tokens** (sequence ids, explicit `UP_TO_*_CLUB`).
 
 Cursor rule: [`.cursor/rules/ssi-chat-j-intent-routing.mdc`](../.cursor/rules/ssi-chat-j-intent-routing.mdc) (mirrors Python [`intent-semantic-routing.mdc`](../.cursor/rules/intent-semantic-routing.mdc)).
 
