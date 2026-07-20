@@ -2,12 +2,15 @@
 
 Java / Spring Boot + Spring AI **A/B** chat experiment. Python `ssi-chat` stays on **8092**; this service listens on **8096**.
 
-## M1 (current)
+## Current surface
 
 - `GET /health`
-- `POST /api/auth/login` (ZITADEL session, parity with Python)
-- `POST /api/chat` routed by Spring AI `RouterDecision`
-- One Policies path: **Who can approve payment {id}?** via payment-service `eligible-approvers` with svc-chat OBO
+- `POST /api/auth/login` (ZITADEL session)
+- Shared PolicyPilot static UI (build-time copy of assets)
+- `POST /api/chat` eligibility lanes:
+  - payment APPROVE → payment-service `eligible-approvers`
+  - payment SUBMIT → authz `eligible-submitters`
+  - instruction APPROVE → instruction-service `eligible-approvers`
 
 ## Run (Compose)
 
@@ -16,21 +19,17 @@ docker compose up -d --build ssi-chat-j
 curl -s http://localhost:8096/health
 ```
 
-## Prove M1 (golden case)
+## Eligibility golden eval (HTTP black-box)
 
-Requires a warm stack with harness seed context (`submitted_payment_id`). From repo root:
+Cases live under [`eval/`](eval/) (owned by this module — not loaded at Java runtime).
 
-```bash
-./ssi-chat-j/scripts/prove-m1.sh
-```
-
-Or manually:
+Warm stack with harness entity context (`submitted_payment_id`, `draft_payment_id`, `pending_instruction_id`):
 
 ```bash
-cd ssi-chat
-CHAT_BASE_URL=http://localhost:8096 \
-  python -m regression.runner --eval-golden --ids golden_policies_eligible_approvers_payment --no-seed
+./ssi-chat-j/scripts/prove-eligibility.sh
 ```
+
+That runs the three goldens against `http://localhost:8096` via the temporary Python regression CLI (`--golden` points at `eval/eligibility_golden.yaml`).
 
 ## Local Maven
 
@@ -39,5 +38,6 @@ cd ssi-chat-j
 mvn -q spring-boot:run
 ```
 
-Plan / todo: [`docs/ssi-chat-j-plan.md`](../docs/ssi-chat-j-plan.md), [`docs/ssi-chat-j-todo.md`](../docs/ssi-chat-j-todo.md).  
-Agent / CI coverage rules: [`AGENTS.md`](AGENTS.md) (`mvn verify`, **≥ 80%** JaCoCo).
+Coverage: `mvn verify` (≥ 80% JaCoCo). See [`AGENTS.md`](AGENTS.md).
+
+Plan / todo: [`docs/ssi-chat-j-plan.md`](../docs/ssi-chat-j-plan.md), [`docs/ssi-chat-j-todo.md`](../docs/ssi-chat-j-todo.md).

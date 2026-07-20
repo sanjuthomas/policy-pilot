@@ -26,7 +26,7 @@ Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `
 | Item | Status | Notes |
 |------|--------|-------|
 | Plan + todo docs | `done` | This file + `ssi-chat-j-plan.md` |
-| **M1** — compose + health + login + eligibility golden | `done` | Proven `golden_policies_eligible_approvers_payment` on `:8096` |
+| **M1** — compose + health + login + eligibility golden | `done` | Three eligibility goldens via `prove-eligibility.sh` |
 | Phase 2 cypher bridge | `todo` | Next for neo4j_direct goldens |
 
 ---
@@ -40,7 +40,7 @@ Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `
 | M1.3 | `POST /api/auth/login` (ZITADEL session) | `done` | Parity headers for golden |
 | M1.4 | `POST /api/chat` + Spring AI `RouterDecision` | `done` | No heuristic failover — Spring AI only |
 | M1.5 | Payment eligibility via OBO (`eligible-approvers`) | `done` | svc-chat + user session |
-| M1.6 | Single regression proof | `done` | `./ssi-chat-j/scripts/prove-m1.sh` |
+| M1.6 | Eligibility golden proof (3 cases) | `done` | `./ssi-chat-j/scripts/prove-eligibility.sh` |
 
 ---
 
@@ -90,7 +90,7 @@ Implement only what golden cases require; mark each golden id when green.
 | ID | Item | Status | Notes |
 |----|------|--------|-------|
 | P3.1 | Pipeline: route → handler lanes (path is law) | `in_progress` | Eligibility lane only |
-| P3.2 | Eligibility / policy tools as needed by golden | `in_progress` | Payment APPROVE only |
+| P3.2 | Eligibility / policy tools as needed by golden | `done` | Payment APPROVE/SUBMIT + instruction APPROVE |
 | P3.3 | Me / who-am-i if in golden | `todo` | |
 | P3.4 | neo4j_direct + formatters for golden graph cases | `todo` | Via cypher bridge |
 | P3.5 | Vector / hybrid only if a golden case needs it | `todo` | |
@@ -100,8 +100,10 @@ Implement only what golden cases require; mark each golden id when green.
 
 | Golden case id | Status | Notes |
 |----------------|--------|-------|
-| `golden_policies_eligible_approvers_payment` | `done` | M1 proof |
-| _(remaining from `eval_golden.yaml`)_ | `todo` | |
+| `golden_policies_eligible_approvers_payment` | `done` | `ssi-chat-j/eval/eligibility_golden.yaml` |
+| `golden_policies_eligible_submitters_payment` | `done` | same |
+| `golden_policies_eligible_approvers_instruction` | `done` | same |
+| _(remaining from full `eval_golden.yaml`)_ | `todo` | |
 
 ---
 
@@ -109,10 +111,10 @@ Implement only what golden cases require; mark each golden id when green.
 
 | ID | Item | Status | Notes |
 |----|------|--------|-------|
-| P4.1 | Run seed + `--eval-golden` against `:8096` | `todo` | |
+| P4.1 | Run seed + eligibility golden against `:8096` | `done` | `prove-eligibility.sh` / warm `--no-seed` |
 | P4.2 | Triage failures into Phase 3 backlog | `todo` | |
-| P4.3 | Document A/B how-to (switch `CHAT_BASE_URL`) | `todo` | Partial in `ssi-chat-j/README.md` |
-| P4.4 | **Success bar met** | `todo` | All golden cases `done` |
+| P4.3 | Document A/B how-to (switch `CHAT_BASE_URL`) | `done` | `ssi-chat-j/README.md` + `eval/README.md` |
+| P4.4 | **Success bar met** | `todo` | Full golden suite still open |
 
 ---
 
@@ -133,3 +135,4 @@ Implement only what golden cases require; mark each golden id when green.
 |------|----------|
 | 2026-07-20 | Name `ssi-chat-j`; A/B only; Maven; reuse cypher_builder via HTTP sidecar; Thymeleaf + build-time static copy; success = golden green; track in this file |
 | 2026-07-20 | **M1 done:** health + login + Spring AI `RouterDecision` + payment eligibility OBO; proven by `golden_policies_eligible_approvers_payment` |
+| 2026-07-20 | Eligibility trio owned under `ssi-chat-j/eval/`; `prove-eligibility.sh` HTTP black-box vs `:8096` |
