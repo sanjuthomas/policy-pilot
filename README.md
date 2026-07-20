@@ -22,7 +22,7 @@ Policy Pilot is a **reference implementation** of that control model, demonstrat
 
 ## The problem
 
-Enterprises want AI that can *do* work: create a payment, submit for funding, approve a trade. They also want AI that can *investigate*: who can approve a payment or instruction, and harder [SoD](docs/opa-controls.md) and control questions such as “[Are there any instances of approving each other's payments?](docs/sod-mutual-approval.md)”, “Are there instructions approved by someone who reports directly to the creator?”, or “[Are there active instructions sharing the same creditor account and currency?](neo4j-graph-model/README.md#are-there-active-instructions-sharing-the-same-creditor-account-and-currency)”
+Enterprises want AI that can *do* work: create a payment, submit for funding, approve a trade. They also want AI that can *investigate*: who can approve a payment or instruction, and harder [SoD](docs/opa-controls.md) and control questions such as “Are there any instances of approving each other's payments?”, “Are there instructions approved by someone who reports directly to the creator?”, or “Are there active instructions sharing the same creditor account and currency?”
 
 What they cannot accept is AI that **bypasses business decisions** — four-eyes rules, ownership, limits, compliance — because those rules lived in a prompt, a spreadsheet, or a service the agent never called.
 
