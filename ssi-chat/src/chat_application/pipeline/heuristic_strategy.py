@@ -45,13 +45,19 @@ from chat_application.graph.cypher import (
     is_security_event_group_by_lob_question,
 )
 from chat_application.pipeline.models import (
+    EligibilityAction,
     EligibilityTarget,
     ExecutionStrategy,
     RouterDecision,
 )
 
 _ELIGIBILITY_PATTERN = re.compile(
-    r"\bwho\b.+\b(approve|authorized|authorize|eligible|green[- ]?light)\b",
+    r"\bwho\b.+\b(approve|authorized|authorize|eligible|green[- ]?light|submit)\b",
+    re.IGNORECASE,
+)
+
+_WHO_CAN_SUBMIT_PATTERN = re.compile(
+    r"\bwho\b.+\bsubmit\b",
     re.IGNORECASE,
 )
 
@@ -115,6 +121,9 @@ _CAPABILITY_ONLY = re.compile(
 
 def resolve_eligibility_target(message: str, *, mode: str) -> EligibilityTarget | None:
     """Resolve payment vs instruction for eligibility (slot / id heuristics)."""
+    if resolve_eligibility_action(message) == "SUBMIT":
+        return "payment"
+
     upper = message.upper()
     if "-P-" in upper:
         return "payment"
@@ -140,6 +149,13 @@ def resolve_eligibility_target(message: str, *, mode: str) -> EligibilityTarget 
     if mode == "policies":
         return "payment"
     return None
+
+
+def resolve_eligibility_action(message: str) -> EligibilityAction:
+    """APPROVE (default) vs SUBMIT for who-can eligibility questions."""
+    if _WHO_CAN_SUBMIT_PATTERN.search(message or ""):
+        return "SUBMIT"
+    return "APPROVE"
 
 
 def is_eligibility_question_heuristic(message: str) -> bool:
@@ -266,6 +282,9 @@ def _looks_like_submit_payment_skill(message: str) -> bool:
     text = message.strip()
     if not text or not _SUBMIT_PAYMENT_SKILL.search(text):
         return False
+    # "Who can submit payment Y for approval?" is eligibility, not the mutation skill.
+    if is_eligibility_question_heuristic(text):
+        return False
     if _CAPABILITY_ONLY.search(text) and "you" not in text.lower()[:40]:
         return False
     from chat_application.skills.detect import parse_submit_payment_params
@@ -385,6 +404,7 @@ def heuristic_router_decision(question: str, *, mode: str) -> RouterDecision:
 
     strategy = infer_execution_strategy_heuristic(question, mode=mode)
     target = resolve_eligibility_target(question, mode=mode) if strategy == "eligibility" else None
+    action = resolve_eligibility_action(question) if strategy == "eligibility" else None
     if strategy == "graph":
         # Path is law: structured shapes own neo4j_direct; ad-hoc Cypher stays graph.
         from chat_application.graph.direct import match_neo4j_direct_intent
@@ -398,8 +418,34 @@ def heuristic_router_decision(question: str, *, mode: str) -> RouterDecision:
         path=strategy,
         strategy=strategy,
         eligibility_target=target,
+        eligibility_action=action,
         reasoning="heuristic fallback",
     )
+
+
+def fill_eligibility_slots(
+    decision: RouterDecision,
+    message: str,
+    *,
+    mode: str,
+) -> RouterDecision:
+    """Ensure eligibility path decisions carry target + APPROVE/SUBMIT action."""
+    if decision.path != "eligibility" and decision.retrieval_strategy != "eligibility":
+        return decision
+    updates: dict[str, object] = {}
+    if decision.eligibility_action is None:
+        updates["eligibility_action"] = resolve_eligibility_action(message)
+    action = updates.get("eligibility_action", decision.eligibility_action) or "APPROVE"
+    if decision.eligibility_target is None:
+        if action == "SUBMIT":
+            updates["eligibility_target"] = "payment"
+        else:
+            updates["eligibility_target"] = resolve_eligibility_target(message, mode=mode)
+    elif action == "SUBMIT" and decision.eligibility_target != "payment":
+        updates["eligibility_target"] = "payment"
+    if not updates:
+        return decision
+    return decision.model_copy(update=updates)
 
 
 def prefer_neo4j_direct_when_matched(

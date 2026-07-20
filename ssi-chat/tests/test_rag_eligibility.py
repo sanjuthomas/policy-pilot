@@ -7,6 +7,7 @@ from chat_application.rag import RagService
 from tests.fixtures.router_decisions import (
     ELIGIBILITY_INSTRUCTION,
     ELIGIBILITY_PAYMENT,
+    ELIGIBILITY_PAYMENT_SUBMIT,
     POLICY_DIRECTORY,
     set_router_decision,
 )
@@ -115,6 +116,93 @@ async def test_ask_short_circuits_eligibility_question(rag_service: RagService) 
 
     assert "Laurent, Sophie" in response.answer
     assert response.sources == []
+
+
+@pytest.mark.asyncio
+async def test_answer_payment_eligible_submitters_calls_authorization_client(
+    rag_service: RagService,
+) -> None:
+    payment_id = "20260720-FICC-P-7"
+    rag_service._eligibility = AsyncMock()
+    rag_service._eligibility.eligible_submitters_for_payment.return_value = {
+        "payment_id": payment_id,
+        "payment_status": "DRAFT",
+        "amount": 250_000,
+        "currency": "USD",
+        "owning_lob": "FICC",
+        "instruction_status": "APPROVED",
+        "eligible": [
+            {
+                "user_id": "fo-ficc-101",
+                "display_name": "Nguyen, Minh (fo-ficc-101)",
+                "title": "Analyst",
+                "allow_basis": [],
+            }
+        ],
+        "candidates_evaluated": 2,
+    }
+
+    answer = await rag_service._answer_payment_eligible_submitters(
+        f"Who can submit {payment_id} for approval?",
+        bearer_token="token",
+        session_id="sess-1",
+    )
+
+    assert answer is not None
+    assert "fo-ficc-101" in answer
+    assert "submit" in answer.lower()
+    assert "FUNDING_APPROVER" not in answer
+    assert "PAYMENT_CREATOR" in answer
+    rag_service._eligibility.eligible_submitters_for_payment.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_ask_short_circuits_submit_eligibility_question(
+    rag_service: RagService,
+) -> None:
+    from chat_application.auth.subject import Subject
+
+    payment_id = "20260720-FICC-P-7"
+    set_router_decision(rag_service.ml_client, ELIGIBILITY_PAYMENT_SUBMIT)
+    rag_service._eligibility = AsyncMock()
+    rag_service._eligibility.eligible_submitters_for_payment.return_value = {
+        "payment_id": payment_id,
+        "payment_status": "DRAFT",
+        "amount": 250_000,
+        "currency": "USD",
+        "owning_lob": "FICC",
+        "instruction_status": "APPROVED",
+        "eligible": [
+            {
+                "user_id": "fo-ficc-101",
+                "display_name": "Nguyen, Minh (fo-ficc-101)",
+                "title": "Analyst",
+                "allow_basis": [],
+            }
+        ],
+        "candidates_evaluated": 2,
+    }
+
+    response = await rag_service.ask(
+        f"Who can submit {payment_id} for approval?",
+        [],
+        mode="policies",
+        bearer_token="token",
+        session_id="sess",
+        subject=Subject(
+            user_id="pay-205",
+            title="VP",
+            roles=["FUNDING_APPROVER"],
+        ),
+    )
+
+    assert "Nguyen, Minh" in response.answer
+    assert "PAYMENT_CREATOR" in response.answer or "submit" in response.answer.lower()
+    rag_service._eligibility.eligible_approvers_for_payment.assert_not_called()
+    rag_service._eligibility.eligible_submitters_for_payment.assert_awaited_once()
+    assert response.routing is not None
+    assert response.routing.path == "eligibility"
+    assert response.routing.answer_synthesis == "eligibility_api"
 
 
 @pytest.mark.asyncio

@@ -39,12 +39,21 @@ ELIGIBILITY_PAYMENT = RouterDecision(
     path="eligibility",
     strategy="eligibility",
     eligibility_target="payment",
+    eligibility_action="APPROVE",
     reasoning="fixture: payment eligible actors",
+)
+ELIGIBILITY_PAYMENT_SUBMIT = RouterDecision(
+    path="eligibility",
+    strategy="eligibility",
+    eligibility_target="payment",
+    eligibility_action="SUBMIT",
+    reasoning="fixture: payment eligible submitters",
 )
 ELIGIBILITY_INSTRUCTION = RouterDecision(
     path="eligibility",
     strategy="eligibility",
     eligibility_target="instruction",
+    eligibility_action="APPROVE",
     reasoning="fixture: instruction eligible actors",
 )
 POLICY_DIRECTORY = RouterDecision(
@@ -92,6 +101,7 @@ REQUIRED_PATH_FIXTURES: tuple[RouterDecision, ...] = (
     VECTOR,
     HYBRID,
     ELIGIBILITY_PAYMENT,
+    ELIGIBILITY_PAYMENT_SUBMIT,
     ELIGIBILITY_INSTRUCTION,
     POLICY_DIRECTORY,
     POLICY_SUMMARY,

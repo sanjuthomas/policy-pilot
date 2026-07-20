@@ -73,6 +73,31 @@ class TestHeuristicStrategy:
         )
         assert decision.strategy == "eligibility"
         assert decision.eligibility_target == "payment"
+        assert decision.eligibility_action == "APPROVE"
+
+    def test_who_can_submit_eligibility_heuristic(self) -> None:
+        decision = heuristic_router_decision(
+            "Who can submit payment 20260705-FX-P-534 for approval?",
+            mode="policies",
+        )
+        assert decision.path == "eligibility"
+        assert decision.eligibility_target == "payment"
+        assert decision.eligibility_action == "SUBMIT"
+
+    def test_submit_payment_skill_not_confused_with_who_can_submit(self) -> None:
+        decide = heuristic_router_decision(
+            "Who can submit payment 20260705-FX-P-534 for approval?",
+            mode="payments",
+        )
+        assert decide.path == "eligibility"
+        assert decide.skill is None
+
+        skill = heuristic_router_decision(
+            "Please submit payment 20260705-FX-P-534 for approval.",
+            mode="payments",
+        )
+        assert skill.path == "skill"
+        assert skill.skill == "submit_payment"
 
     def test_approve_payment_skill_heuristic(self) -> None:
         decision = heuristic_router_decision(

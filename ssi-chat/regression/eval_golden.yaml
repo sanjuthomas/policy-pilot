@@ -350,6 +350,27 @@ cases:
     - already APPROVED
     - payment
 
+- id: golden_policies_eligible_submitters_payment
+  mode: policies
+  retrieval: eligibility
+  tags: [golden, policies, eligibility, submitters]
+  question: Who can submit {draft_payment_id} for approval?
+  expect:
+    requires_context: [draft_payment_id]
+    require_routing: true
+    routing_path: eligibility
+    cypher_class: none
+    answer_synthesis: eligibility_api
+    min_answer_length: 40
+    answer_contains_any:
+    - Live OPA
+    - Users who can submit
+    - PAYMENT_CREATOR
+    - submit
+    answer_not_contains:
+    - FUNDING_APPROVER
+    - Users who can approve this payment
+
 - id: golden_policies_eligible_approvers_instruction
   mode: policies
   retrieval: eligibility

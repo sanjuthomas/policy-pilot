@@ -1,9 +1,11 @@
 from chat_application.pipeline.heuristic_strategy import (
     is_eligibility_question_heuristic,
+    resolve_eligibility_action,
     resolve_eligibility_target,
 )
 
 INSTRUCTION_ID = "11111111-1111-1111-1111-111111111111"
+PAYMENT_ID = "20260720-FICC-P-7"
 
 
 def _eligible_approver_target(message: str, *, mode: str) -> str | None:
@@ -44,3 +46,15 @@ def test_events_mode_resolves_ambiguous_payment_mention() -> None:
 def test_events_mode_resolves_ambiguous_instruction_mention() -> None:
     q = "Who can approve this instruction?"
     assert _eligible_approver_target(q, mode="events") == "instruction"
+
+
+def test_who_can_submit_is_eligibility_with_submit_action() -> None:
+    q = f"Who can submit {PAYMENT_ID} for approval?"
+    assert is_eligibility_question_heuristic(q)
+    assert resolve_eligibility_action(q) == "SUBMIT"
+    assert resolve_eligibility_target(q, mode="policies") == "payment"
+
+
+def test_who_can_approve_defaults_to_approve_action() -> None:
+    q = f"Who can approve payment {PAYMENT_ID}?"
+    assert resolve_eligibility_action(q) == "APPROVE"

@@ -3,7 +3,10 @@ from __future__ import annotations
 from chat_application.models import ChatResponse
 from chat_application.observability.routing import finalize_chat_response
 from chat_application.pipeline.handlers.base import HandlerContext
-from chat_application.pipeline.heuristic_strategy import resolve_eligibility_target
+from chat_application.pipeline.heuristic_strategy import (
+    resolve_eligibility_action,
+    resolve_eligibility_target,
+)
 from chat_application.policy.summary import policies_mode_guidance
 
 
@@ -117,7 +120,17 @@ class PolicyToolsHandler:
         target = ctx.decision.eligibility_target or resolve_eligibility_target(
             ctx.message, mode=ctx.mode
         )
-        if target == "payment":
+        action = ctx.decision.eligibility_action or resolve_eligibility_action(
+            ctx.message
+        )
+
+        if target == "payment" and action == "SUBMIT":
+            answer = await ctx.service._answer_payment_eligible_submitters(
+                ctx.message,
+                bearer_token=ctx.bearer_token,
+                session_id=ctx.session_id,
+            )
+        elif target == "payment":
             answer = await ctx.service._answer_payment_eligible_approvers(
                 ctx.message,
                 bearer_token=ctx.bearer_token,
@@ -144,4 +157,11 @@ class PolicyToolsHandler:
             path="eligibility",
             cypher_provenance="none",
             answer_synthesis="eligibility_api",
+            intent_id=(
+                "eligibility.payment_submitters"
+                if action == "SUBMIT"
+                else "eligibility.payment_approvers"
+                if target == "payment"
+                else "eligibility.instruction_approvers"
+            ),
         )

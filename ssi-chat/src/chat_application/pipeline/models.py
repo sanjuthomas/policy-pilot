@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, model_validator
 
 ExecutionStrategy = Literal["eligibility", "graph", "vector", "hybrid"]
 EligibilityTarget = Literal["payment", "instruction"]
+EligibilityAction = Literal["APPROVE", "SUBMIT"]
 
 IntentPath = Literal[
     "skill",
@@ -66,6 +67,13 @@ class RouterDecision(BaseModel):
     eligibility_target: EligibilityTarget | None = Field(
         default=None,
         description="When path/strategy is eligibility: payment vs instruction.",
+    )
+    eligibility_action: EligibilityAction | None = Field(
+        default=None,
+        description=(
+            "When path is eligibility: APPROVE (default funding/instruction approvers) "
+            "or SUBMIT (desk submitters for a DRAFT payment)."
+        ),
     )
     skill: SkillName | None = Field(
         default=None,

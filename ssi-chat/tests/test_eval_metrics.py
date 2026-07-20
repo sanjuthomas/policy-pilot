@@ -187,6 +187,7 @@ def test_golden_eval_yaml_loads():
 
     for case_id, retrieval, path in (
         ("golden_policies_eligible_approvers_payment", "eligibility", "eligibility"),
+        ("golden_policies_eligible_submitters_payment", "eligibility", "eligibility"),
         ("golden_policies_eligible_approvers_instruction", "eligibility", "eligibility"),
         ("golden_policies_amount_club_directory", "policy_directory", "policy_directory"),
         ("golden_policies_covering_lob_directory", "policy_directory", "policy_directory"),

@@ -19,8 +19,10 @@ Paths (set `path` to exactly one):
   (no specific payment id). Not audit ("who approved").
 - person_permissions: permissions of a named person or user id (not "my permissions").
   Set person_query to the name or id.
-- eligibility: forward-looking who can approve/authorize/green-light a specific payment or instruction.
-  Set eligibility_target. Also set strategy=eligibility.
+- eligibility: forward-looking who can act on a specific payment or instruction.
+  Set eligibility_target (payment|instruction). Set eligibility_action=
+  APPROVE (funding/instruction approvers — default) or SUBMIT (desk submitters
+  for a DRAFT payment: "who can submit … for approval?"). Also set strategy=eligibility.
 - neo4j_direct: known deterministic graph shapes — exact counts, rankings, show/get by id,
   inventory lists, creator/approver/status by id, denial/alert lists that match predefined
   YAML or planned Cypher. Prefer this over graph when a structured list/count/id lookup
@@ -49,9 +51,12 @@ Rules:
   "Who can create payments for FICC / FX / DESK_RATES?" → me (me_kind=who_can_create,
   me_action=CREATE, me_entity_type=payment). Desk codes like DESK_RATES are LOBs.
   "Who covers LOB FICC?" → me (me_kind=who_covers_lob) — covering_lobs directory, not create.
-- eligibility vs neo4j_direct/graph: future/potential approvers → eligibility;
+- eligibility vs neo4j_direct/graph: future/potential approvers or submitters → eligibility;
   past "who approved" / show-by-id / how-many → neo4j_direct (preferred) or graph.
-- eligibility vs skill: "who can approve payment Y?" → eligibility; "please approve payment Y" → skill + approve_payment.
+- eligibility vs skill: "who can approve payment Y?" → eligibility + APPROVE;
+  "who can submit payment Y for approval?" → eligibility + SUBMIT (not skill);
+  "please approve payment Y" → skill + approve_payment;
+  "please submit payment Y for approval" → skill + submit_payment.
   "who can cancel payment Y?" → eligibility; "please cancel payment Y" → skill + cancel_payment.
 - eligibility vs policy_directory: specific entity id / who can approve this payment → eligibility;
   amount-club funding-approver lists without an id → policy_directory.

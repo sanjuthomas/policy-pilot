@@ -145,3 +145,69 @@ async def test_payment_amount_limits_success() -> None:
     call_kwargs = mock_client.get.await_args.kwargs
     assert call_kwargs["headers"]["X-On-Behalf-Of"] == "token"
     assert call_kwargs["headers"]["X-On-Behalf-Of-Session-Id"] == "sess-1"
+
+
+@pytest.mark.asyncio
+async def test_eligible_submitters_for_payment_success() -> None:
+    payment_response = httpx.Response(
+        200,
+        json={
+            "payment_id": "p1",
+            "instruction_id": "i1",
+            "instruction_version": 1,
+            "status": "DRAFT",
+            "amount": 100,
+            "currency": "USD",
+            "owning_lob": "FICC",
+            "instruction_type": "STANDING",
+            "created_by": {"user_id": "fo-ficc-101"},
+        },
+        request=httpx.Request("GET", "http://payment.test/api/v1/payments/p1"),
+    )
+    instruction_response = httpx.Response(
+        200,
+        json={"instruction_id": "i1", "status": "APPROVED", "end_date": "2099-01-01"},
+        request=httpx.Request("GET", "http://instruction.test/api/v1/instructions/i1"),
+    )
+    authz_response = httpx.Response(
+        200,
+        json={
+            "payment_id": "p1",
+            "eligible": [{"user_id": "fo-ficc-101"}],
+            "candidates_evaluated": 1,
+        },
+        request=httpx.Request(
+            "POST",
+            "http://authz.test/api/v1/authorization/payments/eligible-submitters",
+        ),
+    )
+
+    with (
+        patch("chat_application.authz.client.httpx.AsyncClient") as mock_client_cls,
+        patch("chat_application.authz.client.service_identity") as mock_identity,
+    ):
+        mock_identity.token = "svc-token"
+        mock_identity.session_id = "svc-session"
+        mock_identity.ensure_logged_in = AsyncMock()
+        mock_client = mock_client_cls.return_value.__aenter__.return_value
+        mock_client.get = AsyncMock(
+            side_effect=[payment_response, instruction_response]
+        )
+        mock_client.post = AsyncMock(return_value=authz_response)
+        client = EligibilityClient(
+            payment_service_url="http://payment.test",
+            instruction_service_url="http://instruction.test",
+            authorization_service_url="http://authz.test",
+        )
+        body = await client.eligible_submitters_for_payment(
+            "p1",
+            bearer_token="user-token",
+            session_id="user-session",
+        )
+
+    assert body["payment_id"] == "p1"
+    assert body["eligible"][0]["user_id"] == "fo-ficc-101"
+    post_kwargs = mock_client.post.await_args.kwargs
+    assert post_kwargs["headers"]["X-On-Behalf-Of"] == "user-token"
+    assert post_kwargs["json"]["payment"]["payment_id"] == "p1"
+    assert post_kwargs["json"]["instruction_status"] == "APPROVED"
