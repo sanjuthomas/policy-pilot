@@ -26,7 +26,7 @@ Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `
 | Item | Status | Notes |
 |------|--------|-------|
 | Plan + todo docs | `done` | This file + `ssi-chat-j-plan.md` |
-| **M1** — compose + health + login + eligibility golden | `done` | Three eligibility goldens via `prove-eligibility.sh` |
+| **M1** — health + login + eligibility golden | `done` | Three eligibility goldens via `prove-eligibility.sh`; Maven on `:8096` (no root Compose) |
 | Phase 2 cypher bridge | `todo` | Next for neo4j_direct goldens |
 
 ---
@@ -35,7 +35,7 @@ Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `
 
 | ID | Item | Status | Notes |
 |----|------|--------|-------|
-| M1.1 | `ssi-chat-j` in Compose on **8096** | `done` | Python chat stays **8092** |
+| M1.1 | `ssi-chat-j` listening on **8096** | `done` | Maven local; **not** in root Compose yet |
 | M1.2 | `GET /health` | `done` | |
 | M1.3 | `POST /api/auth/login` (ZITADEL session) | `done` | Parity headers for golden |
 | M1.4 | `POST /api/chat` + Spring AI `RouterDecision` | `done` | No heuristic failover — Spring AI only |
@@ -49,7 +49,7 @@ Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `
 | ID | Item | Status | Notes |
 |----|------|--------|-------|
 | P0.1 | Create `ssi-chat-j/` Maven Spring Boot 3 / Java 21 module | `done` | |
-| P0.2 | Dockerfile + compose service `ssi-chat-j` on **8096** | `done` | Do not take over `ssi-chat` / 8092 |
+| P0.2 | Dockerfile (CI image) for `ssi-chat-j` | `done` | Root Compose wiring deferred — run via Maven |
 | P0.3 | `GET /health` | `done` | |
 | P0.4 | Thymeleaf hello page | `done` | Minimal landing |
 | P0.5 | Maven copy of static assets from `ssi-chat/.../static` | `done` | Build-time assembly |
@@ -136,3 +136,4 @@ Implement only what golden cases require; mark each golden id when green.
 | 2026-07-20 | Name `ssi-chat-j`; A/B only; Maven; reuse cypher_builder via HTTP sidecar; Thymeleaf + build-time static copy; success = golden green; track in this file |
 | 2026-07-20 | **M1 done:** health + login + Spring AI `RouterDecision` + payment eligibility OBO; proven by `golden_policies_eligible_approvers_payment` |
 | 2026-07-20 | Eligibility trio owned under `ssi-chat-j/eval/`; `prove-eligibility.sh` HTTP black-box vs `:8096` |
+| 2026-07-20 | Removed `ssi-chat-j` from root `docker-compose.yml` (Maven-only until Compose is wanted) |

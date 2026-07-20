@@ -12,7 +12,7 @@ Java / Spring AI chat module for **A/B testing** beside the existing Python `ssi
 | Success bar | **Golden eval green** against `ssi-chat-j` |
 | Tracking | Living checklist: [`ssi-chat-j-todo.md`](ssi-chat-j-todo.md) |
 
-Compose sketch (proposed): service `ssi-chat-j`, port **8096**, Python `ssi-chat` stays on **8092**.
+Compose: **not** in root `docker-compose.yml` yet — run via Maven on **8096**; Python `ssi-chat` stays on **8092**.
 
 ---
 

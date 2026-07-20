@@ -2,6 +2,8 @@
 
 Java / Spring Boot + Spring AI **A/B** chat experiment. Python `ssi-chat` stays on **8092**; this service listens on **8096**.
 
+Not wired into the root `docker-compose.yml` yet — run locally with Maven against a warm stack.
+
 ## Current surface
 
 - `GET /health`
@@ -12,32 +14,28 @@ Java / Spring Boot + Spring AI **A/B** chat experiment. Python `ssi-chat` stays 
   - payment SUBMIT → authz `eligible-submitters`
   - instruction APPROVE → instruction-service `eligible-approvers`
 
-## Run (Compose)
+## Run (Maven)
+
+With the usual Compose stack up (Python chat, payment, instruction, authz, ZITADEL, …):
 
 ```bash
-docker compose up -d --build ssi-chat-j
+cd ssi-chat-j
+mvn -q spring-boot:run
 curl -s http://localhost:8096/health
 ```
+
+Coverage: `mvn verify` (≥ 80% JaCoCo). See [`AGENTS.md`](AGENTS.md).
 
 ## Eligibility golden eval (HTTP black-box)
 
 Cases live under [`eval/`](eval/) (owned by this module — not loaded at Java runtime).
 
-Warm stack with harness entity context (`submitted_payment_id`, `draft_payment_id`, `pending_instruction_id`):
+Warm stack with harness entity context (`submitted_payment_id`, `draft_payment_id`, `pending_instruction_id`) and Java chat on `:8096`:
 
 ```bash
 ./ssi-chat-j/scripts/prove-eligibility.sh
 ```
 
-That runs the three goldens against `http://localhost:8096` via the temporary Python regression CLI (`--golden` points at `eval/eligibility_golden.yaml`).
-
-## Local Maven
-
-```bash
-cd ssi-chat-j
-mvn -q spring-boot:run
-```
-
-Coverage: `mvn verify` (≥ 80% JaCoCo). See [`AGENTS.md`](AGENTS.md).
+That runs the three goldens via the temporary Python regression CLI (`--golden` points at `eval/eligibility_golden.yaml`).
 
 Plan / todo: [`docs/ssi-chat-j-plan.md`](../docs/ssi-chat-j-plan.md), [`docs/ssi-chat-j-todo.md`](../docs/ssi-chat-j-todo.md).

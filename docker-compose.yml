@@ -690,51 +690,6 @@ services:
     networks:
       - security-event-net
 
-  # Java / Spring AI A/B chat (Python ssi-chat remains on 8092)
-  ssi-chat-j:
-    build:
-      context: .
-      dockerfile: ssi-chat-j/Dockerfile
-    container_name: ssi-chat-j
-    ports:
-      - "8096:8096"
-    environment:
-      <<: *otel-environment
-      OTEL_SERVICE_NAME: ssi-chat-j
-      SERVER_PORT: 8096
-      GCP_PROJECT_ID: ${GCP_PROJECT_ID:-rag-demos-501323}
-      GCP_REGION: ${GCP_REGION:-us-central1}
-      VERTEX_GEMINI_MODEL: ${VERTEX_GEMINI_MODEL:-gemini-2.5-flash}
-      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/gcp-sa.json
-      PAYMENT_SERVICE_URL: http://payment-service:8093
-      INSTRUCTION_SERVICE_URL: http://instruction-service:8000
-      AUTHORIZATION_SERVICE_URL: http://authorization-service:8094
-      EMAIL_DOMAIN: ssi.local
-      ZITADEL_URL: http://zitadel-proxy
-      ZITADEL_HOST_HEADER: localhost
-      ZITADEL_INTERNAL_URL: http://zitadel-proxy
-      ZITADEL_SERVICE_PAT_FILE: /zitadel/bootstrap/login-client.pat
-      OIDC_ISSUER_URL: http://localhost:8080
-      OIDC_INTERNAL_URL: http://zitadel-proxy
-      OIDC_AUDIENCE: policy-pilot
-      SERVICE_USER_ID: svc-chat
-      SERVICE_USER_PASSWORD: Password1!
-    volumes:
-      - zitadel-bootstrap:/zitadel/bootstrap:ro
-      - ${GCP_SA_KEY_PATH:-${HOME}/.config/gcloud/rag-demos-501323-vertex-client-key.json}:/run/secrets/gcp-sa.json:ro
-    depends_on:
-      payment-service:
-        condition: service_started
-      instruction-service:
-        condition: service_started
-      authorization-service:
-        condition: service_started
-      zitadel-api:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - security-event-net
-
   # ZITADEL (local dev only — change masterkey/passwords before any real deployment)
   # Console: http://localhost:8080/ui/console
   zitadel-postgres:
