@@ -122,7 +122,11 @@ Implement only what golden cases require; mark each golden id when green.
 | `golden_policies_payment_cancel_summary` | `done` | payment CANCEL summary |
 | `golden_policies_amount_club_inclusive_1b` | `done` | inclusive $1B directory |
 | `golden_policies_amount_and_covering_combo` | `done` | amount + FICC covering |
-| _(remaining from full `eval_golden.yaml`)_ | `todo` | |
+| `golden_me_waiting_for_me_not_approver_fo` | `done` | FO not_approver |
+| `golden_me_waiting_for_me_worklist_pay205` | `done` | live SUBMITTED + OPA worklist |
+| `golden_me_who_else_can_act_need_id` | `done` | who_else need_id |
+| `golden_me_who_else_can_act_submitted` | `done` | who_else on submitted payment |
+| _(remaining from full `eval_golden.yaml`)_ | `todo` | ~20 Python-only (graph / denials / vector) |
 
 ---
 
