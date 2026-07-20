@@ -8,12 +8,14 @@ import com.policypilot.chatj.eligibility.EligibilityClient;
 import com.policypilot.chatj.observability.ChatAnswerFinalizer;
 import com.policypilot.chatj.pipeline.RouterDecision;
 import com.policypilot.chatj.policydirectory.PolicyDirectoryService;
+import com.policypilot.chatj.policysummary.PolicySummaryAnswerFormatter;
 import com.policypilot.chatj.routing.InstructionIdParser;
 import com.policypilot.chatj.routing.IntentRouter;
 import com.policypilot.chatj.routing.PaymentIdParser;
 import java.util.Map;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 @Service
 public class ChatService {
@@ -22,6 +24,7 @@ public class ChatService {
   private final EligibilityClient eligibilityClient;
   private final EligibilityAnswerFormatter eligibilityAnswerFormatter;
   private final PolicyDirectoryService policyDirectoryService;
+  private final PolicySummaryAnswerFormatter policySummaryAnswerFormatter;
   private final ChatAnswerFinalizer answerFinalizer;
 
   public ChatService(
@@ -29,11 +32,13 @@ public class ChatService {
       EligibilityClient eligibilityClient,
       EligibilityAnswerFormatter eligibilityAnswerFormatter,
       PolicyDirectoryService policyDirectoryService,
+      PolicySummaryAnswerFormatter policySummaryAnswerFormatter,
       ChatAnswerFinalizer answerFinalizer) {
     this.intentRouter = intentRouter;
     this.eligibilityClient = eligibilityClient;
     this.eligibilityAnswerFormatter = eligibilityAnswerFormatter;
     this.policyDirectoryService = policyDirectoryService;
+    this.policySummaryAnswerFormatter = policySummaryAnswerFormatter;
     this.answerFinalizer = answerFinalizer;
   }
 
@@ -42,6 +47,10 @@ public class ChatService {
     RouterDecision decision = intentRouter.route(request.message());
     double generationMs = (System.nanoTime() - routeStartNs) / 1_000_000.0;
     String requestedPath = decision.getPath();
+
+    if ("policy_summary".equals(decision.getPath())) {
+      return policySummary(request, subject, decision, requestedPath, generationMs);
+    }
 
     if ("policy_directory".equals(decision.getPath())) {
       long retrievalStartNs = System.nanoTime();
@@ -74,7 +83,8 @@ public class ChatService {
 
     return answer(
         request,
-        "ssi-chat-j answers payment/instruction eligibility and policy-directory questions "
+        "ssi-chat-j answers payment/instruction eligibility, policy-directory, and "
+            + "policy-summary questions "
             + "(e.g. Who can approve payment 20260720-FICC-P-8?). "
             + "Routed as path="
             + decision.getPath()
@@ -83,6 +93,36 @@ public class ChatService {
         "stub",
         requestedPath,
         0.0,
+        generationMs);
+  }
+
+  private ChatResponse policySummary(
+      ChatRequest request,
+      Subject subject,
+      RouterDecision decision,
+      String requestedPath,
+      double generationMs) {
+    String domain =
+        StringUtils.hasText(decision.getPolicyDomain())
+            ? decision.getPolicyDomain().strip().toLowerCase()
+            : "payment";
+    String action =
+        StringUtils.hasText(decision.getPolicyAction())
+            ? decision.getPolicyAction().strip().toUpperCase()
+            : "APPROVE";
+    long retrievalStartNs = System.nanoTime();
+    Map<String, Object> data =
+        eligibilityClient.policySummary(
+            domain, action, subject.bearerToken(), subject.sessionId());
+    String answerText = policySummaryAnswerFormatter.format(data);
+    double retrievalMs = (System.nanoTime() - retrievalStartNs) / 1_000_000.0;
+    return answer(
+        request,
+        answerText,
+        "policy_summary",
+        "eligibility_api",
+        requestedPath,
+        retrievalMs,
         generationMs);
   }
 
@@ -104,11 +144,11 @@ public class ChatService {
     Map<String, Object> data =
         eligibilityClient.eligibleApproversForPayment(
             paymentId.get(), subject.bearerToken(), subject.sessionId());
-    String answer = eligibilityAnswerFormatter.formatEligiblePaymentApproversAnswer(data);
+    String answerText = eligibilityAnswerFormatter.formatEligiblePaymentApproversAnswer(data);
     double retrievalMs = (System.nanoTime() - retrievalStartNs) / 1_000_000.0;
     return answer(
         request,
-        answer,
+        answerText,
         "eligibility",
         "eligibility_api",
         requestedPath,
@@ -134,11 +174,11 @@ public class ChatService {
     Map<String, Object> data =
         eligibilityClient.eligibleSubmittersForPayment(
             paymentId.get(), subject.bearerToken(), subject.sessionId());
-    String answer = eligibilityAnswerFormatter.formatEligiblePaymentSubmittersAnswer(data);
+    String answerText = eligibilityAnswerFormatter.formatEligiblePaymentSubmittersAnswer(data);
     double retrievalMs = (System.nanoTime() - retrievalStartNs) / 1_000_000.0;
     return answer(
         request,
-        answer,
+        answerText,
         "eligibility",
         "eligibility_api",
         requestedPath,
@@ -164,11 +204,11 @@ public class ChatService {
     Map<String, Object> data =
         eligibilityClient.eligibleApproversForInstruction(
             instructionId.get(), subject.bearerToken(), subject.sessionId());
-    String answer = eligibilityAnswerFormatter.formatEligibleInstructionApproversAnswer(data);
+    String answerText = eligibilityAnswerFormatter.formatEligibleInstructionApproversAnswer(data);
     double retrievalMs = (System.nanoTime() - retrievalStartNs) / 1_000_000.0;
     return answer(
         request,
-        answer,
+        answerText,
         "eligibility",
         "eligibility_api",
         requestedPath,
@@ -185,7 +225,6 @@ public class ChatService {
       double retrievalMs,
       double generationMs) {
     if (answerFinalizer == null) {
-      // Test doubles may construct without observability.
       return ChatResponse.of(answerText, null);
     }
     return answerFinalizer.of(

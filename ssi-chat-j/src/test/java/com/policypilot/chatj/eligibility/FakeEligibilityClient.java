@@ -95,4 +95,13 @@ public class FakeEligibilityClient extends EligibilityClient {
     }
     return new HashMap<>(response);
   }
+
+  @Override
+  public Map<String, Object> policySummary(
+      String domain, String action, String userBearerToken, String userSessionId) {
+    if (error != null) {
+      throw error;
+    }
+    return new HashMap<>(response);
+  }
 }

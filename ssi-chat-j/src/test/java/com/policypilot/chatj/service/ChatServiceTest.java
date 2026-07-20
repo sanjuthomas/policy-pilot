@@ -13,6 +13,7 @@ import com.policypilot.chatj.eligibility.EligibilityAnswerFormatter;
 import com.policypilot.chatj.eligibility.FakeEligibilityClient;
 import com.policypilot.chatj.formatting.AnswerRenderer;
 import com.policypilot.chatj.formatting.AnswerTemplateConfig;
+import com.policypilot.chatj.formatting.IdentityTokenFormat;
 import com.policypilot.chatj.formatting.MoneyFormat;
 import com.policypilot.chatj.formatting.PolicyBasisFormat;
 import com.policypilot.chatj.pipeline.RouterDecision;
@@ -22,6 +23,7 @@ import com.policypilot.chatj.observability.RoutingMetrics;
 import com.policypilot.chatj.observability.SkillMetrics;
 import com.policypilot.chatj.policydirectory.PolicyDirectoryAnswerFormatter;
 import com.policypilot.chatj.policydirectory.PolicyDirectoryService;
+import com.policypilot.chatj.policysummary.PolicySummaryAnswerFormatter;
 import com.policypilot.chatj.routing.IntentRouter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
@@ -43,6 +45,7 @@ class ChatServiceTest {
 
   private EligibilityAnswerFormatter eligibilityAnswerFormatter;
   private PolicyDirectoryAnswerFormatter policyDirectoryAnswerFormatter;
+  private PolicySummaryAnswerFormatter policySummaryAnswerFormatter;
   private IntentRouter intentRouter;
 
   @BeforeEach
@@ -60,6 +63,8 @@ class ChatServiceTest {
             new PolicyBasisFormat());
     eligibilityAnswerFormatter = new EligibilityAnswerFormatter(renderer);
     policyDirectoryAnswerFormatter = new PolicyDirectoryAnswerFormatter(renderer);
+    policySummaryAnswerFormatter =
+        new PolicySummaryAnswerFormatter(renderer, new IdentityTokenFormat());
   }
 
   private ChatService chatService(FakeEligibilityClient eligibilityClient) {
@@ -73,6 +78,7 @@ class ChatServiceTest {
         eligibilityClient,
         eligibilityAnswerFormatter,
         new PolicyDirectoryService(eligibilityClient, policyDirectoryAnswerFormatter),
+        policySummaryAnswerFormatter,
         finalizer);
   }
 
@@ -387,5 +393,89 @@ class ChatServiceTest {
     assertTrue(response.answer().contains("User ID"));
     assertEquals("policy_directory", response.routing().path());
     assertEquals("policy_directory_api", response.routing().answer_synthesis());
+  }
+
+  @Test
+  void policySummaryLaneFormatsInstructionApproval() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("policy_summary");
+    decision.setPolicyDomain("instruction");
+    decision.setPolicyAction("APPROVE");
+    when(callResponseSpec.entity(eq(RouterDecision.class))).thenReturn(decision);
+
+    FakeEligibilityClient eligibilityClient =
+        new FakeEligibilityClient()
+            .returning(
+                Map.of(
+                    "domain",
+                    "instruction",
+                    "action",
+                    "APPROVE",
+                    "title",
+                    "Instruction approval",
+                    "narrative",
+                    "Someone with the INSTRUCTION_APPROVER role may approve — subject to "
+                        + "four-eyes and reporting-line checks and the approval matrix.",
+                    "requires",
+                    List.of(
+                        Map.of("kind", "role", "value", "INSTRUCTION_APPROVER"),
+                        Map.of("kind", "sod", "value", "approver is not the instruction creator")),
+                    "source",
+                    "opa"));
+
+    ChatResponse response =
+        chatService(eligibilityClient)
+            .ask(
+                new ChatRequest("What is the instruction approval policy?", List.of(), "policies"),
+                subject());
+
+    assertTrue(response.answer().contains("Instruction approval"));
+    assertTrue(response.answer().contains("INSTRUCTION_APPROVER"));
+    assertTrue(response.answer().contains("authorization-service"));
+    assertTrue(response.answer().contains("`INSTRUCTION_APPROVER`"));
+    assertEquals("policy_summary", response.routing().path());
+    assertEquals("eligibility_api", response.routing().answer_synthesis());
+    assertEquals("eligibility", response.routing().retrieval_strategy());
+  }
+
+  @Test
+  void policySummaryLaneFormatsPaymentFundingApproval() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("policy_summary");
+    decision.setPolicyDomain("payment");
+    decision.setPolicyAction("APPROVE");
+    when(callResponseSpec.entity(eq(RouterDecision.class))).thenReturn(decision);
+
+    FakeEligibilityClient eligibilityClient =
+        new FakeEligibilityClient()
+            .returning(
+                Map.of(
+                    "domain",
+                    "payment",
+                    "action",
+                    "APPROVE",
+                    "title",
+                    "Funding approval",
+                    "narrative",
+                    "Someone with the FUNDING_APPROVER role in MIDDLE_OFFICE may approve — "
+                        + "subject to four-eyes and reporting-line checks.",
+                    "requires",
+                    List.of(
+                        Map.of("kind", "role", "value", "FUNDING_APPROVER"),
+                        Map.of("kind", "sod", "value", "approver is not the payment creator")),
+                    "source",
+                    "opa"));
+
+    ChatResponse response =
+        chatService(eligibilityClient)
+            .ask(
+                new ChatRequest("What is the funding approval policy?", List.of(), "policies"),
+                subject());
+
+    assertTrue(response.answer().contains("Funding approval"));
+    assertTrue(response.answer().contains("FUNDING_APPROVER"));
+    assertTrue(response.answer().contains("authorization-service"));
+    assertEquals("policy_summary", response.routing().path());
+    assertEquals("eligibility_api", response.routing().answer_synthesis());
   }
 }

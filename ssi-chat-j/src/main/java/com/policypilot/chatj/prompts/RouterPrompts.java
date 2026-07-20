@@ -15,6 +15,15 @@ public final class RouterPrompts {
         "who can submit … for approval?").
       Sequence ids encode type: YYYYMMDD-LOB-P-n is a payment; YYYYMMDD-LOB-I-n is an
       instruction — treat a bare id as naming that entity.
+      Policy summary (normative "what is the … policy?" — NO entity id):
+        path=policy_summary
+        policyDomain=payment|instruction
+        policyAction=APPROVE|CREATE|UPDATE|SUBMIT|REJECT|CANCEL (default APPROVE)
+        Examples:
+          "What is the instruction approval policy?"
+            → policy_summary, policyDomain=instruction, policyAction=APPROVE
+          "Explain the payment funding approval policy"
+            → policy_summary, policyDomain=payment, policyAction=APPROVE
       Policy directory (funding-approver lists by amount club or covering LOB — NO entity id):
         path=policy_directory
         When the question implies a payment size, ALWAYS set:
@@ -36,6 +45,7 @@ public final class RouterPrompts {
           "covering FICC?" / "approve payments covering FICC?"
             → policy_directory, directoryCoveringLob=FICC (amount slots null)
           "exceeding $1M for FICC?" → policy_directory, amount + directoryCoveringLob=FICC
+      Prefer policy_summary for "what is / explain the … policy" questions (no entity id).
       Prefer policy_directory over eligibility when there is no payment/instruction id and the
       question asks who may approve by amount / desk covering LOB.
       Prefer eligibility when a specific payment or instruction id is present.

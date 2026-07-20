@@ -62,6 +62,14 @@ public class RouterDecision {
       "policy_directory only: covering desk LOB code (FICC, FX, …) when asked without a payment id.")
   private String directoryCoveringLob;
 
+  /** When path is policy_summary: payment vs instruction domain. */
+  @JsonPropertyDescription("policy_summary only: payment or instruction.")
+  private String policyDomain;
+
+  /** When path is policy_summary: OPA action (CREATE, APPROVE, UPDATE, SUBMIT, REJECT, CANCEL). */
+  @JsonPropertyDescription("policy_summary only: OPA action (APPROVE default).")
+  private String policyAction;
+
   /** Model rationale for logs — not used for dispatch. */
   @JsonPropertyDescription("Brief explanation of the routing choice.")
   @Setter(AccessLevel.NONE)

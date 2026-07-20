@@ -15,6 +15,8 @@ Not wired into the root `docker-compose.yml` yet — run locally with Maven agai
   - instruction APPROVE → instruction-service `eligible-approvers`
 - `POST /api/chat` policy directory (amount club):
   - authz `payment-amount-limits` + `groups/{club}/members`
+- `POST /api/chat` policy summary (normative OPA):
+  - authz `policy-summary?domain=&action=`
 - Observability (Micrometer → OTLP, same chat SLI names as Python; **no Prometheus scrape**):
   - `POST /api/chat/feedback`
   - `GET /api/routing-stats`, `GET /api/feedback-stats`

@@ -139,6 +139,22 @@ public class EligibilityClient {
     return getJson(url, oboHeaders(userBearerToken, userSessionId), "authorization service error: ");
   }
 
+  /** Normative OPA policy summary (domain + action) via authorization-service. */
+  public Map<String, Object> policySummary(
+      String domain, String action, String userBearerToken, String userSessionId) {
+    String resolvedDomain =
+        StringUtils.hasText(domain) ? domain.strip().toLowerCase() : "payment";
+    String resolvedAction =
+        StringUtils.hasText(action) ? action.strip().toUpperCase() : "APPROVE";
+    String url =
+        trimSlash(properties.authorizationServiceUrl())
+            + "/api/v1/authorization/policy-summary?domain="
+            + UriUtils.encodeQueryParam(resolvedDomain, StandardCharsets.UTF_8)
+            + "&action="
+            + UriUtils.encodeQueryParam(resolvedAction, StandardCharsets.UTF_8);
+    return getJson(url, oboHeaders(userBearerToken, userSessionId), "authorization service error: ");
+  }
+
   /**
    * ZITADEL group members via authorization-service, optionally filtered by role / covering LOB.
    */
