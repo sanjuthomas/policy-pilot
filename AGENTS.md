@@ -161,7 +161,9 @@ inside each service directory listed in the lint matrix:
 - `ssi-indexer`
 - `ssi-demo-harness`
 
-It also builds Docker images for those application services (including `payment-service`) and runs Rego unit tests under `opa-policy-seed/policies` via the official OPA image.
+It also builds Docker images for those application services (including `payment-service` and `ssi-chat-j`) and runs Rego unit tests under `opa-policy-seed/policies` via the official OPA image.
+
+For **`ssi-chat-j`** (Java A/B chat), the same workflow runs **Maven** `test package` (Java 21) and a Docker image build. No Python coverage gate.
 
 The same workflow runs **unit test coverage** (≥ 80% line coverage, **ssi-chat ≥ 70%**) for:
 
@@ -232,6 +234,7 @@ When removing a symbol from code, **remove its import** in the same edit (`F401`
 | `sequence-service` | `seq` | 8095 |
 | `ssi-indexer` | `etl` | 8090 |
 | `ssi-chat` | `chat_application` | 8092 |
+| `ssi-chat-j` | Java (`com.policypilot.chatj`) | 8096 |
 | `ssi-demo-harness` | `harness` | 8091 |
 
 See the root [README.md](README.md) for architecture, storage names, and demo URLs.

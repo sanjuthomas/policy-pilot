@@ -38,7 +38,7 @@ Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `
 | M1.1 | `ssi-chat-j` in Compose on **8096** | `done` | Python chat stays **8092** |
 | M1.2 | `GET /health` | `done` | |
 | M1.3 | `POST /api/auth/login` (ZITADEL session) | `done` | Parity headers for golden |
-| M1.4 | `POST /api/chat` + Spring AI `RouterDecision` | `done` | Heuristic fallback if Vertex fails |
+| M1.4 | `POST /api/chat` + Spring AI `RouterDecision` | `done` | No heuristic failover — Spring AI only |
 | M1.5 | Payment eligibility via OBO (`eligible-approvers`) | `done` | svc-chat + user session |
 | M1.6 | Single regression proof | `done` | `./ssi-chat-j/scripts/prove-m1.sh` |
 

@@ -6,7 +6,7 @@ Java / Spring Boot + Spring AI **A/B** chat experiment. Python `ssi-chat` stays 
 
 - `GET /health`
 - `POST /api/auth/login` (ZITADEL session, parity with Python)
-- `POST /api/chat` routed by Spring AI `RouterDecision` (heuristic fallback)
+- `POST /api/chat` routed by Spring AI `RouterDecision`
 - One Policies path: **Who can approve payment {id}?** via payment-service `eligible-approvers` with svc-chat OBO
 
 ## Run (Compose)

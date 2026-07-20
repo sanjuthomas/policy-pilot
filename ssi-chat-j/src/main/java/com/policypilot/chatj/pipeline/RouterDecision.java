@@ -2,22 +2,57 @@ package com.policypilot.chatj.pipeline;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
+/**
+ * Structured output of the <em>route</em> step: one LLM call that decides what this
+ * question is, then the orchestrator executes deterministically.
+ *
+ * <p><b>Vocabulary</b>
+ * <ul>
+ *   <li><b>Route</b> — the act of producing this object (not a field).</li>
+ *   <li><b>path</b> — which handler lane runs. Path is law for dispatch.</li>
+ * </ul>
+ *
+ * <p>Other fields are path-specific slots; only those relevant to {@code path} are used.
+ */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class RouterDecision {
 
+  /** Primary intent lane — the only dispatch key. */
+  @JsonPropertyDescription("Primary intent path / handler lane.")
   private String path;
-  private String strategy;
+
+  @JsonPropertyDescription("Entity kind when path is eligibility.")
   private String eligibilityTarget;
+
+  @JsonPropertyDescription("Action when path is eligibility.")
   private String eligibilityAction;
+
+  @JsonPropertyDescription("Skill name when path is skill.")
   private String skill;
+
+  @JsonPropertyDescription("Me-intent kind when path is me.")
   private String meKind;
+
+  @JsonPropertyDescription("Action when path is me and the kind requires one.")
   private String meAction;
+
+  @JsonPropertyDescription("Entity kind when path is me and the kind targets an entity.")
   private String meEntityType;
+
+  @JsonPropertyDescription("Domain when path is policy_summary.")
   private String policyDomain;
+
+  @JsonPropertyDescription("Action when path is policy_summary.")
   private String policyAction;
+
+  @JsonPropertyDescription("Person name or id when path is person_permissions.")
   private String personQuery;
+
+  /** Model rationale for logs — not used for dispatch. */
+  @JsonPropertyDescription("Brief explanation of the routing choice.")
   private String reasoning = "";
 
   public String getPath() {
@@ -26,14 +61,6 @@ public class RouterDecision {
 
   public void setPath(String path) {
     this.path = path;
-  }
-
-  public String getStrategy() {
-    return strategy;
-  }
-
-  public void setStrategy(String strategy) {
-    this.strategy = strategy;
   }
 
   public String getEligibilityTarget() {
@@ -114,35 +141,5 @@ public class RouterDecision {
 
   public void setReasoning(String reasoning) {
     this.reasoning = reasoning == null ? "" : reasoning;
-  }
-
-  public void normalize() {
-    if (!hasText(path) && hasText(strategy)) {
-      path = strategy;
-    }
-    if (isRetrievalPath(path) && !hasText(strategy)) {
-      strategy = path;
-    }
-    if (!hasText(path)) {
-      path = "neo4j_direct";
-      strategy = null;
-    }
-    if ("eligibility".equals(path) && !hasText(eligibilityAction)) {
-      eligibilityAction = "APPROVE";
-    }
-    if ("eligibility".equals(path) && !hasText(eligibilityTarget)) {
-      eligibilityTarget = "payment";
-    }
-  }
-
-  private static boolean isRetrievalPath(String value) {
-    return "eligibility".equals(value)
-        || "graph".equals(value)
-        || "vector".equals(value)
-        || "hybrid".equals(value);
-  }
-
-  private static boolean hasText(String value) {
-    return value != null && !value.isBlank();
   }
 }
