@@ -29,7 +29,9 @@ class RouterDecisionTest {
     d.setPath("policy_directory");
     d.setDirectoryAmount(1_000_000_000.0);
     d.setDirectoryAmountStrict(false);
+    d.setDirectoryCoveringLob("FICC");
     assertEquals(1_000_000_000.0, d.getDirectoryAmount());
     assertEquals(false, d.getDirectoryAmountStrict());
+    assertEquals("FICC", d.getDirectoryCoveringLob());
   }
 }

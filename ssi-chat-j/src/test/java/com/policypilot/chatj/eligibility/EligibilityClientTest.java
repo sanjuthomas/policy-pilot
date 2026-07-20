@@ -199,4 +199,21 @@ class EligibilityClientTest {
             "UP_TO_100_BILLION_CLUB", "user-tok", "user-sess", "FUNDING_APPROVER", null);
     assertEquals("UP_TO_100_BILLION_CLUB", body.get("group"));
   }
+
+  @Test
+  void groupMembersIncludesCoveringLobQuery() {
+    server
+        .expect(
+            requestTo(
+                "http://authz:8094/api/v1/authorization/groups/MIDDLE_OFFICE/members?role=FUNDING_APPROVER&covering_lob=FICC"))
+        .andExpect(method(HttpMethod.GET))
+        .andRespond(
+            withSuccess(
+                "{\"group\":\"MIDDLE_OFFICE\",\"members\":[{\"user_id\":\"pay-201\"}]}",
+                MediaType.APPLICATION_JSON));
+
+    var body =
+        client.groupMembers("MIDDLE_OFFICE", "user-tok", "user-sess", "FUNDING_APPROVER", "FICC");
+    assertEquals("MIDDLE_OFFICE", body.get("group"));
+  }
 }

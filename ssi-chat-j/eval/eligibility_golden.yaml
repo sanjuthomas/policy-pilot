@@ -104,3 +104,21 @@ cases:
     - UP_TO_
     - User ID
     - covering
+
+- id: golden_policies_covering_lob_directory
+  mode: policies
+  retrieval: policy_directory
+  tags: [golden, policies, policy_directory, covering_lob, ssi-chat-j]
+  question: Which users have permission to approve payments covering FICC?
+  expect:
+    require_routing: true
+    routing_path: policy_directory
+    cypher_class: none
+    answer_synthesis: policy_directory_api
+    min_answer_length: 40
+    answer_contains_any:
+    - policy directory
+    - FICC
+    - FUNDING_APPROVER
+    - User ID
+    - covering
