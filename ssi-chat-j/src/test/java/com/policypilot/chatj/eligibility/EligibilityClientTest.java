@@ -44,6 +44,22 @@ class EligibilityClientTest {
   }
 
   @Test
+  void eligibleApproversForInstructionReturnsBody() {
+    server
+        .expect(requestTo("http://instruction:8000/api/v1/instructions/INS-1/eligible-approvers"))
+        .andExpect(method(HttpMethod.POST))
+        .andRespond(
+            withSuccess("{\"instruction_id\":\"INS-1\"}", MediaType.APPLICATION_JSON));
+
+    assertEquals(
+        "INS-1",
+        client
+            .eligibleApproversForInstruction("INS-1", "user-tok", "user-sess")
+            .get("instruction_id"));
+    server.verify();
+  }
+
+  @Test
   void eligibleApproversForPaymentReturnsBody() {
     server
         .expect(requestTo("http://payment:8093/api/v1/payments/PAY-1/eligible-approvers"))

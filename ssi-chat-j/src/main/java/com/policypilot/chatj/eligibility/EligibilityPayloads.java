@@ -1,6 +1,6 @@
 package com.policypilot.chatj.eligibility;
 
-import com.policypilot.chatj.eligibility.EligibleApproversView.ApproverRow;
+import com.policypilot.chatj.eligibility.EligiblePaymentApproversView.ApproverRow;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;

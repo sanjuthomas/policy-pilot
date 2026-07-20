@@ -1,10 +1,10 @@
 package com.policypilot.chatj.eligibility;
 
-import com.policypilot.chatj.eligibility.EligibleApproversView.ApproverRow;
+import com.policypilot.chatj.eligibility.EligiblePaymentApproversView.ApproverRow;
 import java.util.List;
 
-/** State for the eligible-submitters answer template. */
-public record EligibleSubmittersView(
+/** State for the {@code eligible-payment-submitters} answer template. */
+public record EligiblePaymentSubmittersView(
     String paymentId,
     String status,
     Object amount,

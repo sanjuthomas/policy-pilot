@@ -29,7 +29,7 @@ class EligibilityAnswerFormatterTest {
   @Test
   void formatsLiveOpaHeaderAndApprovers() {
     String answer =
-        formatter.formatEligibleApproversAnswer(
+        formatter.formatEligiblePaymentApproversAnswer(
             Map.of(
                 "payment_id",
                 "PAY-1",
@@ -96,7 +96,7 @@ class EligibilityAnswerFormatterTest {
                     "covers LOB FICC"))));
     data.put("candidates_evaluated", 6);
 
-    String answer = formatter.formatEligibleApproversAnswer(data);
+    String answer = formatter.formatEligiblePaymentApproversAnswer(data);
     assertTrue(answer.contains("Live OPA"));
     assertTrue(answer.contains("not permitted while status is DRAFT"));
     assertTrue(answer.contains("After the payment is submitted (DRAFT → SUBMITTED)"));
@@ -109,7 +109,7 @@ class EligibilityAnswerFormatterTest {
   @Test
   void formatsEligibleSubmittersAnswer() {
     String answer =
-        formatter.formatEligibleSubmittersAnswer(
+        formatter.formatEligiblePaymentSubmittersAnswer(
             Map.of(
                 "payment_id",
                 "PAY-DRAFT",
@@ -147,7 +147,7 @@ class EligibilityAnswerFormatterTest {
   @Test
   void formatsSubmitBlockedReason() {
     String answer =
-        formatter.formatEligibleSubmittersAnswer(
+        formatter.formatEligiblePaymentSubmittersAnswer(
             Map.of(
                 "payment_id",
                 "PAY-SUB",
@@ -167,5 +167,38 @@ class EligibilityAnswerFormatterTest {
                 List.of()));
     assertTrue(answer.contains("Live OPA evaluation for submitting payment"));
     assertTrue(answer.contains("Only DRAFT payments can be submitted."));
+  }
+
+  @Test
+  void formatsInstructionEligibleApproversWithProspective() {
+    Map<String, Object> data = new LinkedHashMap<>();
+    data.put("instruction_id", "20260720-FICC-I-1");
+    data.put("instruction_status", "DRAFT");
+    data.put("instruction_type", "SSI");
+    data.put("owning_lob", "FICC");
+    data.put("created_by_user_id", "mo-100");
+    data.put("created_by_title", "Analyst");
+    data.put("approval_blocked_reason", "Submit the instruction first.");
+    data.put("eligible", List.of());
+    data.put(
+        "prospective_eligible",
+        List.of(
+            Map.of(
+                "user_id",
+                "mo-050",
+                "display_name",
+                "Lee, Kim",
+                "title",
+                "Director",
+                "allow_basis",
+                List.of("role INSTRUCTION_APPROVER"))));
+    data.put("candidates_evaluated", 3);
+
+    String answer = formatter.formatEligibleInstructionApproversAnswer(data);
+    assertTrue(answer.contains("Live OPA evaluation for instruction"));
+    assertTrue(answer.contains("Submit the instruction first."));
+    assertTrue(answer.contains("After submission (DRAFT → SUBMITTED)"));
+    assertTrue(answer.contains("Lee, Kim"));
+    assertTrue(answer.contains("Evaluated 3 INSTRUCTION_APPROVER"));
   }
 }

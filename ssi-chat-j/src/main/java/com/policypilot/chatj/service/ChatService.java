@@ -7,6 +7,7 @@ import com.policypilot.chatj.auth.Subject;
 import com.policypilot.chatj.eligibility.EligibilityAnswerFormatter;
 import com.policypilot.chatj.eligibility.EligibilityClient;
 import com.policypilot.chatj.pipeline.RouterDecision;
+import com.policypilot.chatj.routing.InstructionIdParser;
 import com.policypilot.chatj.routing.IntentRouter;
 import com.policypilot.chatj.routing.PaymentIdParser;
 import java.util.Map;
@@ -32,19 +33,23 @@ public class ChatService {
   public ChatResponse ask(ChatRequest request, Subject subject) {
     RouterDecision decision = intentRouter.route(request.message());
 
-    if ("eligibility".equals(decision.getPath())
-        && "payment".equalsIgnoreCase(nullToEmpty(decision.getEligibilityTarget()))) {
+    if ("eligibility".equals(decision.getPath())) {
+      String target = nullToEmpty(decision.getEligibilityTarget()).toLowerCase();
       String action = nullToEmpty(decision.getEligibilityAction()).toUpperCase();
-      if ("APPROVE".equals(action)) {
+      if ("payment".equals(target) && "APPROVE".equals(action)) {
         return paymentApprovers(request.message(), subject);
       }
-      if ("SUBMIT".equals(action)) {
+      if ("payment".equals(target) && "SUBMIT".equals(action)) {
         return paymentSubmitters(request.message(), subject);
+      }
+      if ("instruction".equals(target)
+          && (action.isEmpty() || "APPROVE".equals(action))) {
+        return instructionApprovers(request.message(), subject);
       }
     }
 
     return ChatResponse.of(
-        "ssi-chat-j answers payment eligibility (APPROVE / SUBMIT) questions "
+        "ssi-chat-j answers payment/instruction eligibility questions "
             + "(e.g. Who can approve payment 20260720-FICC-P-8?). "
             + "Routed as path="
             + decision.getPath()
@@ -64,7 +69,7 @@ public class ChatService {
         eligibilityClient.eligibleApproversForPayment(
             paymentId.get(), subject.bearerToken(), subject.sessionId());
     return ChatResponse.of(
-        eligibilityAnswerFormatter.formatEligibleApproversAnswer(data),
+        eligibilityAnswerFormatter.formatEligiblePaymentApproversAnswer(data),
         routing("eligibility", "eligibility_api"));
   }
 
@@ -80,7 +85,23 @@ public class ChatService {
         eligibilityClient.eligibleSubmittersForPayment(
             paymentId.get(), subject.bearerToken(), subject.sessionId());
     return ChatResponse.of(
-        eligibilityAnswerFormatter.formatEligibleSubmittersAnswer(data),
+        eligibilityAnswerFormatter.formatEligiblePaymentSubmittersAnswer(data),
+        routing("eligibility", "eligibility_api"));
+  }
+
+  private ChatResponse instructionApprovers(String message, Subject subject) {
+    Optional<String> instructionId = InstructionIdParser.extract(message);
+    if (instructionId.isEmpty()) {
+      return ChatResponse.of(
+          "Please include an instruction id, for example: "
+              + "Who can approve instruction 20260720-FICC-I-1?",
+          routing("eligibility", "eligibility_api"));
+    }
+    Map<String, Object> data =
+        eligibilityClient.eligibleApproversForInstruction(
+            instructionId.get(), subject.bearerToken(), subject.sessionId());
+    return ChatResponse.of(
+        eligibilityAnswerFormatter.formatEligibleInstructionApproversAnswer(data),
         routing("eligibility", "eligibility_api"));
   }
 

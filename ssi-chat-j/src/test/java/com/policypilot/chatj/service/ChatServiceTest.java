@@ -143,6 +143,55 @@ class ChatServiceTest {
   }
 
   @Test
+  void eligibilityInstructionLaneFormatsAnswer() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("eligibility");
+    decision.setEligibilityTarget("instruction");
+    decision.setEligibilityAction("APPROVE");
+    when(callResponseSpec.entity(eq(RouterDecision.class))).thenReturn(decision);
+
+    FakeEligibilityClient eligibilityClient =
+        new FakeEligibilityClient()
+            .returning(
+                Map.of(
+                    "instruction_id",
+                    "20260720-FICC-I-1",
+                    "instruction_status",
+                    "SUBMITTED",
+                    "instruction_type",
+                    "SSI",
+                    "owning_lob",
+                    "FICC",
+                    "created_by_user_id",
+                    "mo-100",
+                    "created_by_title",
+                    "Analyst",
+                    "eligible",
+                    List.of(
+                        Map.of(
+                            "display_name",
+                            "Lee, Kim",
+                            "user_id",
+                            "mo-050",
+                            "title",
+                            "Director",
+                            "allow_basis",
+                            List.of("role INSTRUCTION_APPROVER"))),
+                    "candidates_evaluated",
+                    2));
+    ChatResponse response =
+        chatService(eligibilityClient)
+            .ask(
+                new ChatRequest(
+                    "Who can approve instruction 20260720-FICC-I-1?", List.of(), "policies"),
+                subject());
+
+    assertTrue(response.answer().contains("Live OPA evaluation for instruction"));
+    assertTrue(response.answer().contains("Lee, Kim"));
+    assertEquals("eligibility", response.routing().path());
+  }
+
+  @Test
   void eligibilityWithoutPaymentIdAsksForId() {
     RouterDecision decision = new RouterDecision();
     decision.setPath("eligibility");
@@ -168,7 +217,7 @@ class ChatServiceTest {
         chatService(new FakeEligibilityClient())
             .ask(new ChatRequest("How many alerts?", List.of(), "events"), subject());
 
-    assertTrue(response.answer().contains("payment eligibility"));
+    assertTrue(response.answer().contains("payment/instruction eligibility"));
     assertEquals("stub", response.routing().answer_synthesis());
   }
 }

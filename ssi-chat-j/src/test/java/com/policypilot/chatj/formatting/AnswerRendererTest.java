@@ -2,8 +2,8 @@ package com.policypilot.chatj.formatting;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.policypilot.chatj.eligibility.EligibleApproversView;
-import com.policypilot.chatj.eligibility.EligibleApproversView.ApproverRow;
+import com.policypilot.chatj.eligibility.EligiblePaymentApproversView;
+import com.policypilot.chatj.eligibility.EligiblePaymentApproversView.ApproverRow;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,8 +25,8 @@ class AnswerRendererTest {
   void renderProcessesTextTemplate() {
     String markdown =
         renderer.render(
-            "eligible-approvers",
-            new EligibleApproversView(
+            "eligible-payment-approvers",
+            new EligiblePaymentApproversView(
                 "PAY-1",
                 "SUBMITTED",
                 10,

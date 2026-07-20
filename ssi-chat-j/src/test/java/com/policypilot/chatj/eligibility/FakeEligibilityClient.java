@@ -47,4 +47,13 @@ public class FakeEligibilityClient extends EligibilityClient {
     }
     return new HashMap<>(response);
   }
+
+  @Override
+  public Map<String, Object> eligibleApproversForInstruction(
+      String instructionId, String userBearerToken, String userSessionId) {
+    if (error != null) {
+      throw error;
+    }
+    return new HashMap<>(response);
+  }
 }

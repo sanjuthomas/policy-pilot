@@ -3,12 +3,12 @@ package com.policypilot.chatj.eligibility;
 import java.util.List;
 
 /**
- * Structured state for the eligible-approvers answer template.
+ * Structured state for the {@code eligible-payment-approvers} answer template.
  *
  * <p>Presentation (prose, tables, money / basis formatting) lives in Thymeleaf — this record only
  * carries API-derived fields.
  */
-public record EligibleApproversView(
+public record EligiblePaymentApproversView(
     String paymentId,
     String status,
     Object amount,

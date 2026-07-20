@@ -40,6 +40,16 @@ public class EligibilityClient {
     return postEmpty(url, userBearerToken, userSessionId, "payment service error: ");
   }
 
+  public Map<String, Object> eligibleApproversForInstruction(
+      String instructionId, String userBearerToken, String userSessionId) {
+    String url =
+        trimSlash(properties.instructionServiceUrl())
+            + "/api/v1/instructions/"
+            + instructionId
+            + "/eligible-approvers";
+    return postEmpty(url, userBearerToken, userSessionId, "instruction service error: ");
+  }
+
   /**
    * Load payment (+ instruction) then call authorization-service eligible-submitters (parity with
    * Python {@code EligibilityClient.eligible_submitters_for_payment}).
