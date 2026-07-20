@@ -65,6 +65,41 @@ class EligibilityClientTest {
   }
 
   @Test
+  void eligibleSubmittersForPaymentLoadsPaymentThenAuthz() {
+    server
+        .expect(requestTo("http://payment:8093/api/v1/payments/PAY-1"))
+        .andExpect(method(HttpMethod.GET))
+        .andRespond(
+            withSuccess(
+                """
+                {"payment_id":"PAY-1","instruction_id":"INS-1","status":"DRAFT",
+                 "amount":10,"currency":"USD","owning_lob":"FICC",
+                 "created_by":{"user_id":"mo-100"}}
+                """,
+                MediaType.APPLICATION_JSON));
+    server
+        .expect(requestTo("http://instruction:8000/api/v1/instructions/INS-1"))
+        .andExpect(method(HttpMethod.GET))
+        .andRespond(
+            withSuccess(
+                "{\"instruction_id\":\"INS-1\",\"status\":\"APPROVED\",\"end_date\":\"2026-12-31\"}",
+                MediaType.APPLICATION_JSON));
+    server
+        .expect(
+            requestTo("http://authz:8094/api/v1/authorization/payments/eligible-submitters"))
+        .andExpect(method(HttpMethod.POST))
+        .andRespond(
+            withSuccess(
+                "{\"payment_id\":\"PAY-1\",\"eligible\":[],\"candidates_evaluated\":1}",
+                MediaType.APPLICATION_JSON));
+
+    assertEquals(
+        "PAY-1",
+        client.eligibleSubmittersForPayment("PAY-1", "user-tok", "user-sess").get("payment_id"));
+    server.verify();
+  }
+
+  @Test
   void maps401ToUnauthorized() {
     server
         .expect(requestTo("http://payment:8093/api/v1/payments/PAY-1/eligible-approvers"))

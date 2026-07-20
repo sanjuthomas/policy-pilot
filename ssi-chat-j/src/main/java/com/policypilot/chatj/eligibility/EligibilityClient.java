@@ -2,7 +2,7 @@ package com.policypilot.chatj.eligibility;
 
 import com.policypilot.chatj.auth.ServiceIdentity;
 import com.policypilot.chatj.config.ChatJProperties;
-import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
@@ -11,6 +11,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
@@ -32,38 +33,153 @@ public class EligibilityClient {
   public Map<String, Object> eligibleApproversForPayment(
       String paymentId, String userBearerToken, String userSessionId) {
     String url =
-        properties.paymentServiceUrl().replaceAll("/$", "")
+        trimSlash(properties.paymentServiceUrl())
             + "/api/v1/payments/"
             + paymentId
             + "/eligible-approvers";
-    HttpHeaders headers = new HttpHeaders();
-    serviceIdentity
-        .oboHeaders(userBearerToken, userSessionId)
-        .forEach(headers::set);
+    return postEmpty(url, userBearerToken, userSessionId, "payment service error: ");
+  }
+
+  /**
+   * Load payment (+ instruction) then call authorization-service eligible-submitters (parity with
+   * Python {@code EligibilityClient.eligible_submitters_for_payment}).
+   */
+  public Map<String, Object> eligibleSubmittersForPayment(
+      String paymentId, String userBearerToken, String userSessionId) {
+    HttpHeaders headers = oboHeaders(userBearerToken, userSessionId);
+
+    Map<String, Object> payment =
+        getJson(
+            trimSlash(properties.paymentServiceUrl()) + "/api/v1/payments/" + paymentId,
+            headers,
+            "payment service error: ");
+
+    String instructionId = str(payment.get("instruction_id"));
+    String instructionStatus = "";
+    String instructionEndDate = "";
+    if (StringUtils.hasText(instructionId)) {
+      try {
+        Map<String, Object> instruction =
+            getJson(
+                trimSlash(properties.instructionServiceUrl())
+                    + "/api/v1/instructions/"
+                    + instructionId,
+                headers,
+                "instruction service error: ");
+        instructionStatus = str(instruction.get("status"));
+        instructionEndDate = str(instruction.get("end_date"));
+      } catch (ResponseStatusException ex) {
+        if (ex.getStatusCode() != HttpStatus.UNAUTHORIZED
+            && ex.getStatusCode() != HttpStatus.FORBIDDEN
+            && ex.getStatusCode() != HttpStatus.NOT_FOUND) {
+          throw ex;
+        }
+        // Match Python: ignore 401/403/404 on instruction load.
+      }
+    }
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> createdBy =
+        payment.get("created_by") instanceof Map<?, ?> map
+            ? (Map<String, Object>) map
+            : Map.of();
+
+    Map<String, Object> paymentPayload = new HashMap<>();
+    paymentPayload.put(
+        "payment_id",
+        StringUtils.hasText(str(payment.get("payment_id")))
+            ? payment.get("payment_id")
+            : paymentId);
+    paymentPayload.put("instruction_id", instructionId);
+    paymentPayload.put(
+        "instruction_version",
+        payment.get("instruction_version") != null ? payment.get("instruction_version") : 1);
+    paymentPayload.put(
+        "status",
+        StringUtils.hasText(str(payment.get("status"))) ? payment.get("status") : "DRAFT");
+    paymentPayload.put("amount", payment.get("amount"));
+    paymentPayload.put("currency", payment.get("currency"));
+    paymentPayload.put("owning_lob", payment.get("owning_lob"));
+    paymentPayload.put(
+        "instruction_type",
+        payment.get("instruction_type") != null ? payment.get("instruction_type") : "");
+    paymentPayload.put("created_by_user_id", str(createdBy.get("user_id")));
+    paymentPayload.put("created_by_supervisor_id", createdBy.get("supervisor_id"));
+
+    Map<String, Object> body = new HashMap<>();
+    body.put("payment", paymentPayload);
+    body.put("instruction_status", instructionStatus);
+    body.put("instruction_end_date", instructionEndDate);
+
+    String authzUrl =
+        trimSlash(properties.authorizationServiceUrl())
+            + "/api/v1/authorization/payments/eligible-submitters";
+    return postJson(authzUrl, body, headers, "authorization service error: ");
+  }
+
+  private Map<String, Object> postEmpty(
+      String url, String userBearerToken, String userSessionId, String errorPrefix) {
+    return postJson(url, null, oboHeaders(userBearerToken, userSessionId), errorPrefix);
+  }
+
+  private Map<String, Object> getJson(String url, HttpHeaders headers, String errorPrefix) {
+    try {
+      ResponseEntity<Map<String, Object>> response =
+          restTemplate.exchange(
+              url,
+              HttpMethod.GET,
+              new HttpEntity<>(headers),
+              new ParameterizedTypeReference<>() {});
+      return response.getBody() == null ? Map.of() : response.getBody();
+    } catch (RestClientResponseException ex) {
+      throw mapHttpError(ex, errorPrefix);
+    }
+  }
+
+  private Map<String, Object> postJson(
+      String url, Object body, HttpHeaders headers, String errorPrefix) {
     try {
       ResponseEntity<Map<String, Object>> response =
           restTemplate.exchange(
               url,
               HttpMethod.POST,
-              new HttpEntity<>(headers),
+              new HttpEntity<>(body, headers),
               new ParameterizedTypeReference<>() {});
       return response.getBody() == null ? Map.of() : response.getBody();
     } catch (RestClientResponseException ex) {
-      String detail = ex.getResponseBodyAsString();
-      int status = ex.getStatusCode().value();
-      if (status == 401) {
-        throw new ResponseStatusException(
-            HttpStatus.UNAUTHORIZED, "authentication required — sign in to PolicyPilot");
-      }
-      if (status == 403) {
-        throw new ResponseStatusException(
-            HttpStatus.FORBIDDEN, detail.isBlank() ? "not authorized for this question" : detail);
-      }
-      if (status == 404) {
-        throw new ResponseStatusException(HttpStatus.NOT_FOUND, detail);
-      }
-      throw new ResponseStatusException(
-          HttpStatus.BAD_GATEWAY, "payment service error: " + detail, ex);
+      throw mapHttpError(ex, errorPrefix);
     }
+  }
+
+  private HttpHeaders oboHeaders(String userBearerToken, String userSessionId) {
+    HttpHeaders headers = new HttpHeaders();
+    serviceIdentity.oboHeaders(userBearerToken, userSessionId).forEach(headers::set);
+    return headers;
+  }
+
+  private static ResponseStatusException mapHttpError(
+      RestClientResponseException ex, String errorPrefix) {
+    String detail = ex.getResponseBodyAsString();
+    int status = ex.getStatusCode().value();
+    if (status == 401) {
+      return new ResponseStatusException(
+          HttpStatus.UNAUTHORIZED, "authentication required — sign in to PolicyPilot");
+    }
+    if (status == 403) {
+      return new ResponseStatusException(
+          HttpStatus.FORBIDDEN, detail.isBlank() ? "not authorized for this question" : detail);
+    }
+    if (status == 404) {
+      return new ResponseStatusException(HttpStatus.NOT_FOUND, detail);
+    }
+    return new ResponseStatusException(HttpStatus.BAD_GATEWAY, errorPrefix + detail, ex);
+  }
+
+  private static String trimSlash(String url) {
+    return url == null ? "" : url.replaceAll("/$", "");
+  }
+
+  private static String str(Object value) {
+    return value == null ? "" : String.valueOf(value);
   }
 }

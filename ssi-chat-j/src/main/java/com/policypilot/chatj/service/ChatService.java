@@ -33,28 +33,55 @@ public class ChatService {
     RouterDecision decision = intentRouter.route(request.message());
 
     if ("eligibility".equals(decision.getPath())
-        && "payment".equalsIgnoreCase(nullToEmpty(decision.getEligibilityTarget()))
-        && "APPROVE".equalsIgnoreCase(nullToEmpty(decision.getEligibilityAction()))) {
-      Optional<String> paymentId = PaymentIdParser.extract(request.message());
-      if (paymentId.isEmpty()) {
-        return ChatResponse.of(
-            "Please include a payment id, for example: Who can approve payment PAY-…?",
-            routing("eligibility", "eligibility_api"));
+        && "payment".equalsIgnoreCase(nullToEmpty(decision.getEligibilityTarget()))) {
+      String action = nullToEmpty(decision.getEligibilityAction()).toUpperCase();
+      if ("APPROVE".equals(action)) {
+        return paymentApprovers(request.message(), subject);
       }
-      Map<String, Object> data =
-          eligibilityClient.eligibleApproversForPayment(
-              paymentId.get(), subject.bearerToken(), subject.sessionId());
-      String answer = eligibilityAnswerFormatter.formatEligibleApproversAnswer(data);
-      return ChatResponse.of(answer, routing("eligibility", "eligibility_api"));
+      if ("SUBMIT".equals(action)) {
+        return paymentSubmitters(request.message(), subject);
+      }
     }
 
     return ChatResponse.of(
-        "ssi-chat-j M1 only answers payment eligibility questions "
-            + "(e.g. Who can approve payment PAY-…). "
+        "ssi-chat-j answers payment eligibility (APPROVE / SUBMIT) questions "
+            + "(e.g. Who can approve payment 20260720-FICC-P-8?). "
             + "Routed as path="
             + decision.getPath()
             + ".",
         routing(decision.getPath(), "stub"));
+  }
+
+  private ChatResponse paymentApprovers(String message, Subject subject) {
+    Optional<String> paymentId = PaymentIdParser.extract(message);
+    if (paymentId.isEmpty()) {
+      return ChatResponse.of(
+          "Please include a payment id, for example: "
+              + "Who can approve payment 20260720-FICC-P-8?",
+          routing("eligibility", "eligibility_api"));
+    }
+    Map<String, Object> data =
+        eligibilityClient.eligibleApproversForPayment(
+            paymentId.get(), subject.bearerToken(), subject.sessionId());
+    return ChatResponse.of(
+        eligibilityAnswerFormatter.formatEligibleApproversAnswer(data),
+        routing("eligibility", "eligibility_api"));
+  }
+
+  private ChatResponse paymentSubmitters(String message, Subject subject) {
+    Optional<String> paymentId = PaymentIdParser.extract(message);
+    if (paymentId.isEmpty()) {
+      return ChatResponse.of(
+          "Please include a payment id, for example: "
+              + "Who can submit payment 20260720-FICC-P-8 for approval?",
+          routing("eligibility", "eligibility_api"));
+    }
+    Map<String, Object> data =
+        eligibilityClient.eligibleSubmittersForPayment(
+            paymentId.get(), subject.bearerToken(), subject.sessionId());
+    return ChatResponse.of(
+        eligibilityAnswerFormatter.formatEligibleSubmittersAnswer(data),
+        routing("eligibility", "eligibility_api"));
   }
 
   private static AnswerRoutingInfo routing(String path, String synthesis) {
@@ -62,7 +89,6 @@ public class ChatService {
         "eligibility".equals(path)
             ? "Eligibility API (OPA)"
             : "ssi-chat-j M1 (" + path + ")";
-    // Wire field for clients/evals; mirrors path for retrieval-style lanes.
     String retrievalStrategy = "eligibility".equals(path) ? "eligibility" : null;
     return new AnswerRoutingInfo(
         path, "none", synthesis, label, null, retrievalStrategy, null);

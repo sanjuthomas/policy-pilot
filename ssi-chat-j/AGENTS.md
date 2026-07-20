@@ -45,7 +45,7 @@ Prefer hermetic unit tests (mocks for ZITADEL, payment-service, Spring AI `ChatC
 - Intent from Spring AI structured `RouterDecision` — not regex heuristics for classification. Regex is OK for **slots** (e.g. payment id) after path is known.
 - Router system prompt lives in `prompts/RouterPrompts.ROUTER_SYSTEM` (grow that string as paths are added).
 - Answer prose in Thymeleaf templates under `templates/answers/`; Java maps API data → view models.
-- Shared display helpers (e.g. `MoneyFormat`) live under `formatting/` as static utilities when reused across lanes.
+- Shared display helpers (e.g. `MoneyFormat`, `PolicyBasisFormat`) are Spring beans exposed to answer templates via `AnswerRenderer` context variables — keep view models as state only.
 - Keep changes focused; do not replace Python `ssi-chat`.
 - Only create git commits when the user explicitly asks.
 

@@ -1,33 +1,35 @@
 package com.policypilot.chatj.formatting;
 
+import java.text.NumberFormat;
 import java.util.Locale;
+import org.springframework.stereotype.Component;
 
-/** Shared display helpers for monetary amounts in chat answers. */
-public final class MoneyFormat {
-
-  private MoneyFormat() {}
+/** Display helper for monetary amounts — called from Thymeleaf answer templates. */
+@Component
+public class MoneyFormat {
 
   /**
-   * Formats an amount with currency for prose (e.g. {@code 100 USD}, {@code 100000000 USD}).
-   * Returns {@code unknown amount} when {@code amount} is null.
+   * Formats an amount with currency for prose, matching Python {@code format_money_amount}
+   * (currency first with thousands separators), e.g. {@code USD 12,000,000.00}.
    */
-  public static String format(Object amount, String currency) {
+  public String format(Object amount, String currency) {
     if (amount == null) {
-      return "unknown amount";
+      return "N/A";
     }
-    String cur = currency == null || currency.isBlank() ? "USD" : currency.trim();
+    String cur = currency == null || currency.isBlank() ? "" : currency.trim();
     try {
       double value =
           amount instanceof Number n ? n.doubleValue() : Double.parseDouble(String.valueOf(amount));
-      if (Math.abs(value) >= 1_000_000d) {
-        return String.format(Locale.US, "%.0f %s", value, cur);
+      NumberFormat nf = NumberFormat.getNumberInstance(Locale.US);
+      nf.setMinimumFractionDigits(2);
+      nf.setMaximumFractionDigits(2);
+      String formatted = nf.format(value);
+      if (cur.isEmpty()) {
+        return formatted;
       }
-      if (value == Math.rint(value)) {
-        return String.format(Locale.US, "%.0f %s", value, cur);
-      }
-      return String.format(Locale.US, "%.2f %s", value, cur);
+      return cur + " " + formatted;
     } catch (NumberFormatException ex) {
-      return amount + " " + cur;
+      return cur.isEmpty() ? String.valueOf(amount) : amount + " " + cur;
     }
   }
 }

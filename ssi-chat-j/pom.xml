@@ -153,6 +153,26 @@
               <overwrite>true</overwrite>
             </configuration>
           </execution>
+          <execution>
+            <id>copy-zitadel-users-seed</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/classes</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${project.basedir}/../zitadel-seed</directory>
+                  <filtering>false</filtering>
+                  <includes>
+                    <include>users.yaml</include>
+                  </includes>
+                </resource>
+              </resources>
+              <overwrite>true</overwrite>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
     </plugins>

@@ -2,16 +2,25 @@ package com.policypilot.chatj.eligibility;
 
 import java.util.List;
 
-/** View model for {@code templates/answers/eligible-approvers.md}. */
+/**
+ * Structured state for the eligible-approvers answer template.
+ *
+ * <p>Presentation (prose, tables, money / basis formatting) lives in Thymeleaf — this record only
+ * carries API-derived fields.
+ */
 public record EligibleApproversView(
     String paymentId,
     String status,
-    String amountText,
+    Object amount,
+    String currency,
     String owningLob,
-    String instructionSummary,
+    String instructionId,
+    String instructionStatus,
     String blockedReason,
     List<ApproverRow> eligible,
+    List<ApproverRow> prospectiveEligible,
     Integer candidatesEvaluated) {
 
-  public record ApproverRow(int index, String name, String title, String policyBasis) {}
+  public record ApproverRow(
+      String displayName, String userId, String title, List<String> allowBasis) {}
 }

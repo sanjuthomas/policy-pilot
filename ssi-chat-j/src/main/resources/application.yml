@@ -34,6 +34,8 @@ chatj:
   service-user-password: ${SERVICE_USER_PASSWORD:Password1!}
   chat-roles:
     - COMPLIANCE_ANALYST
+    - COMPLIANCE_OFFICER
+    - PLATFORM_ADMIN
     - PAYMENT_CREATOR
     - FUNDING_APPROVER
     - INSTRUCTION_CREATOR

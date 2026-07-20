@@ -4,6 +4,7 @@ import com.policypilot.chatj.api.ApiModels.ChatRequest;
 import com.policypilot.chatj.api.ApiModels.ChatResponse;
 import com.policypilot.chatj.api.ApiModels.LoginRequest;
 import com.policypilot.chatj.api.ApiModels.LoginResponse;
+import com.policypilot.chatj.auth.ChatUsersDirectory;
 import com.policypilot.chatj.auth.SessionCredentials;
 import com.policypilot.chatj.auth.Subject;
 import com.policypilot.chatj.auth.SubjectResolver;
@@ -31,23 +32,31 @@ public class ChatApiController {
   private final SubjectResolver subjectResolver;
   private final ChatService chatService;
   private final ChatJProperties properties;
+  private final ChatUsersDirectory chatUsersDirectory;
 
   public ChatApiController(
       ZitadelAuthClient zitadelAuthClient,
       ZitadelPatProvider patProvider,
       SubjectResolver subjectResolver,
       ChatService chatService,
-      ChatJProperties properties) {
+      ChatJProperties properties,
+      ChatUsersDirectory chatUsersDirectory) {
     this.zitadelAuthClient = zitadelAuthClient;
     this.patProvider = patProvider;
     this.subjectResolver = subjectResolver;
     this.chatService = chatService;
     this.properties = properties;
+    this.chatUsersDirectory = chatUsersDirectory;
   }
 
   @GetMapping("/health")
   public Map<String, String> health() {
     return Map.of("status", "UP");
+  }
+
+  @GetMapping("/api/chat-users")
+  public Map<String, Object> chatUsers() {
+    return Map.of("users", chatUsersDirectory.listChatUsers());
   }
 
   @PostMapping("/api/auth/login")

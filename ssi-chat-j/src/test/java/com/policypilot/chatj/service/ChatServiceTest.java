@@ -13,6 +13,8 @@ import com.policypilot.chatj.eligibility.EligibilityAnswerFormatter;
 import com.policypilot.chatj.eligibility.FakeEligibilityClient;
 import com.policypilot.chatj.formatting.AnswerRenderer;
 import com.policypilot.chatj.formatting.AnswerTemplateConfig;
+import com.policypilot.chatj.formatting.MoneyFormat;
+import com.policypilot.chatj.formatting.PolicyBasisFormat;
 import com.policypilot.chatj.pipeline.RouterDecision;
 import com.policypilot.chatj.routing.IntentRouter;
 import java.util.List;
@@ -43,7 +45,11 @@ class ChatServiceTest {
     when(requestSpec.user(anyString())).thenReturn(requestSpec);
     when(requestSpec.call()).thenReturn(callResponseSpec);
     intentRouter = new IntentRouter(chatClientBuilder);
-    AnswerRenderer renderer = new AnswerRenderer(new AnswerTemplateConfig().answerTemplateEngine());
+    AnswerRenderer renderer =
+        new AnswerRenderer(
+            new AnswerTemplateConfig().answerTemplateEngine(),
+            new MoneyFormat(),
+            new PolicyBasisFormat());
     eligibilityAnswerFormatter = new EligibilityAnswerFormatter(renderer);
   }
 
@@ -75,13 +81,63 @@ class ChatServiceTest {
     when(callResponseSpec.entity(eq(RouterDecision.class))).thenReturn(decision);
 
     FakeEligibilityClient eligibilityClient =
-        new FakeEligibilityClient().returning(Map.of("payment_id", "PAY-1"));
+        new FakeEligibilityClient().returning(Map.of("payment_id", "20260720-FICC-P-8"));
     ChatService chatService = chatService(eligibilityClient);
 
     ChatResponse response =
-        chatService.ask(new ChatRequest("Who can approve payment PAY-1?", List.of(), "policies"), subject());
+        chatService.ask(
+            new ChatRequest("Who can approve 20260720-FICC-P-8?", List.of(), "policies"),
+            subject());
 
     assertTrue(response.answer().contains("Live OPA"));
+    assertEquals("eligibility", response.routing().path());
+    assertEquals("eligibility_api", response.routing().answer_synthesis());
+  }
+
+  @Test
+  void eligibilitySubmittersLaneFormatsAnswer() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("eligibility");
+    decision.setEligibilityTarget("payment");
+    decision.setEligibilityAction("SUBMIT");
+    when(callResponseSpec.entity(eq(RouterDecision.class))).thenReturn(decision);
+
+    FakeEligibilityClient eligibilityClient =
+        new FakeEligibilityClient()
+            .returning(
+                Map.of(
+                    "payment_id",
+                    "20260720-FICC-P-8",
+                    "payment_status",
+                    "DRAFT",
+                    "amount",
+                    100,
+                    "currency",
+                    "USD",
+                    "owning_lob",
+                    "FICC",
+                    "eligible",
+                    List.of(
+                        Map.of(
+                            "display_name",
+                            "Chen, Sarah",
+                            "user_id",
+                            "mo-100",
+                            "title",
+                            "Analyst",
+                            "allow_basis",
+                            List.of("role PAYMENT_CREATOR"))),
+                    "candidates_evaluated",
+                    2));
+    ChatResponse response =
+        chatService(eligibilityClient)
+            .ask(
+                new ChatRequest(
+                    "Who can submit 20260720-FICC-P-8 for approval?", List.of(), "policies"),
+                subject());
+
+    assertTrue(response.answer().contains("Live OPA evaluation for submitting"));
+    assertTrue(response.answer().contains("Chen, Sarah"));
     assertEquals("eligibility", response.routing().path());
     assertEquals("eligibility_api", response.routing().answer_synthesis());
   }
@@ -112,7 +168,7 @@ class ChatServiceTest {
         chatService(new FakeEligibilityClient())
             .ask(new ChatRequest("How many alerts?", List.of(), "events"), subject());
 
-    assertTrue(response.answer().contains("M1 only"));
+    assertTrue(response.answer().contains("payment eligibility"));
     assertEquals("stub", response.routing().answer_synthesis());
   }
 }

@@ -6,14 +6,18 @@ import java.util.HashMap;
 import java.util.Map;
 import org.springframework.web.client.RestTemplate;
 
-/** Test double for {@link com.policypilot.chatj.eligibility.EligibilityClient}. */
-public class FakeEligibilityClient extends com.policypilot.chatj.eligibility.EligibilityClient {
+/** Test double for {@link EligibilityClient}. */
+public class FakeEligibilityClient extends EligibilityClient {
 
   private Map<String, Object> response = Map.of();
   private RuntimeException error;
 
   public FakeEligibilityClient() {
-    super(new RestTemplate(), TestFixtures.properties(), new ServiceIdentity(new com.policypilot.chatj.auth.FakeZitadelAuthClient(), TestFixtures.properties()));
+    super(
+        new RestTemplate(),
+        TestFixtures.properties(),
+        new ServiceIdentity(
+            new com.policypilot.chatj.auth.FakeZitadelAuthClient(), TestFixtures.properties()));
   }
 
   public FakeEligibilityClient returning(Map<String, Object> response) {
@@ -28,6 +32,15 @@ public class FakeEligibilityClient extends com.policypilot.chatj.eligibility.Eli
 
   @Override
   public Map<String, Object> eligibleApproversForPayment(
+      String paymentId, String userBearerToken, String userSessionId) {
+    if (error != null) {
+      throw error;
+    }
+    return new HashMap<>(response);
+  }
+
+  @Override
+  public Map<String, Object> eligibleSubmittersForPayment(
       String paymentId, String userBearerToken, String userSessionId) {
     if (error != null) {
       throw error;

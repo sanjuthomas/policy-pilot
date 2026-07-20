@@ -14,7 +14,11 @@ class AnswerRendererTest {
 
   @BeforeEach
   void setUp() {
-    renderer = new AnswerRenderer(new AnswerTemplateConfig().answerTemplateEngine());
+    renderer =
+        new AnswerRenderer(
+            new AnswerTemplateConfig().answerTemplateEngine(),
+            new MoneyFormat(),
+            new PolicyBasisFormat());
   }
 
   @Test
@@ -25,14 +29,20 @@ class AnswerRendererTest {
             new EligibleApproversView(
                 "PAY-1",
                 "SUBMITTED",
-                "$10.00",
+                10,
+                "USD",
                 "FICC",
-                "backing instruction INS-1 (APPROVED)",
+                "INS-1",
+                "APPROVED",
                 null,
-                List.of(new ApproverRow(1, "Smith", "FO", "role:FUNDING_APPROVER")),
+                List.of(
+                    new ApproverRow(
+                        "Smith", "pay-101", "FO", List.of("role:FUNDING_APPROVER"))),
+                List.of(),
                 2));
 
     assertTrue(markdown.contains("PAY-1"));
     assertTrue(markdown.contains("Smith"));
+    assertTrue(markdown.contains("USD 10.00"));
   }
 }

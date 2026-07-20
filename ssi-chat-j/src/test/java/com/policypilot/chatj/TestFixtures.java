@@ -23,7 +23,14 @@ public final class TestFixtures {
         "ssi.local",
         "svc-chat",
         "Password1!",
-        List.of("COMPLIANCE_ANALYST", "PAYMENT_CREATOR"));
+        List.of(
+            "COMPLIANCE_ANALYST",
+            "COMPLIANCE_OFFICER",
+            "PLATFORM_ADMIN",
+            "PAYMENT_CREATOR",
+            "FUNDING_APPROVER",
+            "INSTRUCTION_CREATOR",
+            "INSTRUCTION_APPROVER"));
   }
 
   public static ChatJProperties propertiesWithoutPat() {
@@ -42,7 +49,14 @@ public final class TestFixtures {
         "ssi.local",
         "svc-chat",
         "Password1!",
-        List.of("COMPLIANCE_ANALYST", "PAYMENT_CREATOR"));
+        List.of(
+            "COMPLIANCE_ANALYST",
+            "COMPLIANCE_OFFICER",
+            "PLATFORM_ADMIN",
+            "PAYMENT_CREATOR",
+            "FUNDING_APPROVER",
+            "INSTRUCTION_CREATOR",
+            "INSTRUCTION_APPROVER"));
   }
 
   public static ChatJProperties propertiesWithPatFile(String patFile) {

@@ -2,11 +2,13 @@ package com.policypilot.chatj.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.policypilot.chatj.TestFixtures;
 import com.policypilot.chatj.api.ApiModels.ChatRequest;
 import com.policypilot.chatj.api.ApiModels.ChatResponse;
 import com.policypilot.chatj.api.ApiModels.LoginRequest;
+import com.policypilot.chatj.auth.ChatUsersDirectory;
 import com.policypilot.chatj.auth.FakeSubjectResolver;
 import com.policypilot.chatj.auth.FakeZitadelAuthClient;
 import com.policypilot.chatj.auth.SessionCredentials;
@@ -27,6 +29,7 @@ class ChatApiControllerTest {
   private ZitadelPatProvider patProvider;
   private FakeSubjectResolver subjectResolver;
   private FakeChatService chatService;
+  private ChatUsersDirectory chatUsersDirectory;
   private ChatApiController controller;
 
   @BeforeEach
@@ -36,9 +39,15 @@ class ChatApiControllerTest {
     patProvider = new ZitadelPatProvider(properties);
     subjectResolver = new FakeSubjectResolver(zitadelAuthClient);
     chatService = new FakeChatService();
+    chatUsersDirectory = new ChatUsersDirectory(properties);
     controller =
         new ChatApiController(
-            zitadelAuthClient, patProvider, subjectResolver, chatService, properties);
+            zitadelAuthClient,
+            patProvider,
+            subjectResolver,
+            chatService,
+            properties,
+            chatUsersDirectory);
   }
 
   @Test
@@ -54,7 +63,8 @@ class ChatApiControllerTest {
             new ZitadelPatProvider(TestFixtures.propertiesWithoutPat()),
             subjectResolver,
             chatService,
-            TestFixtures.propertiesWithoutPat());
+            TestFixtures.propertiesWithoutPat(),
+            chatUsersDirectory);
     ResponseStatusException ex =
         assertThrows(
             ResponseStatusException.class,
@@ -165,5 +175,11 @@ class ChatApiControllerTest {
             "sess");
 
     assertEquals("answer", response.answer());
+  }
+
+  @Test
+  void chatUsersReturnsSeedRoster() {
+    var body = controller.chatUsers();
+    assertTrue(((java.util.List<?>) body.get("users")).size() > 0);
   }
 }
