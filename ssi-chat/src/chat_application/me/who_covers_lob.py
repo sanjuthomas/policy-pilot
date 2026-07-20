@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from chat_application.auth.users import SeedFile, SeedUser, load_users
+from chat_application.formatting.common import format_identity_token_list
 from chat_application.me.models import MeIntentResult
 
 
@@ -52,7 +53,7 @@ def answer_who_covers_lob(
     ]
     for user in matches:
         display = f"{user.family_name}, {user.given_name}"
-        roles = ", ".join(user.roles) or "—"
+        roles = format_identity_token_list(user.roles)
         covering = ", ".join(user.covering_lobs) or "—"
         lines.append(f"- **{display}** (`{user.user_id}`) — {user.title}")
         lines.append(f"  - Roles: {roles}")

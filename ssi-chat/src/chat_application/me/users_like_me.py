@@ -3,6 +3,7 @@ from __future__ import annotations
 from chat_application.auth.capabilities import OPERATIONAL_ROLES, capabilities_for
 from chat_application.auth.subject import Subject
 from chat_application.auth.users import SeedFile, SeedUser, load_users
+from chat_application.formatting.common import format_identity_token_list
 from chat_application.me.models import MeIntentResult
 
 _AMOUNT_CLUBS = frozenset(
@@ -96,8 +97,8 @@ def answer_users_like_me(
         if subject.family_name and subject.given_name
         else subject.user_id
     )
-    role_bits = ", ".join(subject.roles) or "none"
-    group_bits = ", ".join(subject.groups) or "none"
+    role_bits = format_identity_token_list(subject.roles, empty="none")
+    group_bits = format_identity_token_list(subject.groups, empty="none")
     lob_bits = ", ".join(subject.covering_lobs) or "none"
 
     header = (

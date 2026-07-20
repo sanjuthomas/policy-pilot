@@ -422,3 +422,32 @@ cases:
     - four-eyes
     - reporting-line
     - approval matrix
+
+# ── Me intents: markdown-safe identity tokens (roles / clubs) ───────────────
+
+- id: golden_me_who_am_i_identity_tokens_pay205
+  mode: all
+  retrieval: eligibility
+  tags: [golden, me, who_am_i, formatting, regression_guard]
+  persona: pay-205
+  question: Who am I?
+  expect:
+    require_routing: true
+    routing_path: eligibility
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: me.who_am_i
+    min_answer_length: 80
+    answer_contains_all:
+    - pay-205
+    - "**Roles:**"
+    - "`PAYMENT_CREATOR`"
+    - "`FUNDING_APPROVER`"
+    - "**Amount clubs:**"
+    - "`UP_TO_1_BILLION_CLUB`"
+    - "`MIDDLE_OFFICE`"
+    answer_not_contains:
+    - PAYMENTCREATOR
+    - FUNDINGAPPROVER
+    - UPTO1BILLIONCLUB
+    - MIDDLEOFFICE

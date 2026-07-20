@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from chat_application.auth.subject import Subject
+from chat_application.formatting.common import format_identity_token_list
 from chat_application.me.models import MeIntentResult
 
 _AMOUNT_CLUBS = frozenset(
@@ -35,7 +36,7 @@ def answer_can_create_payment(subject: Subject) -> MeIntentResult:
             answer=(
                 f"**Yes** — `{subject.user_id}` ({name}) may **create** draft payments "
                 f"under policy, for covering LOBs **{', '.join(covering)}** within "
-                f"amount club(s) **{', '.join(clubs)}**.\n\n"
+                f"amount club(s) {format_identity_token_list(clubs)}.\n\n"
                 "OPA still checks the specific instruction (usable status, not expired) "
                 "and that the amount is within your club ceiling at create time."
             ),
@@ -184,7 +185,7 @@ def answer_can_approve_payment(subject: Subject) -> MeIntentResult:
             answer=(
                 f"**Yes** — `{subject.user_id}` ({name}) may **approve** payments "
                 f"under policy for covering LOBs **{', '.join(covering)}** within "
-                f"amount club(s) **{', '.join(clubs)}**.\n\n"
+                f"amount club(s) {format_identity_token_list(clubs)}.\n\n"
                 "For a specific payment, OPA still enforces four-eyes, reporting-line, "
                 "instruction status, and amount ceiling. Ask "
                 "“Do I have permission to approve payment <id>?” for a live check."
