@@ -109,6 +109,28 @@ public class ChatAnswerFinalizer {
       String requestedPath,
       Double retrievalMs,
       Double generationMs) {
+    return of(
+        message,
+        mode,
+        answer,
+        path,
+        answerSynthesis,
+        requestedPath,
+        retrievalMs,
+        generationMs,
+        null);
+  }
+
+  public ChatResponse of(
+      String message,
+      String mode,
+      String answer,
+      String path,
+      String answerSynthesis,
+      String requestedPath,
+      Double retrievalMs,
+      Double generationMs,
+      String intentId) {
     return finalizeAnswer(
         message,
         mode,
@@ -121,7 +143,7 @@ public class ChatAnswerFinalizer {
         path,
         "none",
         answerSynthesis,
-        null,
+        intentId,
         List.of(),
         null,
         null,

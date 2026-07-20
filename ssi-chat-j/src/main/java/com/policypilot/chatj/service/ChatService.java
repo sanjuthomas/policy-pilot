@@ -5,6 +5,7 @@ import com.policypilot.chatj.api.ApiModels.ChatResponse;
 import com.policypilot.chatj.auth.Subject;
 import com.policypilot.chatj.eligibility.EligibilityAnswerFormatter;
 import com.policypilot.chatj.eligibility.EligibilityClient;
+import com.policypilot.chatj.me.WhoAmIService;
 import com.policypilot.chatj.observability.ChatAnswerFinalizer;
 import com.policypilot.chatj.pipeline.RouterDecision;
 import com.policypilot.chatj.policydirectory.PolicyDirectoryService;
@@ -25,6 +26,7 @@ public class ChatService {
   private final EligibilityAnswerFormatter eligibilityAnswerFormatter;
   private final PolicyDirectoryService policyDirectoryService;
   private final PolicySummaryAnswerFormatter policySummaryAnswerFormatter;
+  private final WhoAmIService whoAmIService;
   private final ChatAnswerFinalizer answerFinalizer;
 
   public ChatService(
@@ -33,12 +35,14 @@ public class ChatService {
       EligibilityAnswerFormatter eligibilityAnswerFormatter,
       PolicyDirectoryService policyDirectoryService,
       PolicySummaryAnswerFormatter policySummaryAnswerFormatter,
+      WhoAmIService whoAmIService,
       ChatAnswerFinalizer answerFinalizer) {
     this.intentRouter = intentRouter;
     this.eligibilityClient = eligibilityClient;
     this.eligibilityAnswerFormatter = eligibilityAnswerFormatter;
     this.policyDirectoryService = policyDirectoryService;
     this.policySummaryAnswerFormatter = policySummaryAnswerFormatter;
+    this.whoAmIService = whoAmIService;
     this.answerFinalizer = answerFinalizer;
   }
 
@@ -47,6 +51,10 @@ public class ChatService {
     RouterDecision decision = intentRouter.route(request.message());
     double generationMs = (System.nanoTime() - routeStartNs) / 1_000_000.0;
     String requestedPath = decision.getPath();
+
+    if ("me".equals(decision.getPath())) {
+      return meIntent(request, subject, decision, generationMs);
+    }
 
     if ("policy_summary".equals(decision.getPath())) {
       return policySummary(request, subject, decision, requestedPath, generationMs);
@@ -63,7 +71,8 @@ public class ChatService {
           "policy_directory_api",
           requestedPath,
           retrievalMs,
-          generationMs);
+          generationMs,
+          null);
     }
 
     if ("eligibility".equals(decision.getPath())) {
@@ -83,8 +92,8 @@ public class ChatService {
 
     return answer(
         request,
-        "ssi-chat-j answers payment/instruction eligibility, policy-directory, and "
-            + "policy-summary questions "
+        "ssi-chat-j answers payment/instruction eligibility, policy-directory, "
+            + "policy-summary, and who-am-I questions "
             + "(e.g. Who can approve payment 20260720-FICC-P-8?). "
             + "Routed as path="
             + decision.getPath()
@@ -93,7 +102,40 @@ public class ChatService {
         "stub",
         requestedPath,
         0.0,
-        generationMs);
+        generationMs,
+        null);
+  }
+
+  /**
+   * Python records who-am-I as {@code path=eligibility} + {@code intent_id=me.who_am_i} for OpenSLO
+   * / golden parity (not {@code path=me}).
+   */
+  private ChatResponse meIntent(
+      ChatRequest request, Subject subject, RouterDecision decision, double generationMs) {
+    String kind =
+        StringUtils.hasText(decision.getMeKind())
+            ? decision.getMeKind().strip().toLowerCase()
+            : "who_am_i";
+    if (!"who_am_i".equals(kind)) {
+      return answer(
+          request,
+          "ssi-chat-j currently supports meKind=who_am_i only. Routed as meKind=" + kind + ".",
+          "eligibility",
+          "formatter",
+          null,
+          0.0,
+          generationMs,
+          null);
+    }
+    return answer(
+        request,
+        whoAmIService.answer(subject),
+        "eligibility",
+        "formatter",
+        null,
+        0.0,
+        generationMs,
+        WhoAmIService.INTENT_ID);
   }
 
   private ChatResponse policySummary(
@@ -123,7 +165,8 @@ public class ChatService {
         "eligibility_api",
         requestedPath,
         retrievalMs,
-        generationMs);
+        generationMs,
+        null);
   }
 
   private ChatResponse paymentApprovers(
@@ -138,7 +181,8 @@ public class ChatService {
           "eligibility_api",
           requestedPath,
           0.0,
-          generationMs);
+          generationMs,
+          null);
     }
     long retrievalStartNs = System.nanoTime();
     Map<String, Object> data =
@@ -153,7 +197,8 @@ public class ChatService {
         "eligibility_api",
         requestedPath,
         retrievalMs,
-        generationMs);
+        generationMs,
+        null);
   }
 
   private ChatResponse paymentSubmitters(
@@ -168,7 +213,8 @@ public class ChatService {
           "eligibility_api",
           requestedPath,
           0.0,
-          generationMs);
+          generationMs,
+          null);
     }
     long retrievalStartNs = System.nanoTime();
     Map<String, Object> data =
@@ -183,7 +229,8 @@ public class ChatService {
         "eligibility_api",
         requestedPath,
         retrievalMs,
-        generationMs);
+        generationMs,
+        null);
   }
 
   private ChatResponse instructionApprovers(
@@ -198,7 +245,8 @@ public class ChatService {
           "eligibility_api",
           requestedPath,
           0.0,
-          generationMs);
+          generationMs,
+          null);
     }
     long retrievalStartNs = System.nanoTime();
     Map<String, Object> data =
@@ -213,7 +261,8 @@ public class ChatService {
         "eligibility_api",
         requestedPath,
         retrievalMs,
-        generationMs);
+        generationMs,
+        null);
   }
 
   private ChatResponse answer(
@@ -223,7 +272,8 @@ public class ChatService {
       String synthesis,
       String requestedPath,
       double retrievalMs,
-      double generationMs) {
+      double generationMs,
+      String intentId) {
     if (answerFinalizer == null) {
       return ChatResponse.of(answerText, null);
     }
@@ -235,7 +285,8 @@ public class ChatService {
         synthesis,
         requestedPath,
         retrievalMs,
-        generationMs);
+        generationMs,
+        intentId);
   }
 
   private static String nullToEmpty(String value) {

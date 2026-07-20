@@ -17,6 +17,7 @@ Not wired into the root `docker-compose.yml` yet — run locally with Maven agai
   - authz `payment-amount-limits` + `groups/{club}/members`
 - `POST /api/chat` policy summary (normative OPA):
   - authz `policy-summary?domain=&action=`
+- `POST /api/chat` who-am-I (`path=me` → recorded as `eligibility` + `me.who_am_i`)
 - Observability (Micrometer → OTLP, same chat SLI names as Python; **no Prometheus scrape**):
   - `POST /api/chat/feedback`
   - `GET /api/routing-stats`, `GET /api/feedback-stats`

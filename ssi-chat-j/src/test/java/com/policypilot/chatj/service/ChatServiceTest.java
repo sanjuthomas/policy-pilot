@@ -16,11 +16,12 @@ import com.policypilot.chatj.formatting.AnswerTemplateConfig;
 import com.policypilot.chatj.formatting.IdentityTokenFormat;
 import com.policypilot.chatj.formatting.MoneyFormat;
 import com.policypilot.chatj.formatting.PolicyBasisFormat;
-import com.policypilot.chatj.pipeline.RouterDecision;
+import com.policypilot.chatj.me.WhoAmIService;
 import com.policypilot.chatj.observability.ChatAnswerFinalizer;
 import com.policypilot.chatj.observability.RoutingDistributionTracker;
 import com.policypilot.chatj.observability.RoutingMetrics;
 import com.policypilot.chatj.observability.SkillMetrics;
+import com.policypilot.chatj.pipeline.RouterDecision;
 import com.policypilot.chatj.policydirectory.PolicyDirectoryAnswerFormatter;
 import com.policypilot.chatj.policydirectory.PolicyDirectoryService;
 import com.policypilot.chatj.policysummary.PolicySummaryAnswerFormatter;
@@ -46,6 +47,7 @@ class ChatServiceTest {
   private EligibilityAnswerFormatter eligibilityAnswerFormatter;
   private PolicyDirectoryAnswerFormatter policyDirectoryAnswerFormatter;
   private PolicySummaryAnswerFormatter policySummaryAnswerFormatter;
+  private WhoAmIService whoAmIService;
   private IntentRouter intentRouter;
 
   @BeforeEach
@@ -61,10 +63,12 @@ class ChatServiceTest {
             new AnswerTemplateConfig().answerTemplateEngine(),
             new MoneyFormat(),
             new PolicyBasisFormat());
+    IdentityTokenFormat identityTokenFormat = new IdentityTokenFormat();
     eligibilityAnswerFormatter = new EligibilityAnswerFormatter(renderer);
     policyDirectoryAnswerFormatter = new PolicyDirectoryAnswerFormatter(renderer);
     policySummaryAnswerFormatter =
-        new PolicySummaryAnswerFormatter(renderer, new IdentityTokenFormat());
+        new PolicySummaryAnswerFormatter(renderer, identityTokenFormat);
+    whoAmIService = new WhoAmIService(renderer, identityTokenFormat);
   }
 
   private ChatService chatService(FakeEligibilityClient eligibilityClient) {
@@ -79,6 +83,7 @@ class ChatServiceTest {
         eligibilityAnswerFormatter,
         new PolicyDirectoryService(eligibilityClient, policyDirectoryAnswerFormatter),
         policySummaryAnswerFormatter,
+        whoAmIService,
         finalizer);
   }
 
@@ -477,5 +482,43 @@ class ChatServiceTest {
     assertTrue(response.answer().contains("authorization-service"));
     assertEquals("policy_summary", response.routing().path());
     assertEquals("eligibility_api", response.routing().answer_synthesis());
+  }
+
+  @Test
+  void whoAmILaneFormatsIdentityTokens() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("me");
+    decision.setMeKind("who_am_i");
+    when(callResponseSpec.entity(eq(RouterDecision.class))).thenReturn(decision);
+
+    Subject pay205 =
+        new Subject(
+            "pay-205",
+            "Fatima",
+            "Al-Rashid",
+            "Vice President",
+            null,
+            List.of("PAYMENT_CREATOR", "FUNDING_APPROVER"),
+            List.of("MIDDLE_OFFICE", "UP_TO_1_BILLION_CLUB"),
+            "pay-300",
+            List.of("FICC"),
+            "tok",
+            "sess");
+
+    ChatResponse response =
+        chatService(new FakeEligibilityClient())
+            .ask(new ChatRequest("Who am I?", List.of(), "all"), pay205);
+
+    assertTrue(response.answer().contains("pay-205"));
+    assertTrue(response.answer().contains("**Roles:**"));
+    assertTrue(response.answer().contains("`PAYMENT_CREATOR`"));
+    assertTrue(response.answer().contains("`FUNDING_APPROVER`"));
+    assertTrue(response.answer().contains("**Amount clubs:**"));
+    assertTrue(response.answer().contains("`UP_TO_1_BILLION_CLUB`"));
+    assertTrue(response.answer().contains("`MIDDLE_OFFICE`"));
+    assertTrue(!response.answer().contains("PAYMENTCREATOR"));
+    assertEquals("eligibility", response.routing().path());
+    assertEquals("formatter", response.routing().answer_synthesis());
+    assertEquals("me.who_am_i", response.routing().intent_id());
   }
 }

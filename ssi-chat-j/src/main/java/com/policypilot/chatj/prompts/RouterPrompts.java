@@ -46,6 +46,8 @@ public final class RouterPrompts {
             → policy_directory, directoryCoveringLob=FICC (amount slots null)
           "exceeding $1M for FICC?" → policy_directory, amount + directoryCoveringLob=FICC
       Prefer policy_summary for "what is / explain the … policy" questions (no entity id).
+      Me / identity (logged-in subject — no entity id):
+        path=me, meKind=who_am_i for "Who am I?" / "what is my identity?"
       Prefer policy_directory over eligibility when there is no payment/instruction id and the
       question asks who may approve by amount / desk covering LOB.
       Prefer eligibility when a specific payment or instruction id is present.
