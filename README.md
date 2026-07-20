@@ -22,7 +22,7 @@ Policy Pilot is a **reference implementation** of that control model, demonstrat
 
 ## The problem
 
-Enterprises want AI that can *do* work: create a payment, submit for funding, approve a trade, answer “Are there any instances of approving each other's payments?”
+Enterprises want AI that can *do* work: create a payment, submit for funding, approve a trade. They also want AI that can *investigate*: who can approve a payment or instruction, and harder [SoD](docs/opa-controls.md) and control questions such as “[Are there any instances of approving each other's payments?](docs/sod-mutual-approval.md)”, “Are there instructions approved by someone who reports directly to the creator?”, or “[Are there active instructions sharing the same creditor account and currency?](neo4j-graph-model/README.md#are-there-active-instructions-sharing-the-same-creditor-account-and-currency)”
 
 What they cannot accept is AI that **bypasses business decisions** — four-eyes rules, ownership, limits, compliance — because those rules lived in a prompt, a spreadsheet, or a service the agent never called.
 
@@ -53,7 +53,7 @@ That is a **controlled ecosystem**: AI is inside the perimeter of governance, no
 | **Governed automation** | High-stakes actions run through the same decision layer for humans, APIs, and AI-initiated capabilities. |
 | **Fail-closed control** | Deny or abandoned confirmation stops the work. There is no soft “best effort” write after policy says no. |
 | **Explainable decisions** | Allow/deny comes with *why* — durable on the audit event, not lost in a chat transcript. |
-| **Consistent rules** | SoD, reporting-line inversion, LOB scope, amount clubs — encoded once, reused on every mutation. |
+| **Consistent rules** | [SoD](docs/opa-controls.md), reporting-line inversion, LOB scope, amount clubs — encoded once, reused on every mutation. |
 | **Investigable evidence** | What was proposed, who acted, what policy said, and what changed — available afterward for supervisors and compliance. |
 
 This is not “prompt the model to be careful.” Policy is software that runs **before** execution.
@@ -66,7 +66,7 @@ This is not “prompt the model to be careful.” Policy is software that runs *
 |-------------------|--------------|
 | Model plans and often steers tool use | Model proposes; **policy decides** |
 | Governance bolted on in prompts | Governance is the **decision layer** |
-| Permission ≈ “can the agent call the API?” | Permission = **business decision** (SoD, limits, ownership, approval) |
+| Permission ≈ “can the agent call the API?” | Permission = **business decision** ([SoD](docs/opa-controls.md), limits, ownership, approval) |
 | Success = task completed | Success = task completed **under enforceable rules**, with evidence |
 
 If you land here wondering “why not LangGraph / AutoGen?” — those optimize agent loops. Policy Pilot optimizes **enterprise control when AI is allowed to touch real operations.**
@@ -113,6 +113,7 @@ Prerequisites and GCP Vertex setup: **[How it works — Quick start](docs/how-it
 |----------|----------|
 | **[How it works](docs/how-it-works.md)** | Integration picture, data flow, intent pipelines, graph model, ETL, quick start |
 | **[OPA policy controls](docs/opa-controls.md)** | Four-eyes, reporting-line inversion, LOB boundaries, amount clubs |
+| **[SoD: Mutual Approval](docs/sod-mutual-approval.md)** | Showcase — instruction mutual SoD vs payment FO-submit path |
 | **[Authorization audit trail](docs/authorization-audit-trail.md)** | Who / when / why on past approvals; live eligibility |
 | **[OBO call paths](docs/obo-call-paths.md)** | Service JWT + on-behalf-of matrix across chat and domain APIs |
 | **[Architecture review](docs/architecture-review-2026-07-18.md)** | Adversarial review (score and residual risks) |

@@ -264,6 +264,28 @@ RETURN v.version_number, v.status, v.action
 ORDER BY v.version_number DESC;
 ```
 
+### Are there active instructions sharing the same creditor account and currency?
+
+`CONFLICTS_WITH` edges are maintained by the indexer when current versions share creditor account + currency (among other route fields). Chat’s duplicate-routes intent uses this shape (active = `APPROVED` or `SUBMITTED`):
+
+```cypher
+// Are there active instructions sharing the same creditor account and currency?
+MATCH (i1:Instruction)-[:CONFLICTS_WITH]-(i2:Instruction)
+WHERE elementId(i1) < elementId(i2)
+MATCH (i1)-[:CURRENT]->(v1:InstructionVersion)
+MATCH (i2)-[:CURRENT]->(v2:InstructionVersion)
+WHERE v1.status IN ['APPROVED', 'SUBMITTED']
+  AND v2.status IN ['APPROVED', 'SUBMITTED']
+RETURN i1.instruction_id AS instruction_id_a,
+       i2.instruction_id AS instruction_id_b,
+       v1.owning_lob AS owning_lob,
+       v1.currency AS currency,
+       v1.creditor_account AS creditor_account,
+       v1.creditor_name AS creditor_name
+ORDER BY v1.creditor_account, v1.currency
+LIMIT 50;
+```
+
 ## Cross-graph queries
 
 Nodes are shared across pipelines — these join audit events, lifecycle edges, and current state:
@@ -298,11 +320,15 @@ MATCH (approver)-[:REPORTS_TO]->(creator)
 RETURN creator.display_name, approver.display_name, p.payment_id, pv.amount
 LIMIT 50;
 
--- Potential duplicate settlement routes
-MATCH (i1:Instruction)-[:CONFLICTS_WITH]->(i2:Instruction)
+-- Potential duplicate settlement routes (see also Example queries above)
+MATCH (i1:Instruction)-[:CONFLICTS_WITH]-(i2:Instruction)
+WHERE elementId(i1) < elementId(i2)
 MATCH (i1)-[:CURRENT]->(v1:InstructionVersion)
 MATCH (i2)-[:CURRENT]->(v2:InstructionVersion)
+WHERE v1.status IN ['APPROVED', 'SUBMITTED']
+  AND v2.status IN ['APPROVED', 'SUBMITTED']
 RETURN v1.instruction_id, v1.creditor_account, v1.currency, v2.instruction_id
+ORDER BY v1.creditor_account, v1.currency
 LIMIT 50;
 ```
 

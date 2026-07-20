@@ -78,6 +78,7 @@ Domain services enforce OPA policy and write versioned state **and** a security 
 | Topic | Summary |
 |-------|---------|
 | **[OPA policy controls](opa-controls.md)** | SoD, reporting-line inversion, LOB boundaries, amount clubs |
+| **[SoD: Mutual Approval](sod-mutual-approval.md)** | Instruction vs payment: role segregation / FO submit |
 | **[Data flow](data-flow.md)** | Mongo transactions → Kafka CDC → ETL → Neo4j → chat |
 | **[Intent determination](intent-determination.md)** | Gemini `RouterDecision`, selective retrieval |
 | **[Create / submit / approve / cancel payment skills](create-payment-skill.md)** | Scripted capabilities, OPA preflight, Go / No Go |
