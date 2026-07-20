@@ -58,7 +58,7 @@ class ClubResolverTest {
   }
 
   @Test
-  void regexFallbackWhenLlmOmitsAmountOnDollarPhrase() {
+  void omittingLlmAmountYieldsNoClubsEvenWithDollarPhrase() {
     ClubResolver.ClubResolution resolution =
         ClubResolver.resolve(
             "Who has permission to approve payments exceeding $1 million?",
@@ -66,11 +66,7 @@ class ClubResolverTest {
             null,
             LIMITS,
             ABSOLUTE);
-    assertEquals(
-        List.of(
-            "UP_TO_100_MILLION_CLUB", "UP_TO_1_BILLION_CLUB", "UP_TO_100_BILLION_CLUB"),
-        resolution.clubs());
-    assertTrue(resolution.strict());
+    assertTrue(resolution.clubs().isEmpty());
   }
 
   @Test
@@ -93,5 +89,13 @@ class ClubResolverTest {
     assertEquals(
         List.of("UP_TO_1_BILLION_CLUB", "UP_TO_100_BILLION_CLUB"),
         ClubResolver.clubsForAmount(1_000_000_000.0, LIMITS, ABSOLUTE, false));
+  }
+
+  @Test
+  void nullStrictDefaultsToTrueWhenAmountPresent() {
+    ClubResolver.ClubResolution resolution =
+        ClubResolver.resolve("amount question", 1_000_000_000.0, null, LIMITS, ABSOLUTE);
+    assertTrue(resolution.strict());
+    assertEquals(List.of("UP_TO_100_BILLION_CLUB"), resolution.clubs());
   }
 }
