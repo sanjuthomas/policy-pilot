@@ -90,9 +90,9 @@ Implement only what golden cases require; mark each golden id when green.
 
 | ID | Item | Status | Notes |
 |----|------|--------|-------|
-| P3.1 | Pipeline: route → handler lanes (path is law) | `in_progress` | Eligibility lane only |
-| P3.2 | Eligibility / policy tools as needed by golden | `in_progress` | Eligibility + directory + `policy_summary` done |
-| P3.3 | Me / who-am-i if in golden | `todo` | |
+| P3.1 | Pipeline: route → handler lanes (path is law) | `in_progress` | Eligibility + directory + summary + me |
+| P3.2 | Eligibility / policy tools as needed by golden | `done` | Eligibility + directory + `policy_summary` |
+| P3.3 | Me / who-am-i if in golden | `done` | who-am-I for pay-205 golden |
 | P3.4 | neo4j_direct + formatters for golden graph cases | `todo` | Via cypher bridge |
 | P3.5 | Vector / hybrid only if a golden case needs it | `todo` | |
 | P3.6 | Skills only if a golden case needs them | `deferred` | Likely after golden |
@@ -108,6 +108,7 @@ Implement only what golden cases require; mark each golden id when green.
 | `golden_policies_covering_lob_directory` | `done` | covering-LOB policy directory |
 | `golden_policies_instruction_approval_summary` | `done` | `policy_summary` via authz OBO |
 | `golden_policies_payment_approval_summary` | `done` | funding / payment APPROVE summary |
+| `golden_me_who_am_i_identity_tokens_pay205` | `done` | who-am-I identity token backticks |
 | _(remaining from full `eval_golden.yaml`)_ | `todo` | |
 
 ---

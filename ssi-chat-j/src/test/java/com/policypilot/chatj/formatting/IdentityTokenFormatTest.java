@@ -28,4 +28,12 @@ class IdentityTokenFormatTest {
         "Someone with the `INSTRUCTION_APPROVER` role — see also `FUNDING_APPROVER` already wrapped.",
         out);
   }
+
+  @Test
+  void formatTokenListJoinsWithBackticks() {
+    assertEquals(
+        "`PAYMENT_CREATOR`, `FUNDING_APPROVER`",
+        format.formatTokenList(java.util.List.of("PAYMENT_CREATOR", "FUNDING_APPROVER")));
+    assertEquals("—", format.formatTokenList(java.util.List.of()));
+  }
 }

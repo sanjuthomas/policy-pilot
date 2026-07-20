@@ -70,6 +70,10 @@ public class RouterDecision {
   @JsonPropertyDescription("policy_summary only: OPA action (APPROVE default).")
   private String policyAction;
 
+  /** When path is me: which me-centric intent (who_am_i, …). */
+  @JsonPropertyDescription("me only: who_am_i (identity), …")
+  private String meKind;
+
   /** Model rationale for logs — not used for dispatch. */
   @JsonPropertyDescription("Brief explanation of the routing choice.")
   @Setter(AccessLevel.NONE)

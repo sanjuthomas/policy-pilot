@@ -33,6 +33,25 @@ public class IdentityTokenFormat {
     return token;
   }
 
+  /** Join identity tokens with markdown-safe backticks (comma-separated). */
+  public String formatTokenList(List<String> names) {
+    return formatTokenList(names, "—");
+  }
+
+  public String formatTokenList(List<String> names, String empty) {
+    if (names == null || names.isEmpty()) {
+      return empty;
+    }
+    List<String> parts = new ArrayList<>();
+    for (String name : names) {
+      if (name == null || name.isBlank()) {
+        continue;
+      }
+      parts.add(formatToken(name));
+    }
+    return parts.isEmpty() ? empty : String.join(", ", parts);
+  }
+
   public String formatTokensInText(String text) {
     if (text == null || text.isEmpty()) {
       return text;
