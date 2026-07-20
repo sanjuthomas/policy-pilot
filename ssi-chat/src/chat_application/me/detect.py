@@ -201,7 +201,7 @@ def me_intent_from_router(decision: RouterDecision, message: str) -> MeIntent | 
         return MeIntent(
             kind=kind,
             action=action or "CREATE",
-            entity_type=entity_type or "payment",
+            entity_type=entity_type or _create_entity_type(text) or "payment",
             entity_id=entity_id,
         )
 
@@ -271,7 +271,7 @@ def detect_me_intent_heuristic(message: str) -> MeIntent | None:
         return MeIntent(
             kind="can_act_on_entity",
             action="APPROVE",
-            entity_type="payment",
+            entity_type=_create_entity_type(text) or "payment",
             entity_id=entity_id,
         )
 

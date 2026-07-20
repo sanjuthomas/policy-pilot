@@ -3,6 +3,7 @@ from __future__ import annotations
 from chat_application.auth.capabilities import capabilities_for
 from chat_application.auth.subject import Subject
 from chat_application.me.can_create import (
+    answer_can_approve_instruction,
     answer_can_approve_payment,
     answer_can_create_instruction,
     answer_can_create_payment,
@@ -84,6 +85,8 @@ async def dispatch_me_intent(
         if intent.action == "SUBMIT":
             return answer_can_submit_payment(subject)
         if intent.action == "APPROVE" and not intent.entity_id:
+            if intent.entity_type == "instruction":
+                return answer_can_approve_instruction(subject)
             return answer_can_approve_payment(subject)
         if not intent.entity_id:
             return MeIntentResult(
@@ -92,6 +95,16 @@ async def dispatch_me_intent(
                     "for example: “Do I have permission to approve payment 20260705-FX-P-534?”"
                 ),
                 intent_id="me.can_act_on_entity.need_id",
+            )
+        if intent.action == "APPROVE" and intent.entity_type == "instruction":
+            return MeIntentResult(
+                answer=(
+                    f"Live OPA evaluate for “can I approve instruction `{intent.entity_id}`?” "
+                    "is not wired in chat yet. Directory-level instruction approve needs "
+                    "`INSTRUCTION_APPROVER` and desk `lob`; ask “Can I approve an instruction?” "
+                    "for that capability check."
+                ),
+                intent_id="me.can_act_on_entity.pending_instruction",
             )
         if not caps.can_approve_payment and intent.action == "APPROVE":
             return MeIntentResult(

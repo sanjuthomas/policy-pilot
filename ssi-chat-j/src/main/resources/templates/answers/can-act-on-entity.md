@@ -37,10 +37,20 @@ For a specific payment, OPA still enforces four-eyes, reporting-line, instructio
 
 Funding approval needs `FUNDING_APPROVER` + `MIDDLE_OFFICE` + covering LOBs + amount club, then per-payment OPA checks (four-eyes, reporting line, amount).
 [/]
+[# th:case="'approve_instruction_yes'"]**Yes** — `[(${m.userId})]` ([(${m.displayName})]) may **approve** instructions for desk LOB **[(${m.deskLob})]** under policy (role `INSTRUCTION_APPROVER`, title `[(${m.title})]`).
+
+For a specific instruction, OPA still enforces four-eyes, reporting-line, and the approval-matrix title check. Ask “Do I have permission to approve instruction <id>?” for a live check.
+[/]
+[# th:case="'approve_instruction_no'"]**No** — `[(${m.userId})]` ([(${m.displayName})]) cannot **approve** instructions. Missing: [# th:each="g,stat : ${m.gaps}"][(${g})][# th:unless="${stat.last}"], [/][/].[# th:if="${m.extra != null and !m.extra.isEmpty()}"][(${m.extra})][/]
+
+Instruction APPROVE needs `INSTRUCTION_APPROVER` and desk `lob` matching the instruction owning LOB (e.g. `ficc-300`). This is different from **payment** funding approval (`FUNDING_APPROVER`).
+[/]
 [# th:case="'need_id'"]Include a payment id when asking about a specific payment action, for example: “Do I have permission to approve payment 20260705-FX-P-534?”
 [/]
 [# th:case="'not_approver'"]You (`[(${m.userId})]`) do not hold `FUNDING_APPROVER`, so you cannot approve payment `[(${m.entityId})]` under current policy.
 [/]
 [# th:case="'pending'"]Live OPA evaluate for “can I approve payment `[(${m.entityId})]`?” is wired next (service + on-behalf-of). You hold `FUNDING_APPROVER`; the next step checks amount club, covering LOBs, four-eyes, and reporting line against that payment.
+[/]
+[# th:case="'pending_instruction'"]Live OPA evaluate for “can I approve instruction `[(${m.entityId})]`?” is not wired in chat yet. Directory-level instruction approve needs `INSTRUCTION_APPROVER` and desk `lob`; ask “Can I approve an instruction?” for that capability check.
 [/]
 [/]

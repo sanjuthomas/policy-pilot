@@ -57,13 +57,14 @@ public class MeIntentResolver {
         }
         yield new MeIntent(kind, null, null, null, coveringLob);
       }
-      case "can_act_on_entity" ->
-          new MeIntent(
-              kind,
-              action != null ? action : "CREATE",
-              entityType != null ? entityType : "payment",
-              entityId,
-              null);
+      case "can_act_on_entity" -> {
+        String resolvedType = entityType != null ? entityType : createEntityType(text);
+        if (resolvedType == null) {
+          resolvedType = "payment";
+        }
+        yield new MeIntent(
+            kind, action != null ? action : "CREATE", resolvedType, entityId, null);
+      }
       case "who_else_can_act" ->
           new MeIntent(
               kind,

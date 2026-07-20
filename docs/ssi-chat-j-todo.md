@@ -126,6 +126,9 @@ Implement only what golden cases require; mark each golden id when green.
 | `golden_me_waiting_for_me_worklist_pay205` | `done` | live SUBMITTED + OPA worklist |
 | `golden_me_who_else_can_act_need_id` | `done` | who_else need_id |
 | `golden_me_who_else_can_act_submitted` | `done` | who_else on submitted payment |
+| `golden_me_can_approve_instruction_no_pay205` | `done` | instruction APPROVE ≠ payment APPROVE |
+| `golden_me_can_approve_instruction_yes_ficc300` | `done` | instruction APPROVE yes (desk FO) |
+| `golden_me_can_create_instruction_no_pay205` | `done` | CREATE instruction ≠ payment CREATE |
 | _(remaining from full `eval_golden.yaml`)_ | `todo` | ~20 Python-only (graph / denials / vector) |
 
 ---
