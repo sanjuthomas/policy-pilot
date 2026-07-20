@@ -50,7 +50,7 @@ Valid LOB values: `FICC`, `FX`, or `DESK_<name>`.
 
 `CREATE`, `UPDATE`, `CANCEL`, `SUBMIT`, `APPROVE`, `REJECT`, `SUSPEND`, `REACTIVATE`, `USE`, `VIEW`
 
-Key rules: creator cannot approve own instruction; approver must not report directly to creator (inversion of control); manager cannot approve direct report’s instruction; approver LOB must match instruction LOB; approver title must satisfy the approval matrix. Full control catalog: **[docs/opa-controls.md](../docs/opa-controls.md)**.
+Key rules: creator cannot approve own instruction; approver must not report directly to creator (inversion of control); manager cannot approve direct report’s instruction; approver LOB must match instruction LOB; approver title must satisfy the approval matrix. Mutual Approval SoD (instruction prevent vs payment FO-submit) — **[showcase](../docs/sod-mutual-approval.md)**. Reporting-line inversion — **[OPA policy controls](../docs/opa-controls.md#reporting-line-controls-inversion-of-control)**. Full catalog: **[docs/opa-controls.md](../docs/opa-controls.md)**.
 
 Policy denials surface as HTTP 403 and `ALERT` security events in Mongo (streamed to Kafka by Connect). Authorization-service queries:
 

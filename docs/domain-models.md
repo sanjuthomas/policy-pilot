@@ -17,7 +17,7 @@ effective_date      template validity start
 end_date            template validity end
 ```
 
-Lifecycle: `DRAFT` → `SUBMITTED` → `APPROVED` or `REJECTED`; approved instructions may become `SUSPENDED`, `USED`, `EXPIRED`, or `CANCELLED`. `STANDING` and `SINGLE_USE` remain instruction types, not lifecycle statuses.
+Lifecycle: `DRAFT` → `SUBMITTED` → `APPROVED` or **`REJECTED` (terminal)**; from `DRAFT`/`SUBMITTED` also **`CANCELLED` (terminal)**. Approved instructions may become `SUSPENDED`, `USED`, or **`EXPIRED` (terminal)**. `STANDING` and `SINGLE_USE` are instruction types, not lifecycle statuses. Full diagram: **[OPA policy controls — Lifecycle](opa-controls.md#lifecycle-overview)**.
 
 API and UI: `instruction-service/` — see [instruction-service/README.md](../instruction-service/README.md).
 
@@ -33,7 +33,7 @@ value_date          settlement date
 owning_lob          inherited from instruction
 ```
 
-Lifecycle: `DRAFT` → `SUBMITTED` → `APPROVED` or `REJECTED` (or `CANCELLED` if the instruction becomes invalid at approval time).
+Lifecycle: `DRAFT` → `SUBMITTED` → `APPROVED` or **`REJECTED` (terminal)**; from `DRAFT`/`SUBMITTED` also **`CANCELLED` (terminal)**. `APPROVED` is terminal in this demo (no further payment mutations). Full diagram: **[OPA policy controls — Payment state machine](opa-controls.md#payment-state-machine)**.
 
 Policy denials (self-approval, wrong LOB, amount over club limit, subordinate approver) emit `ALERT` security events; authorized actions emit `INFO`.
 
