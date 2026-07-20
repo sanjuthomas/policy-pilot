@@ -16,4 +16,11 @@ class MoneyFormatTest {
     assertEquals("EUR 12.34", money.format(12.34, "EUR"));
     assertEquals("12.00", money.format(12, ""));
   }
+
+  @Test
+  void formatUsdCompactMatchesPythonStyle() {
+    assertEquals("$25 billion", money.formatUsdCompact(25_000_000_000.0));
+    assertEquals("$1 million", money.formatUsdCompact(1_000_000.0));
+    assertEquals("N/A", money.formatUsdCompact(null));
+  }
 }

@@ -1,0 +1,31 @@
+---
+description: Thumb rule — Spring AI RouterDecision for ssi-chat-j intent; no heuristic routing
+globs: ssi-chat-j/**/*
+alwaysApply: false
+---
+
+# Intent routing thumb rule (ssi-chat-j)
+
+**Natural-language intent / path is determined by Spring AI structured `RouterDecision` — not regex, keyword lists, or fuzzy classification.**
+
+Same bar as Python `ssi-chat` (`intent-semantic-routing.mdc`): people phrase the same intent many ways. Do not grow heuristic routers in Java.
+
+## Do
+
+- Route via Spring AI structured output (`RouterDecision.path` and path-specific slots such as `eligibilityTarget` / `eligibilityAction`).
+- Grow `prompts/RouterPrompts.ROUTER_SYSTEM` and the `RouterDecision` schema when adding a lane — not `if (message.contains(...))` classifiers.
+- Keep **deterministic execution** after the route (authz/payment HTTP, club math from OPA catalog, Thymeleaf formatters).
+- **Path is law:** `ChatService` dispatches on `path` only; do not silently override another path with regex “force” lanes.
+- Use regex only as **slot parsers** after path is known (payment/instruction ids, explicit
+  `UP_TO_*_CLUB` tokens) — never as primary NLU.
+- For **policy_directory** money size, prefer LLM slots `directoryAmount` /
+  `directoryAmountStrict` on `RouterDecision` (worded amounts like "a billion"). Regex amount
+  parse is fallback only for `$N billion`-style text when the model omits slots.
+
+## Don't
+
+- Add `HeuristicRouter`, keyword/phrase lists, or fuzzy matchers that choose `path`.
+- Infer `eligibility` vs `policy_directory` vs `me` from regex before or instead of Spring AI.
+- Treat slot parsers (`PaymentIdParser`, `AmountThresholdParser`, …) as intent classifiers.
+
+Canonical write-up: `docs/intent-determination.md`. Module notes: `ssi-chat-j/AGENTS.md`.

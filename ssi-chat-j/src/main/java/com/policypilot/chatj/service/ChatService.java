@@ -7,6 +7,7 @@ import com.policypilot.chatj.auth.Subject;
 import com.policypilot.chatj.eligibility.EligibilityAnswerFormatter;
 import com.policypilot.chatj.eligibility.EligibilityClient;
 import com.policypilot.chatj.pipeline.RouterDecision;
+import com.policypilot.chatj.policydirectory.PolicyDirectoryService;
 import com.policypilot.chatj.routing.InstructionIdParser;
 import com.policypilot.chatj.routing.IntentRouter;
 import com.policypilot.chatj.routing.PaymentIdParser;
@@ -20,18 +21,27 @@ public class ChatService {
   private final IntentRouter intentRouter;
   private final EligibilityClient eligibilityClient;
   private final EligibilityAnswerFormatter eligibilityAnswerFormatter;
+  private final PolicyDirectoryService policyDirectoryService;
 
   public ChatService(
       IntentRouter intentRouter,
       EligibilityClient eligibilityClient,
-      EligibilityAnswerFormatter eligibilityAnswerFormatter) {
+      EligibilityAnswerFormatter eligibilityAnswerFormatter,
+      PolicyDirectoryService policyDirectoryService) {
     this.intentRouter = intentRouter;
     this.eligibilityClient = eligibilityClient;
     this.eligibilityAnswerFormatter = eligibilityAnswerFormatter;
+    this.policyDirectoryService = policyDirectoryService;
   }
 
   public ChatResponse ask(ChatRequest request, Subject subject) {
     RouterDecision decision = intentRouter.route(request.message());
+
+    if ("policy_directory".equals(decision.getPath())) {
+      return ChatResponse.of(
+          policyDirectoryService.answer(request.message(), subject, decision),
+          routing("policy_directory", "policy_directory_api"));
+    }
 
     if ("eligibility".equals(decision.getPath())) {
       String target = nullToEmpty(decision.getEligibilityTarget()).toLowerCase();
@@ -49,7 +59,7 @@ public class ChatService {
     }
 
     return ChatResponse.of(
-        "ssi-chat-j answers payment/instruction eligibility questions "
+        "ssi-chat-j answers payment/instruction eligibility and policy-directory questions "
             + "(e.g. Who can approve payment 20260720-FICC-P-8?). "
             + "Routed as path="
             + decision.getPath()
@@ -107,10 +117,17 @@ public class ChatService {
 
   private static AnswerRoutingInfo routing(String path, String synthesis) {
     String label =
-        "eligibility".equals(path)
-            ? "Eligibility API (OPA)"
-            : "ssi-chat-j M1 (" + path + ")";
-    String retrievalStrategy = "eligibility".equals(path) ? "eligibility" : null;
+        switch (path) {
+          case "eligibility" -> "Eligibility API (OPA)";
+          case "policy_directory" -> "Policy directory API";
+          default -> "ssi-chat-j (" + path + ")";
+        };
+    String retrievalStrategy =
+        switch (path) {
+          case "eligibility" -> "eligibility";
+          case "policy_directory" -> "policy_directory";
+          default -> null;
+        };
     return new AnswerRoutingInfo(
         path, "none", synthesis, label, null, retrievalStrategy, null);
   }

@@ -13,6 +13,8 @@ Not wired into the root `docker-compose.yml` yet — run locally with Maven agai
   - payment APPROVE → payment-service `eligible-approvers`
   - payment SUBMIT → authz `eligible-submitters`
   - instruction APPROVE → instruction-service `eligible-approvers`
+- `POST /api/chat` policy directory (amount club):
+  - authz `payment-amount-limits` + `groups/{club}/members`
 
 ## Run (Maven)
 

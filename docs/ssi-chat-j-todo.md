@@ -90,7 +90,7 @@ Implement only what golden cases require; mark each golden id when green.
 | ID | Item | Status | Notes |
 |----|------|--------|-------|
 | P3.1 | Pipeline: route → handler lanes (path is law) | `in_progress` | Eligibility lane only |
-| P3.2 | Eligibility / policy tools as needed by golden | `done` | Payment APPROVE/SUBMIT + instruction APPROVE |
+| P3.2 | Eligibility / policy tools as needed by golden | `in_progress` | Eligibility + amount-club `policy_directory` done |
 | P3.3 | Me / who-am-i if in golden | `todo` | |
 | P3.4 | neo4j_direct + formatters for golden graph cases | `todo` | Via cypher bridge |
 | P3.5 | Vector / hybrid only if a golden case needs it | `todo` | |
@@ -103,6 +103,7 @@ Implement only what golden cases require; mark each golden id when green.
 | `golden_policies_eligible_approvers_payment` | `done` | `ssi-chat-j/eval/eligibility_golden.yaml` |
 | `golden_policies_eligible_submitters_payment` | `done` | same |
 | `golden_policies_eligible_approvers_instruction` | `done` | same |
+| `golden_policies_amount_club_directory` | `done` | amount-club policy directory |
 | _(remaining from full `eval_golden.yaml`)_ | `todo` | |
 
 ---

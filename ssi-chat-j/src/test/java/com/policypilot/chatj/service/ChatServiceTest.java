@@ -16,6 +16,8 @@ import com.policypilot.chatj.formatting.AnswerTemplateConfig;
 import com.policypilot.chatj.formatting.MoneyFormat;
 import com.policypilot.chatj.formatting.PolicyBasisFormat;
 import com.policypilot.chatj.pipeline.RouterDecision;
+import com.policypilot.chatj.policydirectory.PolicyDirectoryAnswerFormatter;
+import com.policypilot.chatj.policydirectory.PolicyDirectoryService;
 import com.policypilot.chatj.routing.IntentRouter;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +37,7 @@ class ChatServiceTest {
   @Mock ChatClient.CallResponseSpec callResponseSpec;
 
   private EligibilityAnswerFormatter eligibilityAnswerFormatter;
+  private PolicyDirectoryAnswerFormatter policyDirectoryAnswerFormatter;
   private IntentRouter intentRouter;
 
   @BeforeEach
@@ -51,10 +54,15 @@ class ChatServiceTest {
             new MoneyFormat(),
             new PolicyBasisFormat());
     eligibilityAnswerFormatter = new EligibilityAnswerFormatter(renderer);
+    policyDirectoryAnswerFormatter = new PolicyDirectoryAnswerFormatter(renderer);
   }
 
   private ChatService chatService(FakeEligibilityClient eligibilityClient) {
-    return new ChatService(intentRouter, eligibilityClient, eligibilityAnswerFormatter);
+    return new ChatService(
+        intentRouter,
+        eligibilityClient,
+        eligibilityAnswerFormatter,
+        new PolicyDirectoryService(eligibilityClient, policyDirectoryAnswerFormatter));
   }
 
   private static Subject subject() {
@@ -219,5 +227,110 @@ class ChatServiceTest {
 
     assertTrue(response.answer().contains("payment/instruction eligibility"));
     assertEquals("stub", response.routing().answer_synthesis());
+  }
+
+  @Test
+  void policyDirectoryLaneFormatsAmountClubAnswer() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("policy_directory");
+    decision.setDirectoryAmount(25_000_000_000.0);
+    decision.setDirectoryAmountStrict(true);
+    when(callResponseSpec.entity(eq(RouterDecision.class))).thenReturn(decision);
+
+    FakeEligibilityClient eligibilityClient =
+        new FakeEligibilityClient()
+            .returningLimits(
+                Map.of(
+                    "absolute_limit",
+                    100_000_000_000.0,
+                    "club_limits",
+                    Map.of(
+                        "UP_TO_100_MILLION_CLUB",
+                        100_000_000.0,
+                        "UP_TO_1_BILLION_CLUB",
+                        1_000_000_000.0,
+                        "UP_TO_100_BILLION_CLUB",
+                        100_000_000_000.0)))
+            .returningGroupMembers(
+                Map.of(
+                    "group",
+                    "UP_TO_100_BILLION_CLUB",
+                    "members",
+                    List.of(
+                        Map.of(
+                            "user_id",
+                            "pay-204",
+                            "display_name",
+                            "Chen, Wei",
+                            "title",
+                            "Managing Director",
+                            "groups",
+                            List.of("MIDDLE_OFFICE", "UP_TO_100_BILLION_CLUB"),
+                            "covering_lobs",
+                            List.of("FICC", "FX")))));
+
+    ChatResponse response =
+        chatService(eligibilityClient)
+            .ask(
+                new ChatRequest(
+                    "Who has permission to approve payments worth more than $25 billion?",
+                    List.of(),
+                    "policies"),
+                subject());
+
+    assertTrue(response.answer().contains("UP_TO_100_BILLION_CLUB"));
+    assertTrue(response.answer().contains("exceeding $25 billion"));
+    assertTrue(response.answer().contains("pay-204"));
+    assertTrue(response.answer().contains("Covering LOBs"));
+    assertEquals("policy_directory", response.routing().path());
+    assertEquals("policy_directory_api", response.routing().answer_synthesis());
+    assertEquals("policy_directory", response.routing().retrieval_strategy());
+  }
+
+  @Test
+  void policyDirectoryLaneUsesLlmSlotsForWordedBillion() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("policy_directory");
+    decision.setDirectoryAmount(1_000_000_000.0);
+    decision.setDirectoryAmountStrict(false);
+    when(callResponseSpec.entity(eq(RouterDecision.class))).thenReturn(decision);
+
+    FakeEligibilityClient eligibilityClient =
+        new FakeEligibilityClient()
+            .returningLimits(
+                Map.of(
+                    "absolute_limit",
+                    100_000_000_000.0,
+                    "club_limits",
+                    Map.of(
+                        "UP_TO_1_BILLION_CLUB",
+                        1_000_000_000.0,
+                        "UP_TO_100_BILLION_CLUB",
+                        100_000_000_000.0)))
+            .returningGroupMembers(
+                Map.of(
+                    "members",
+                    List.of(
+                        Map.of(
+                            "user_id",
+                            "pay-201",
+                            "display_name",
+                            "Laurent, Sophie",
+                            "title",
+                            "VP",
+                            "groups",
+                            List.of("UP_TO_1_BILLION_CLUB"),
+                            "covering_lobs",
+                            List.of("FICC")))));
+
+    ChatResponse response =
+        chatService(eligibilityClient)
+            .ask(
+                new ChatRequest("Who can approve a billion dollar payment?", List.of(), "policies"),
+                subject());
+
+    assertTrue(response.answer().contains("of at least $1 billion"));
+    assertTrue(response.answer().contains("pay-201"));
+    assertEquals("policy_directory", response.routing().path());
   }
 }

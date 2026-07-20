@@ -31,6 +31,23 @@ public class RouterDecision {
   @JsonPropertyDescription("Action when path is eligibility.")
   private String eligibilityAction;
 
+  /**
+   * When path is policy_directory: USD amount threshold as a number (e.g. 1e9 for \"a billion\" /
+   * \"$1 billion\"). Semantic amount extraction — do not leave null when the question implies a
+   * money size.
+   */
+  @JsonPropertyDescription(
+      "policy_directory only: USD threshold as a number (1e9 for a/one/$1 billion).")
+  private Double directoryAmount;
+
+  /**
+   * When path is policy_directory: true if the threshold is exclusive (more than / exceeding /
+   * over); false if inclusive (at least / a N-dollar payment / of N).
+   */
+  @JsonPropertyDescription(
+      "policy_directory only: true for more-than/exceeding; false for at-least / a N payment.")
+  private Boolean directoryAmountStrict;
+
   /** Model rationale for logs — not used for dispatch. */
   @JsonPropertyDescription("Brief explanation of the routing choice.")
   private String reasoning = "";
@@ -57,6 +74,22 @@ public class RouterDecision {
 
   public void setEligibilityAction(String eligibilityAction) {
     this.eligibilityAction = eligibilityAction;
+  }
+
+  public Double getDirectoryAmount() {
+    return directoryAmount;
+  }
+
+  public void setDirectoryAmount(Double directoryAmount) {
+    this.directoryAmount = directoryAmount;
+  }
+
+  public Boolean getDirectoryAmountStrict() {
+    return directoryAmountStrict;
+  }
+
+  public void setDirectoryAmountStrict(Boolean directoryAmountStrict) {
+    this.directoryAmountStrict = directoryAmountStrict;
   }
 
   public String getReasoning() {
