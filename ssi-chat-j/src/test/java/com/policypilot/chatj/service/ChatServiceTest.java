@@ -8,6 +8,8 @@ import static org.mockito.Mockito.when;
 
 import com.policypilot.chatj.api.ApiModels.ChatRequest;
 import com.policypilot.chatj.api.ApiModels.ChatResponse;
+import com.policypilot.chatj.TestFixtures;
+import com.policypilot.chatj.auth.ChatUsersDirectory;
 import com.policypilot.chatj.auth.Subject;
 import com.policypilot.chatj.eligibility.EligibilityAnswerFormatter;
 import com.policypilot.chatj.eligibility.FakeEligibilityClient;
@@ -16,7 +18,16 @@ import com.policypilot.chatj.formatting.AnswerTemplateConfig;
 import com.policypilot.chatj.formatting.IdentityTokenFormat;
 import com.policypilot.chatj.formatting.MoneyFormat;
 import com.policypilot.chatj.formatting.PolicyBasisFormat;
+import com.policypilot.chatj.me.CanActOnEntityService;
+import com.policypilot.chatj.me.MeIntentResolver;
+import com.policypilot.chatj.me.MeIntentService;
+import com.policypilot.chatj.me.MyPermissionsService;
+import com.policypilot.chatj.me.UsersLikeMeService;
+import com.policypilot.chatj.me.WaitingForMeService;
 import com.policypilot.chatj.me.WhoAmIService;
+import com.policypilot.chatj.me.WhoCanCreateService;
+import com.policypilot.chatj.me.WhoCoversLobService;
+import com.policypilot.chatj.me.WhoElseCanActService;
 import com.policypilot.chatj.observability.ChatAnswerFinalizer;
 import com.policypilot.chatj.observability.RoutingDistributionTracker;
 import com.policypilot.chatj.observability.RoutingMetrics;
@@ -47,7 +58,7 @@ class ChatServiceTest {
   private EligibilityAnswerFormatter eligibilityAnswerFormatter;
   private PolicyDirectoryAnswerFormatter policyDirectoryAnswerFormatter;
   private PolicySummaryAnswerFormatter policySummaryAnswerFormatter;
-  private WhoAmIService whoAmIService;
+  private MeIntentService meIntentService;
   private IntentRouter intentRouter;
 
   @BeforeEach
@@ -68,7 +79,20 @@ class ChatServiceTest {
     policyDirectoryAnswerFormatter = new PolicyDirectoryAnswerFormatter(renderer);
     policySummaryAnswerFormatter =
         new PolicySummaryAnswerFormatter(renderer, identityTokenFormat);
-    whoAmIService = new WhoAmIService(renderer, identityTokenFormat);
+    ChatUsersDirectory directory = new ChatUsersDirectory(TestFixtures.properties());
+    WhoAmIService whoAmIService = new WhoAmIService(renderer, identityTokenFormat);
+    FakeEligibilityClient eligibilityForMe = new FakeEligibilityClient();
+    meIntentService =
+        new MeIntentService(
+            new MeIntentResolver(),
+            whoAmIService,
+            new MyPermissionsService(renderer, identityTokenFormat),
+            new CanActOnEntityService(renderer, identityTokenFormat),
+            new WhoCanCreateService(directory, renderer, identityTokenFormat),
+            new WhoCoversLobService(directory, renderer, identityTokenFormat),
+            new UsersLikeMeService(directory, renderer, identityTokenFormat),
+            new WaitingForMeService(eligibilityForMe, renderer),
+            new WhoElseCanActService(eligibilityForMe, renderer));
   }
 
   private ChatService chatService(FakeEligibilityClient eligibilityClient) {
@@ -83,7 +107,7 @@ class ChatServiceTest {
         eligibilityAnswerFormatter,
         new PolicyDirectoryService(eligibilityClient, policyDirectoryAnswerFormatter),
         policySummaryAnswerFormatter,
-        whoAmIService,
+        meIntentService,
         finalizer);
   }
 

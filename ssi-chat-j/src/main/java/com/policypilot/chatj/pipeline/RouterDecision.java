@@ -70,9 +70,19 @@ public class RouterDecision {
   @JsonPropertyDescription("policy_summary only: OPA action (APPROVE default).")
   private String policyAction;
 
-  /** When path is me: which me-centric intent (who_am_i, …). */
-  @JsonPropertyDescription("me only: who_am_i (identity), …")
+  /** When path is me: which me-centric intent (who_am_i, my_permissions, …). */
+  @JsonPropertyDescription(
+      "me only: who_am_i, my_permissions, can_act_on_entity, who_else_can_act, "
+          + "who_can_create, who_covers_lob, waiting_for_me, users_like_me")
   private String meKind;
+
+  /** When path is me: OPA-ish action for can_act / who_else / waiting (CREATE, APPROVE, …). */
+  @JsonPropertyDescription("me only: CREATE|APPROVE|SUBMIT|CANCEL|… when relevant")
+  private String meAction;
+
+  /** When path is me: payment vs instruction for who_can_create / can_act. */
+  @JsonPropertyDescription("me only: payment or instruction when relevant")
+  private String meEntityType;
 
   /** Model rationale for logs — not used for dispatch. */
   @JsonPropertyDescription("Brief explanation of the routing choice.")

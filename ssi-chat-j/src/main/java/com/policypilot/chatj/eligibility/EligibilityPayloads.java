@@ -7,11 +7,11 @@ import java.util.Map;
 import org.springframework.util.StringUtils;
 
 /** Shared mapping from eligibility API JSON maps → view-model rows (state only). */
-final class EligibilityPayloads {
+public final class EligibilityPayloads {
 
   private EligibilityPayloads() {}
 
-  static List<ApproverRow> toApproverRows(Object eligible) {
+  public static List<ApproverRow> toApproverRows(Object eligible) {
     List<ApproverRow> rows = new ArrayList<>();
     for (Map<String, Object> row : castListOfMaps(eligible)) {
       rows.add(
@@ -24,7 +24,7 @@ final class EligibilityPayloads {
     return List.copyOf(rows);
   }
 
-  static Integer parseCandidatesEvaluated(Object evaluated) {
+  public static Integer parseCandidatesEvaluated(Object evaluated) {
     if (evaluated instanceof Number number) {
       return number.intValue();
     }
@@ -38,21 +38,21 @@ final class EligibilityPayloads {
     return null;
   }
 
-  static String str(Object value) {
+  public static String str(Object value) {
     return value == null ? "" : String.valueOf(value);
   }
 
-  static String blankToNull(String value) {
+  public static String blankToNull(String value) {
     return StringUtils.hasText(value) ? value : null;
   }
 
-  static String blockedOrNull(Object value) {
+  public static String blockedOrNull(Object value) {
     String text = str(value);
     return StringUtils.hasText(text) ? text : null;
   }
 
   @SuppressWarnings("unchecked")
-  static List<Map<String, Object>> castListOfMaps(Object value) {
+  public static List<Map<String, Object>> castListOfMaps(Object value) {
     if (!(value instanceof List<?> list)) {
       return List.of();
     }

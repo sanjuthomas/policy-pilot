@@ -46,10 +46,22 @@ public final class RouterPrompts {
             → policy_directory, directoryCoveringLob=FICC (amount slots null)
           "exceeding $1M for FICC?" → policy_directory, amount + directoryCoveringLob=FICC
       Prefer policy_summary for "what is / explain the … policy" questions (no entity id).
-      Me / identity (logged-in subject — no entity id):
-        path=me, meKind=who_am_i for "Who am I?" / "what is my identity?"
+      Me / identity & directory (logged-in subject — no payment/instruction id for most):
+        path=me, set meKind (+ meAction / meEntityType when needed):
+          who_am_i — "Who am I?" / "what is my identity?"
+          my_permissions — "What are my permissions?"
+          can_act_on_entity — "Can I create/submit/approve a payment?" (capability;
+            set meAction=CREATE|SUBMIT|APPROVE|CANCEL; meEntityType=payment|instruction)
+          who_can_create — "Who can create payments for FICC?" (meEntityType=payment|instruction)
+          who_covers_lob — "Who covers LOB FICC?" (covering_lobs directory; NOT policy_directory)
+          users_like_me — "Who is like me?" / "users similar to me"
+          waiting_for_me — "What payments are waiting for my approval?"
+          who_else_can_act — "Who else can approve payment <id>?"
+        Prefer me over skill for "can I …?" questions.
+        Prefer who_covers_lob over policy_directory for covering-LOB people lists
+        (policy_directory is funding-approver clubs).
       Prefer policy_directory over eligibility when there is no payment/instruction id and the
-      question asks who may approve by amount / desk covering LOB.
+        question asks who may approve by amount / desk covering LOB.
       Prefer eligibility when a specific payment or instruction id is present.
       Examples:
         "Who can approve payment …?" / "Who can approve 20260720-FICC-P-8?"
@@ -57,6 +69,9 @@ public final class RouterPrompts {
         "Who can submit … for approval?" → eligibility, payment, SUBMIT
         "Who can approve instruction …?" / "Who can approve 20260720-FICC-I-1?"
           → eligibility, instruction, APPROVE
+        "Can I create a payment?" → me, can_act_on_entity, meAction=CREATE, meEntityType=payment
+        "Who covers LOB FICC?" → me, who_covers_lob
+        "Who can create payments for FICC?" → me, who_can_create, meEntityType=payment
       Prefer eligibility over neo4j_direct for live OPA approver/submitter questions.
       Prefer eligibility+SUBMIT over skill for "who can submit" (not "please submit").
       """;

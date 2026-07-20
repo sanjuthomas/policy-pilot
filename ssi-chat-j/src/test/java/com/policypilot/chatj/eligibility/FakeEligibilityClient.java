@@ -104,4 +104,25 @@ public class FakeEligibilityClient extends EligibilityClient {
     }
     return new HashMap<>(response);
   }
+
+  @Override
+  public java.util.List<Map<String, Object>> listPayments(
+      String status, int limit, String userBearerToken, String userSessionId) {
+    if (error != null) {
+      throw error;
+    }
+    Object list = response.get("payments");
+    if (list instanceof java.util.List<?> rows) {
+      java.util.List<Map<String, Object>> out = new java.util.ArrayList<>();
+      for (Object row : rows) {
+        if (row instanceof Map<?, ?> map) {
+          @SuppressWarnings("unchecked")
+          Map<String, Object> cast = (Map<String, Object>) map;
+          out.add(cast);
+        }
+      }
+      return out;
+    }
+    return java.util.List.of();
+  }
 }

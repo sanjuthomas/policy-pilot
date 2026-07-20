@@ -5,7 +5,8 @@ import com.policypilot.chatj.api.ApiModels.ChatResponse;
 import com.policypilot.chatj.auth.Subject;
 import com.policypilot.chatj.eligibility.EligibilityAnswerFormatter;
 import com.policypilot.chatj.eligibility.EligibilityClient;
-import com.policypilot.chatj.me.WhoAmIService;
+import com.policypilot.chatj.me.MeIntentResult;
+import com.policypilot.chatj.me.MeIntentService;
 import com.policypilot.chatj.observability.ChatAnswerFinalizer;
 import com.policypilot.chatj.pipeline.RouterDecision;
 import com.policypilot.chatj.policydirectory.PolicyDirectoryService;
@@ -26,7 +27,7 @@ public class ChatService {
   private final EligibilityAnswerFormatter eligibilityAnswerFormatter;
   private final PolicyDirectoryService policyDirectoryService;
   private final PolicySummaryAnswerFormatter policySummaryAnswerFormatter;
-  private final WhoAmIService whoAmIService;
+  private final MeIntentService meIntentService;
   private final ChatAnswerFinalizer answerFinalizer;
 
   public ChatService(
@@ -35,14 +36,14 @@ public class ChatService {
       EligibilityAnswerFormatter eligibilityAnswerFormatter,
       PolicyDirectoryService policyDirectoryService,
       PolicySummaryAnswerFormatter policySummaryAnswerFormatter,
-      WhoAmIService whoAmIService,
+      MeIntentService meIntentService,
       ChatAnswerFinalizer answerFinalizer) {
     this.intentRouter = intentRouter;
     this.eligibilityClient = eligibilityClient;
     this.eligibilityAnswerFormatter = eligibilityAnswerFormatter;
     this.policyDirectoryService = policyDirectoryService;
     this.policySummaryAnswerFormatter = policySummaryAnswerFormatter;
-    this.whoAmIService = whoAmIService;
+    this.meIntentService = meIntentService;
     this.answerFinalizer = answerFinalizer;
   }
 
@@ -93,7 +94,7 @@ public class ChatService {
     return answer(
         request,
         "ssi-chat-j answers payment/instruction eligibility, policy-directory, "
-            + "policy-summary, and who-am-I questions "
+            + "policy-summary, and me-centric questions "
             + "(e.g. Who can approve payment 20260720-FICC-P-8?). "
             + "Routed as path="
             + decision.getPath()
@@ -107,35 +108,21 @@ public class ChatService {
   }
 
   /**
-   * Python records who-am-I as {@code path=eligibility} + {@code intent_id=me.who_am_i} for OpenSLO
-   * / golden parity (not {@code path=me}).
+   * Python records me-intents as {@code path=eligibility} + {@code intent_id=me.*} for OpenSLO /
+   * golden parity (not {@code path=me}).
    */
   private ChatResponse meIntent(
       ChatRequest request, Subject subject, RouterDecision decision, double generationMs) {
-    String kind =
-        StringUtils.hasText(decision.getMeKind())
-            ? decision.getMeKind().strip().toLowerCase()
-            : "who_am_i";
-    if (!"who_am_i".equals(kind)) {
-      return answer(
-          request,
-          "ssi-chat-j currently supports meKind=who_am_i only. Routed as meKind=" + kind + ".",
-          "eligibility",
-          "formatter",
-          null,
-          0.0,
-          generationMs,
-          null);
-    }
+    MeIntentResult result = meIntentService.answer(decision, request.message(), subject);
     return answer(
         request,
-        whoAmIService.answer(subject),
+        result.answer(),
         "eligibility",
         "formatter",
         null,
         0.0,
         generationMs,
-        WhoAmIService.INTENT_ID);
+        result.intentId());
   }
 
   private ChatResponse policySummary(
