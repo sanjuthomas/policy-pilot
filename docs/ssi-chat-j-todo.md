@@ -92,7 +92,7 @@ Implement only what golden cases require; mark each golden id when green.
 |----|------|--------|-------|
 | P3.1 | Pipeline: route → handler lanes (path is law) | `in_progress` | Eligibility + directory + summary + me |
 | P3.2 | Eligibility / policy tools as needed by golden | `done` | Eligibility + directory + `policy_summary` |
-| P3.3 | Me / who-am-i if in golden | `done` | who-am-I for pay-205 golden |
+| P3.3 | Me / who-am-i if in golden | `done` | All Python meKinds live (incl. waiting_for_me / who_else_can_act) |
 | P3.4 | neo4j_direct + formatters for golden graph cases | `todo` | Via cypher bridge |
 | P3.5 | Vector / hybrid only if a golden case needs it | `todo` | |
 | P3.6 | Skills only if a golden case needs them | `deferred` | Likely after golden |
@@ -109,6 +109,19 @@ Implement only what golden cases require; mark each golden id when green.
 | `golden_policies_instruction_approval_summary` | `done` | `policy_summary` via authz OBO |
 | `golden_policies_payment_approval_summary` | `done` | funding / payment APPROVE summary |
 | `golden_me_who_am_i_identity_tokens_pay205` | `done` | who-am-I identity token backticks |
+| `golden_me_my_permissions_pay205` | `done` | my_permissions for pay-205 |
+| `golden_me_can_create_payment_yes_pay205` | `done` | can_act CREATE yes |
+| `golden_me_can_create_payment_fo_submitter` | `done` | FO create → fo_submitter |
+| `golden_me_who_covers_lob_ficc` | `done` | who_covers_lob FICC |
+| `golden_me_who_can_create_payment_ficc` | `done` | who_can_create payment for FICC |
+| `golden_me_users_like_me_pay205` | `done` | users_like_me |
+| `golden_me_can_approve_payment_capability` | `done` | can_approve directory-level |
+| `golden_me_can_submit_payment_fo_fx` | `done` | can_submit FO yes |
+| `golden_me_who_can_create_instruction` | `done` | who_can_create instruction |
+| `golden_policies_payment_create_summary` | `done` | payment CREATE summary |
+| `golden_policies_payment_cancel_summary` | `done` | payment CANCEL summary |
+| `golden_policies_amount_club_inclusive_1b` | `done` | inclusive $1B directory |
+| `golden_policies_amount_and_covering_combo` | `done` | amount + FICC covering |
 | _(remaining from full `eval_golden.yaml`)_ | `todo` | |
 
 ---

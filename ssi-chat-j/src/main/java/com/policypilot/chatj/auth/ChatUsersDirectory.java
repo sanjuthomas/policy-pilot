@@ -14,9 +14,11 @@ import org.springframework.stereotype.Component;
 import org.yaml.snakeyaml.Yaml;
 
 /**
- * Login-picker roster from the ZITADEL seed file (build-time copy of {@code zitadel-seed/users.yaml}).
+ * Login-picker roster + full directory rows from the ZITADEL seed file (build-time copy of {@code
+ * zitadel-seed/users.yaml}).
  *
- * <p>M1 uses the seed as a stable directory for the UI; live ZITADEL list can replace this later.
+ * <p>M1 uses the seed as a stable directory for the UI and me-lane directory answers; live ZITADEL
+ * list can replace this later.
  */
 @Component
 public class ChatUsersDirectory {
@@ -30,27 +32,43 @@ public class ChatUsersDirectory {
   public List<Map<String, Object>> listChatUsers() {
     Set<String> allowed = new HashSet<>(properties.chatRoles());
     List<Map<String, Object>> rows = new ArrayList<>();
+    for (DirectoryUser user : listDirectoryUsers()) {
+      if (user.roles().stream().noneMatch(allowed::contains)) {
+        continue;
+      }
+      Map<String, Object> row = new LinkedHashMap<>();
+      row.put("user_id", user.userId());
+      row.put("display_name", user.displayName());
+      row.put("title", user.title());
+      row.put("roles", user.roles());
+      row.put("audiences", AudienceLabels.forRoles(user.roles()));
+      rows.add(row);
+    }
+    rows.sort(Comparator.comparing(r -> String.valueOf(r.get("display_name"))));
+    return rows;
+  }
+
+  /** All non-service seed users with groups / covering LOBs (for me-lane directory answers). */
+  public List<DirectoryUser> listDirectoryUsers() {
+    List<DirectoryUser> out = new ArrayList<>();
     for (Map<String, Object> user : loadSeedUsers()) {
       String userId = str(user.get("user_id"));
       if (userId.startsWith("svc-")) {
         continue;
       }
-      List<String> roles = stringList(user.get("roles"));
-      if (roles.stream().noneMatch(allowed::contains)) {
-        continue;
-      }
-      Map<String, Object> row = new LinkedHashMap<>();
-      row.put("user_id", userId);
-      row.put(
-          "display_name",
-          str(user.get("family_name")) + ", " + str(user.get("given_name")));
-      row.put("title", str(user.get("title")));
-      row.put("roles", roles);
-      row.put("audiences", AudienceLabels.forRoles(roles));
-      rows.add(row);
+      out.add(
+          new DirectoryUser(
+              userId,
+              str(user.get("given_name")),
+              str(user.get("family_name")),
+              str(user.get("title")),
+              blankToNull(str(user.get("lob"))),
+              stringList(user.get("roles")),
+              stringList(user.get("groups")),
+              stringList(user.get("covering_lobs")),
+              blankToNull(str(user.get("supervisor_id")))));
     }
-    rows.sort(Comparator.comparing(r -> String.valueOf(r.get("display_name"))));
-    return rows;
+    return out;
   }
 
   @SuppressWarnings("unchecked")
@@ -78,6 +96,10 @@ public class ChatUsersDirectory {
 
   private static String str(Object value) {
     return value == null ? "" : String.valueOf(value);
+  }
+
+  private static String blankToNull(String value) {
+    return value == null || value.isBlank() ? null : value;
   }
 
   @SuppressWarnings("unchecked")

@@ -190,3 +190,340 @@ cases:
     - FUNDINGAPPROVER
     - UPTO1BILLIONCLUB
     - MIDDLEOFFICE
+
+- id: golden_me_my_permissions_pay205
+  mode: all
+  retrieval: eligibility
+  tags: [golden, me, my_permissions, formatting, ssi-chat-j]
+  persona: pay-205
+  question: What are my permissions?
+  expect:
+    require_routing: true
+    routing_path: eligibility
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: me.my_permissions
+    min_answer_length: 80
+    answer_contains_all:
+    - pay-205
+    - "**Roles:**"
+    - "`PAYMENT_CREATOR`"
+    - "`FUNDING_APPROVER`"
+    - "**Derived capabilities:**"
+    answer_not_contains:
+    - PAYMENTCREATOR
+
+- id: golden_me_can_create_payment_yes_pay205
+  mode: all
+  retrieval: eligibility
+  tags: [golden, me, can_act_on_entity, create, ssi-chat-j]
+  persona: pay-205
+  question: Can I create a payment?
+  expect:
+    require_routing: true
+    routing_path: eligibility
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: me.can_create_payment.yes
+    min_answer_length: 40
+    answer_contains_all:
+    - "**Yes**"
+    - pay-205
+    - "`UP_TO_1_BILLION_CLUB`"
+    - FICC
+    answer_contains_any:
+    - create
+    - draft payments
+
+- id: golden_me_can_create_payment_fo_submitter
+  mode: all
+  retrieval: eligibility
+  tags: [golden, me, can_act_on_entity, create, fo, ssi-chat-j]
+  persona: fo-fx-101
+  question: Can I create a payment?
+  expect:
+    require_routing: true
+    routing_path: eligibility
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: me.can_create_payment.fo_submitter
+    min_answer_length: 40
+    answer_contains_all:
+    - "**No**"
+    - fo-fx-101
+    - front-office submit
+    answer_contains_any:
+    - "`PAYMENT_CREATOR`"
+    - submit
+
+- id: golden_me_who_covers_lob_ficc
+  mode: all
+  retrieval: eligibility
+  tags: [golden, me, who_covers_lob, ssi-chat-j]
+  question: Who covers LOB FICC?
+  expect:
+    require_routing: true
+    routing_path: eligibility
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: me.who_covers_lob
+    min_answer_length: 40
+    answer_contains_all:
+    - cover LOB FICC
+    - Covering LOBs
+    answer_contains_any:
+    - pay-
+    - FICC
+
+- id: golden_me_who_can_create_payment_ficc
+  mode: all
+  retrieval: eligibility
+  tags: [golden, me, who_can_create, ssi-chat-j]
+  persona: pay-205
+  question: Who can create payments for FICC?
+  expect:
+    require_routing: true
+    routing_path: eligibility
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: me.who_can_create.payment
+    min_answer_length: 40
+    answer_contains_all:
+    - "**create**"
+    - "`PAYMENT_CREATOR`"
+    - FICC
+    answer_contains_any:
+    - MIDDLE_OFFICE
+    - pay-
+    answer_not_contains:
+    - policy directory
+
+- id: golden_me_users_like_me_pay205
+  mode: all
+  retrieval: eligibility
+  tags: [golden, me, users_like_me, ssi-chat-j]
+  persona: pay-205
+  question: Who is like me?
+  expect:
+    require_routing: true
+    routing_path: eligibility
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: me.users_like_me
+    min_answer_length: 40
+    answer_contains_all:
+    - pay-205
+    - Users similar to
+    - Closest matches
+    answer_contains_any:
+    - pay-
+    - Overlap
+
+- id: golden_me_can_approve_payment_capability
+  mode: all
+  retrieval: eligibility
+  tags: [golden, me, can_act_on_entity, approve, ssi-chat-j]
+  persona: pay-205
+  question: Can I approve a payment?
+  expect:
+    require_routing: true
+    routing_path: eligibility
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: me.can_approve_payment.yes
+    min_answer_length: 40
+    answer_contains_all:
+    - "**Yes**"
+    - pay-205
+    - FICC
+    answer_contains_any:
+    - "`UP_TO_1_BILLION_CLUB`"
+    - approve
+
+- id: golden_me_can_submit_payment_fo_fx
+  mode: all
+  retrieval: eligibility
+  tags: [golden, me, can_act_on_entity, submit, fo, ssi-chat-j]
+  persona: fo-fx-101
+  question: Can I submit a payment?
+  expect:
+    require_routing: true
+    routing_path: eligibility
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: me.can_submit_payment.yes
+    min_answer_length: 40
+    answer_contains_all:
+    - "**Yes**"
+    - "**submit**"
+    - FX
+    answer_not_contains:
+    - policy directory
+
+- id: golden_me_who_can_create_instruction
+  mode: all
+  retrieval: eligibility
+  tags: [golden, me, who_can_create, instruction, ssi-chat-j]
+  question: Who can create instructions?
+  expect:
+    require_routing: true
+    routing_path: eligibility
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: me.who_can_create.instruction
+    min_answer_length: 40
+    answer_contains_all:
+    - "**create**"
+    - "`INSTRUCTION_CREATOR`"
+    answer_contains_any:
+    - mo-
+    - MIDDLE_OFFICE
+    answer_not_contains:
+    - policy directory
+
+- id: golden_policies_payment_create_summary
+  mode: policies
+  retrieval: policy_summary
+  tags: [golden, policies, policy_summary, payment, create, ssi-chat-j]
+  question: What is the payment creation policy?
+  expect:
+    require_routing: true
+    routing_path: policy_summary
+    cypher_class: none
+    answer_synthesis: eligibility_api
+    min_answer_length: 60
+    answer_contains_all:
+    - Payment creation
+    - PAYMENT_CREATOR
+    answer_contains_any:
+    - MIDDLE_OFFICE
+    - authorization-service
+    - covering
+
+- id: golden_policies_payment_cancel_summary
+  mode: policies
+  retrieval: policy_summary
+  tags: [golden, policies, policy_summary, payment, cancel, ssi-chat-j]
+  question: What is the payment cancellation policy?
+  expect:
+    require_routing: true
+    routing_path: policy_summary
+    cypher_class: none
+    answer_synthesis: eligibility_api
+    min_answer_length: 60
+    answer_contains_all:
+    - Payment cancellation
+    - PAYMENT_CREATOR
+    answer_contains_any:
+    - DRAFT
+    - SUBMITTED
+    - MIDDLE_OFFICE
+    - authorization-service
+
+- id: golden_policies_amount_club_inclusive_1b
+  mode: policies
+  retrieval: policy_directory
+  tags: [golden, policies, policy_directory, amount_club, inclusive, ssi-chat-j]
+  question: Who can approve a billion dollar payment?
+  expect:
+    require_routing: true
+    routing_path: policy_directory
+    cypher_class: none
+    answer_synthesis: policy_directory_api
+    min_answer_length: 40
+    answer_contains_any:
+    - UP_TO_1_BILLION_CLUB
+    - policy directory
+    - User ID
+    - at least
+    - of at least
+
+- id: golden_policies_amount_and_covering_combo
+  mode: policies
+  retrieval: policy_directory
+  tags: [golden, policies, policy_directory, amount_club, covering_lob, ssi-chat-j]
+  question: Who can approve payments exceeding $1M covering FICC?
+  expect:
+    require_routing: true
+    routing_path: policy_directory
+    cypher_class: none
+    answer_synthesis: policy_directory_api
+    min_answer_length: 40
+    answer_contains_all:
+    - FICC
+    answer_contains_any:
+    - policy directory
+    - UP_TO_
+    - User ID
+    - FUNDING_APPROVER
+    - exceeding
+
+- id: golden_me_waiting_for_me_not_approver_fo
+  mode: all
+  retrieval: eligibility
+  tags: [golden, me, waiting_for_me, fo, ssi-chat-j]
+  persona: fo-fx-101
+  question: What payments are waiting for my approval?
+  expect:
+    require_routing: true
+    routing_path: eligibility
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: me.waiting_for_me.not_approver
+    min_answer_length: 40
+    answer_contains_all:
+    - fo-fx-101
+    - "`FUNDING_APPROVER`"
+
+- id: golden_me_waiting_for_me_worklist_pay205
+  mode: all
+  retrieval: eligibility
+  tags: [golden, me, waiting_for_me, ssi-chat-j]
+  persona: pay-205
+  question: What payments are waiting for my approval?
+  expect:
+    require_routing: true
+    routing_path: eligibility
+    cypher_class: none
+    answer_synthesis: formatter
+    min_answer_length: 40
+    answer_contains_any:
+    - waiting for your funding approval
+    - No SUBMITTED payments currently list you
+    - pay-205
+
+- id: golden_me_who_else_can_act_need_id
+  mode: all
+  retrieval: eligibility
+  tags: [golden, me, who_else_can_act, ssi-chat-j]
+  persona: pay-205
+  question: Who else can approve?
+  expect:
+    require_routing: true
+    routing_path: eligibility
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: me.who_else_can_act.need_id
+    min_answer_length: 20
+    answer_contains_any:
+    - payment id
+    - Include
+
+- id: golden_me_who_else_can_act_submitted
+  mode: all
+  retrieval: eligibility
+  tags: [golden, me, who_else_can_act, ssi-chat-j]
+  persona: pay-205
+  question: Who else can approve payment {submitted_payment_id}?
+  expect:
+    requires_context: [submitted_payment_id]
+    require_routing: true
+    routing_path: eligibility
+    cypher_class: none
+    answer_synthesis: formatter
+    min_answer_length: 20
+    answer_contains_any:
+    - Other users who can approve
+    - No other users currently satisfy
+    - not open for funding approval
+    - excluding you
