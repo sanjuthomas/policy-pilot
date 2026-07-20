@@ -166,7 +166,7 @@ def test_summarize_suite_quality():
 def test_golden_eval_yaml_loads():
     raw = yaml.safe_load(GOLDEN.read_text(encoding="utf-8"))
     suite = RegressionSuite.model_validate({"seed": {}, **raw})
-    assert len(suite.cases) >= 25
+    assert len(suite.cases) >= 26
     for case in suite.cases:
         assert case.expect.require_routing is True
     p0 = {c.id for c in suite.cases if "p0" in c.tags}
@@ -203,6 +203,17 @@ def test_golden_eval_yaml_loads():
         if case_id == "golden_policies_instruction_approval_summary":
             assert case.question == "What is the instruction approval policy?"
             assert case.expect.answer_synthesis == "eligibility_api"
+
+    me_case = by_id["golden_me_who_am_i_identity_tokens_pay205"]
+    assert me_case.persona == "pay-205"
+    assert me_case.mode == "all"
+    assert me_case.question == "Who am I?"
+    assert me_case.expect.intent_id == "me.who_am_i"
+    assert me_case.expect.answer_synthesis == "formatter"
+    assert "`PAYMENT_CREATOR`" in me_case.expect.answer_contains_all
+    assert "`UP_TO_1_BILLION_CLUB`" in me_case.expect.answer_contains_all
+    assert "PAYMENTCREATOR" in me_case.expect.answer_not_contains
+    assert "regression_guard" in me_case.tags
 
 @pytest.mark.parametrize(
     "retrieval,path,synthesis,should_pass",

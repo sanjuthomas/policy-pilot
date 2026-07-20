@@ -15,8 +15,9 @@ function formatInlineMarkdown(text) {
     return token;
   });
   html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-  // Underscore italics must not run inside protected code spans (e.g. ALERT_UNAPPROVED_INSTRUCTION).
-  html = html.replace(/_([^_\n]+)_/g, "<em>$1</em>");
+  // Only italicize deliberate _phrase_ markers — not SCREAMING_SNAKE identity tokens
+  // (PAYMENT_CREATOR, UP_TO_100_BILLION_CLUB) or comma-joined lists of them.
+  html = html.replace(/(?<![A-Za-z0-9])_([^_\n]+)_(?![A-Za-z0-9])/g, "<em>$1</em>");
   codeSlots.forEach((snippet, index) => {
     html = html.replace(`\u0000CODE${index}\u0000`, snippet);
   });

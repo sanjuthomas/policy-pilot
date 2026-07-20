@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from chat_application.auth.capabilities import capabilities_for
 from chat_application.auth.subject import Subject
+from chat_application.formatting.common import format_identity_token_list
 from chat_application.me.models import MeIntentResult
 
 _AMOUNT_CLUBS = frozenset(
@@ -18,7 +19,11 @@ def _capability_lines(subject: Subject) -> list[str]:
     groups = set(subject.groups)
     org_groups = [g for g in subject.groups if g not in _AMOUNT_CLUBS]
     clubs = [g for g in subject.groups if g in _AMOUNT_CLUBS]
-    club_text = ", ".join(clubs) if clubs else "no amount-limit club"
+    club_text = (
+        format_identity_token_list(clubs, empty="no amount-limit club")
+        if clubs
+        else "no amount-limit club"
+    )
     covering = (
         ", ".join(subject.covering_lobs) if subject.covering_lobs else "no covering LOBs"
     )
@@ -89,9 +94,9 @@ def answer_my_permissions(subject: Subject) -> MeIntentResult:
         f"Permissions for **{display}** (`{subject.user_id}`), derived from your "
         "signed-in identity (roles, groups, covering LOBs, amount clubs):",
         "",
-        f"- **Roles:** {', '.join(subject.roles) or '—'}",
-        f"- **Groups:** {', '.join(org_groups) or '—'}",
-        f"- **Amount clubs:** {', '.join(clubs) or '—'}",
+        f"- **Roles:** {format_identity_token_list(subject.roles)}",
+        f"- **Groups:** {format_identity_token_list(org_groups)}",
+        f"- **Amount clubs:** {format_identity_token_list(clubs)}",
         f"- **Covering LOBs:** {', '.join(subject.covering_lobs) or '—'}",
         f"- **Desk LOB:** {subject.lob or '—'}",
         "",

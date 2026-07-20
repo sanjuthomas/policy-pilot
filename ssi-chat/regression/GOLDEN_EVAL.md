@@ -22,7 +22,7 @@ Seed runs by default (`--no-seed` if the graph is already warm). Offline schema 
 pytest tests/test_eval_metrics.py -v
 ```
 
-## Case catalog (25)
+## Case catalog (26)
 
 | ID | Mode | Retrieval | Question | Context | Quality gates | Answer expects |
 |----|------|-----------|----------|---------|---------------|----------------|
@@ -47,6 +47,7 @@ pytest tests/test_eval_metrics.py -v
 | `golden_policies_amount_club_directory` | policies | policy_directory | Who has permission to approve payments worth more than $25 billion? | — | path `policy_directory`, synthesis `policy_directory_api` | policy directory / UP_TO_ / User ID |
 | `golden_policies_covering_lob_directory` | policies | policy_directory | Which users have permission to approve payments covering FICC? | — | same | policy directory / FICC / FUNDING_APPROVER |
 | `golden_policies_instruction_approval_summary` | policies | policy_summary | What is the instruction approval policy? | — | `require_routing`, path `policy_summary`, synthesis `eligibility_api`, `cypher_class: none` | Instruction approval / INSTRUCTION_APPROVER / live OPA source |
+| `golden_me_who_am_i_identity_tokens_pay205` | all | eligibility | Who am I? | persona `pay-205` | `require_routing`, path `eligibility`, synthesis `formatter`, intent `me.who_am_i` | backtick-safe `PAYMENT_CREATOR` / `FUNDING_APPROVER` / `UP_TO_1_BILLION_CLUB`; forbids concatenated forms |
 
 Pinned exact totals assume the shared harness seed in `eval_golden.yaml` / `questions.yaml` after truncate+reload. Golden runs **before** API smoke in the default suite so FO/MO VIEW denial ALERTs do not inflate counts. Do not re-seed on a warm graph before golden runs (`--no-seed`) or counts inflate.
 
@@ -63,6 +64,7 @@ Pinned exact totals assume the shared harness seed in `eval_golden.yaml` / `ques
 | Policies eligibility | `golden_policies_eligible_approvers_payment`, `golden_policies_eligible_approvers_instruction` |
 | Policies directory | `golden_policies_amount_club_directory`, `golden_policies_covering_lob_directory` |
 | Policies summary | `golden_policies_instruction_approval_summary` |
+| Me / formatting | `golden_me_who_am_i_identity_tokens_pay205` |
 
 ### By retrieval tag
 
@@ -71,7 +73,7 @@ Pinned exact totals assume the shared harness seed in `eval_golden.yaml` / `ques
 | deterministic | 17 | entity lookups, denial counts/lists, LOB-scope trio, show-by-id guards |
 | graph | 2 | `golden_events_count_today`, `golden_events_who_approved_payment` |
 | vector | 1 | `golden_vector_security_summary` |
-| eligibility | 2 | `golden_policies_eligible_approvers_payment`, `golden_policies_eligible_approvers_instruction` |
+| eligibility | 3 | `golden_policies_eligible_approvers_payment`, `golden_policies_eligible_approvers_instruction`, `golden_me_who_am_i_identity_tokens_pay205` |
 | policy_directory | 2 | `golden_policies_amount_club_directory`, `golden_policies_covering_lob_directory` |
 | policy_summary | 1 | `golden_policies_instruction_approval_summary` |
 

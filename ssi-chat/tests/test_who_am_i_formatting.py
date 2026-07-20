@@ -71,6 +71,11 @@ class TestWhoAmIFormatting:
         _assert_title_case_labels_intact(response.answer)
         assert "Vice President" in response.answer
         assert "pay-201" in response.answer
+        assert "`PAYMENT_CREATOR`" in response.answer
+        assert "`FUNDING_APPROVER`" in response.answer
+        assert "`UP_TO_100_MILLION_CLUB`" in response.answer
+        assert "PAYMENTCREATOR" not in response.answer
+        assert "FUNDINGAPPROVER" not in response.answer
 
     @pytest.mark.asyncio
     async def test_ask_who_am_i_preserves_labels(

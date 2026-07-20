@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from chat_application.auth.capabilities import capabilities_for
 from chat_application.auth.subject import Subject
+from chat_application.formatting.common import format_identity_token_list
 from chat_application.me.models import MeIntentResult
 
 _AMOUNT_CLUBS = frozenset(
@@ -38,9 +39,9 @@ def answer_who_am_i(subject: Subject) -> MeIntentResult:
         f"You are signed in as **{display}** (`{subject.user_id}`).",
         "",
         f"- **Title:** {subject.title or '—'}",
-        f"- **Roles:** {', '.join(subject.roles) or '—'}",
-        f"- **Groups:** {', '.join(org_groups) or '—'}",
-        f"- **Amount clubs:** {', '.join(clubs) or '—'}",
+        f"- **Roles:** {format_identity_token_list(subject.roles)}",
+        f"- **Groups:** {format_identity_token_list(org_groups)}",
+        f"- **Amount clubs:** {format_identity_token_list(clubs)}",
         f"- **Desk LOB:** {subject.lob or '—'}",
         f"- **Covering LOBs:** {', '.join(subject.covering_lobs) or '—'}",
         f"- **Supervisor:** {subject.supervisor_id or '—'}",

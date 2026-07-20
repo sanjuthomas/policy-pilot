@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from chat_application.auth.subject import Subject
 from chat_application.auth.users import SeedFile, SeedUser, load_users
+from chat_application.formatting.common import format_identity_token_list
 from chat_application.me.models import MeIntentResult
 
 _AMOUNT_CLUBS = frozenset(
@@ -92,12 +93,12 @@ def answer_who_can_create_payment(
         clubs = [g for g in user.groups if g in _AMOUNT_CLUBS]
         org = [g for g in user.groups if g not in _AMOUNT_CLUBS]
         covering = ", ".join(user.covering_lobs) or "—"
-        club_text = ", ".join(clubs) or "—"
+        club_text = format_identity_token_list(clubs)
         marker = " ← you" if subject and user.user_id == subject.user_id else ""
         lines.append(
             f"- **{user.family_name}, {user.given_name}** (`{user.user_id}`) — "
             f"{user.title}; covering [{covering}]; clubs [{club_text}]; "
-            f"groups [{', '.join(org) or '—'}]{marker}"
+            f"groups [{format_identity_token_list(org)}]{marker}"
         )
 
     lines.extend(

@@ -3,6 +3,7 @@ from __future__ import annotations
 from chat_application.formatting import (
     format_approval_auth_lines,
     format_identity_token,
+    format_identity_token_list,
     format_identity_tokens_in_text,
     format_markdown_table,
     format_money_amount,
@@ -108,6 +109,17 @@ class TestFormatIdentityTokens:
 
     def test_does_not_double_wrap(self) -> None:
         assert format_identity_token("`FUNDING_APPROVER`") == "`FUNDING_APPROVER`"
+
+    def test_formats_comma_separated_list(self) -> None:
+        assert format_identity_token_list(
+            ["PAYMENT_CREATOR", "FUNDING_APPROVER"]
+        ) == "`PAYMENT_CREATOR`, `FUNDING_APPROVER`"
+        assert (
+            format_identity_token_list(["UP_TO_100_BILLION_CLUB"])
+            == "`UP_TO_100_BILLION_CLUB`"
+        )
+        assert format_identity_token_list([]) == "—"
+        assert format_identity_token_list([], empty="none") == "none"
 
     def test_protects_prose_from_markdown_italics(self) -> None:
         prose = (

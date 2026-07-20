@@ -27,6 +27,16 @@ def format_identity_token(name: str) -> str:
     return token
 
 
+def format_identity_token_list(
+    names: list[str] | tuple[str, ...] | None,
+    *,
+    empty: str = "—",
+) -> str:
+    """Join identity tokens with markdown-safe backticks (comma-separated)."""
+    parts = [format_identity_token(str(name)) for name in (names or []) if str(name).strip()]
+    return ", ".join(parts) if parts else empty
+
+
 def format_identity_tokens_in_text(text: str) -> str:
     """Backtick SCREAMING_SNAKE identity tokens in prose without double-wrapping."""
     if not text:
