@@ -4,7 +4,6 @@ from collections import Counter
 from pathlib import Path
 
 import yaml
-
 from regression.assertions import evaluate_confirm_expectations, evaluate_expectations
 from regression.models import (
     SKILL_CONFIRM_PATHS,

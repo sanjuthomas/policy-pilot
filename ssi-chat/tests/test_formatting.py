@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from chat_application.formatting import (
     format_approval_auth_lines,
+    format_identity_token,
+    format_identity_tokens_in_text,
     format_markdown_table,
     format_money_amount,
     format_policy_violations,
@@ -92,3 +94,30 @@ class TestFormatPolicyViolations:
     def test_empty_falls_back(self) -> None:
         assert format_policy_violations([]) == "policy denied"
         assert format_policy_violations(None) == "policy denied"
+
+
+class TestFormatIdentityTokens:
+    def test_wraps_role_group_club(self) -> None:
+        assert format_identity_token("FUNDING_APPROVER") == "`FUNDING_APPROVER`"
+        assert format_identity_token("MIDDLE_OFFICE") == "`MIDDLE_OFFICE`"
+        assert format_identity_token("UP_TO_1_BILLION_CLUB") == "`UP_TO_1_BILLION_CLUB`"
+
+    def test_leaves_plain_lob_and_prose(self) -> None:
+        assert format_identity_token("FICC") == "FICC"
+        assert format_identity_token("instruction owning LOB") == "instruction owning LOB"
+
+    def test_does_not_double_wrap(self) -> None:
+        assert format_identity_token("`FUNDING_APPROVER`") == "`FUNDING_APPROVER`"
+
+    def test_protects_prose_from_markdown_italics(self) -> None:
+        prose = (
+            "Someone with the FUNDING_APPROVER role, who belongs to the "
+            "MIDDLE_OFFICE group and an amount-limit club"
+        )
+        formatted = format_identity_tokens_in_text(prose)
+        assert "`FUNDING_APPROVER`" in formatted
+        assert "`MIDDLE_OFFICE`" in formatted
+        # Already-backticked tokens stay single-wrapped.
+        assert format_identity_tokens_in_text("role `FUNDING_APPROVER` ok") == (
+            "role `FUNDING_APPROVER` ok"
+        )

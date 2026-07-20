@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from chat_application.pipeline.models import RouterDecision
 from chat_application.pipeline.route import route_question
 from tests.fixtures import router_decisions as fixtures

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from typing import get_args
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from chat_application.observability.routing import (
+    PATH_LABELS,
     AnswerRouting,
+    RetrievalPath,
     cypher_class_for_provenance,
     cypher_provenance_for_direct_intent,
     finalize_chat_response,
@@ -35,6 +37,9 @@ class TestQuestionFingerprint:
 
 
 class TestFormatRoutingLabel:
+    def test_path_labels_cover_every_retrieval_path(self) -> None:
+        assert set(PATH_LABELS) == set(get_args(RetrievalPath))
+
     def test_includes_intent_when_present(self) -> None:
         label = format_routing_label(
             path="neo4j_direct",
@@ -45,6 +50,27 @@ class TestFormatRoutingLabel:
         assert "Neo4j direct" in label
         assert "Predefined Cypher (YAML)" in label
         assert "intent=instruction.creator_by_id" in label
+
+    def test_policy_summary_label_does_not_keyerror(self) -> None:
+        label = format_routing_label(
+            path="policy_summary",
+            cypher_provenance="none",
+            answer_synthesis="eligibility_api",
+        )
+        assert "Policy summary" in label
+        response = finalize_chat_response(
+            "What is the funding approval policy?",
+            "policies",
+            answer="Funding approval rules…",
+            retrieval_ms=0.0,
+            generation_ms=1.0,
+            path="policy_summary",
+            cypher_provenance="none",
+            answer_synthesis="eligibility_api",
+        )
+        assert response.routing is not None
+        assert response.routing.path == "policy_summary"
+        assert "Policy summary" in (response.routing.label or "")
 
     def test_direct_intent_provenance_mapping(self) -> None:
         assert cypher_provenance_for_direct_intent("instruction.creator_by_id") == "predefined_yaml"

@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-
 from chat_application.formatting.dispatch import format_planned_graph_answer
 from chat_application.formatting.response import format_chat_response
 from chat_application.graph.cypher import plan_graph_queries

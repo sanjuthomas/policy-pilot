@@ -3,7 +3,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from chat_application.vector.search import (
     VectorSearchClient,
     _payload_from_node,

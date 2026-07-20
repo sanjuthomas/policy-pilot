@@ -74,8 +74,11 @@ PATH_LABELS: dict[str, str] = {
     "neo4j_direct": "Neo4j direct (early exit)",
     "eligibility": "Eligibility shortcut",
     "policy_directory": "Policy directory",
+    "policy_summary": "Policy summary",
+    "person_permissions": "Person permissions",
     "full_rag": "Full RAG (vector + graph)",
     "skill": "Mutation skill",
+    "me": "Me / identity",
 }
 
 _logger = get_logger(__name__)

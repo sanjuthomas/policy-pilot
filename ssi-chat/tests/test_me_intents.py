@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-
 from chat_application.auth.capabilities import audience_labels, capabilities_for
 from chat_application.auth.subject import Subject
 from chat_application.auth.users import SeedFile, SeedUser

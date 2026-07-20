@@ -6,7 +6,6 @@ import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from chat_application.auth.capabilities import ChatCapabilities
 from chat_application.models import ChatResponse
 from chat_application.pipeline.handlers.base import HandlerContext

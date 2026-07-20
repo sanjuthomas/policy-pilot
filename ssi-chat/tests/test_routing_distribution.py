@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
-
 from chat_application.models import SourceHit
 from chat_application.observability.routing import (
     AnswerRouting,
@@ -12,6 +10,7 @@ from chat_application.observability.routing import (
     log_answer_routing,
     reset_routing_distribution,
 )
+from fastapi.testclient import TestClient
 
 
 class TestRetrievalStrategyClassification:

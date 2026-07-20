@@ -95,7 +95,7 @@ intents:
     priority: 90
     modes: [payments, all, events]
     # Noun optional: "show me <P-id>" matches the same as "show me the payment <P-id>".
-    match: '\b(show|get|display|look\s*up|find|fetch|open|pull\s+up)\b.*\bpayment\b|\b(tell\s+me\s+about|details?\s+(?:for|of|on)|what\s+about)\b.*\bpayment\b|\bpayment\b\s+(?:id\s+)?\d{8}-[A-Z]+-P-\d+|\b(show|get|display|look\s*up|find|fetch|open|pull\s+up|tell\s+me\s+about|details?\s+(?:for|of|on)|what\s+about)\b.*\d{8}-[A-Z]+-P-\d+'
+    match: '\b(show|get|display|look\s*up|find|fetch|open|pull\s+up)\b.*\bpayment\b|\b(tell\s+me\s+about|details?\s+(?:for|of|on)|what\s+about)\b.*\bpayment\b|\bpayment\b\s+(?:id\s+)?\d{8}-[A-Z_]+-P-\d+|\b(show|get|display|look\s*up|find|fetch|open|pull\s+up|tell\s+me\s+about|details?\s+(?:for|of|on)|what\s+about)\b.*\d{8}-[A-Z_]+-P-\d+'
     exclude: '\bversions?\b|\bwho\s+created\b|\bwho\s+approv|\bstatus of\b|\bwhat is\s+the\s+status\b|\bcreate\b|\bdraft\b|\binstructions?\b'
     requires:
       payment_id: true

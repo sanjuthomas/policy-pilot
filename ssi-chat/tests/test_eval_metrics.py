@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-
 from regression.eval_metrics import (
     ROUTING_BY_RETRIEVAL,
     CaseQualityScores,
@@ -167,7 +166,7 @@ def test_summarize_suite_quality():
 def test_golden_eval_yaml_loads():
     raw = yaml.safe_load(GOLDEN.read_text(encoding="utf-8"))
     suite = RegressionSuite.model_validate({"seed": {}, **raw})
-    assert len(suite.cases) >= 24
+    assert len(suite.cases) >= 25
     for case in suite.cases:
         assert case.expect.require_routing is True
     p0 = {c.id for c in suite.cases if "p0" in c.tags}
@@ -191,12 +190,19 @@ def test_golden_eval_yaml_loads():
         ("golden_policies_eligible_approvers_instruction", "eligibility", "eligibility"),
         ("golden_policies_amount_club_directory", "policy_directory", "policy_directory"),
         ("golden_policies_covering_lob_directory", "policy_directory", "policy_directory"),
+        (
+            "golden_policies_instruction_approval_summary",
+            "policy_summary",
+            "policy_summary",
+        ),
     ):
         case = by_id[case_id]
         assert case.mode == "policies"
         assert case.retrieval == retrieval
         assert case.expect.routing_path == path
-
+        if case_id == "golden_policies_instruction_approval_summary":
+            assert case.question == "What is the instruction approval policy?"
+            assert case.expect.answer_synthesis == "eligibility_api"
 
 @pytest.mark.parametrize(
     "retrieval,path,synthesis,should_pass",

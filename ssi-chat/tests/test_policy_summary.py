@@ -70,6 +70,7 @@ def test_format_policy_summary_answer() -> None:
         }
     )
     assert "Funding approval" in text
-    assert "FUNDING_APPROVER" in text
-    assert "**role**: FUNDING_APPROVER" in text
+    assert "`FUNDING_APPROVER`" in text
+    assert "`MIDDLE_OFFICE`" in text
+    assert "**role**: `FUNDING_APPROVER`" in text
     assert "authorization-service" in text

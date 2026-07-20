@@ -3,7 +3,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 import pytest
-
 from chat_application.pipeline.heuristic_strategy import (
     heuristic_router_decision,
     infer_execution_strategy_heuristic,

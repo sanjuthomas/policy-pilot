@@ -3,7 +3,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from chat_application.auth.subject import Subject
 from chat_application.skills.create_payment import (
     _clubs,

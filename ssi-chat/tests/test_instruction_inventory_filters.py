@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 import pytest
-
 from chat_application.graph.direct import try_neo4j_direct_answer
 
 

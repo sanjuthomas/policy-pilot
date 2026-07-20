@@ -295,13 +295,13 @@ INSERT INTO service_level_objectives (
     "kind": "SLI",
     "metadata": { "name": "pipeline-consumer-success", "displayName": "Indexer consumer success" },
     "spec": {
-      "description": "Ratio of CDC records the indexer processed vs processed-plus-failed.",
+      "description": "Ratio of CDC records the indexer processed vs processed-plus-failed. Missing etl_consumer_failed is treated as zero (healthy indexer has no permanent failures).",
       "ratioMetric": {
         "good": { "metricSource": { "metricSourceRef": "prometheus", "spec": {
           "query": "sum(increase(etl_consumer_processed[5m]))"
         } } },
         "total": { "metricSource": { "metricSourceRef": "prometheus", "spec": {
-          "query": "sum(increase(etl_consumer_processed[5m])) + sum(increase(etl_consumer_failed[5m]))"
+          "query": "sum(increase(etl_consumer_processed[5m])) + (sum(increase(etl_consumer_failed[5m])) or vector(0))"
         } } }
       }
     }

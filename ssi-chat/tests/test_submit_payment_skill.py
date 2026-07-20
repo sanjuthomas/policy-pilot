@@ -3,7 +3,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from chat_application.auth.subject import Subject
 from chat_application.authz.obo import PolicyDecision
 from chat_application.skills.detect import parse_submit_payment_params

@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from cypher_builder import is_payment_list_question, plan_graph_queries
-
 from chat_application.graph.direct import match_neo4j_direct_intent
 from chat_application.models import ChatMessage
 from chat_application.pipeline.follow_up import expand_follow_up_question
+from cypher_builder import is_payment_list_question, plan_graph_queries
 
 
 def test_expand_list_those_payments_follow_up() -> None:
