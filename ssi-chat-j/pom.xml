@@ -11,7 +11,7 @@
     <relativePath/>
   </parent>
 
-  <groupId>com.policypilot</groupId>
+  <groupId>com.sanjuthomas.policypilot</groupId>
   <artifactId>ssi-chat-j</artifactId>
   <version>0.1.0-SNAPSHOT</version>
   <name>ssi-chat-j</name>
@@ -179,7 +179,7 @@
         <configuration>
           <excludes>
             <!-- Spring Boot entrypoint only -->
-            <exclude>com/policypilot/chatj/ChatJApplication.class</exclude>
+            <exclude>com/sanjuthomas/policypilot/ChatJApplication.class</exclude>
           </excludes>
         </configuration>
       </plugin>

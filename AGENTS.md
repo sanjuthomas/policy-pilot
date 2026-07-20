@@ -50,7 +50,7 @@ Every Python service **except** `ssi-demo-harness` must maintain line coverage o
 |--------|------|
 | Most application + `shared/*` packages | **≥ 80%** |
 | `ssi-chat` (`chat_application`) | **≥ 70%** — hermetic fixture `RouterDecision` contract; no Gemini in CI ([issue #13](https://github.com/sanjuthomas/policy-pilot/issues/13)). Do not pad coverage with heuristic-as-NLU tests. |
-| `ssi-chat-j` (Java `com.policypilot.chatj`) | **≥ 80%** line coverage via JaCoCo — see [`ssi-chat-j/AGENTS.md`](ssi-chat-j/AGENTS.md) |
+| `ssi-chat-j` (Java `com.sanjuthomas.policypilot`) | **≥ 80%** line coverage via JaCoCo — see [`ssi-chat-j/AGENTS.md`](ssi-chat-j/AGENTS.md) |
 | `ssi-demo-harness` | exempt |
 
 Package `[tool.coverage.report] fail_under` must match the gate above so local `pytest --cov` matches CI.
@@ -235,7 +235,7 @@ When removing a symbol from code, **remove its import** in the same edit (`F401`
 | `sequence-service` | `seq` | 8095 |
 | `ssi-indexer` | `etl` | 8090 |
 | `ssi-chat` | `chat_application` | 8092 |
-| `ssi-chat-j` | Java (`com.policypilot.chatj`) | 8096 |
+| `ssi-chat-j` | Java (`com.sanjuthomas.policypilot`) | 8096 |
 | `ssi-demo-harness` | `harness` | 8091 |
 
 See the root [README.md](README.md) for architecture, storage names, and demo URLs.

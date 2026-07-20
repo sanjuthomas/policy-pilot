@@ -14,7 +14,7 @@ From `ssi-chat-j/`:
 mvn -B verify
 ```
 
-That runs unit tests, writes a JaCoCo report, and **fails if line coverage is below 80%** on `com.policypilot.chatj` (entrypoint `ChatJApplication` excluded).
+That runs unit tests, writes a JaCoCo report, and **fails if line coverage is below 80%** on `com.sanjuthomas.policypilot` (entrypoint `ChatJApplication` excluded).
 
 Report: `target/site/jacoco/index.html`
 
@@ -24,7 +24,7 @@ Do **not** commit or push if `mvn verify` fails.
 
 | Target | Gate |
 |--------|------|
-| `ssi-chat-j` (`com.policypilot.chatj`) | **≥ 80%** line coverage |
+| `ssi-chat-j` (`com.sanjuthomas.policypilot`) | **≥ 80%** line coverage |
 
 Match root [AGENTS.md](../AGENTS.md) Python service expectations: add or update tests when you change code so coverage stays at or above the gate.
 
@@ -34,7 +34,7 @@ Prefer hermetic unit tests (mocks for ZITADEL, payment-service, Spring AI `ChatC
 
 | Path | Role |
 |------|------|
-| `src/main/java/com/policypilot/chatj/` | Application code |
+| `src/main/java/com/sanjuthomas/policypilot/` | Application code |
 | `src/main/resources/templates/answers/` | Thymeleaf TEXT answer templates |
 | `src/test/java/` | Unit tests |
 | `scripts/prove-m1.sh` | Optional live golden against `:8096` |

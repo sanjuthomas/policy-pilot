@@ -76,7 +76,7 @@ management:
 
 logging:
   level:
-    com.policypilot.chatj: INFO
+    com.sanjuthomas.policypilot: INFO
     org.springframework.ai: INFO
   pattern:
     console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] [traceId=%X{traceId:-} spanId=%X{spanId:-}] %logger{36} - %msg%n"

@@ -183,7 +183,7 @@ sequenceDiagram
 ```text
 ssi-chat-j/
   pom.xml
-  src/main/java/com/policypilot/chatj/
+  src/main/java/com/sanjuthomas/policypilot/
   src/main/resources/
     application.yml
     templates/          # Thymeleaf
@@ -228,7 +228,7 @@ CHAT_BASE_URL=http://localhost:8096 PYTHONPATH=. python -m regression.runner \
 
 ## Open follow-ups (not blocking the plan doc)
 
-- Exact package name (`com.policypilot.chatj` vs other)
+- Exact package name (`com.sanjuthomas.policypilot` vs other)
 - Whether `cypher-builder-svc` is a new compose service or a profile of an existing Python service
 - Spring AI vs Google GenAI SDK for structured `RouterDecision` (spike in Phase 1)
 
