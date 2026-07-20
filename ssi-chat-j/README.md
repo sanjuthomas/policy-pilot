@@ -15,6 +15,9 @@ Not wired into the root `docker-compose.yml` yet — run locally with Maven agai
   - instruction APPROVE → instruction-service `eligible-approvers`
 - `POST /api/chat` policy directory (amount club):
   - authz `payment-amount-limits` + `groups/{club}/members`
+- Observability (Micrometer → OTLP, same chat SLI names as Python; **no Prometheus scrape**):
+  - `POST /api/chat/feedback`
+  - `GET /api/routing-stats`, `GET /api/feedback-stats`
 
 ## Run (Maven)
 
@@ -22,11 +25,17 @@ With the usual Compose stack up (Python chat, payment, instruction, authz, ZITAD
 
 ```bash
 cd ssi-chat-j
+# Optional: point at the mesh collector (defaults match Python OTEL_* )
+# export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+# export OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+# export OTEL_SDK_DISABLED=true   # local only — still records in-process meters
 mvn -q spring-boot:run
 curl -s http://localhost:8096/health
 ```
 
 Coverage: `mvn verify` (≥ 80% JaCoCo). See [`AGENTS.md`](AGENTS.md).
+
+Metrics leave via **OTLP** (`micrometer-registry-otlp` + Micrometer Tracing → OTel). Actuator exposes **health only** — Prometheus registry / `/actuator/prometheus` is intentionally not wired. Series names match Python chat SLIs (`chat.answer.count`, `chat.feedback.count`, `http.server.request.duration`, …) under `service.name=ssi-chat-j`.
 
 ## Eligibility golden eval (HTTP black-box)
 

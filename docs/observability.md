@@ -8,8 +8,9 @@ The reference is a metrics + SLO stack for a single petstore service. We extend 
 
 ```mermaid
 flowchart TB
-  subgraph Apps["Application services (Python / FastAPI)"]
-    CHAT["ssi-chat"]
+  subgraph Apps["Application services"]
+    CHAT["ssi-chat (Python)"]
+    CHATJ["ssi-chat-j (Java / Micrometer→OTLP)"]
     AUTHZ["authorization-service"]
     INST["instruction-service"]
     PAY["payment-service"]
@@ -32,6 +33,7 @@ flowchart TB
   end
 
   Apps -->|"OTLP logs+metrics+traces"| OTEL
+  CHATJ -->|"OTLP metrics+traces (Micrometer)"| OTEL
   OTEL -->|metrics| PROM
   OTEL -->|logs| LOKI
   OTEL -->|traces| TEMPO
@@ -52,6 +54,8 @@ flowchart TB
 | Traces | `otlp → batch → otlp/tempo` | Tempo OTLP (`:4317`) | `Tempo` |
 
 The `prometheus` exporter runs with `add_metric_suffixes: false` and `resource_to_telemetry_conversion: true`, so OTLP metrics keep predictable names (`http_server_request_duration_bucket`, `chat_answer_count`) and carry a `service_name` label lifted from the OTel resource.
+
+**ssi-chat-j** emits the same chat SLI instrument names via **Micrometer** (`micrometer-registry-otlp`, Micrometer Tracing → OTel). It does **not** expose a Prometheus scrape endpoint; series land under `service.name=ssi-chat-j` (A/B separate from `ssi-chat`). OpenSLO seed docs still target `ssi-chat` until a Java-specific catalog entry is added.
 
 ## Services & ports
 

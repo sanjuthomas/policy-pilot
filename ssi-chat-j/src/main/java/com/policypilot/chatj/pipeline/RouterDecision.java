@@ -3,6 +3,9 @@ package com.policypilot.chatj.pipeline;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  * Structured output of the <em>route</em> step: one LLM call that decides what this
@@ -17,6 +20,8 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
  * <p>Grow this class only when a new path is implemented — add slots then, not ahead of time.
  * Unknown JSON properties from the model are ignored.
  */
+@Getter
+@Setter
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class RouterDecision {
@@ -59,59 +64,8 @@ public class RouterDecision {
 
   /** Model rationale for logs — not used for dispatch. */
   @JsonPropertyDescription("Brief explanation of the routing choice.")
+  @Setter(AccessLevel.NONE)
   private String reasoning = "";
-
-  public String getPath() {
-    return path;
-  }
-
-  public void setPath(String path) {
-    this.path = path;
-  }
-
-  public String getEligibilityTarget() {
-    return eligibilityTarget;
-  }
-
-  public void setEligibilityTarget(String eligibilityTarget) {
-    this.eligibilityTarget = eligibilityTarget;
-  }
-
-  public String getEligibilityAction() {
-    return eligibilityAction;
-  }
-
-  public void setEligibilityAction(String eligibilityAction) {
-    this.eligibilityAction = eligibilityAction;
-  }
-
-  public Double getDirectoryAmount() {
-    return directoryAmount;
-  }
-
-  public void setDirectoryAmount(Double directoryAmount) {
-    this.directoryAmount = directoryAmount;
-  }
-
-  public Boolean getDirectoryAmountStrict() {
-    return directoryAmountStrict;
-  }
-
-  public void setDirectoryAmountStrict(Boolean directoryAmountStrict) {
-    this.directoryAmountStrict = directoryAmountStrict;
-  }
-
-  public String getDirectoryCoveringLob() {
-    return directoryCoveringLob;
-  }
-
-  public void setDirectoryCoveringLob(String directoryCoveringLob) {
-    this.directoryCoveringLob = directoryCoveringLob;
-  }
-
-  public String getReasoning() {
-    return reasoning;
-  }
 
   public void setReasoning(String reasoning) {
     this.reasoning = reasoning == null ? "" : reasoning;

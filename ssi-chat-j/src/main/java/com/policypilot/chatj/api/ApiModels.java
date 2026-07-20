@@ -31,6 +31,16 @@ public final class ApiModels {
     }
   }
 
+  public record ChatFeedbackRequest(
+      String rating,
+      String mode,
+      String path,
+      String cypher_provenance,
+      String answer_synthesis,
+      String retrieval_strategy,
+      String intent_id,
+      String question_hash) {}
+
   @JsonInclude(JsonInclude.Include.NON_NULL)
   public record AnswerRoutingInfo(
       String path,

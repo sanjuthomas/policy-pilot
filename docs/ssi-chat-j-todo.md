@@ -27,6 +27,7 @@ Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `
 |------|--------|-------|
 | Plan + todo docs | `done` | This file + `ssi-chat-j-plan.md` |
 | **M1** — health + login + eligibility golden | `done` | Three eligibility goldens via `prove-eligibility.sh`; Maven on `:8096` (no root Compose) |
+| Observability (Micrometer → OTLP) | `done` | Same chat SLI names as Python; no Prometheus scrape |
 | Phase 2 cypher bridge | `todo` | Next for neo4j_direct goldens |
 
 ---
@@ -139,3 +140,4 @@ Implement only what golden cases require; mark each golden id when green.
 | 2026-07-20 | **M1 done:** health + login + Spring AI `RouterDecision` + payment eligibility OBO; proven by `golden_policies_eligible_approvers_payment` |
 | 2026-07-20 | Eligibility trio owned under `ssi-chat-j/eval/`; `prove-eligibility.sh` HTTP black-box vs `:8096` |
 | 2026-07-20 | Removed `ssi-chat-j` from root `docker-compose.yml` (Maven-only until Compose is wanted) |
+| 2026-07-20 | Java chat observability: Micrometer → OTLP (same chat SLI names as Python); no Prometheus scrape endpoint yet |

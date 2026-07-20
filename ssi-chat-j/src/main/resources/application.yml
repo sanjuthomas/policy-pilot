@@ -45,9 +45,38 @@ management:
   endpoints:
     web:
       exposure:
+        # Health only — no Prometheus scrape endpoint (metrics leave via OTLP).
         include: health
+  endpoint:
+    prometheus:
+      enabled: false
+  metrics:
+    tags:
+      service: ssi-chat-j
+    distribution:
+      percentiles-histogram:
+        http.server.request.duration: true
+  otlp:
+    metrics:
+      export:
+        # OtelEnvironmentPostProcessor remaps OTEL_EXPORTER_OTLP_* / OTEL_SDK_DISABLED.
+        enabled: true
+        url: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
+        protocol: ${OTEL_EXPORTER_OTLP_PROTOCOL:grpc}
+        step: 15s
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
+      transport: grpc
+  tracing:
+    sampling:
+      probability: 1.0
+  observations:
+    key-values:
+      application: ssi-chat-j
 
 logging:
   level:
     com.policypilot.chatj: INFO
     org.springframework.ai: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] [traceId=%X{traceId:-} spanId=%X{spanId:-}] %logger{36} - %msg%n"
