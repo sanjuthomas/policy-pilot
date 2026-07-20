@@ -48,6 +48,15 @@ public class RouterDecision {
       "policy_directory only: true for more-than/exceeding; false for at-least / a N payment.")
   private Boolean directoryAmountStrict;
 
+  /**
+   * When path is policy_directory: covering desk LOB for funding-approver directory (e.g. FICC,
+   * FX). Set when the question asks who may approve payments covering that desk — not when a
+   * specific payment id is present (that is eligibility).
+   */
+  @JsonPropertyDescription(
+      "policy_directory only: covering desk LOB code (FICC, FX, …) when asked without a payment id.")
+  private String directoryCoveringLob;
+
   /** Model rationale for logs — not used for dispatch. */
   @JsonPropertyDescription("Brief explanation of the routing choice.")
   private String reasoning = "";
@@ -90,6 +99,14 @@ public class RouterDecision {
 
   public void setDirectoryAmountStrict(Boolean directoryAmountStrict) {
     this.directoryAmountStrict = directoryAmountStrict;
+  }
+
+  public String getDirectoryCoveringLob() {
+    return directoryCoveringLob;
+  }
+
+  public void setDirectoryCoveringLob(String directoryCoveringLob) {
+    this.directoryCoveringLob = directoryCoveringLob;
   }
 
   public String getReasoning() {

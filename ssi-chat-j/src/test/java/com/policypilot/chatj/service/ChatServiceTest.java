@@ -333,4 +333,48 @@ class ChatServiceTest {
     assertTrue(response.answer().contains("pay-201"));
     assertEquals("policy_directory", response.routing().path());
   }
+
+  @Test
+  void policyDirectoryLaneFormatsCoveringLobAnswer() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("policy_directory");
+    decision.setDirectoryCoveringLob("FICC");
+    when(callResponseSpec.entity(eq(RouterDecision.class))).thenReturn(decision);
+
+    FakeEligibilityClient eligibilityClient =
+        new FakeEligibilityClient()
+            .returningGroupMembers(
+                Map.of(
+                    "group",
+                    "MIDDLE_OFFICE",
+                    "members",
+                    List.of(
+                        Map.of(
+                            "user_id",
+                            "pay-201",
+                            "display_name",
+                            "Laurent, Sophie",
+                            "title",
+                            "Vice President",
+                            "groups",
+                            List.of("MIDDLE_OFFICE", "UP_TO_1_BILLION_CLUB"),
+                            "covering_lobs",
+                            List.of("FICC", "FX")))));
+
+    ChatResponse response =
+        chatService(eligibilityClient)
+            .ask(
+                new ChatRequest(
+                    "Which users have permission to approve payments covering FICC?",
+                    List.of(),
+                    "policies"),
+                subject());
+
+    assertTrue(response.answer().contains("policy directory"));
+    assertTrue(response.answer().contains("FUNDING_APPROVER covering desk FICC"));
+    assertTrue(response.answer().contains("pay-201"));
+    assertTrue(response.answer().contains("User ID"));
+    assertEquals("policy_directory", response.routing().path());
+    assertEquals("policy_directory_api", response.routing().answer_synthesis());
+  }
 }

@@ -26,20 +26,26 @@ public class PolicyDirectoryService {
   }
 
   public String answer(String message, Subject subject, RouterDecision decision) {
-    Map<String, Object> limits =
-        eligibilityClient.paymentAmountLimits(subject.bearerToken(), subject.sessionId());
-    Map<String, Double> clubLimits = toClubLimits(limits.get("club_limits"));
-    double absoluteLimit = toDouble(limits.get("absolute_limit"));
-    if (clubLimits.isEmpty() || absoluteLimit <= 0) {
-      return "Could not load payment amount limits from policy (OPA). "
-          + "Try again shortly, or ask with an explicit club name such as "
-          + "UP_TO_100_BILLION_CLUB.";
-    }
-
     Double amount = decision != null ? decision.getDirectoryAmount() : null;
     Boolean strict = decision != null ? decision.getDirectoryAmountStrict() : null;
+    String coveringLob = decision != null ? decision.getDirectoryCoveringLob() : null;
+
+    Map<String, Double> clubLimits = Map.of();
+    double absoluteLimit = 0;
+    if (amount != null) {
+      Map<String, Object> limits =
+          eligibilityClient.paymentAmountLimits(subject.bearerToken(), subject.sessionId());
+      clubLimits = toClubLimits(limits.get("club_limits"));
+      absoluteLimit = toDouble(limits.get("absolute_limit"));
+      if (clubLimits.isEmpty() || absoluteLimit <= 0) {
+        return "Could not load payment amount limits from policy (OPA). "
+            + "Try again shortly, or ask with an explicit club name such as "
+            + "UP_TO_100_BILLION_CLUB.";
+      }
+    }
+
     ClubResolver.ClubResolution resolution =
-        ClubResolver.resolve(message, amount, strict, clubLimits, absoluteLimit);
+        ClubResolver.resolve(message, amount, strict, coveringLob, clubLimits, absoluteLimit);
     if (resolution.clubs().isEmpty()) {
       return "I could not determine which payment amount-limit club or desk LOB applies. "
           + "Try including an amount (e.g. a billion dollars / $25 billion), a club name such as "
@@ -54,7 +60,7 @@ public class PolicyDirectoryService {
               subject.bearerToken(),
               subject.sessionId(),
               "FUNDING_APPROVER",
-              null);
+              resolution.coveringLob());
       Object members = data.get("members");
       if (members instanceof List<?> list) {
         for (Object item : list) {
@@ -71,7 +77,7 @@ public class PolicyDirectoryService {
         resolution.clubs(),
         resolution.amount(),
         resolution.strict(),
-        null,
+        resolution.coveringLob(),
         DirectoryMemberMerger.merge(merged));
   }
 

@@ -27,11 +27,15 @@ public final class RouterPrompts {
             "who can approve a billion dollar payment?").
         Do not omit directoryAmount when size is implied — the client does not parse
         amounts from free text.
+        When the question asks who may approve payments covering / belonging to a desk LOB
+        (and there is no payment id), set directoryCoveringLob to the LOB code uppercase
+        (FICC, FX, DESK_RATES, …). Leave null when no desk is named.
         Examples:
           "worth more than $25 billion?" → policy_directory, directoryAmount=2.5e10, strict=true
           "a billion dollar payment?" → policy_directory, directoryAmount=1e9, strict=false
-          "one billion payment?" → policy_directory, directoryAmount=1e9, strict=false
-          "covering FICC?" (no amount) → policy_directory, leave amount slots null
+          "covering FICC?" / "approve payments covering FICC?"
+            → policy_directory, directoryCoveringLob=FICC (amount slots null)
+          "exceeding $1M for FICC?" → policy_directory, amount + directoryCoveringLob=FICC
       Prefer policy_directory over eligibility when there is no payment/instruction id and the
       question asks who may approve by amount / desk covering LOB.
       Prefer eligibility when a specific payment or instruction id is present.

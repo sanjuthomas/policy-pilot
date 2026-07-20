@@ -104,6 +104,7 @@ Implement only what golden cases require; mark each golden id when green.
 | `golden_policies_eligible_submitters_payment` | `done` | same |
 | `golden_policies_eligible_approvers_instruction` | `done` | same |
 | `golden_policies_amount_club_directory` | `done` | amount-club policy directory |
+| `golden_policies_covering_lob_directory` | `done` | covering-LOB policy directory |
 | _(remaining from full `eval_golden.yaml`)_ | `todo` | |
 
 ---
