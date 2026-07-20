@@ -30,7 +30,8 @@ class InvestigateHandler:
 
     async def handle(self, ctx: HandlerContext) -> ChatResponse:
         execution_strategy = ctx.decision.retrieval_strategy
-        if execution_strategy == "eligibility":
+        if execution_strategy == "eligibility" or ctx.path == "neo4j_direct":
+            # neo4j_direct miss fallthrough uses graph retrieve.
             execution_strategy = "graph"
 
         search_source = _search_source_for_mode(ctx.mode)

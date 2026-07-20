@@ -79,6 +79,12 @@ ROUTING_BY_RETRIEVAL: dict[RetrievalStrategy, RoutingExpectation] = {
         synthesis_modes=frozenset({"policy_directory_api"}),
         min_sources=0,
     ),
+    "policy_summary": RoutingExpectation(
+        paths=frozenset({"policy_summary"}),
+        cypher_classes=frozenset({"none"}),
+        synthesis_modes=frozenset({"eligibility_api"}),
+        min_sources=0,
+    ),
     "graph": RoutingExpectation(
         paths=frozenset({"neo4j_direct", "full_rag"}),
         cypher_classes=frozenset({"deterministic", "llm"}),

@@ -6,7 +6,6 @@ import time
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from chat_application.auth.capabilities import capabilities_for
 from chat_application.auth.subject import Subject
 from chat_application.formatting.response import format_chat_response

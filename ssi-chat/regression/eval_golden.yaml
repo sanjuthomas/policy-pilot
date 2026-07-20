@@ -402,3 +402,23 @@ cases:
     - FUNDING_APPROVER
     - User ID
     - covering
+
+- id: golden_policies_instruction_approval_summary
+  mode: policies
+  retrieval: policy_summary
+  tags: [golden, policies, policy_summary]
+  question: What is the instruction approval policy?
+  expect:
+    require_routing: true
+    routing_path: policy_summary
+    cypher_class: none
+    answer_synthesis: eligibility_api
+    min_answer_length: 80
+    answer_contains_all:
+    - Instruction approval
+    - INSTRUCTION_APPROVER
+    answer_contains_any:
+    - authorization-service
+    - four-eyes
+    - reporting-line
+    - approval matrix

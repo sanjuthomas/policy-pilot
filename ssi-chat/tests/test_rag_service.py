@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock
 
 import pytest
 from cypher_builder import GraphIntent, GraphQueryPlan
-
 from tests.fixtures.router_decisions import GRAPH, set_router_decision
 
 

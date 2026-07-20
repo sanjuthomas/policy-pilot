@@ -15,6 +15,7 @@ from chat_application.pipeline.handlers.gates import (
 )
 from chat_application.pipeline.handlers.investigate import InvestigateHandler
 from chat_application.pipeline.handlers.me import MeIntentHandler
+from chat_application.pipeline.handlers.neo4j_direct import Neo4jDirectHandler
 from chat_application.pipeline.handlers.policy_tools import PolicyToolsHandler
 from chat_application.pipeline.handlers.registry import resolve_handler
 from chat_application.pipeline.handlers.skill import CreatePaymentSkillHandler
@@ -148,6 +149,13 @@ class TestLaneAccess:
         assert access.allowed
         assert access.lane == HandlerLane.INVESTIGATE
 
+    def test_neo4j_direct_lane_in_events(self) -> None:
+        access = resolve_lane_access(
+            path="neo4j_direct", mode="events", capabilities=_caps(creator=True)
+        )
+        assert access.allowed
+        assert access.lane == HandlerLane.NEO4J_DIRECT
+
     def test_me_allowed_in_any_mode(self) -> None:
         access = resolve_lane_access(
             path="me", mode="events", capabilities=_caps(approver=True)
@@ -180,6 +188,12 @@ class TestResolveHandler:
             _ctx(path="hybrid", mode="events", caps=_caps(compliance=True))
         )
         assert isinstance(handler, InvestigateHandler)
+
+    def test_neo4j_direct_lane(self) -> None:
+        handler = resolve_handler(
+            _ctx(path="neo4j_direct", mode="events", caps=_caps(compliance=True))
+        )
+        assert isinstance(handler, Neo4jDirectHandler)
 
     def test_me_lane(self) -> None:
         handler = resolve_handler(

@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
-
 from chat_application.models import (
     ChatMessage,
     ChatRequest,
     ChatResponse,
     SourceHit,
 )
+from pydantic import ValidationError
 
 
 class TestChatMessage:

@@ -92,7 +92,7 @@ Seven OpenSLO documents are seeded (`observability/slo-catalog/seed-slos.sql`) a
 | `authz-evaluate-latency-250ms-30d` | authorization-service | 99% | `authz_evaluate_duration` `le="250"` / total |
 | `skill-execution-success-30d` | ssi-chat | 99% | `chat_skill_outcome_count{status!="error"}` / all |
 | `platform-http-success-30d` | policy-pilot | 99.9% | non-5xx / all requests, every service |
-| `pipeline-consumer-success-30d` | ssi-indexer | 99.9% | `etl_consumer_processed` / (processed + failed) |
+| `pipeline-consumer-success-30d` | ssi-indexer | 99.9% | `etl_consumer_processed` / (processed + (`etl_consumer_failed` or 0)) |
 
 Provisioned Sloth rules land in the `prometheus-sloth-rules` volume mounted at `/etc/prometheus/rules-sloth`. Useful recorded series:
 

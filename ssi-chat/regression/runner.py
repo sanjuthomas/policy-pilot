@@ -499,7 +499,7 @@ def main(argv: list[str] | None = None) -> int:
         default="",
         help=(
             "Comma-separated retrieval filter: deterministic, graph, vector, "
-            "eligibility, policy_directory, skill"
+            "eligibility, policy_directory, policy_summary, skill"
         ),
     )
     parser.add_argument("--ids", default="", help="Comma-separated case id filter")
@@ -546,9 +546,18 @@ def main(argv: list[str] | None = None) -> int:
         case_ids=id_filter,
         retrieval=retrieval_filter,
     )
-    # Golden stage ignores bank filters so the integration suite always gets a
-    # full deterministic check when enabled.
-    golden_cases = list(golden_suite.cases)
+    # Full golden by default (bank --mode/--tags/--retrieval must not shrink it).
+    # Explicit --ids still filters golden so failed cases can be re-run alone.
+    if id_filter:
+        golden_cases = filter_cases(
+            golden_suite.cases,
+            mode="all",
+            tags=None,
+            case_ids=id_filter,
+            retrieval=None,
+        )
+    else:
+        golden_cases = list(golden_suite.cases)
 
     seed_context: dict[str, str] = {}
     if args.seed and seed_suite.seed.steps:

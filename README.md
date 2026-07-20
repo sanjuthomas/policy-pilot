@@ -22,7 +22,7 @@ Policy Pilot is a **reference implementation** of that control model, demonstrat
 
 ## The problem
 
-Enterprises want AI that can *do* work: create a payment, submit for funding, approve a trade, answer “who can approve this?”
+Enterprises want AI that can *do* work: create a payment, submit for funding, approve a trade, answer “Are there any instances of approving each other's payments?”
 
 What they cannot accept is AI that **bypasses business decisions** — four-eyes rules, ownership, limits, compliance — because those rules lived in a prompt, a spreadsheet, or a service the agent never called.
 

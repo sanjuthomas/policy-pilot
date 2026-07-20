@@ -9,6 +9,40 @@ _AMOUNT_IN_BASIS = re.compile(
     re.IGNORECASE,
 )
 
+# Roles / groups / amount clubs (e.g. FUNDING_APPROVER, MIDDLE_OFFICE, UP_TO_1_BILLION_CLUB).
+_IDENTITY_TOKEN = re.compile(r"\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b")
+_CODE_SPAN = re.compile(r"`[^`]+`")
+_CODE_SLOT = "\0IDCODE{index}\0"
+
+
+def format_identity_token(name: str) -> str:
+    """Wrap a role/group/club token in backticks for markdown-safe display."""
+    token = str(name or "").strip()
+    if not token:
+        return token
+    if token.startswith("`") and token.endswith("`") and token.count("`") == 2:
+        return token
+    if _IDENTITY_TOKEN.fullmatch(token):
+        return f"`{token}`"
+    return token
+
+
+def format_identity_tokens_in_text(text: str) -> str:
+    """Backtick SCREAMING_SNAKE identity tokens in prose without double-wrapping."""
+    if not text:
+        return text
+    slots: list[str] = []
+
+    def _protect(match: re.Match[str]) -> str:
+        slots.append(match.group(0))
+        return _CODE_SLOT.format(index=len(slots) - 1)
+
+    protected = _CODE_SPAN.sub(_protect, text)
+    wrapped = _IDENTITY_TOKEN.sub(lambda match: f"`{match.group(0)}`", protected)
+    for index, snippet in enumerate(slots):
+        wrapped = wrapped.replace(_CODE_SLOT.format(index=index), snippet)
+    return wrapped
+
 
 def escape_markdown_cell(value: Any) -> str:
     if value is None or value == "":

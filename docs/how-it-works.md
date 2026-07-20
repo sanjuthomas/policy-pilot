@@ -8,7 +8,70 @@ Technical reference for the operating stack: integration, data flow, intent rout
 
 ## Reference architecture
 
-![End-to-end architecture](architecture.png)
+Component-level dataflow (mutation → evidence → retrieval). Chat-internal Route → Retrieve → Synthesize detail is in the sections below.
+
+```mermaid
+flowchart LR
+    Actor(["Front · Middle Office · Compliance"])
+
+    subgraph Surfaces
+        PP["ssi-chat · Policy Pilot"]
+        UI["Classic UIs<br/>instruction and payment HTML"]
+    end
+
+    subgraph Identity_Policy["Identity and Policy"]
+        Z["ZITADEL (OIDC)"]
+        AZ["authorization-service<br/>OPA gateway"]
+        OPA["OPA (Rego)"]
+    end
+
+    subgraph Domain["Domain write path"]
+        IS["instruction-service"]
+        PS["payment-service"]
+        SEQ["sequence-service"]
+    end
+
+    MDB[("MongoDB rs0<br/>instructions · payments · security_events")]
+
+    subgraph Pipeline["CDC / indexing"]
+        KC["Kafka Connect<br/>Mongo source"]
+        K["Kafka topics"]
+        IDX["ssi-indexer (ETL)"]
+    end
+
+    NEO[("Neo4j<br/>graph + vector · MultimodalDocument")]
+    V["Google Vertex<br/>Gemini + embeddings"]
+
+    Actor -->|use| PP
+    Actor -->|use| UI
+
+    Z -->|OIDC / JWT| PP
+    Z -->|OIDC / JWT| UI
+
+    UI -->|HTTPS + JWT| IS
+    UI -->|HTTPS + JWT| PS
+
+    PP -->|OBO evaluate / eligibility| AZ
+    IS -->|OBO evaluate| AZ
+    PS -->|OBO evaluate| AZ
+    AZ -->|evaluate| OPA
+    AZ -.->|directory| Z
+
+    IS -.->|id| SEQ
+    PS -.->|id| SEQ
+    IS -->|txn write| MDB
+    PS -->|txn write| MDB
+
+    MDB -->|CDC| KC
+    KC -->|publish| K
+    K -->|consume| IDX
+    IDX -->|graph + vector| NEO
+
+    PP -->|retrieve graph / vector| NEO
+    PP -->|textgen / embed| V
+    PP -->|skills / mutate · re-check OPA| PS
+    PP -->|skills / mutate · re-check OPA| IS
+```
 
 Domain services enforce OPA policy and write versioned state **and** a security event to MongoDB in one transaction. Kafka Connect streams inserts; **ssi-indexer** builds a shared Neo4j graph and dense vector index. **ssi-chat** routes natural language through Route → Retrieve → Synthesize. Live policy and eligibility use the same **authorization-service → OPA** path as mutations (logged-in user JWT / ZITADEL session via OBO) — not a parallel unchecked tool layer.
 

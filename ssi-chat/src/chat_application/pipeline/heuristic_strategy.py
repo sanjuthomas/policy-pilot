@@ -385,9 +385,47 @@ def heuristic_router_decision(question: str, *, mode: str) -> RouterDecision:
 
     strategy = infer_execution_strategy_heuristic(question, mode=mode)
     target = resolve_eligibility_target(question, mode=mode) if strategy == "eligibility" else None
+    if strategy == "graph":
+        # Path is law: structured shapes own neo4j_direct; ad-hoc Cypher stays graph.
+        from chat_application.graph.direct import match_neo4j_direct_intent
+
+        if match_neo4j_direct_intent(question, mode=mode) is not None:
+            return RouterDecision(
+                path="neo4j_direct",
+                reasoning="heuristic fallback: neo4j_direct YAML/planned match",
+            )
     return RouterDecision(
         path=strategy,
         strategy=strategy,
         eligibility_target=target,
         reasoning="heuristic fallback",
+    )
+
+
+def prefer_neo4j_direct_when_matched(
+    decision: RouterDecision,
+    message: str,
+    *,
+    mode: str,
+) -> RouterDecision:
+    """Clamp graph/hybrid → neo4j_direct when YAML/planned matcher hits.
+
+    Product rule (issue #8): path is set before handlers; investigate never
+    silently steals. Pure ``vector`` is never upgraded.
+    """
+    if decision.path not in ("graph", "hybrid"):
+        return decision
+    from chat_application.graph.direct import match_neo4j_direct_intent
+
+    if match_neo4j_direct_intent(message, mode=mode) is None:
+        return decision
+    prior = decision.path
+    reasoning = (decision.reasoning or "").strip()
+    note = f"clamped neo4j_direct (YAML matched; was {prior})"
+    return decision.model_copy(
+        update={
+            "path": "neo4j_direct",
+            "strategy": None,
+            "reasoning": f"{reasoning}; {note}".strip("; "),
+        }
     )

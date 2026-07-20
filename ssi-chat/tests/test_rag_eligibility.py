@@ -3,7 +3,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from chat_application.rag import RagService
 from tests.fixtures.router_decisions import (
     ELIGIBILITY_INSTRUCTION,

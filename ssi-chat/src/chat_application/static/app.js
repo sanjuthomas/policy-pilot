@@ -212,7 +212,10 @@ async function login() {
 
 function logout() {
   session = null;
+  history = [];
   saveSession();
+  // Drop chat transcript, skill cards, metadata, and mode UI by reloading unsigned.
+  window.location.assign("/");
 }
 
 function authHeaders() {

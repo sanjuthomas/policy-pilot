@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from chat_application.models import SearchMode
 from chat_application.pipeline.heuristic_strategy import (
     heuristic_router_decision,
+    prefer_neo4j_direct_when_matched,
     prefer_vector_for_open_narrative,
 )
 from chat_application.pipeline.models import RouterDecision
@@ -27,4 +28,5 @@ async def route_question(
     except Exception as exc:
         logger.warning("LLM router failed, using heuristic fallback: %s", exc)
         decision = heuristic_router_decision(message, mode=mode)
-    return prefer_vector_for_open_narrative(decision, message, mode=mode)
+    decision = prefer_vector_for_open_narrative(decision, message, mode=mode)
+    return prefer_neo4j_direct_when_matched(decision, message, mode=mode)

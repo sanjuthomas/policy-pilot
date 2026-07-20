@@ -2,14 +2,13 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from fastapi.testclient import TestClient
-
 from chat_application.observability.feedback import (
     ChatFeedbackContext,
     get_feedback_distribution,
     record_chat_feedback,
     reset_feedback_distribution,
 )
+from fastapi.testclient import TestClient
 
 
 class TestChatFeedbackContext:

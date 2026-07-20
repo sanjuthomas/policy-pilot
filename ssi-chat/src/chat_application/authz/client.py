@@ -9,6 +9,8 @@ from chat_application.auth.service_identity import service_identity
 from chat_application.config import settings
 from chat_application.formatting import (
     format_eligible_approvers_section,
+    format_identity_token,
+    format_identity_tokens_in_text,
     format_money_amount,
 )
 
@@ -255,7 +257,7 @@ def format_policy_summary_answer(data: dict[str, Any]) -> str:
 
     lines = [header, ""]
     if narrative:
-        lines.append(narrative)
+        lines.append(format_identity_tokens_in_text(narrative))
         lines.append("")
 
     if requires:
@@ -267,7 +269,7 @@ def format_policy_summary_answer(data: dict[str, Any]) -> str:
             value = str(item.get("value") or "").strip()
             if not kind or not value:
                 continue
-            lines.append(f"- **{kind}**: {value}")
+            lines.append(f"- **{kind}**: {format_identity_token(value)}")
         lines.append("")
 
     lines.append("_Source: live OPA policy via authorization-service._")
@@ -303,12 +305,15 @@ def format_person_permission_summary_answer(data: dict[str, Any]) -> str:
     ]
     narrative = str(row.get("narrative") or "").strip()
     if narrative:
-        lines.append(narrative)
+        lines.append(format_identity_tokens_in_text(narrative))
         lines.append("")
 
-    roles = ", ".join(row.get("roles") or []) or "—"
-    groups = ", ".join(row.get("groups") or []) or "—"
-    clubs = ", ".join(row.get("amount_clubs") or []) or "—"
+    roles = ", ".join(format_identity_token(str(r)) for r in (row.get("roles") or [])) or "—"
+    groups = ", ".join(format_identity_token(str(g)) for g in (row.get("groups") or [])) or "—"
+    clubs = (
+        ", ".join(format_identity_token(str(c)) for c in (row.get("amount_clubs") or []))
+        or "—"
+    )
     covering = ", ".join(row.get("covering_lobs") or []) or "—"
     lob = row.get("lob") or "—"
     lines.extend(

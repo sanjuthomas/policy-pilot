@@ -3,7 +3,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 import pytest
-
 from chat_application.formatting.neo4j import (
     format_instruction_creator_by_id,
     format_instruction_detail_by_id,
@@ -67,6 +66,14 @@ class TestNeo4jDirectMatching:
 
     def test_matches_show_payment_by_id_without_noun(self) -> None:
         question = "Can you show me 20260712-FICC-P-2?"
+        match = match_neo4j_direct_intent(question, mode="payments")
+        assert match is not None
+        assert match.intent_id == "payment.show_by_id"
+        assert match.formatter_name == "payment_detail_by_id"
+
+    def test_matches_show_payment_by_id_without_noun_underscore_lob(self) -> None:
+        """Bare show-me must accept OWNING_LOB tokens with underscores (e.g. DESK_RATES)."""
+        question = "Can you show me 20260720-DESK_RATES-P-2?"
         match = match_neo4j_direct_intent(question, mode="payments")
         assert match is not None
         assert match.intent_id == "payment.show_by_id"

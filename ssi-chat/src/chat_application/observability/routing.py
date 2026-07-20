@@ -37,8 +37,11 @@ RetrievalPath = Literal[
     "neo4j_direct",
     "eligibility",
     "policy_directory",
+    "policy_summary",
+    "person_permissions",
     "full_rag",
     "skill",
+    "me",
 ]
 
 RetrievalStrategy = Literal[
@@ -71,8 +74,11 @@ PATH_LABELS: dict[str, str] = {
     "neo4j_direct": "Neo4j direct (early exit)",
     "eligibility": "Eligibility shortcut",
     "policy_directory": "Policy directory",
+    "policy_summary": "Policy summary",
+    "person_permissions": "Person permissions",
     "full_rag": "Full RAG (vector + graph)",
     "skill": "Mutation skill",
+    "me": "Me / identity",
 }
 
 _logger = get_logger(__name__)
@@ -135,8 +141,12 @@ def classify_retrieval_strategy(
         return "eligibility"
     if path == "policy_directory":
         return "policy_directory"
+    if path in ("policy_summary", "person_permissions"):
+        return "eligibility"
     if path == "skill":
         return "skill"
+    if path == "me":
+        return "deterministic"
     if path == "neo4j_direct":
         return "deterministic"
 

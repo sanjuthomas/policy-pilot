@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from chat_application.pipeline.handlers.base import ChatHandler, HandlerContext
+from chat_application.pipeline.handlers.base import HandlerContext
 from chat_application.pipeline.handlers.denial import DenialHandler
 from chat_application.pipeline.handlers.gates import (
     DenialReason,
@@ -20,22 +20,8 @@ _direct = Neo4jDirectHandler()
 _investigate = InvestigateHandler()
 
 
-class _ChainHandler:
-    """Try handlers in order; first non-None response wins."""
-
-    def __init__(self, *handlers: ChatHandler) -> None:
-        self._handlers = handlers
-
-    async def handle(self, ctx: HandlerContext):
-        for handler in self._handlers:
-            response = await handler.handle(ctx)
-            if response is not None:
-                return response
-        return None
-
-
 async def resolve_and_handle(ctx: HandlerContext):
-    """Capability × mode fence, then lane handler (no orchestrator switchboard)."""
+    """Capability × mode fence, then exactly one path-owned handler (path is law)."""
     access = resolve_lane_access(
         path=ctx.path,
         mode=ctx.mode,
@@ -59,12 +45,20 @@ async def resolve_and_handle(ctx: HandlerContext):
             if ctx.capabilities.can_use_policies:
                 return await _tools.handle(ctx)
             return await DenialHandler(DenialReason.POLICIES_MODE_OPERATIONAL).handle(ctx)
-        return await _ChainHandler(_direct, _investigate).handle(ctx)
+        # Me miss in investigate modes — full RAG (path remains me only if me answered).
+        return await _investigate.handle(ctx)
 
     if access.lane == HandlerLane.TOOLS:
         return await _tools.handle(ctx)
 
-    return await _ChainHandler(_direct, _investigate).handle(ctx)
+    if access.lane == HandlerLane.NEO4J_DIRECT:
+        response = await _direct.handle(ctx)
+        if response is not None:
+            return response
+        # Missed YAML/planned shape — fall through to graph investigate (not a path steal).
+        return await _investigate.handle(ctx)
+
+    return await _investigate.handle(ctx)
 
 
 def resolve_handler(ctx: HandlerContext):
@@ -82,4 +76,6 @@ def resolve_handler(ctx: HandlerContext):
         return _me
     if access.lane == HandlerLane.TOOLS:
         return _tools
+    if access.lane == HandlerLane.NEO4J_DIRECT:
+        return _direct
     return _investigate

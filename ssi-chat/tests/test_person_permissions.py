@@ -55,4 +55,6 @@ def test_format_person_permission_summary_answer() -> None:
     assert "Kowalski, Anna" in text
     assert "pay-203" in text
     assert "funding_approve" in text
-    assert "UP_TO_100_MILLION_CLUB" in text
+    assert "`UP_TO_100_MILLION_CLUB`" in text
+    assert "`FUNDING_APPROVER`" in text
+    assert "`MIDDLE_OFFICE`" in text

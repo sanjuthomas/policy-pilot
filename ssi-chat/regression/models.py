@@ -14,6 +14,7 @@ RetrievalStrategy = Literal[
     "vector",
     "eligibility",
     "policy_directory",
+    "policy_summary",
     "skill",
 ]
 
@@ -92,6 +93,8 @@ class RegressionCase(BaseModel):
             "Primary engine for the answer: deterministic (Neo4j formatter, no LLM synthesis), "
             "graph (Neo4j planned/LLM Cypher authoritative), vector (Neo4j dense primary), "
             "eligibility (live OPA via authorization-service, no vector search), "
+            "policy_directory (ZITADEL / amount-club / covering-LOB directories), "
+            "policy_summary (live OPA normative policy summary), "
             "skill (mutation skill with optional Go / No Go confirm)."
         ),
     )

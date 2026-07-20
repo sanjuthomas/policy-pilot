@@ -3,7 +3,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-
 from chat_application.graph.cypher import (
     extract_entity_ids,
     extract_uuids,

@@ -1,20 +1,16 @@
 from __future__ import annotations
 
-from chat_application.graph.cypher import extract_entity_ids, extract_payment_ids
 from chat_application.models import ChatResponse
 from chat_application.observability.routing import finalize_chat_response
 from chat_application.pipeline.handlers.base import HandlerContext
-from chat_application.pipeline.heuristic_strategy import (
-    is_eligibility_question_heuristic,
-    resolve_eligibility_target,
-)
+from chat_application.pipeline.heuristic_strategy import resolve_eligibility_target
 from chat_application.policy.summary import policies_mode_guidance
 
 
 class PolicyToolsHandler:
-    """Policies-mode live tools: summary, directory, person permissions, eligibility."""
+    """Policies-mode live tools — path is law (no soft eligibility force)."""
 
-    async def handle(self, ctx: HandlerContext) -> ChatResponse | None:
+    async def handle(self, ctx: HandlerContext) -> ChatResponse:
         path = ctx.path
 
         if path == "policy_summary":
@@ -30,13 +26,9 @@ class PolicyToolsHandler:
             if response is not None:
                 return response
         elif path == "eligibility":
-            response = await self._eligibility(ctx, require_eligibility_path=True)
+            response = await self._eligibility(ctx)
             if response is not None:
                 return response
-
-        response = await self._eligibility(ctx, require_eligibility_path=False)
-        if response is not None:
-            return response
 
         return finalize_chat_response(
             ctx.message,
@@ -44,9 +36,16 @@ class PolicyToolsHandler:
             answer=policies_mode_guidance(),
             retrieval_ms=0.0,
             generation_ms=ctx.elapsed_ms(),
-            path="eligibility",
+            path=path if path in {
+                "policy_summary",
+                "policy_directory",
+                "person_permissions",
+                "eligibility",
+            } else "eligibility",
             cypher_provenance="none",
-            answer_synthesis="eligibility_api",
+            answer_synthesis=(
+                "policy_directory_api" if path == "policy_directory" else "eligibility_api"
+            ),
         )
 
     async def _policy_summary(self, ctx: HandlerContext) -> ChatResponse | None:
@@ -66,7 +65,7 @@ class PolicyToolsHandler:
             answer=answer,
             retrieval_ms=0.0,
             generation_ms=ctx.elapsed_ms(),
-            path="eligibility",
+            path="policy_summary",
             cypher_provenance="none",
             answer_synthesis="eligibility_api",
         )
@@ -106,25 +105,14 @@ class PolicyToolsHandler:
             answer=answer,
             retrieval_ms=0.0,
             generation_ms=ctx.elapsed_ms(),
-            path="eligibility",
+            path="person_permissions",
             cypher_provenance="none",
             answer_synthesis="eligibility_api",
         )
 
-    async def _eligibility(
-        self,
-        ctx: HandlerContext,
-        *,
-        require_eligibility_path: bool,
-    ) -> ChatResponse | None:
-        path = ctx.path
-        if require_eligibility_path:
-            if path != "eligibility" and ctx.decision.retrieval_strategy != "eligibility":
-                return None
-        elif path != "eligibility":
-            if not is_eligibility_question_heuristic(ctx.message):
-                if not extract_entity_ids(ctx.message) and not extract_payment_ids(ctx.message):
-                    return None
+    async def _eligibility(self, ctx: HandlerContext) -> ChatResponse | None:
+        if ctx.path != "eligibility" and ctx.decision.retrieval_strategy != "eligibility":
+            return None
 
         target = ctx.decision.eligibility_target or resolve_eligibility_target(
             ctx.message, mode=ctx.mode
