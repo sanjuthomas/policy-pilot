@@ -1,6 +1,7 @@
 package com.sanjuthomas.policypilot.neo4j;
 
 import com.sanjuthomas.policypilot.formatting.AnswerRenderer;
+import com.sanjuthomas.policypilot.formatting.PolicyBasisFormat;
 import com.sanjuthomas.policypilot.neo4j.SecurityEventAlertListView.AlertEventRow;
 import com.sanjuthomas.policypilot.neo4j.SecurityEventAlertRankingView.RankingRow;
 import java.util.ArrayList;
@@ -23,11 +24,15 @@ public class Neo4jDirectAnswerFormatter {
   private static final String PAYMENT_STATUS_TEMPLATE = "payment-status-by-id";
   private static final String INSTRUCTION_STATUS_TEMPLATE = "instruction-status-by-id";
   private static final String PAYMENT_CREATOR_TEMPLATE = "payment-creator-by-id";
+  private static final String APPROVAL_LOOKUP_TEMPLATE = "approval-lookup";
 
   private final AnswerRenderer answerRenderer;
+  private final PolicyBasisFormat policyBasisFormat;
 
-  public Neo4jDirectAnswerFormatter(AnswerRenderer answerRenderer) {
+  public Neo4jDirectAnswerFormatter(
+      AnswerRenderer answerRenderer, PolicyBasisFormat policyBasisFormat) {
     this.answerRenderer = answerRenderer;
+    this.policyBasisFormat = policyBasisFormat;
   }
 
   public String format(String question, Set<String> labels, List<Map<String, Object>> rows) {
@@ -41,18 +46,28 @@ public class Neo4jDirectAnswerFormatter {
 
     if ("payment.status_by_id".equals(intent)
         || (labelSet.contains("payment_detail") && isStatusQuestion(question))) {
-      return answerRenderer.render(
-          PAYMENT_STATUS_TEMPLATE, toPaymentStatusView(rows));
+      return answerRenderer.render(PAYMENT_STATUS_TEMPLATE, toPaymentStatusView(rows));
     }
     if ("instruction.status_by_id".equals(intent)
         || (labelSet.contains("instruction_detail") && isStatusQuestion(question))) {
-      return answerRenderer.render(
-          INSTRUCTION_STATUS_TEMPLATE, toInstructionStatusView(rows));
+      return answerRenderer.render(INSTRUCTION_STATUS_TEMPLATE, toInstructionStatusView(rows));
     }
     if ("payment.creator_by_id".equals(intent)
         || (labelSet.contains("payment_detail") && isCreatorQuestion(question))) {
-      return answerRenderer.render(
-          PAYMENT_CREATOR_TEMPLATE, toPaymentCreatorView(rows));
+      return answerRenderer.render(PAYMENT_CREATOR_TEMPLATE, toPaymentCreatorView(rows));
+    }
+    if ("payment.approver_by_id".equals(intent)
+        || "instruction.approver_by_id".equals(intent)
+        || labelSet.contains("payment_approval_lookup")
+        || labelSet.contains("approval_lookup")) {
+      String noun =
+          labelSet.contains("approval_lookup") && !labelSet.contains("payment_approval_lookup")
+              ? "instruction"
+              : "payment";
+      if ("instruction.approver_by_id".equals(intent)) {
+        noun = "instruction";
+      }
+      return answerRenderer.render(APPROVAL_LOOKUP_TEMPLATE, toApprovalLookupView(rows, noun));
     }
 
     if (labelSet.contains("ranking") && isAlertRankingQuestion(question)) {
@@ -156,6 +171,69 @@ public class Neo4jDirectAnswerFormatter {
       return new EntityCreatorByIdView(false, true, entityId, null);
     }
     return new EntityCreatorByIdView(false, false, entityId, creator);
+  }
+
+  ApprovalLookupView toApprovalLookupView(List<Map<String, Object>> rows, String entityNoun) {
+    String noun = entityNoun == null || entityNoun.isBlank() ? "payment" : entityNoun;
+    String displayNoun = "instruction".equalsIgnoreCase(noun) ? "Instruction" : "Payment";
+    Map<String, Object> row = firstRow(rows);
+    if (row == null) {
+      return new ApprovalLookupView(true, false, noun, displayNoun, null, null, null, null, List.of());
+    }
+    String entityId =
+        displayOrUnknown(
+            "instruction".equalsIgnoreCase(noun) ? row.get("instruction_id") : row.get("payment_id"));
+    if ("unknown".equals(entityId)) {
+      entityId =
+          displayOrUnknown(
+              row.get("payment_id") != null ? row.get("payment_id") : row.get("instruction_id"));
+    }
+    if (!rowHasApproval(row)) {
+      String status = displayOrUnknown(row.get("status"));
+      if (!"unknown".equals(status)) {
+        return new ApprovalLookupView(
+            false, true, noun, displayNoun, entityId, status, null, null, List.of());
+      }
+      return new ApprovalLookupView(true, false, noun, displayNoun, null, null, null, null, List.of());
+    }
+    String who = displayOrUnknown(row.get("approver_display"));
+    Object whenRaw = row.get("approved_at");
+    if (whenRaw == null) {
+      whenRaw = row.get("v.approved_at");
+    }
+    String when = displayOrNull(whenRaw);
+    Object summary = row.get("authorization_summary");
+    if (summary == null) {
+      summary = row.get("v.authorization_summary");
+    }
+    Object basis = row.get("authorization_basis");
+    if (basis == null) {
+      basis = row.get("v.authorization_basis");
+    }
+    List<String> authLines =
+        policyBasisFormat.formatApprovalAuthLines(
+            summary == null ? null : summary.toString(), basis);
+    return new ApprovalLookupView(
+        false, false, noun, displayNoun, entityId, null, who, when, authLines);
+  }
+
+  static boolean rowHasApproval(Map<String, Object> row) {
+    Object flag = row.get("has_approval");
+    if (flag instanceof Boolean bool) {
+      return bool;
+    }
+    if (flag != null) {
+      String text = flag.toString().trim().toLowerCase(Locale.ROOT);
+      if ("true".equals(text) || "false".equals(text)) {
+        return Boolean.parseBoolean(text);
+      }
+    }
+    String approver = displayOrNull(row.get("approver_display"));
+    if (approver == null) {
+      return false;
+    }
+    String lower = approver.toLowerCase(Locale.ROOT);
+    return !(lower.equals("unknown") || lower.equals("—") || lower.equals("-") || lower.equals("none"));
   }
 
   static SecurityEventAlertCountView toCountView(String question, List<Map<String, Object>> rows) {

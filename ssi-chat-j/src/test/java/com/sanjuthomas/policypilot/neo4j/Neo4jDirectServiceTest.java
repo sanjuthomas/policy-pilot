@@ -36,12 +36,14 @@ class Neo4jDirectServiceTest {
 
   @BeforeEach
   void setUp() {
+    PolicyBasisFormat basis = new PolicyBasisFormat();
     formatter =
         new Neo4jDirectAnswerFormatter(
             new AnswerRenderer(
                 new AnswerTemplateConfig().answerTemplateEngine(),
                 new MoneyFormat(),
-                new PolicyBasisFormat()));
+                basis),
+            basis);
   }
 
   @Test

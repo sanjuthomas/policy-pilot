@@ -1163,6 +1163,9 @@ def _is_payment_approval_lookup(question: str, *, mode: str) -> bool:
         return False
     if not _ENTITY_ID_PATTERN.search(question):
         return False
+    # Noun optional when a payment id is present ("Who approved 2026…-P-19?").
+    if extract_payment_ids(question) and not extract_instruction_ids(question):
+        return True
     return "payment" in q or mode == "payments"
 
 
@@ -1198,6 +1201,9 @@ OPTIONAL MATCH (approverUser:User {{user_id: v.approver_user_id}})
 {_APPROVAL_LOOKUP_EVENT_AUTH}
 RETURN v.instruction_id AS instruction_id,
        v.status AS status,
+       (approveEvent IS NOT NULL OR (
+         v.approver_user_id IS NOT NULL AND trim(toString(v.approver_user_id)) <> ''
+       )) AS has_approval,
        coalesce(v.approved_at, approveEvent.timestamp) AS approved_at,
        coalesce(approverUser.display_name, v.approver_user_id, '') AS approver_display,
 {_APPROVAL_AUTH_COALESCE}
@@ -1378,26 +1384,33 @@ LIMIT 200""",
 
 def _payment_approval_lookup_queries(payment_id: str) -> list[tuple[str, str]]:
     safe_id = _escape_cypher_literal(payment_id)
+    # Start from CURRENT payment version so cancelled / never-approved payments still
+    # return status for deterministic "was not approved" answers (Python + Java).
     return [
         (
             "payment_approval_lookup",
-            f"""MATCH (e:SecurityEvent)-[:FOR]->(pv:PaymentVersion {{payment_id: '{safe_id}'}})
+            f"""MATCH (pay:Payment {{payment_id: '{safe_id}'}})-[:CURRENT]->(pv:PaymentVersion)
+OPTIONAL MATCH (e:SecurityEvent)-[:FOR]->(pv)
 WHERE e.action IN ['APPROVE', 'APPROVE_PAYMENT'] AND e.outcome = 'success'
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
+WITH pv, e, actor
+ORDER BY e.timestamp DESC
+WITH pv, head(collect({{event: e, actor: actor}})) AS top
 RETURN pv.payment_id AS payment_id,
-       coalesce(pv.approved_at, e.timestamp) AS approved_at,
-       coalesce(actor.display_name, actor.user_id, pv.approver_user_id, '') AS approver_display,
+       pv.status AS status,
+       (top.event IS NOT NULL) AS has_approval,
+       coalesce(pv.approved_at, top.event.timestamp) AS approved_at,
+       coalesce(top.actor.display_name, top.actor.user_id, pv.approver_user_id, '') AS approver_display,
        coalesce(
          CASE WHEN pv.authorization_summary IS NULL OR trim(toString(pv.authorization_summary)) = ''
               THEN null ELSE pv.authorization_summary END,
-         e.authorization_summary
+         top.event.authorization_summary
        ) AS authorization_summary,
        coalesce(
          CASE WHEN pv.authorization_basis IS NULL OR trim(toString(pv.authorization_basis)) IN ['', '[]']
               THEN null ELSE pv.authorization_basis END,
-         e.authorization_basis
+         top.event.authorization_basis
        ) AS authorization_basis
-ORDER BY e.timestamp DESC
 LIMIT 1""",
         ),
     ]

@@ -63,13 +63,14 @@ public final class RouterPrompts {
       Prefer policy_directory over eligibility when there is no payment/instruction id and the
         question asks who may approve by amount / desk covering LOB.
       Prefer eligibility when a specific payment or instruction id is present for who-can /
-        live OPA questions.
+        live OPA questions — not past-tense "who approved" (that is neo4j_direct audit).
       Examples:
         "Who can approve payment …?" / "Who can approve 20260720-FICC-P-8?"
           → eligibility, payment, APPROVE
         "Who can submit … for approval?" → eligibility, payment, SUBMIT
         "Who can approve instruction …?" / "Who can approve 20260720-FICC-I-1?"
           → eligibility, instruction, APPROVE
+        "Who approved 20260720-FICC-P-19?" → neo4j_direct
         "Can I create a payment?" → me, can_act_on_entity, meAction=CREATE, meEntityType=payment
         "Who covers LOB FICC?" → me, who_covers_lob
         "Who can create payments for FICC?" → me, who_can_create, meEntityType=payment
@@ -95,8 +96,10 @@ public final class RouterPrompts {
         Prefer for "how many ALERT / policy denial / security events … today/this week?",
         "list / report all ALERTS today", "list instruction denial events this week",
         "which user triggered the most policy denial alerts …",
-        "what is the status of payment/instruction <id>", and "who created payment <id>".
-        Prefer document_extraction for show-by-id (full card), not status/creator.
+        "what is the status of payment/instruction <id>", "who created payment <id>",
+        and past-tense "who approved <id>" / "who approved payment <id> and why?"
+        (noun optional when a payment or instruction id is present).
+        Prefer document_extraction for show-by-id (full card), not status/creator/approver.
         Examples:
           "How many ALERT events happened today?" → neo4j_direct
           "How many instruction policy denials happened this week?" → neo4j_direct
@@ -108,6 +111,8 @@ public final class RouterPrompts {
           "What is the status of 20260720-FICC-P-19?" → neo4j_direct
           "What is the status of instruction 20260720-FICC-I-1?" → neo4j_direct
           "Who created payment 20260720-FICC-P-1?" → neo4j_direct
+          "Who approved payment 20260720-FICC-P-1 and why?" → neo4j_direct
+          "Who approved 20260720-FICC-P-19?" → neo4j_direct
           (Entity id lookups apply regardless of UI search mode.)
       """;
 }

@@ -175,9 +175,10 @@ def format_planned_graph_answer(
         from chat_application.formatting.neo4j import format_approval_lookup_answer
 
         row = rows[0] if rows else None
+        noun = "instruction" if "approval_lookup" in labels and "payment_approval_lookup" not in labels else "payment"
         if not row:
-            return None
-        return format_approval_lookup_answer(row)
+            return f"No {noun} with that ID was found in the graph."
+        return format_approval_lookup_answer(row, entity_noun=noun)
 
     if "security_event_count" in labels and is_security_event_count_aggregate_question(
         question, mode=mode

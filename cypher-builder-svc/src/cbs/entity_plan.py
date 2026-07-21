@@ -33,6 +33,8 @@ _STATUS_RE = re.compile(
 )
 _CREATOR_RE = re.compile(r"(?i)\b(who|which user)\s+created\b")
 _APPROVE_RE = re.compile(r"(?i)\bapprov")
+_APPROVER_RE = re.compile(r"(?i)\bwho\s+approv")
+_WHO_CAN_APPROVE_RE = re.compile(r"(?i)\bwho\s+can\s+approv")
 
 _BUILDER = CypherQueryBuilder()
 
@@ -64,6 +66,19 @@ def plan_entity_detail(request: PlanRequest) -> PlanResponse | None:
             return _detail_response(
                 "instruction.creator_by_id",
                 _BUILDER.instruction_detail(instruction_ids[0]),
+            )
+
+    # Past-tense audit ("who approved") — fallback when plan_graph_queries misses (e.g. mode=all).
+    if _APPROVER_RE.search(question) and not _WHO_CAN_APPROVE_RE.search(question):
+        if payment_ids:
+            return _detail_response(
+                "payment.approver_by_id",
+                _BUILDER.payment_approval_lookup(payment_ids[0]),
+            )
+        if instruction_ids:
+            return _detail_response(
+                "instruction.approver_by_id",
+                _BUILDER.instruction_approval_lookup(instruction_ids[0]),
             )
 
     return None
