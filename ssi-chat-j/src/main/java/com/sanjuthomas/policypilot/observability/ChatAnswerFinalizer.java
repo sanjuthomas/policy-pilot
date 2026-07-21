@@ -165,6 +165,8 @@ public class ChatAnswerFinalizer {
     String pathLabel =
         switch (routing.path()) {
           case "eligibility" -> "Eligibility shortcut";
+          case "document_extraction" -> "Document extraction (API)";
+          case "instruction_show" -> "Document extraction (API)";
           case "policy_directory" -> "Policy directory";
           case "policy_summary" -> "Policy summary";
           case "person_permissions" -> "Person permissions";

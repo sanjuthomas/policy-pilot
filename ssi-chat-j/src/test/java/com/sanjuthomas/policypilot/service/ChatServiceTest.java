@@ -11,6 +11,8 @@ import com.sanjuthomas.policypilot.api.ApiModels.ChatResponse;
 import com.sanjuthomas.policypilot.TestFixtures;
 import com.sanjuthomas.policypilot.auth.ChatUsersDirectory;
 import com.sanjuthomas.policypilot.auth.Subject;
+import com.sanjuthomas.policypilot.extraction.DocumentExtractionService;
+import com.sanjuthomas.policypilot.extraction.PaymentDetailAnswerFormatter;
 import com.sanjuthomas.policypilot.eligibility.EligibilityAnswerFormatter;
 import com.sanjuthomas.policypilot.eligibility.FakeEligibilityClient;
 import com.sanjuthomas.policypilot.formatting.AnswerRenderer;
@@ -18,6 +20,7 @@ import com.sanjuthomas.policypilot.formatting.AnswerTemplateConfig;
 import com.sanjuthomas.policypilot.formatting.IdentityTokenFormat;
 import com.sanjuthomas.policypilot.formatting.MoneyFormat;
 import com.sanjuthomas.policypilot.formatting.PolicyBasisFormat;
+import com.sanjuthomas.policypilot.instruction.InstructionDetailAnswerFormatter;
 import com.sanjuthomas.policypilot.me.CanActOnEntityService;
 import com.sanjuthomas.policypilot.me.MeIntentResolver;
 import com.sanjuthomas.policypilot.me.MeIntentService;
@@ -56,6 +59,8 @@ class ChatServiceTest {
   @Mock ChatClient.CallResponseSpec callResponseSpec;
 
   private EligibilityAnswerFormatter eligibilityAnswerFormatter;
+  private InstructionDetailAnswerFormatter instructionDetailAnswerFormatter;
+  private PaymentDetailAnswerFormatter paymentDetailAnswerFormatter;
   private PolicyDirectoryAnswerFormatter policyDirectoryAnswerFormatter;
   private PolicySummaryAnswerFormatter policySummaryAnswerFormatter;
   private MeIntentService meIntentService;
@@ -76,6 +81,8 @@ class ChatServiceTest {
             new PolicyBasisFormat());
     IdentityTokenFormat identityTokenFormat = new IdentityTokenFormat();
     eligibilityAnswerFormatter = new EligibilityAnswerFormatter(renderer);
+    instructionDetailAnswerFormatter = new InstructionDetailAnswerFormatter(renderer);
+    paymentDetailAnswerFormatter = new PaymentDetailAnswerFormatter(renderer, new MoneyFormat());
     policyDirectoryAnswerFormatter = new PolicyDirectoryAnswerFormatter(renderer);
     policySummaryAnswerFormatter =
         new PolicySummaryAnswerFormatter(renderer, identityTokenFormat);
@@ -105,6 +112,10 @@ class ChatServiceTest {
         intentRouter,
         eligibilityClient,
         eligibilityAnswerFormatter,
+        new DocumentExtractionService(
+            eligibilityClient,
+            instructionDetailAnswerFormatter,
+            paymentDetailAnswerFormatter),
         new PolicyDirectoryService(eligibilityClient, policyDirectoryAnswerFormatter),
         policySummaryAnswerFormatter,
         meIntentService,
@@ -146,6 +157,176 @@ class ChatServiceTest {
     assertTrue(response.answer().contains("Live OPA"));
     assertEquals("eligibility", response.routing().path());
     assertEquals("eligibility_api", response.routing().answer_synthesis());
+  }
+
+  @Test
+  void instructionShowLaneFormatsAnswer() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("document_extraction");
+    decision.setExtractionTarget("instruction");
+    when(callResponseSpec.entity(eq(RouterDecision.class))).thenReturn(decision);
+
+    java.util.Map<String, Object> payload = new java.util.HashMap<>();
+    payload.put("instruction_id", "20260720-FICC-I-1");
+    payload.put("status", "APPROVED");
+    payload.put("instruction_type", "STANDING");
+    payload.put("owning_lob", "FICC");
+    payload.put("currency", "USD");
+    payload.put("wire_scope", "DOMESTIC");
+    payload.put("version_number", 2);
+    payload.put("effective_date", "2026-07-20");
+    payload.put("end_date", "2027-07-20");
+    payload.put(
+        "created_by",
+        Map.of(
+            "user_id",
+            "mo-050",
+            "given_name",
+            "David",
+            "family_name",
+            "Okonkwo",
+            "title",
+            "Analyst"));
+    payload.put(
+        "approved_by",
+        Map.of(
+            "user_id",
+            "ficc-500",
+            "given_name",
+            "Caroline",
+            "family_name",
+            "Nguyen",
+            "title",
+            "Approver"));
+    payload.put("approved_at", "2026-07-20T10:00:00");
+    payload.put("creditor", Map.of("name", "Acme Corp"));
+    payload.put("creditor_account", Map.of("identification", "123456"));
+
+    FakeEligibilityClient eligibilityClient = new FakeEligibilityClient().returning(payload);
+    ChatResponse response =
+        chatService(eligibilityClient)
+            .ask(
+                new ChatRequest(
+                    "Show me instruction 20260720-FICC-I-1", List.of(), "instructions"),
+                subject());
+
+    assertTrue(response.answer().contains("### Instruction `20260720-FICC-I-1`"));
+    assertTrue(response.answer().contains("**APPROVED**"));
+    assertTrue(response.answer().contains("Okonkwo, David (mo-050)"));
+    assertTrue(response.answer().contains("Nguyen, Caroline (ficc-500)"));
+    assertEquals("document_extraction", response.routing().path());
+    assertEquals("formatter", response.routing().answer_synthesis());
+    assertEquals("instruction.show_by_id", response.routing().intent_id());
+    assertEquals("document_extraction", response.routing().retrieval_strategy());
+  }
+
+  @Test
+  void paymentShowLaneFormatsAnswer() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("document_extraction");
+    decision.setExtractionTarget("payment");
+    when(callResponseSpec.entity(eq(RouterDecision.class))).thenReturn(decision);
+
+    java.util.Map<String, Object> payload = new java.util.HashMap<>();
+    payload.put("payment_id", "20260720-FICC-P-8");
+    payload.put("instruction_id", "20260720-FICC-I-1");
+    payload.put("status", "APPROVED");
+    payload.put("amount", 15_000_000);
+    payload.put("currency", "USD");
+    payload.put("value_date", "2026-07-21");
+    payload.put("owning_lob", "FICC");
+    payload.put(
+        "created_by",
+        Map.of("user_id", "pay-101", "given_name", "Emily", "family_name", "Rodriguez"));
+    payload.put(
+        "approved_by",
+        Map.of("user_id", "ficc-500", "given_name", "Caroline", "family_name", "Nguyen"));
+    payload.put("approved_at", "2026-07-20T12:00:00");
+
+    ChatResponse response =
+        chatService(new FakeEligibilityClient().returning(payload))
+            .ask(
+                new ChatRequest("Show me payment 20260720-FICC-P-8", List.of(), "payments"),
+                subject());
+
+    assertTrue(response.answer().contains("### Payment `20260720-FICC-P-8`"));
+    assertTrue(response.answer().contains("**APPROVED**"));
+    assertTrue(response.answer().contains("USD 15,000,000"));
+    assertTrue(response.answer().contains("Rodriguez, Emily (pay-101)"));
+    assertEquals("document_extraction", response.routing().path());
+    assertEquals("payment.show_by_id", response.routing().intent_id());
+    assertEquals("document_extraction", response.routing().retrieval_strategy());
+  }
+
+  @Test
+  void instructionShowLaneNotFoundReturnsProse() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("document_extraction");
+    decision.setExtractionTarget("instruction");
+    when(callResponseSpec.entity(eq(RouterDecision.class))).thenReturn(decision);
+
+    FakeEligibilityClient eligibilityClient =
+        new FakeEligibilityClient()
+            .failing(
+                new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.NOT_FOUND, "missing"));
+    ChatResponse response =
+        chatService(eligibilityClient)
+            .ask(
+                new ChatRequest(
+                    "Show me instruction 20260720-FICC-I-99", List.of(), "instructions"),
+                subject());
+
+    assertEquals("No instruction with that ID was found.", response.answer());
+    assertEquals("document_extraction", response.routing().path());
+    assertEquals("instruction.show_by_id", response.routing().intent_id());
+  }
+
+  @Test
+  void instructionShowLaneForbiddenReturnsFriendlyProse() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("document_extraction");
+    decision.setExtractionTarget("instruction");
+    when(callResponseSpec.entity(eq(RouterDecision.class))).thenReturn(decision);
+
+    FakeEligibilityClient eligibilityClient =
+        new FakeEligibilityClient()
+            .failing(
+                new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN,
+                    "{\"detail\":\"subject LOB/covering_lobs does not entitle read\"}"));
+    ChatResponse response =
+        chatService(eligibilityClient)
+            .ask(
+                new ChatRequest(
+                    "Show me instruction 20260720-FICC-I-1", List.of(), "instructions"),
+                subject());
+
+    assertEquals("You are not authorized to view this instruction.", response.answer());
+    assertTrue(!response.answer().contains("{"));
+    assertEquals("instruction.show_by_id", response.routing().intent_id());
+  }
+
+  @Test
+  void paymentShowLaneForbiddenReturnsFriendlyProse() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("document_extraction");
+    decision.setExtractionTarget("payment");
+    when(callResponseSpec.entity(eq(RouterDecision.class))).thenReturn(decision);
+
+    ChatResponse response =
+        chatService(
+                new FakeEligibilityClient()
+                    .failing(
+                        new org.springframework.web.server.ResponseStatusException(
+                            org.springframework.http.HttpStatus.FORBIDDEN,
+                            "not authorized to view payment")))
+            .ask(
+                new ChatRequest("Show me payment 20260720-FICC-P-8", List.of(), "payments"),
+                subject());
+
+    assertEquals("You are not authorized to view this payment.", response.answer());
+    assertEquals("payment.show_by_id", response.routing().intent_id());
   }
 
   @Test

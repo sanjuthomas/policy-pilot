@@ -55,6 +55,28 @@ public class EligibilityClient {
   }
 
   /**
+   * Load a single instruction by id (OBO). AuthZ / LOB are enforced by instruction-service —
+   * preferred over Neo4j for “show me instruction …” document lookup.
+   */
+  public Map<String, Object> getInstruction(
+      String instructionId, String userBearerToken, String userSessionId) {
+    String url =
+        trimSlash(properties.instructionServiceUrl()) + "/api/v1/instructions/" + instructionId;
+    return getJson(
+        url, oboHeaders(userBearerToken, userSessionId), "instruction service error: ");
+  }
+
+  /**
+   * Load a single payment by id (OBO). AuthZ / LOB are enforced by payment-service — preferred
+   * over Neo4j for “show me payment …” document lookup.
+   */
+  public Map<String, Object> getPayment(
+      String paymentId, String userBearerToken, String userSessionId) {
+    String url = trimSlash(properties.paymentServiceUrl()) + "/api/v1/payments/" + paymentId;
+    return getJson(url, oboHeaders(userBearerToken, userSessionId), "payment service error: ");
+  }
+
+  /**
    * Load payment (+ instruction) then call authorization-service eligible-submitters (parity with
    * Python {@code EligibilityClient.eligible_submitters_for_payment}).
    */
@@ -261,7 +283,7 @@ public class EligibilityClient {
 
   private static ResponseStatusException mapHttpError(
       RestClientResponseException ex, String errorPrefix) {
-    String detail = ex.getResponseBodyAsString();
+    String detail = HttpErrorBodies.detail(ex.getResponseBodyAsString());
     int status = ex.getStatusCode().value();
     if (status == 401) {
       return new ResponseStatusException(
@@ -272,7 +294,8 @@ public class EligibilityClient {
           HttpStatus.FORBIDDEN, detail.isBlank() ? "not authorized for this question" : detail);
     }
     if (status == 404) {
-      return new ResponseStatusException(HttpStatus.NOT_FOUND, detail);
+      return new ResponseStatusException(
+          HttpStatus.NOT_FOUND, detail.isBlank() ? "not found" : detail);
     }
     return new ResponseStatusException(HttpStatus.BAD_GATEWAY, errorPrefix + detail, ex);
   }

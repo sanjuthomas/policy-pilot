@@ -103,6 +103,12 @@ ROUTING_BY_RETRIEVAL: dict[RetrievalStrategy, RoutingExpectation] = {
         synthesis_modes=frozenset({"formatter"}),
         min_sources=0,
     ),
+    "document_extraction": RoutingExpectation(
+        paths=frozenset({"document_extraction"}),
+        cypher_classes=frozenset({"none"}),
+        synthesis_modes=frozenset({"formatter"}),
+        min_sources=0,
+    ),
 }
 
 

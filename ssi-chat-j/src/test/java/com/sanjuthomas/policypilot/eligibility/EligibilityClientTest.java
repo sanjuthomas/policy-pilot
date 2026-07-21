@@ -60,6 +60,35 @@ class EligibilityClientTest {
   }
 
   @Test
+  void getInstructionReturnsBody() {
+    server
+        .expect(requestTo("http://instruction:8000/api/v1/instructions/INS-1"))
+        .andExpect(method(HttpMethod.GET))
+        .andRespond(
+            withSuccess(
+                "{\"instruction_id\":\"INS-1\",\"status\":\"APPROVED\",\"owning_lob\":\"FICC\"}",
+                MediaType.APPLICATION_JSON));
+
+    assertEquals(
+        "APPROVED", client.getInstruction("INS-1", "user-tok", "user-sess").get("status"));
+    server.verify();
+  }
+
+  @Test
+  void getPaymentReturnsBody() {
+    server
+        .expect(requestTo("http://payment:8093/api/v1/payments/PAY-1"))
+        .andExpect(method(HttpMethod.GET))
+        .andRespond(
+            withSuccess(
+                "{\"payment_id\":\"PAY-1\",\"status\":\"APPROVED\",\"amount\":100}",
+                MediaType.APPLICATION_JSON));
+
+    assertEquals("APPROVED", client.getPayment("PAY-1", "user-tok", "user-sess").get("status"));
+    server.verify();
+  }
+
+  @Test
   void eligibleApproversForPaymentReturnsBody() {
     server
         .expect(requestTo("http://payment:8093/api/v1/payments/PAY-1/eligible-approvers"))
@@ -140,6 +169,23 @@ class EligibilityClientTest {
             () -> client.eligibleApproversForPayment("PAY-1", "user-tok", "user-sess"));
     assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
     assertEquals("denied", ex.getReason());
+  }
+
+  @Test
+  void maps403FastapiJsonDetail() {
+    server
+        .expect(requestTo("http://instruction:8000/api/v1/instructions/INS-1"))
+        .andExpect(method(HttpMethod.GET))
+        .andRespond(
+            withStatus(HttpStatus.FORBIDDEN)
+                .body("{\"detail\":\"subject LOB/covering_lobs does not entitle read\"}"));
+
+    ResponseStatusException ex =
+        assertThrows(
+            ResponseStatusException.class,
+            () -> client.getInstruction("INS-1", "user-tok", "user-sess"));
+    assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
+    assertEquals("subject LOB/covering_lobs does not entitle read", ex.getReason());
   }
 
   @Test
