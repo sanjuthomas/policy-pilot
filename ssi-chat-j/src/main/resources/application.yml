@@ -16,6 +16,14 @@ spring:
             options:
               model: ${VERTEX_GEMINI_MODEL:gemini-2.5-flash}
               temperature: 0.0
+        embedding:
+          project-id: ${GCP_PROJECT_ID:rag-demos-501323}
+          location: ${GCP_REGION:us-central1}
+          text:
+            options:
+              model: ${VERTEX_EMBEDDING_MODEL:text-embedding-004}
+              task-type: RETRIEVAL_QUERY
+              dimensions: ${EMBEDDING_DIMENSION:768}
 
 chatj:
   payment-service-url: ${PAYMENT_SERVICE_URL:http://localhost:8093}
@@ -25,6 +33,8 @@ chatj:
   neo4j-uri: ${NEO4J_URI:bolt://localhost:7687}
   neo4j-user: ${NEO4J_USER:svc_chat}
   neo4j-password: ${NEO4J_PASSWORD:Password1!}
+  multimodal-vector-index: ${MULTIMODAL_VECTOR_INDEX:multimodal_embedding}
+  retrieval-limit: ${RETRIEVAL_LIMIT:8}
   zitadel-url: ${ZITADEL_URL:http://localhost:8080}
   zitadel-internal-url: ${ZITADEL_INTERNAL_URL:}
   zitadel-host-header: ${ZITADEL_HOST_HEADER:}

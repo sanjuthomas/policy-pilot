@@ -13,6 +13,7 @@ import com.sanjuthomas.policypilot.pipeline.LaneAnswer;
 import com.sanjuthomas.policypilot.pipeline.RouterDecision;
 import com.sanjuthomas.policypilot.policydirectory.PolicyDirectoryService;
 import com.sanjuthomas.policypilot.policysummary.PolicySummaryService;
+import com.sanjuthomas.policypilot.vector.FullRagLaneService;
 import org.springframework.stereotype.Component;
 
 /**
@@ -28,6 +29,7 @@ public class ChatPathDispatcher {
   private final PolicyDirectoryService policyDirectoryService;
   private final DocumentExtractionService documentExtractionService;
   private final Neo4jDirectService neo4jDirectService;
+  private final FullRagLaneService fullRagLaneService;
 
   public ChatPathDispatcher(
       MeIntentService meIntentService,
@@ -35,13 +37,15 @@ public class ChatPathDispatcher {
       PolicySummaryService policySummaryService,
       PolicyDirectoryService policyDirectoryService,
       DocumentExtractionService documentExtractionService,
-      Neo4jDirectService neo4jDirectService) {
+      Neo4jDirectService neo4jDirectService,
+      FullRagLaneService fullRagLaneService) {
     this.meIntentService = meIntentService;
     this.eligibilityLaneService = eligibilityLaneService;
     this.policySummaryService = policySummaryService;
     this.policyDirectoryService = policyDirectoryService;
     this.documentExtractionService = documentExtractionService;
     this.neo4jDirectService = neo4jDirectService;
+    this.fullRagLaneService = fullRagLaneService;
   }
 
   public LaneAnswer dispatch(RouterDecision decision, ChatRequest request, Subject subject) {
@@ -60,6 +64,8 @@ public class ChatPathDispatcher {
       case "neo4j_direct" -> neo4jDirect(request, subject);
       case "eligibility" ->
           eligibilityLaneService.answer(request.message(), subject, decision);
+      case "vector", "full_rag" ->
+          fullRagLaneService.answer(request.message(), request.mode(), subject);
       default -> null;
     };
   }

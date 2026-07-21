@@ -114,5 +114,14 @@ public final class RouterPrompts {
           "Who approved payment 20260720-FICC-P-1 and why?" → neo4j_direct
           "Who approved 20260720-FICC-P-19?" → neo4j_direct
           (Entity id lookups apply regardless of UI search mode.)
+      Vector (open narrative / semantic audit overview — no entity id, no how-many/list):
+        path=vector
+        Prefer for brief narratives, audit-log overviews, or "recent policy denial activity"
+        prose. Do NOT use neo4j_direct for open narratives (that path is for counts/lists/ids).
+        Examples:
+          "Write a brief narrative about recent policy denial activity in the audit log."
+            → vector
+          "Give me a brief overview of recent denial activity."
+            → vector
       """;
 }
