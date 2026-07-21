@@ -1,10 +1,14 @@
 package com.sanjuthomas.policypilot.cypher;
 
 import com.sanjuthomas.policypilot.config.ChatJProperties;
+import com.sanjuthomas.policypilot.cypher.CypherBuilderModels.PlanOptions;
 import com.sanjuthomas.policypilot.cypher.CypherBuilderModels.PlanRequest;
 import com.sanjuthomas.policypilot.cypher.CypherBuilderModels.PlanResponse;
 import com.sanjuthomas.policypilot.cypher.CypherBuilderModels.ValidateRequest;
 import com.sanjuthomas.policypilot.cypher.CypherBuilderModels.ValidateResponse;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
@@ -21,8 +25,21 @@ public class CypherBuilderClient {
   }
 
   public PlanResponse plan(String question, String mode) {
+    return plan(question, mode, null);
+  }
+
+  /**
+   * @param allowedLobs {@code null} = unscoped (compliance); empty = deny; non-empty = FO/MO scope
+   */
+  public PlanResponse plan(String question, String mode, Set<String> allowedLobs) {
     String url = baseUrl + "/v1/plan";
-    PlanRequest body = new PlanRequest(question, mode == null || mode.isBlank() ? "events" : mode);
+    PlanOptions options = null;
+    if (allowedLobs != null) {
+      options = new PlanOptions(true, new ArrayList<>(allowedLobs));
+    }
+    PlanRequest body =
+        new PlanRequest(
+            question, mode == null || mode.isBlank() ? "events" : mode, options);
     PlanResponse response = restTemplate.postForObject(url, body, PlanResponse.class);
     if (response == null) {
       throw new IllegalStateException("cypher-builder-svc /v1/plan returned empty body");

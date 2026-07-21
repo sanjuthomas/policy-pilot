@@ -1,0 +1,1 @@
+[# th:if="${m.total == 0}"]There were no [(${m.scopePrefix})][(${m.eventLabel})] events[(${m.periodSuffix})].[/][# th:if="${m.total == 1}"]There was 1 [(${m.scopePrefix})][(${m.eventLabel})] event[(${m.periodSuffix})].[/][# th:if="${m.total > 1}"]There were [(${m.total})] [(${m.scopePrefix})][(${m.eventLabel})] events[(${m.periodSuffix})].[/]

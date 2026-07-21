@@ -90,12 +90,22 @@ public final class RouterPrompts {
             → document_extraction, extractionTarget=payment
       Prefer eligibility over neo4j_direct for live OPA approver/submitter questions.
       Prefer eligibility+SUBMIT over skill for "who can submit" (not "please submit").
-      Neo4j direct (deterministic SecurityEvent / graph counts and lists — no entity mutation):
+      Neo4j direct (deterministic SecurityEvent / entity status-creator / graph lists — no mutation):
         path=neo4j_direct
-        Prefer for "how many ALERT / policy denial / security events … today/this week?"
-        and similar graph aggregate questions. Prefer document_extraction for show-by-id.
+        Prefer for "how many ALERT / policy denial / security events … today/this week?",
+        "list / report all ALERTS today", "list instruction denial events this week",
+        "which user triggered the most policy denial alerts …",
+        "what is the status of payment/instruction <id>", and "who created payment <id>".
+        Prefer document_extraction for show-by-id (full card), not status/creator.
         Examples:
           "How many ALERT events happened today?" → neo4j_direct
           "How many instruction policy denials happened this week?" → neo4j_direct
+          "How many payment policy denial alerts happened today?" → neo4j_direct
+          "Can you list all instruction denial events for this week?" → neo4j_direct
+          "Can you report all ALERTS today?" → neo4j_direct
+          "Which user triggered the most policy denial alerts this week?" → neo4j_direct
+          "What is the status of payment 20260720-FICC-P-1?" → neo4j_direct
+          "What is the status of instruction 20260720-FICC-I-1?" → neo4j_direct
+          "Who created payment 20260720-FICC-P-1?" → neo4j_direct
       """;
 }

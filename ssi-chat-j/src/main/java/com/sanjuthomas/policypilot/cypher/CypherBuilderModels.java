@@ -1,6 +1,7 @@
 package com.sanjuthomas.policypilot.cypher;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import java.util.Map;
@@ -10,7 +11,12 @@ public final class CypherBuilderModels {
 
   private CypherBuilderModels() {}
 
-  public record PlanRequest(String question, String mode, Map<String, Object> options) {
+  @JsonInclude(JsonInclude.Include.NON_NULL)
+  public record PlanOptions(
+      @JsonProperty("lob_scoped") Boolean lobScoped,
+      @JsonProperty("allowed_lobs") List<String> allowedLobs) {}
+
+  public record PlanRequest(String question, String mode, PlanOptions options) {
     public PlanRequest(String question, String mode) {
       this(question, mode, null);
     }

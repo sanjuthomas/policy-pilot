@@ -1,5 +1,9 @@
 package com.sanjuthomas.policypilot.neo4j;
 
+import com.sanjuthomas.policypilot.formatting.AnswerRenderer;
+import com.sanjuthomas.policypilot.neo4j.SecurityEventAlertListView.AlertEventRow;
+import com.sanjuthomas.policypilot.neo4j.SecurityEventAlertRankingView.RankingRow;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -7,22 +11,80 @@ import java.util.Set;
 import org.springframework.stereotype.Component;
 
 /**
- * Deterministic formatters for planned_graph neo4j_direct answers (v1: alert/denial counts).
- * Parity with Python {@code _format_security_event_alert_count_answer}.
+ * Maps neo4j_direct planned labels + rows → Thymeleaf answer templates (parity with Python
+ * planned_graph / YAML entity-detail formatters).
  */
 @Component
 public class Neo4jDirectAnswerFormatter {
 
+  private static final String COUNT_TEMPLATE = "security-event-alert-count";
+  private static final String LIST_TEMPLATE = "security-event-alert-list";
+  private static final String RANKING_TEMPLATE = "security-event-alert-ranking";
+  private static final String PAYMENT_STATUS_TEMPLATE = "payment-status-by-id";
+  private static final String INSTRUCTION_STATUS_TEMPLATE = "instruction-status-by-id";
+  private static final String PAYMENT_CREATOR_TEMPLATE = "payment-creator-by-id";
+
+  private final AnswerRenderer answerRenderer;
+
+  public Neo4jDirectAnswerFormatter(AnswerRenderer answerRenderer) {
+    this.answerRenderer = answerRenderer;
+  }
+
   public String format(String question, Set<String> labels, List<Map<String, Object>> rows) {
-    if (labels.contains("count") && isAlertCountQuestion(question)) {
-      return formatAlertCount(question, rows);
+    return format(question, labels, rows, null);
+  }
+
+  public String format(
+      String question, Set<String> labels, List<Map<String, Object>> rows, String intentId) {
+    Set<String> labelSet = labels == null ? Set.of() : labels;
+    String intent = intentId == null ? "" : intentId;
+
+    if ("payment.status_by_id".equals(intent)
+        || (labelSet.contains("payment_detail") && isStatusQuestion(question))) {
+      return answerRenderer.render(
+          PAYMENT_STATUS_TEMPLATE, toPaymentStatusView(rows));
+    }
+    if ("instruction.status_by_id".equals(intent)
+        || (labelSet.contains("instruction_detail") && isStatusQuestion(question))) {
+      return answerRenderer.render(
+          INSTRUCTION_STATUS_TEMPLATE, toInstructionStatusView(rows));
+    }
+    if ("payment.creator_by_id".equals(intent)
+        || (labelSet.contains("payment_detail") && isCreatorQuestion(question))) {
+      return answerRenderer.render(
+          PAYMENT_CREATOR_TEMPLATE, toPaymentCreatorView(rows));
+    }
+
+    if (labelSet.contains("ranking") && isAlertRankingQuestion(question)) {
+      return answerRenderer.render(RANKING_TEMPLATE, toRankingView(question, rows));
+    }
+    if (labelSet.contains("security_event_alert_list") && isAlertListQuestion(question)) {
+      return answerRenderer.render(LIST_TEMPLATE, toListView(question, rows));
+    }
+    if (labelSet.contains("count") && isAlertCountQuestion(question)) {
+      return answerRenderer.render(COUNT_TEMPLATE, toCountView(question, rows));
     }
     long total = extractTotal(rows);
     return "Graph query returned " + total + " row(s).";
   }
 
+  static boolean isStatusQuestion(String question) {
+    String q = lower(question);
+    return q.contains("status of")
+        || q.contains("what is the status")
+        || q.contains("what's the status");
+  }
+
+  static boolean isCreatorQuestion(String question) {
+    String q = lower(question);
+    if (q.contains("approv")) {
+      return false;
+    }
+    return q.contains("who created") || q.contains("which user created");
+  }
+
   static boolean isAlertCountQuestion(String question) {
-    String q = question == null ? "" : question.toLowerCase(Locale.ROOT);
+    String q = lower(question);
     if (!(q.contains("how many") || q.contains("count") || q.contains("number of"))) {
       return false;
     }
@@ -32,31 +94,161 @@ public class Neo4jDirectAnswerFormatter {
         || q.contains("security event");
   }
 
-  private static String formatAlertCount(String question, List<Map<String, Object>> rows) {
-    long total = extractTotal(rows);
-    String q = question == null ? "" : question.toLowerCase(Locale.ROOT);
-    String scope = "";
+  static boolean isAlertListQuestion(String question) {
+    String q = lower(question);
+    boolean listVerb =
+        q.contains("list")
+            || q.contains("show")
+            || q.contains("report")
+            || q.contains("enumerate")
+            || q.contains("display")
+            || q.contains("all ");
+    boolean alertNoun =
+        q.contains("alert")
+            || q.contains("denial")
+            || q.contains("denied")
+            || q.contains("security event");
+    return listVerb && alertNoun;
+  }
+
+  static boolean isAlertRankingQuestion(String question) {
+    String q = lower(question);
+    return (q.contains("most") || q.contains("top") || q.contains("rank"))
+        && (q.contains("alert") || q.contains("denial") || q.contains("denied"));
+  }
+
+  static EntityStatusByIdView toPaymentStatusView(List<Map<String, Object>> rows) {
+    Map<String, Object> row = firstRow(rows);
+    if (row == null) {
+      return new EntityStatusByIdView(true, null, null, "");
+    }
+    String lob = displayOrNull(row.get("owning_lob"));
+    String lobSuffix = lob == null ? "" : " (LOB " + lob + ")";
+    return new EntityStatusByIdView(
+        false,
+        displayOrUnknown(row.get("payment_id")),
+        displayOrUnknown(row.get("status")),
+        lobSuffix);
+  }
+
+  static EntityStatusByIdView toInstructionStatusView(List<Map<String, Object>> rows) {
+    Map<String, Object> row = firstRow(rows);
+    if (row == null) {
+      return new EntityStatusByIdView(true, null, null, "");
+    }
+    String lob = displayOrNull(row.get("owning_lob"));
+    String lobSuffix = lob == null ? "" : " (LOB " + lob + ")";
+    return new EntityStatusByIdView(
+        false,
+        displayOrUnknown(row.get("instruction_id")),
+        displayOrUnknown(row.get("status")),
+        lobSuffix);
+  }
+
+  static EntityCreatorByIdView toPaymentCreatorView(List<Map<String, Object>> rows) {
+    Map<String, Object> row = firstRow(rows);
+    if (row == null) {
+      return new EntityCreatorByIdView(true, false, null, null);
+    }
+    String entityId = displayOrUnknown(row.get("payment_id"));
+    String creator = displayOrNull(row.get("creator_display"));
+    if (creator == null || "unknown".equalsIgnoreCase(creator)) {
+      return new EntityCreatorByIdView(false, true, entityId, null);
+    }
+    return new EntityCreatorByIdView(false, false, entityId, creator);
+  }
+
+  static SecurityEventAlertCountView toCountView(String question, List<Map<String, Object>> rows) {
+    String q = lower(question);
+    String scopePrefix = "";
     if (q.contains("payment")) {
-      scope = "payment ";
+      scopePrefix = "payment ";
     } else if (q.contains("instruction")) {
-      scope = "instruction ";
+      scopePrefix = "instruction ";
     }
     String eventLabel = (q.contains("denial") || q.contains("denied")) ? "policy denial" : "ALERT";
-    String suffix;
+    String periodSuffix;
     if (q.contains("today")) {
-      suffix = " today";
+      periodSuffix = " today";
     } else if (q.contains("this week") || q.contains("week")) {
-      suffix = " this week";
+      periodSuffix = " this week";
     } else {
-      suffix = "";
+      periodSuffix = "";
     }
-    if (total == 0) {
-      return "There were no " + scope + eventLabel + " events" + suffix + ".";
+    return new SecurityEventAlertCountView(
+        extractTotal(rows), scopePrefix, eventLabel, periodSuffix);
+  }
+
+  static SecurityEventAlertListView toListView(String question, List<Map<String, Object>> rows) {
+    String q = lower(question);
+    boolean approvalDenial = q.contains("approval") && (q.contains("denial") || q.contains("denied"));
+    String title =
+        approvalDenial ? "Approval denial ALERT security events" : "ALERT security events";
+    String empty =
+        approvalDenial
+            ? "No approval-denial ALERT security events were found in the graph."
+            : "No ALERT security events were found in the graph.";
+    List<AlertEventRow> tableRows = new ArrayList<>();
+    if (rows != null) {
+      for (Map<String, Object> row : rows) {
+        if (row == null || row.get("event_id") == null) {
+          continue;
+        }
+        tableRows.add(
+            new AlertEventRow(
+                display(row.get("event_id")),
+                display(row.get("timestamp")),
+                display(row.get("entity_type")),
+                display(row.get("entity_id")),
+                display(row.get("actor_display")),
+                display(row.get("action"))));
+      }
     }
-    if (total == 1) {
-      return "There was 1 " + scope + eventLabel + " event" + suffix + ".";
+    return new SecurityEventAlertListView(title, empty, tableRows);
+  }
+
+  static SecurityEventAlertRankingView toRankingView(
+      String question, List<Map<String, Object>> rows) {
+    String q = lower(question);
+    String domain;
+    if (q.contains("payment") && !q.contains("instruction")) {
+      domain = "payment policy denial alerts";
+    } else if (q.contains("instruction") && !q.contains("payment")) {
+      domain = "instruction policy denial alerts";
+    } else {
+      domain = "policy denial alerts";
     }
-    return "There were " + total + " " + scope + eventLabel + " events" + suffix + ".";
+    String period;
+    if (q.contains("today")) {
+      period = "today";
+    } else if (q.contains("this week") || q.contains("week")) {
+      period = "this week";
+    } else {
+      period = "all time";
+    }
+    List<RankingRow> rankingRows = new ArrayList<>();
+    if (rows != null) {
+      for (Map<String, Object> row : rows) {
+        if (row == null || !row.containsKey("alert_count") || !row.containsKey("actor_display")) {
+          continue;
+        }
+        rankingRows.add(
+            new RankingRow(
+                display(row.get("actor_display")),
+                display(row.get("user_id")),
+                asLong(row.get("alert_count")),
+                asLong(row.get("payment_alerts")),
+                asLong(row.get("instruction_alerts"))));
+      }
+    }
+    return new SecurityEventAlertRankingView(domain, period, rankingRows);
+  }
+
+  private static Map<String, Object> firstRow(List<Map<String, Object>> rows) {
+    if (rows == null || rows.isEmpty()) {
+      return null;
+    }
+    return rows.get(0);
   }
 
   private static long extractTotal(List<Map<String, Object>> rows) {
@@ -64,11 +256,52 @@ public class Neo4jDirectAnswerFormatter {
       return 0L;
     }
     for (Map<String, Object> row : rows) {
-      Object total = row.get("total");
-      if (total instanceof Number number) {
-        return number.longValue();
+      if (row != null && row.get("total") != null) {
+        return asLong(row.get("total"));
       }
     }
     return rows.size();
+  }
+
+  private static long asLong(Object value) {
+    if (value instanceof Number number) {
+      return number.longValue();
+    }
+    if (value == null) {
+      return 0L;
+    }
+    try {
+      return Long.parseLong(value.toString());
+    } catch (NumberFormatException ex) {
+      return 0L;
+    }
+  }
+
+  private static String display(Object value) {
+    if (value == null) {
+      return "—";
+    }
+    String text = value.toString();
+    return text.isBlank() ? "—" : text;
+  }
+
+  private static String displayOrUnknown(Object value) {
+    if (value == null) {
+      return "unknown";
+    }
+    String text = value.toString().trim();
+    return text.isEmpty() ? "unknown" : text;
+  }
+
+  private static String displayOrNull(Object value) {
+    if (value == null) {
+      return null;
+    }
+    String text = value.toString().trim();
+    return text.isEmpty() ? null : text;
+  }
+
+  private static String lower(String question) {
+    return question == null ? "" : question.toLowerCase(Locale.ROOT);
   }
 }

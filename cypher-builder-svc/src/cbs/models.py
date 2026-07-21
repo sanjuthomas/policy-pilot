@@ -8,7 +8,10 @@ SearchMode = Literal["events", "instructions", "payments", "policies", "all"]
 
 
 class PlanOptions(BaseModel):
-    lob_scope: str | None = None
+    """When ``lob_scoped`` is true, plan under ``retrieval_lob_scope(allowed_lobs)``."""
+
+    lob_scoped: bool = False
+    allowed_lobs: list[str] = Field(default_factory=list)
 
 
 class PlanRequest(BaseModel):

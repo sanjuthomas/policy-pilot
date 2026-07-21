@@ -125,7 +125,11 @@ class ChatServiceTest {
         policySummaryAnswerFormatter,
         meIntentService,
         new Neo4jDirectService(
-            null, null, new Neo4jDirectAnswerFormatter()),
+            null, null, new Neo4jDirectAnswerFormatter(
+                new AnswerRenderer(
+                    new AnswerTemplateConfig().answerTemplateEngine(),
+                    new MoneyFormat(),
+                    new PolicyBasisFormat()))),
         finalizer);
   }
 
@@ -471,7 +475,7 @@ class ChatServiceTest {
 
     Neo4jDirectService neo4j =
         org.mockito.Mockito.mock(Neo4jDirectService.class);
-    when(neo4j.answer(anyString(), anyString()))
+    when(neo4j.answer(anyString(), anyString(), org.mockito.ArgumentMatchers.any()))
         .thenReturn(
             new Neo4jDirectService.Neo4jDirectResult(
                 "There were 2 ALERT events today.",

@@ -102,7 +102,7 @@ public class ChatService {
     }
 
     if ("neo4j_direct".equals(decision.getPath())) {
-      return neo4jDirect(request, requestedPath, generationMs);
+      return neo4jDirect(request, subject, requestedPath, generationMs);
     }
 
     if ("eligibility".equals(decision.getPath())) {
@@ -124,8 +124,8 @@ public class ChatService {
         request,
         "ssi-chat-j answers payment/instruction eligibility, document extraction "
             + "(show payment/instruction by id), policy-directory, policy-summary, "
-            + "me-centric questions, and neo4j_direct security-event counts "
-            + "(e.g. How many ALERT events happened today?). "
+            + "me-centric questions, and neo4j_direct graph answers "
+            + "(ALERT counts/lists, entity status/creator by id). "
             + "Routed as path="
             + decision.getPath()
             + ".",
@@ -138,9 +138,10 @@ public class ChatService {
   }
 
   private ChatResponse neo4jDirect(
-      ChatRequest request, String requestedPath, double generationMs) {
+      ChatRequest request, Subject subject, String requestedPath, double generationMs) {
     long retrievalStartNs = System.nanoTime();
-    Neo4jDirectResult result = neo4jDirectService.answer(request.message(), request.mode());
+    Neo4jDirectResult result =
+        neo4jDirectService.answer(request.message(), request.mode(), subject);
     double retrievalMs = (System.nanoTime() - retrievalStartNs) / 1_000_000.0;
     if (answerFinalizer == null) {
       return ChatResponse.of(result.answer(), null);
