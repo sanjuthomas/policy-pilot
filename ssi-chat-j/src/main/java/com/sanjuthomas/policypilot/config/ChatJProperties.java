@@ -2,6 +2,7 @@ package com.sanjuthomas.policypilot.config;
 
 import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.DefaultValue;
 
 @ConfigurationProperties(prefix = "chatj")
 public record ChatJProperties(
@@ -12,6 +13,8 @@ public record ChatJProperties(
     String neo4jUri,
     String neo4jUser,
     String neo4jPassword,
+    @DefaultValue("multimodal_embedding") String multimodalVectorIndex,
+    @DefaultValue("8") int retrievalLimit,
     String zitadelUrl,
     String zitadelInternalUrl,
     String zitadelHostHeader,

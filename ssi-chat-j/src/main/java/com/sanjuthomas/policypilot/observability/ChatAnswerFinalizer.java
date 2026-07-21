@@ -159,11 +159,41 @@ public class ChatAnswerFinalizer {
       String cypher,
       List<Map<String, Object>> graphRows,
       String cypherProvenance) {
+    return of(
+        message,
+        mode,
+        answer,
+        path,
+        answerSynthesis,
+        requestedPath,
+        retrievalMs,
+        generationMs,
+        intentId,
+        cypher,
+        graphRows,
+        cypherProvenance,
+        List.of());
+  }
+
+  public ChatResponse of(
+      String message,
+      String mode,
+      String answer,
+      String path,
+      String answerSynthesis,
+      String requestedPath,
+      Double retrievalMs,
+      Double generationMs,
+      String intentId,
+      String cypher,
+      List<Map<String, Object>> graphRows,
+      String cypherProvenance,
+      List<SourceHit> sources) {
     return finalizeAnswer(
         message,
         mode,
         answer,
-        List.of(),
+        sources == null ? List.of() : sources,
         cypher,
         graphRows == null ? List.of() : graphRows,
         retrievalMs,

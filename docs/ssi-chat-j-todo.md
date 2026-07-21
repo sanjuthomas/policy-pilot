@@ -34,9 +34,10 @@ Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `
 | Entity status / creator goldens | `done` | status + payment creator via bridge YAML-parity |
 | Who-approved payment golden | `done` | approval-lookup Thymeleaf; heuristic + entity_plan fallback |
 | FO/MO instruction VIEW goldens | `done` | `golden_instruction_view_fo_ficc` / `_mo_covering_ficc` |
-| **Next** — vector security summary | `todo` | `golden_vector_security_summary` (P3.5) |
+| **P3.5** — vector security summary | `done` | `golden_vector_security_summary` green on `:8096` |
+| **Next** — success bar / hygiene | `todo` | A/B Python parity closed; Java-only hygiene deferred |
 
-**Bank snapshot:** Java green **53** · Python-only still open **1** · Java-only hygiene **27** (not required for Python parity).
+**Bank snapshot:** Java green **54** · Python-only still open **0** · Java-only hygiene **27** (not required for Python parity).
 
 ---
 
@@ -98,14 +99,14 @@ Implement only what golden cases require; mark each golden id when green.
 
 | ID | Item | Status | Notes |
 |----|------|--------|-------|
-| P3.1 | Pipeline: route → handler lanes (path is law) | `in_progress` | Eligibility + directory + summary + me + document_extraction + neo4j_direct |
+| P3.1 | Pipeline: route → handler lanes (path is law) | `done` | Eligibility + directory + summary + me + document_extraction + neo4j_direct + vector/full_rag |
 | P3.2 | Eligibility / policy tools as needed by golden | `done` | Eligibility + directory + `policy_summary` |
 | P3.3 | Me / who-am-i if in golden | `done` | All Python meKinds live |
 | P3.4 | neo4j_direct + formatters for golden graph cases | `done` | Counts / lists / ranking / status / creator; LOB scope |
-| P3.5 | Vector / hybrid only if a golden case needs it | `todo` | `golden_vector_security_summary` |
+| P3.5 | Vector / hybrid only if a golden case needs it | `done` | `golden_vector_security_summary` green on `:8096` |
 | P3.6 | Skills only if a golden case needs them | `deferred` | Likely after golden |
 
-### Golden case checklist — Java bank green (51)
+### Golden case checklist — Java bank green (54)
 
 | Golden case id | Status | Notes |
 |----------------|--------|-------|
@@ -137,14 +138,11 @@ Implement only what golden cases require; mark each golden id when green.
 | `golden_events_who_approved_payment` | `done` | payment_approval_lookup + Thymeleaf WHO/WHEN/WHY |
 | `golden_instruction_view_fo_ficc` | `done` | FO FICC desk LOB VIEW via neo4j_direct status |
 | `golden_instruction_view_mo_covering_ficc` | `done` | MO covering-FICC VIEW via neo4j_direct status |
+| `golden_vector_security_summary` | `done` | vector → `full_rag` + `gemini_full`; cypher_class=none |
 
-### Remaining Python-only (1) — open for A/B parity
+### Remaining Python-only (0) — A/B parity closed
 
-From `ssi-chat/regression/eval_golden.yaml`, not yet in the Java bank:
-
-| Golden case id | Status | Likely lane |
-|----------------|--------|-------------|
-| `golden_vector_security_summary` | `todo` | vector (P3.5) |
+No Python-only golden cases remain open for the Java success bar.
 
 ### Hygiene (deferred for success bar)
 
@@ -159,9 +157,9 @@ From `ssi-chat/regression/eval_golden.yaml`, not yet in the Java bank:
 | ID | Item | Status | Notes |
 |----|------|--------|-------|
 | P4.1 | Run seed + eligibility golden against `:8096` | `done` | `prove-eligibility.sh` / warm `--no-seed` |
-| P4.2 | Triage failures into Phase 3 backlog | `todo` | Vector summary next |
+| P4.2 | Triage failures into Phase 3 backlog | `done` | Last Python-only case closed |
 | P4.3 | Document A/B how-to (switch `CHAT_BASE_URL`) | `done` | `ssi-chat-j/README.md` + `eval/README.md` |
-| P4.4 | **Success bar met** | `todo` | 1 Python-only case still open |
+| P4.4 | **Success bar met** | `done` | Java bank **54**; Python-only **0** |
 
 ---
 
@@ -190,3 +188,4 @@ From `ssi-chat/regression/eval_golden.yaml`, not yet in the Java bank:
 | 2026-07-21 | P3.4: Thymeleaf neo4j_direct count/list/ranking templates + subject LOB scope on cypher-builder-svc; 8 denial/alert goldens |
 | 2026-07-21 | Entity status/creator: cypher-builder-svc YAML-parity plan fallback + Thymeleaf formatters; `golden_payment_status` / `golden_instruction_status` / `golden_payment_creator` |
 | 2026-07-21 | FO/MO instruction VIEW goldens (`fo-ficc-101`, `pay-101`); formatter `generation_ms=0` parity with Python neo4j_direct |
+| 2026-07-21 | P3.5: vector/full_rag lane (`EmbeddingModel` + Neo4j `queryNodes` + Gemini synthesize); `golden_vector_security_summary` green — A/B Python parity closed |

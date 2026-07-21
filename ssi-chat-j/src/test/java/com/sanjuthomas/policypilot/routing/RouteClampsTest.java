@@ -40,4 +40,43 @@ class RouteClampsTest {
     assertTrue(RouteClamps.isPastWhoApprovedAudit("Who approved 20260720-FICC-P-19?"));
     assertFalse(RouteClamps.isPastWhoApprovedAudit("Who can approve 20260720-FICC-P-8?"));
   }
+
+  @Test
+  void clampsOpenNarrativeFromNeo4jDirectToVector() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("neo4j_direct");
+
+    RouterDecision clamped =
+        RouteClamps.apply(
+            decision,
+            "Write a brief narrative about recent policy denial activity in the audit log.");
+
+    assertEquals("vector", clamped.getPath());
+    assertTrue(clamped.getReasoning().contains("forced vector for open narrative"));
+  }
+
+  @Test
+  void leavesOpenNarrativeAlreadyOnVector() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("vector");
+
+    RouterDecision result =
+        RouteClamps.apply(
+            decision,
+            "Write a brief narrative about recent policy denial activity in the audit log.");
+
+    assertEquals("vector", result.getPath());
+  }
+
+  @Test
+  void detectsOpenNarrativeQuestion() {
+    assertTrue(
+        RouteClamps.isOpenNarrativeQuestion(
+            "Write a brief narrative about recent policy denial activity in the audit log."));
+    assertFalse(
+        RouteClamps.isOpenNarrativeQuestion("How many instruction policy denials happened this week?"));
+    assertFalse(
+        RouteClamps.isOpenNarrativeQuestion(
+            "Write a brief narrative about payment 20260720-FICC-P-1"));
+  }
 }

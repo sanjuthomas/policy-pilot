@@ -11,6 +11,7 @@ import org.neo4j.driver.Result;
 import org.neo4j.driver.Session;
 import org.neo4j.driver.SessionConfig;
 import org.neo4j.driver.Value;
+import org.neo4j.driver.types.Node;
 import org.springframework.stereotype.Component;
 
 /** Read-only Neo4j execution as svc_chat. */
@@ -24,12 +25,17 @@ public class Neo4jQueryExecutor {
   }
 
   public List<Map<String, Object>> runRead(String cypher) {
+    return runRead(cypher, Map.of());
+  }
+
+  public List<Map<String, Object>> runRead(String cypher, Map<String, Object> params) {
     SessionConfig config =
         SessionConfig.builder().withDefaultAccessMode(AccessMode.READ).build();
+    Map<String, Object> effective = params == null ? Map.of() : params;
     try (Session session = driver.session(config)) {
       return session.executeRead(
           tx -> {
-            Result result = tx.run(cypher);
+            Result result = tx.run(cypher, effective);
             List<Map<String, Object>> rows = new ArrayList<>();
             while (result.hasNext()) {
               rows.add(toMap(result.next()));
@@ -66,6 +72,14 @@ public class Neo4jQueryExecutor {
         Map<String, Object> map = new LinkedHashMap<>();
         for (String key : value.keys()) {
           map.put(key, convert(value.get(key)));
+        }
+        yield map;
+      }
+      case "NODE" -> {
+        Node node = value.asNode();
+        Map<String, Object> map = new LinkedHashMap<>();
+        for (String key : node.keys()) {
+          map.put(key, convert(node.get(key)));
         }
         yield map;
       }

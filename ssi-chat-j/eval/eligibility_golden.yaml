@@ -1021,3 +1021,18 @@ cases:
     require_entity_recall: true
     min_answer_length: 5
     answer_contains_any: [approved, status, instruction, ficc]
+
+# Vector-only security summary (Python golden_vector_security_summary parity).
+- id: golden_vector_security_summary
+  mode: events
+  retrieval: vector
+  tags: [golden, vector, full_rag, ssi-chat-j]
+  # Avoid "summarize … alerts" — that matches the deterministic ALERT-list intent.
+  question: Write a brief narrative about recent policy denial activity in the audit log.
+  expect:
+    require_routing: true
+    routing_path: full_rag
+    cypher_class: none
+    min_answer_length: 40
+    min_faithfulness: 0.05
+    answer_contains_any: [denial, alert, policy]

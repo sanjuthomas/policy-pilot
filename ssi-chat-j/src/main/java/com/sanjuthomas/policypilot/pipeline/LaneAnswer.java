@@ -1,5 +1,6 @@
 package com.sanjuthomas.policypilot.pipeline;
 
+import com.sanjuthomas.policypilot.api.ApiModels.SourceHit;
 import java.util.List;
 import java.util.Map;
 
@@ -13,7 +14,8 @@ public record LaneAnswer(
     String intentId,
     String cypher,
     List<Map<String, Object>> graphRows,
-    String cypherProvenance) {
+    String cypherProvenance,
+    List<SourceHit> sources) {
 
   public static LaneAnswer of(String answer, String recordedPath, String synthesis) {
     return of(answer, recordedPath, synthesis, null);
@@ -21,7 +23,8 @@ public record LaneAnswer(
 
   public static LaneAnswer of(
       String answer, String recordedPath, String synthesis, String intentId) {
-    return new LaneAnswer(answer, recordedPath, synthesis, intentId, null, List.of(), "none");
+    return new LaneAnswer(
+        answer, recordedPath, synthesis, intentId, null, List.of(), "none", List.of());
   }
 
   public static LaneAnswer neo4j(
@@ -37,6 +40,19 @@ public record LaneAnswer(
         intentId,
         cypher,
         graphRows == null ? List.of() : graphRows,
-        cypherProvenance == null ? "none" : cypherProvenance);
+        cypherProvenance == null ? "none" : cypherProvenance,
+        List.of());
+  }
+
+  public static LaneAnswer fullRag(String answer, List<SourceHit> sources) {
+    return new LaneAnswer(
+        answer,
+        "full_rag",
+        "gemini_full",
+        null,
+        null,
+        List.of(),
+        "none",
+        sources == null ? List.of() : sources);
   }
 }

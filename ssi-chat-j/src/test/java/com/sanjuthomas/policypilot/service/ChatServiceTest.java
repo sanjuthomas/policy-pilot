@@ -39,12 +39,14 @@ import com.sanjuthomas.policypilot.observability.ChatAnswerFinalizer;
 import com.sanjuthomas.policypilot.observability.RoutingDistributionTracker;
 import com.sanjuthomas.policypilot.observability.RoutingMetrics;
 import com.sanjuthomas.policypilot.observability.SkillMetrics;
+import com.sanjuthomas.policypilot.pipeline.LaneAnswer;
 import com.sanjuthomas.policypilot.pipeline.RouterDecision;
 import com.sanjuthomas.policypilot.policydirectory.PolicyDirectoryAnswerFormatter;
 import com.sanjuthomas.policypilot.policydirectory.PolicyDirectoryService;
 import com.sanjuthomas.policypilot.policysummary.PolicySummaryAnswerFormatter;
 import com.sanjuthomas.policypilot.policysummary.PolicySummaryService;
 import com.sanjuthomas.policypilot.routing.IntentRouter;
+import com.sanjuthomas.policypilot.vector.FullRagLaneService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +64,7 @@ class ChatServiceTest {
   @Mock ChatClient chatClient;
   @Mock ChatClient.ChatClientRequestSpec requestSpec;
   @Mock ChatClient.CallResponseSpec callResponseSpec;
+  @Mock FullRagLaneService fullRagLaneService;
 
   private EligibilityAnswerFormatter eligibilityAnswerFormatter;
   private InstructionDetailAnswerFormatter instructionDetailAnswerFormatter;
@@ -134,7 +137,8 @@ class ChatServiceTest {
                         new AnswerTemplateConfig().answerTemplateEngine(),
                         new MoneyFormat(),
                         new PolicyBasisFormat()),
-                    new PolicyBasisFormat()))),
+                    new PolicyBasisFormat())),
+            fullRagLaneService),
         finalizer);
   }
 
@@ -461,15 +465,49 @@ class ChatServiceTest {
   @Test
   void otherPathsReturnStub() {
     RouterDecision decision = new RouterDecision();
-    decision.setPath("full_rag");
+    decision.setPath("skill");
     when(callResponseSpec.entity(eq(RouterDecision.class))).thenReturn(decision);
 
     ChatResponse response =
         chatService(new FakeEligibilityClient())
-            .ask(new ChatRequest("Summarize the corpus", List.of(), "events"), subject());
+            .ask(new ChatRequest("Please create a payment", List.of(), "events"), subject());
 
-    assertTrue(response.answer().contains("neo4j_direct"));
+    assertTrue(response.answer().contains("vector/full_rag"));
     assertEquals("stub", response.routing().answer_synthesis());
+  }
+
+  @Test
+  void vectorLaneRecordsFullRagWithSources() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("vector");
+    when(callResponseSpec.entity(eq(RouterDecision.class))).thenReturn(decision);
+    when(fullRagLaneService.answer(anyString(), anyString(), org.mockito.ArgumentMatchers.any()))
+        .thenReturn(
+            LaneAnswer.fullRag(
+                "Recent policy denial activity includes an ALERT for a VIEW denial.",
+                List.of(
+                    new com.sanjuthomas.policypilot.api.ApiModels.SourceHit(
+                        "evt-1",
+                        "20260720-FICC-I-1",
+                        0.9,
+                        List.of("vector"),
+                        "Policy denial",
+                        Map.of(),
+                        Map.of()))));
+
+    ChatResponse response =
+        chatService(new FakeEligibilityClient())
+            .ask(
+                new ChatRequest(
+                    "Write a brief narrative about recent policy denial activity in the audit log.",
+                    List.of(),
+                    "events"),
+                subject());
+
+    assertEquals("full_rag", response.routing().path());
+    assertEquals("gemini_full", response.routing().answer_synthesis());
+    assertEquals(1, response.sources().size());
+    assertTrue(response.answer().toLowerCase().contains("denial"));
   }
 
   @Test
@@ -509,7 +547,8 @@ class ChatServiceTest {
                     new FakeEligibilityClient(),
                     instructionDetailAnswerFormatter,
                     paymentDetailAnswerFormatter),
-                neo4j),
+                neo4j,
+                fullRagLaneService),
             finalizer);
 
     ChatResponse response =

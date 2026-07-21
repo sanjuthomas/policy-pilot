@@ -2,6 +2,7 @@ package com.sanjuthomas.policypilot.service;
 
 import com.sanjuthomas.policypilot.api.ApiModels.ChatRequest;
 import com.sanjuthomas.policypilot.api.ApiModels.ChatResponse;
+import com.sanjuthomas.policypilot.api.ApiModels.SourceHit;
 import com.sanjuthomas.policypilot.auth.Subject;
 import com.sanjuthomas.policypilot.observability.ChatAnswerFinalizer;
 import com.sanjuthomas.policypilot.pipeline.LaneAnswer;
@@ -21,8 +22,9 @@ public class ChatService {
   private static final String UNSUPPORTED_ANSWER =
       "ssi-chat-j answers payment/instruction eligibility, document extraction "
           + "(show payment/instruction by id), policy-directory, policy-summary, "
-          + "me-centric questions, and neo4j_direct graph answers "
-          + "(ALERT counts/lists, entity status/creator by id). ";
+          + "me-centric questions, neo4j_direct graph answers "
+          + "(ALERT counts/lists, entity status/creator by id), and vector/full_rag "
+          + "security-event narratives. ";
 
   private final IntentRouter intentRouter;
   private final ChatPathDispatcher pathDispatcher;
@@ -48,7 +50,11 @@ public class ChatService {
     double laneMs = (System.nanoTime() - retrievalStartNs) / 1_000_000.0;
 
     // Me lane records path=eligibility for OpenSLO parity; do not treat router "me" as requested.
+    // Vector lane records path=full_rag; treat router vector as matching executed path.
     String effectiveRequested = "me".equals(requestedPath) ? null : requestedPath;
+    if ("vector".equals(effectiveRequested) && lane != null && "full_rag".equals(lane.recordedPath())) {
+      effectiveRequested = null;
+    }
 
     if (lane == null) {
       return finalize(
@@ -62,14 +68,28 @@ public class ChatService {
           null,
           null,
           null,
-          "none");
+          "none",
+          List.of());
     }
 
     // Parity with Python neo4j_direct / document_extraction: formatter answers report
     // generation_ms=0 (deterministic quality gate max is 100ms); router+lane → retrieval_ms.
+    // Gemini synthesis lanes report lane time as generation_ms (embed+search+synth).
     boolean formatterOnly = "formatter".equals(lane.synthesis());
-    double retrievalMs = formatterOnly ? routeMs + laneMs : laneMs;
-    double generationMs = formatterOnly ? 0.0 : routeMs;
+    boolean geminiSynth =
+        "gemini_full".equals(lane.synthesis()) || "gemini_why_only".equals(lane.synthesis());
+    double retrievalMs;
+    double generationMs;
+    if (formatterOnly) {
+      retrievalMs = routeMs + laneMs;
+      generationMs = 0.0;
+    } else if (geminiSynth) {
+      retrievalMs = routeMs;
+      generationMs = laneMs;
+    } else {
+      retrievalMs = laneMs;
+      generationMs = routeMs;
+    }
 
     return finalize(
         request,
@@ -82,7 +102,8 @@ public class ChatService {
         lane.intentId(),
         lane.cypher(),
         lane.graphRows(),
-        lane.cypherProvenance());
+        lane.cypherProvenance(),
+        lane.sources());
   }
 
   private ChatResponse finalize(
@@ -96,7 +117,8 @@ public class ChatService {
       String intentId,
       String cypher,
       List<Map<String, Object>> graphRows,
-      String cypherProvenance) {
+      String cypherProvenance,
+      List<SourceHit> sources) {
     if (answerFinalizer == null) {
       return ChatResponse.of(answerText, null);
     }
@@ -112,6 +134,7 @@ public class ChatService {
         intentId,
         cypher,
         graphRows,
-        cypherProvenance);
+        cypherProvenance,
+        sources);
   }
 }
