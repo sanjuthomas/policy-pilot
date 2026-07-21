@@ -41,28 +41,45 @@ Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `
 
 **Bank snapshot:** Java prove bank **57** · Python-only **0**. Soft bank not used for Java roadmap.
 
-### neo4j_direct remaining (from `ssi-chat/.../neo4j_direct.yaml`)
+### neo4j_direct port (from `ssi-chat/.../graph/intents/neo4j_direct.yaml`)
 
-Skip: `*.show_by_id` (intentional Java `document_extraction`).
+Each remaining intent: cypher-builder plan match → Java Thymeleaf formatter → prove golden.  
+Skip: `instruction.show_by_id` / `payment.show_by_id` (intentional Java `document_extraction`).
 
-| Intent | Status | Golden |
-|--------|--------|--------|
-| `payment.creator_and_approver_by_id` | `done` | `golden_payment_creator_and_approver` |
-| `instruction.creator_and_approver_by_id` | `done` | `golden_instruction_creator_and_approver` |
-| `instruction.creator_by_id` | `done` | formatter parity (no dedicated golden yet) |
-| `instruction.list_by_status` | `todo` | **next** |
-| `instruction.list_single_use` | `todo` | |
-| `instruction.list_standing` | `todo` | |
-| `instruction.created_by_user` | `todo` | |
-| `instruction.self_approval` | `todo` | |
-| `instruction.subordinate_approver` | `todo` | |
-| `instruction.duplicate_routes` | `todo` | |
-| `instruction.mutual_approval` | `todo` | needs SoD seed |
-| `instruction.cross_entity_reciprocal_approval` | `todo` | |
-| `instruction.versions_by_id` | `todo` | |
-| `payment.versions_by_id` | `todo` | |
-| `events.instruction_timeline_by_id` | `todo` | |
-| Facet counts / group-by (planned_graph formatters) | `todo` | GOLDEN_EVAL P1/P2 |
+#### Already on Java (done)
+
+| Intent | Status | Golden / notes |
+|--------|--------|----------------|
+| `payment.status_by_id` | `done` | `golden_payment_status`, FO/MO VIEW twins |
+| `instruction.status_by_id` | `done` | `golden_instruction_status`, VIEW twins |
+| `payment.creator_by_id` | `done` | `golden_payment_creator` |
+| `instruction.creator_by_id` | `done` | formatter parity; add golden when convenient |
+| `payment.approver_by_id` | `done` | `golden_events_who_approved_payment` (also `planned_graph`) |
+| `instruction.approver_by_id` | `done` | via approval-lookup formatter |
+| `payment.creator_and_approver_by_id` | `done` | `golden_payment_creator_and_approver` ([#109](https://github.com/sanjuthomas/policy-pilot/pull/109)) |
+| `instruction.creator_and_approver_by_id` | `done` | `golden_instruction_creator_and_approver` ([#109](https://github.com/sanjuthomas/policy-pilot/pull/109)) |
+| `events.alerts_today_count` | `done` | `golden_events_count_today` (+ denial count goldens via `planned_graph`) |
+| `events.alert_list` | `done` | `golden_alerts_list_today_entity_ids`, denial list goldens |
+| `instruction.show_by_id` | `deferred` | intentional `document_extraction` |
+| `payment.show_by_id` | `deferred` | intentional `document_extraction` |
+
+#### Remaining (todo) — port order
+
+| # | Intent | Status | Proposed golden | Notes |
+|---|--------|--------|-----------------|-------|
+| 1 | `instruction.list_by_status` | `todo` | `golden_instructions_list_by_status` | **next**; inventory table |
+| 2 | `instruction.list_standing` | `todo` | `golden_instructions_list_standing` | STANDING / synonym taxonomy |
+| 3 | `instruction.list_single_use` | `todo` | `golden_instructions_list_single_use` | SINGLE_USE synonyms |
+| 4 | `instruction.created_by_user` | `todo` | `golden_instructions_created_by_user` | e.g. mo-100 |
+| 5 | `instruction.self_approval` | `todo` | `golden_instructions_self_approval` | compliance table; empty-OK |
+| 6 | `instruction.subordinate_approver` | `todo` | `golden_instructions_subordinate_approver` | compliance table |
+| 7 | `instruction.duplicate_routes` | `todo` | `golden_instructions_duplicate_routes` | `CONFLICTS_WITH` |
+| 8 | `instruction.mutual_approval` | `todo` | `golden_instructions_mutual_approval` | needs SoD / mutual-approval seed |
+| 9 | `instruction.cross_entity_reciprocal_approval` | `todo` | `golden_cross_entity_reciprocal_approval` | |
+| 10 | `instruction.versions_by_id` | `todo` | `golden_instruction_versions_by_id` | |
+| 11 | `payment.versions_by_id` | `todo` | `golden_payment_versions_by_id` | |
+| 12 | `events.instruction_timeline_by_id` | `todo` | `golden_events_instruction_timeline` | |
+| — | Facet counts / group-by (`planned_graph` formatters) | `todo` | see `ssi-chat/regression/GOLDEN_EVAL.md` P1/P2 | not YAML intents; still neo4j_direct path |
 
 ---
 
