@@ -24,6 +24,8 @@ public class Neo4jDirectAnswerFormatter {
   private static final String PAYMENT_STATUS_TEMPLATE = "payment-status-by-id";
   private static final String INSTRUCTION_STATUS_TEMPLATE = "instruction-status-by-id";
   private static final String PAYMENT_CREATOR_TEMPLATE = "payment-creator-by-id";
+  private static final String INSTRUCTION_CREATOR_TEMPLATE = "instruction-creator-by-id";
+  private static final String CREATOR_AND_APPROVER_TEMPLATE = "entity-creator-and-approver";
   private static final String APPROVAL_LOOKUP_TEMPLATE = "approval-lookup";
 
   private final AnswerRenderer answerRenderer;
@@ -52,9 +54,26 @@ public class Neo4jDirectAnswerFormatter {
         || (labelSet.contains("instruction_detail") && isStatusQuestion(question))) {
       return answerRenderer.render(INSTRUCTION_STATUS_TEMPLATE, toInstructionStatusView(rows));
     }
+    if ("payment.creator_and_approver_by_id".equals(intent)
+        || "instruction.creator_and_approver_by_id".equals(intent)
+        || ((labelSet.contains("payment_detail") || labelSet.contains("instruction_detail"))
+            && isCreatorAndApproverQuestion(question))) {
+      String displayNoun =
+          "instruction.creator_and_approver_by_id".equals(intent)
+                  || (!"payment.creator_and_approver_by_id".equals(intent)
+                      && labelSet.contains("instruction_detail"))
+              ? "Instruction"
+              : "Payment";
+      return answerRenderer.render(
+          CREATOR_AND_APPROVER_TEMPLATE, toCreatorAndApproverView(rows, displayNoun));
+    }
     if ("payment.creator_by_id".equals(intent)
         || (labelSet.contains("payment_detail") && isCreatorQuestion(question))) {
       return answerRenderer.render(PAYMENT_CREATOR_TEMPLATE, toPaymentCreatorView(rows));
+    }
+    if ("instruction.creator_by_id".equals(intent)
+        || (labelSet.contains("instruction_detail") && isCreatorQuestion(question))) {
+      return answerRenderer.render(INSTRUCTION_CREATOR_TEMPLATE, toInstructionCreatorView(rows));
     }
     if ("payment.approver_by_id".equals(intent)
         || "instruction.approver_by_id".equals(intent)
@@ -96,6 +115,13 @@ public class Neo4jDirectAnswerFormatter {
       return false;
     }
     return q.contains("who created") || q.contains("which user created");
+  }
+
+  static boolean isCreatorAndApproverQuestion(String question) {
+    String q = lower(question);
+    boolean created = q.contains("who created");
+    boolean approved = q.contains("who approv");
+    return created && approved;
   }
 
   static boolean isAlertCountQuestion(String question) {
@@ -171,6 +197,42 @@ public class Neo4jDirectAnswerFormatter {
       return new EntityCreatorByIdView(false, true, entityId, null);
     }
     return new EntityCreatorByIdView(false, false, entityId, creator);
+  }
+
+  static EntityCreatorByIdView toInstructionCreatorView(List<Map<String, Object>> rows) {
+    Map<String, Object> row = firstRow(rows);
+    if (row == null) {
+      return new EntityCreatorByIdView(true, false, null, null);
+    }
+    String entityId = displayOrUnknown(row.get("instruction_id"));
+    String creator = displayOrNull(row.get("creator_display"));
+    if (creator == null || "unknown".equalsIgnoreCase(creator)) {
+      return new EntityCreatorByIdView(false, true, entityId, null);
+    }
+    return new EntityCreatorByIdView(false, false, entityId, creator);
+  }
+
+  static EntityCreatorAndApproverView toCreatorAndApproverView(
+      List<Map<String, Object>> rows, String displayNoun) {
+    String noun = displayNoun == null || displayNoun.isBlank() ? "Payment" : displayNoun;
+    String entityNoun = noun.toLowerCase(Locale.ROOT);
+    Map<String, Object> row = firstRow(rows);
+    if (row == null) {
+      return new EntityCreatorAndApproverView(true, noun, entityNoun, null, null, null, null);
+    }
+    boolean instruction = "Instruction".equalsIgnoreCase(noun);
+    String entityId =
+        displayOrUnknown(instruction ? row.get("instruction_id") : row.get("payment_id"));
+    String creator = displayOrDash(row.get("creator_display"));
+    String approver = displayOrDash(row.get("approver_display"));
+    String approvedAt = displayOrNull(row.get("approved_at"));
+    return new EntityCreatorAndApproverView(
+        false, noun, entityNoun, entityId, creator, approver, approvedAt);
+  }
+
+  private static String displayOrDash(Object value) {
+    String text = displayOrNull(value);
+    return text == null ? "—" : text;
   }
 
   ApprovalLookupView toApprovalLookupView(List<Map<String, Object>> rows, String entityNoun) {

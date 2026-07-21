@@ -101,6 +101,37 @@ def test_plan_payment_creator_by_id() -> None:
     assert body["planned"][0]["label"] == "payment_detail"
 
 
+def test_plan_payment_creator_and_approver_by_id() -> None:
+    response = client.post(
+        "/v1/plan",
+        json={
+            "question": "Who created payment 20260720-FICC-P-1 and who approved it?",
+            "mode": "payments",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["matched"] is True
+    assert body["intent_id"] == "payment.creator_and_approver_by_id"
+    assert body["planned"][0]["label"] == "payment_detail"
+    assert body["meta"]["source"] == "entity_detail"
+
+
+def test_plan_instruction_creator_and_approver_by_id() -> None:
+    response = client.post(
+        "/v1/plan",
+        json={
+            "question": "Who created instruction 20260720-FICC-I-1 and who approved it?",
+            "mode": "instructions",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["matched"] is True
+    assert body["intent_id"] == "instruction.creator_and_approver_by_id"
+    assert body["planned"][0]["label"] == "instruction_detail"
+
+
 def test_plan_entity_detail_any_mode() -> None:
     """ID-based status works from Events (default UI mode), not only payments."""
     response = client.post(

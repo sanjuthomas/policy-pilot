@@ -1,4 +1,4 @@
-"""YAML-parity entity detail intents (status / creator by id).
+"""YAML-parity entity detail intents (status / creator / approver by id).
 
 ssi-chat matches these via neo4j_direct.yaml before plan_graph_queries; the bridge
 reproduces the same CypherQueryBuilder.payment_detail / instruction_detail path.
@@ -28,6 +28,7 @@ def _builder_version() -> str:
     except PackageNotFoundError:
         return "unknown"
 
+
 _STATUS_RE = re.compile(
     r"(?i)\b(what is|what's)\s+the\s+status\b|\bstatus of\b"
 )
@@ -35,6 +36,10 @@ _CREATOR_RE = re.compile(r"(?i)\b(who|which user)\s+created\b")
 _APPROVE_RE = re.compile(r"(?i)\bapprov")
 _APPROVER_RE = re.compile(r"(?i)\bwho\s+approv")
 _WHO_CAN_APPROVE_RE = re.compile(r"(?i)\bwho\s+can\s+approv")
+# Parity with neo4j_direct.yaml instruction/payment.creator_and_approver_by_id
+_CREATOR_AND_APPROVER_RE = re.compile(
+    r"(?i)\bwho\s+created\b.*\bwho\s+approv|\bwho\s+approv.*\bwho\s+created\b"
+)
 
 _BUILDER = CypherQueryBuilder()
 
@@ -43,6 +48,19 @@ def plan_entity_detail(request: PlanRequest) -> PlanResponse | None:
     question = request.question
     payment_ids = extract_payment_ids(question)
     instruction_ids = extract_instruction_ids(question)
+
+    # Combined creator+approver must win over single-slot creator / approver.
+    if _CREATOR_AND_APPROVER_RE.search(question):
+        if payment_ids:
+            return _detail_response(
+                "payment.creator_and_approver_by_id",
+                _BUILDER.payment_detail(payment_ids[0]),
+            )
+        if instruction_ids:
+            return _detail_response(
+                "instruction.creator_and_approver_by_id",
+                _BUILDER.instruction_detail(instruction_ids[0]),
+            )
 
     if _STATUS_RE.search(question):
         if payment_ids:

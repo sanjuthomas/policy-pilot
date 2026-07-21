@@ -36,9 +36,34 @@ Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `
 | FO/MO instruction VIEW goldens | `done` | `golden_instruction_view_fo_ficc` / `_mo_covering_ficc` |
 | **P3.5** — vector security summary | `done` | `golden_vector_security_summary` green on `:8096` |
 | **person_permissions** | `done` | Authz directory summary; `golden_person_permissions_kowalski` in prove bank |
-| **Next** — payment skills | `todo` | Soft-bank skill cases (create/submit/approve/cancel) |
+| **neo4j_direct remaining port** | `in_progress` | Port Python YAML intents one-by-one + golden each |
+| **Next after neo4j_direct** | `todo` | Payment skills |
 
-**Bank snapshot:** Java prove bank **55** (incl. person_permissions) · Python-only still open **0** · Java-only hygiene **27** (not required for Python parity).
+**Bank snapshot:** Java prove bank **57** · Python-only **0**. Soft bank not used for Java roadmap.
+
+### neo4j_direct remaining (from `ssi-chat/.../neo4j_direct.yaml`)
+
+Skip: `*.show_by_id` (intentional Java `document_extraction`).
+
+| Intent | Status | Golden |
+|--------|--------|--------|
+| `payment.creator_and_approver_by_id` | `done` | `golden_payment_creator_and_approver` |
+| `instruction.creator_and_approver_by_id` | `done` | `golden_instruction_creator_and_approver` |
+| `instruction.creator_by_id` | `done` | formatter parity (no dedicated golden yet) |
+| `instruction.list_by_status` | `todo` | **next** |
+| `instruction.list_single_use` | `todo` | |
+| `instruction.list_standing` | `todo` | |
+| `instruction.created_by_user` | `todo` | |
+| `instruction.self_approval` | `todo` | |
+| `instruction.subordinate_approver` | `todo` | |
+| `instruction.duplicate_routes` | `todo` | |
+| `instruction.mutual_approval` | `todo` | needs SoD seed |
+| `instruction.cross_entity_reciprocal_approval` | `todo` | |
+| `instruction.versions_by_id` | `todo` | |
+| `payment.versions_by_id` | `todo` | |
+| `events.instruction_timeline_by_id` | `todo` | |
+| Facet counts / group-by (planned_graph formatters) | `todo` | GOLDEN_EVAL P1/P2 |
+
 ---
 
 ## Milestone M1 (shipped)
