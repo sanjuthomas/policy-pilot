@@ -202,9 +202,9 @@ class Neo4jDirectAnswerFormatterTest {
             "planned_graph");
     assertTrue(answer.contains("WHO: Vasquez, Elena (ficc-300)"));
     assertTrue(answer.contains("WHEN: 2026-07-04T12:29:42"));
-    assertTrue(answer.contains("WHY:"));
+    assertTrue(answer.contains("BASIS:"));
     assertTrue(answer.contains("FICC_SUPERVISOR"));
-    assertTrue(!answer.contains("BASIS:"));
+    assertTrue(!answer.contains("WHY:"));
   }
 
   @Test
@@ -262,7 +262,9 @@ class Neo4jDirectAnswerFormatterTest {
             "planned_graph");
     assertTrue(answer.contains("WHO: Laurent, Sophie (pay-201)"));
     assertTrue(answer.contains("WHEN: 2026-07-20T01:19:04.508813Z"));
+    assertTrue(answer.contains("BASIS:"));
     assertTrue(answer.contains("FUNDING_APPROVER"));
+    assertTrue(!answer.contains("WHY:"));
     assertTrue(!answer.contains("was not approved"));
   }
 }

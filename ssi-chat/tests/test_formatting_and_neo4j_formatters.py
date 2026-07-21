@@ -193,8 +193,9 @@ class TestNeo4jFormatters:
                 }
             ],
         )
-        assert "WHY:" in text
-        assert "BASIS:" not in text
+        assert "WHY:" not in text
+        assert "BASIS:" in text
+        assert "FICC_SUPERVISOR" in text
 
     def test_payment_approver_not_approved_with_status(self) -> None:
         from chat_application.formatting.neo4j import format_payment_approver_by_id
@@ -235,6 +236,8 @@ class TestNeo4jFormatters:
         )
         assert "WHO: Laurent, Sophie (pay-201)" in text
         assert "was not approved" not in text
+        assert "BASIS:" in text
+        assert "WHY:" not in text
         assert "FUNDING_APPROVER" in text
 
     def test_instruction_mutual_approval_table(self) -> None:

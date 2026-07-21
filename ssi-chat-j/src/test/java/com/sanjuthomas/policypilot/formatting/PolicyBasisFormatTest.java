@@ -24,13 +24,14 @@ class PolicyBasisFormatTest {
   }
 
   @Test
-  void formatApprovalAuthLinesWhyOnlyWhenRedundant() {
+  void formatApprovalAuthLinesSummaryUsesBasisLabelWhenRedundant() {
     String summary =
         "Vasquez was allowed to APPROVE because role FICC_SUPERVISOR; valid transition";
     List<String> lines =
         basis.formatApprovalAuthLines(summary, List.of("role FICC_SUPERVISOR"));
     assertEquals(1, lines.size());
-    assertTrue(lines.get(0).startsWith("WHY:"));
+    assertTrue(lines.get(0).startsWith("BASIS:"));
+    assertTrue(!lines.get(0).contains("WHY:"));
   }
 
   @Test
