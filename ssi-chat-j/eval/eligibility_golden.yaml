@@ -592,3 +592,45 @@ cases:
     - PAYMENT_CREATOR
     - cannot **create** instructions
     - cannot create instructions
+
+- id: golden_me_can_create_instruction_yes_mo
+  mode: all
+  retrieval: eligibility
+  tags: [golden, me, can_act_on_entity, instruction, create, ssi-chat-j]
+  persona: mo-100
+  question: Can I create an instruction?
+  expect:
+    require_routing: true
+    routing_path: eligibility
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: me.can_create_instruction.yes
+    min_answer_length: 40
+    answer_contains_all:
+    - "**Yes**"
+    - mo-100
+    - "`INSTRUCTION_CREATOR`"
+    answer_contains_any:
+    - draft instructions
+    - "**create**"
+
+- id: golden_me_can_approve_payment_no_fo
+  mode: all
+  retrieval: eligibility
+  tags: [golden, me, can_act_on_entity, approve, fo, ssi-chat-j]
+  persona: fo-fx-101
+  question: Can I approve a payment?
+  expect:
+    require_routing: true
+    routing_path: eligibility
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: me.can_approve_payment.no
+    min_answer_length: 40
+    answer_contains_all:
+    - "**No**"
+    - fo-fx-101
+    - "`FUNDING_APPROVER`"
+    answer_contains_any:
+    - payment APPROVE
+    - Funding approval
