@@ -9,7 +9,7 @@ public class FakeChatService extends ChatService {
   private ChatResponse response = ChatResponse.of("default", null);
 
   public FakeChatService() {
-    super(null, null, null, null, null, null, null, null);
+    super(null, null, null, null, null, null, null, null, null);
   }
 
   public FakeChatService returning(ChatResponse response) {

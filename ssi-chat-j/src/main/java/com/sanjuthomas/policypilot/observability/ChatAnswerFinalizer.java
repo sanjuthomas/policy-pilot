@@ -131,17 +131,45 @@ public class ChatAnswerFinalizer {
       Double retrievalMs,
       Double generationMs,
       String intentId) {
+    return of(
+        message,
+        mode,
+        answer,
+        path,
+        answerSynthesis,
+        requestedPath,
+        retrievalMs,
+        generationMs,
+        intentId,
+        null,
+        List.of(),
+        "none");
+  }
+
+  public ChatResponse of(
+      String message,
+      String mode,
+      String answer,
+      String path,
+      String answerSynthesis,
+      String requestedPath,
+      Double retrievalMs,
+      Double generationMs,
+      String intentId,
+      String cypher,
+      List<Map<String, Object>> graphRows,
+      String cypherProvenance) {
     return finalizeAnswer(
         message,
         mode,
         answer,
         List.of(),
-        null,
-        List.of(),
+        cypher,
+        graphRows == null ? List.of() : graphRows,
         retrievalMs,
         generationMs,
         path,
-        "none",
+        cypherProvenance == null ? "none" : cypherProvenance,
         answerSynthesis,
         intentId,
         List.of(),

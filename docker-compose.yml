@@ -638,6 +638,21 @@ services:
     networks:
       - security-event-net
 
+  # HTTP bridge for shared/cypher_builder — used by ssi-chat-j (Maven on :8096).
+  cypher-builder-svc:
+    build:
+      context: .
+      dockerfile: cypher-builder-svc/Dockerfile
+    container_name: cypher-builder-svc
+    ports:
+      - "8097:8097"
+    environment:
+      <<: *otel-environment
+      OTEL_SERVICE_NAME: cypher-builder-svc
+    restart: unless-stopped
+    networks:
+      - security-event-net
+
   ssi-chat:
     build:
       context: .

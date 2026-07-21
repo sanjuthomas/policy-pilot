@@ -90,5 +90,12 @@ public final class RouterPrompts {
             → document_extraction, extractionTarget=payment
       Prefer eligibility over neo4j_direct for live OPA approver/submitter questions.
       Prefer eligibility+SUBMIT over skill for "who can submit" (not "please submit").
+      Neo4j direct (deterministic SecurityEvent / graph counts and lists — no entity mutation):
+        path=neo4j_direct
+        Prefer for "how many ALERT / policy denial / security events … today/this week?"
+        and similar graph aggregate questions. Prefer document_extraction for show-by-id.
+        Examples:
+          "How many ALERT events happened today?" → neo4j_direct
+          "How many instruction policy denials happened this week?" → neo4j_direct
       """;
 }
