@@ -101,14 +101,32 @@ def test_plan_payment_creator_by_id() -> None:
     assert body["planned"][0]["label"] == "payment_detail"
 
 
-def test_plan_entity_detail_respects_mode() -> None:
+def test_plan_entity_detail_any_mode() -> None:
+    """ID-based status works from Events (default UI mode), not only payments."""
     response = client.post(
         "/v1/plan",
         json={
-            "question": "What is the status of payment 20260720-FICC-P-1?",
+            "question": "What is the status of 20260720-FICC-P-19?",
             "mode": "events",
         },
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["matched"] is False
+    assert body["matched"] is True
+    assert body["intent_id"] == "payment.status_by_id"
+    assert body["planned"][0]["label"] == "payment_detail"
+    assert "20260720-FICC-P-19" in body["planned"][0]["cypher"]
+
+
+def test_plan_payment_creator_any_mode() -> None:
+    response = client.post(
+        "/v1/plan",
+        json={
+            "question": "Who created payment 20260720-FICC-P-1?",
+            "mode": "policies",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["matched"] is True
+    assert body["intent_id"] == "payment.creator_by_id"

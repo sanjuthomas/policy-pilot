@@ -105,7 +105,9 @@ public final class RouterPrompts {
           "Can you report all ALERTS today?" → neo4j_direct
           "Which user triggered the most policy denial alerts this week?" → neo4j_direct
           "What is the status of payment 20260720-FICC-P-1?" → neo4j_direct
+          "What is the status of 20260720-FICC-P-19?" → neo4j_direct
           "What is the status of instruction 20260720-FICC-I-1?" → neo4j_direct
           "Who created payment 20260720-FICC-P-1?" → neo4j_direct
+          (Entity id lookups apply regardless of UI search mode.)
       """;
 }

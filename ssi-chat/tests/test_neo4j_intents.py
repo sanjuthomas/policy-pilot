@@ -115,6 +115,12 @@ class TestNeo4jDirectMatching:
         assert match is not None
         assert match.intent_id == "instruction.status_by_id"
 
+    def test_payment_status_by_id_any_ui_mode(self) -> None:
+        question = "What is the status of 20260720-FICC-P-19?"
+        match = match_neo4j_direct_intent(question, mode="events")
+        assert match is not None
+        assert match.intent_id == "payment.status_by_id"
+
     def test_mutual_approval(self) -> None:
         question = "Are there any mutual approval cases?"
         match = match_neo4j_direct_intent(question, mode="instructions")

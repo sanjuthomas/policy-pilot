@@ -4,6 +4,8 @@
 #   id          — stable intent name
 #   priority    — higher wins when multiple intents match (default 50)
 #   modes       — chat search modes where this intent applies
+#                 (ID-required intents also apply in any mode when the question
+#                 contains a matching payment/instruction id — see direct.py)
 #   match       — regex on the question (case-insensitive)
 #   exclude     — optional regex; intent skipped when this matches
 #   requires    — optional keys: instruction_id, payment_id, user_id
