@@ -191,14 +191,14 @@ def format_approval_auth_lines(
     summary: str | None,
     basis: list[str],
 ) -> list[str]:
-    """Build WHY and/or BASIS lines without repeating the same OPA checks."""
+    """Build BASIS line(s) without repeating the same OPA checks."""
     readable_summary = humanize_authorization_text(str(summary)) if summary else None
     readable_basis = humanize_policy_basis(basis) if basis else []
     redundant = basis_redundant_with_summary(readable_summary, basis)
 
     lines: list[str] = []
     if readable_summary:
-        lines.append(f"WHY: {readable_summary}")
+        lines.append(f"BASIS: {readable_summary}")
     elif readable_basis:
         basis_line = format_approval_basis_line(basis)
         if basis_line:

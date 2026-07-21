@@ -95,7 +95,7 @@ class TestRagServiceAsk:
         )
         assert response.answer.startswith("WHO:")
         assert "BASIS:" in response.answer
-        assert "WHY:" in response.answer
+        assert "WHY:" not in response.answer
         assert "role FUNDING_APPROVER" in response.answer
         assert "covers LOB FICC" in response.answer
         assert "amount $1 million within subject and absolute limits" in response.answer

@@ -151,6 +151,10 @@ def test_plan_payment_approver_bare_id_any_mode() -> None:
     assert body["planned"][0]["label"] == "payment_approval_lookup"
     assert "Payment" in body["planned"][0]["cypher"]
     assert "has_approval" in body["planned"][0]["cypher"]
+    assert "approver_user_id IS NOT NULL" in body["planned"][0]["cypher"]
+    assert f"PaymentVersion {{payment_id: '20260720-FICC-P-19'}}" in body["planned"][0][
+        "cypher"
+    ]
 
 
 def test_plan_payment_approver_events_via_heuristic() -> None:

@@ -202,9 +202,9 @@ class Neo4jDirectAnswerFormatterTest {
             "planned_graph");
     assertTrue(answer.contains("WHO: Vasquez, Elena (ficc-300)"));
     assertTrue(answer.contains("WHEN: 2026-07-04T12:29:42"));
-    assertTrue(answer.contains("WHY:"));
+    assertTrue(answer.contains("BASIS:"));
     assertTrue(answer.contains("FICC_SUPERVISOR"));
-    assertTrue(!answer.contains("BASIS:"));
+    assertTrue(!answer.contains("WHY:"));
   }
 
   @Test
@@ -237,5 +237,34 @@ class Neo4jDirectAnswerFormatterTest {
             "payment.approver_by_id");
     assertEquals(
         "Payment 20260720-FICC-P-19 was not approved. Its status is CANCELLED.", answer);
+  }
+
+  @Test
+  void formatsPaymentApprovalLookupWhenHasApprovalFalseButApproverPresent() {
+    String answer =
+        formatter.format(
+            "Who approved payment 20260720-FICC-P-1 and why?",
+            Set.of("payment_approval_lookup"),
+            List.of(
+                Map.of(
+                    "payment_id",
+                    "20260720-FICC-P-1",
+                    "status",
+                    "APPROVED",
+                    "has_approval",
+                    false,
+                    "approver_display",
+                    "Laurent, Sophie (pay-201)",
+                    "approved_at",
+                    "2026-07-20T01:19:04.508813Z",
+                    "authorization_summary",
+                    "Laurent, Sophie (pay-201) was allowed to APPROVE because role FUNDING_APPROVER")),
+            "planned_graph");
+    assertTrue(answer.contains("WHO: Laurent, Sophie (pay-201)"));
+    assertTrue(answer.contains("WHEN: 2026-07-20T01:19:04.508813Z"));
+    assertTrue(answer.contains("BASIS:"));
+    assertTrue(answer.contains("FUNDING_APPROVER"));
+    assertTrue(!answer.contains("WHY:"));
+    assertTrue(!answer.contains("was not approved"));
   }
 }

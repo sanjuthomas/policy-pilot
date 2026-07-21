@@ -85,8 +85,8 @@ public class PolicyBasisFormat {
   }
 
   /**
-   * Build WHY / BASIS lines without repeating OPA checks already present in the summary (parity
-   * with Python {@code format_approval_auth_lines}).
+   * Build BASIS line(s) without repeating OPA checks already present in the summary (parity with
+   * Python {@code format_approval_auth_lines}).
    */
   public List<String> formatApprovalAuthLines(String summary, Object basisRaw) {
     List<String> basis = parseBasis(basisRaw);
@@ -95,7 +95,7 @@ public class PolicyBasisFormat {
     boolean redundant = basisRedundantWithSummary(readableSummary, basis);
     List<String> lines = new ArrayList<>();
     if (readableSummary != null) {
-      lines.add("WHY: " + readableSummary);
+      lines.add("BASIS: " + readableSummary);
     } else {
       String basisLine = formatBasisLine(basis);
       if (basisLine != null) {

@@ -193,8 +193,9 @@ class TestNeo4jFormatters:
                 }
             ],
         )
-        assert "WHY:" in text
-        assert "BASIS:" not in text
+        assert "WHY:" not in text
+        assert "BASIS:" in text
+        assert "FICC_SUPERVISOR" in text
 
     def test_payment_approver_not_approved_with_status(self) -> None:
         from chat_application.formatting.neo4j import format_payment_approver_by_id
@@ -213,6 +214,31 @@ class TestNeo4jFormatters:
         assert text == (
             "Payment 20260720-FICC-P-19 was not approved. Its status is CANCELLED."
         )
+
+    def test_payment_approver_has_approval_false_but_approver_present(self) -> None:
+        from chat_application.formatting.neo4j import format_payment_approver_by_id
+
+        text = format_payment_approver_by_id(
+            "Who approved payment 20260720-FICC-P-1 and why?",
+            [
+                {
+                    "payment_id": "20260720-FICC-P-1",
+                    "status": "APPROVED",
+                    "has_approval": False,
+                    "approver_display": "Laurent, Sophie (pay-201)",
+                    "approved_at": "2026-07-20T01:19:04.508813Z",
+                    "authorization_summary": (
+                        "Laurent, Sophie (pay-201) was allowed to APPROVE "
+                        "because role FUNDING_APPROVER"
+                    ),
+                }
+            ],
+        )
+        assert "WHO: Laurent, Sophie (pay-201)" in text
+        assert "was not approved" not in text
+        assert "BASIS:" in text
+        assert "WHY:" not in text
+        assert "FUNDING_APPROVER" in text
 
     def test_instruction_mutual_approval_table(self) -> None:
         text = format_instruction_mutual_approval(

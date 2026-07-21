@@ -219,21 +219,27 @@ public class Neo4jDirectAnswerFormatter {
 
   static boolean rowHasApproval(Map<String, Object> row) {
     Object flag = row.get("has_approval");
-    if (flag instanceof Boolean bool) {
-      return bool;
+    if (flag instanceof Boolean bool && bool) {
+      return true;
     }
     if (flag != null) {
       String text = flag.toString().trim().toLowerCase(Locale.ROOT);
-      if ("true".equals(text) || "false".equals(text)) {
-        return Boolean.parseBoolean(text);
+      if ("true".equals(text)) {
+        return true;
       }
+      // Explicit false still falls through: CURRENT version may carry approver fields
+      // even when the APPROVE SecurityEvent is attached to a non-CURRENT version.
     }
     String approver = displayOrNull(row.get("approver_display"));
     if (approver == null) {
       return false;
     }
     String lower = approver.toLowerCase(Locale.ROOT);
-    return !(lower.equals("unknown") || lower.equals("—") || lower.equals("-") || lower.equals("none"));
+    return !(lower.equals("unknown")
+        || lower.equals("—")
+        || lower.equals("-")
+        || lower.equals("none")
+        || lower.equals("null"));
   }
 
   static SecurityEventAlertCountView toCountView(String question, List<Map<String, Object>> rows) {

@@ -237,10 +237,12 @@ def format_approval_lookup_answer(row: dict[str, Any], *, entity_noun: str = "pa
 
 def _row_has_approval(row: dict[str, Any]) -> bool:
     flag = row.get("has_approval")
-    if isinstance(flag, bool):
-        return flag
-    if flag is not None and str(flag).strip().lower() in {"true", "false"}:
-        return str(flag).strip().lower() == "true"
+    if isinstance(flag, bool) and flag:
+        return True
+    if flag is not None and str(flag).strip().lower() == "true":
+        return True
+    # Explicit false still falls through: CURRENT version may carry approver fields
+    # even when the APPROVE SecurityEvent is attached to a non-CURRENT version.
     approver = str(row.get("approver_display") or "").strip()
     if not approver or approver.lower() in {"unknown", "—", "-", "none", "null"}:
         return False

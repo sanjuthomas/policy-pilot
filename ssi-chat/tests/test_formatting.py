@@ -70,7 +70,7 @@ class TestFormatApprovalAuthLines:
         )
         assert lines == ["BASIS: role FICC_SUPERVISOR"]
 
-    def test_summary_and_redundant_basis_uses_why_only(self) -> None:
+    def test_summary_and_redundant_basis_uses_basis_only(self) -> None:
         summary = (
             "Vasquez was allowed to APPROVE because role FICC_SUPERVISOR; "
             "valid transition for status SUBMITTED"
@@ -78,8 +78,8 @@ class TestFormatApprovalAuthLines:
         basis = ["role FICC_SUPERVISOR", "valid transition for status SUBMITTED"]
         lines = format_approval_auth_lines(summary=summary, basis=basis)
         assert len(lines) == 1
-        assert lines[0].startswith("WHY:")
-        assert "BASIS:" not in lines[0]
+        assert lines[0].startswith("BASIS:")
+        assert "WHY:" not in lines[0]
 
 
 class TestFormatPolicyViolations:
