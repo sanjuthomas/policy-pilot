@@ -1036,3 +1036,25 @@ cases:
     min_answer_length: 40
     min_faithfulness: 0.05
     answer_contains_any: [denial, alert, policy]
+
+# Named-person directory permissions (not me / my_permissions).
+- id: golden_person_permissions_kowalski
+  mode: policies
+  retrieval: person_permissions
+  tags: [golden, policies, person_permissions, ssi-chat-j]
+  question: Can you list the permissions of Kowalski, Anna?
+  expect:
+    require_routing: true
+    routing_path: person_permissions
+    cypher_class: none
+    answer_synthesis: eligibility_api
+    min_answer_length: 80
+    answer_contains_all:
+    - Kowalski, Anna
+    - pay-203
+    - FUNDING_APPROVER
+    - MIDDLE_OFFICE
+    answer_contains_any:
+    - ZITADEL
+    - amount clubs
+    - Derived capabilities

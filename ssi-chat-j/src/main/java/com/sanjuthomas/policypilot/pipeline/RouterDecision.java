@@ -78,6 +78,14 @@ public class RouterDecision {
   @JsonPropertyDescription("policy_summary only: OPA action (APPROVE default).")
   private String policyAction;
 
+  /**
+   * When path is person_permissions: person name or user id (e.g. {@code Kowalski, Anna} or {@code
+   * pay-203}). Not "my permissions" (that is {@code me} / {@code my_permissions}).
+   */
+  @JsonPropertyDescription(
+      "person_permissions only: person name or user id (e.g. 'Kowalski, Anna' or 'pay-203').")
+  private String personQuery;
+
   /** When path is me: which me-centric intent (who_am_i, my_permissions, …). */
   @JsonPropertyDescription(
       "me only: who_am_i, my_permissions, can_act_on_entity, who_else_can_act, "

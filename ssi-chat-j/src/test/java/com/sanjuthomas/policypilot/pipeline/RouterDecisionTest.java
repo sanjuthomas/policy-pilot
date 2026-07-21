@@ -45,4 +45,13 @@ class RouterDecisionTest {
     assertEquals("instruction", d.getPolicyDomain());
     assertEquals("APPROVE", d.getPolicyAction());
   }
+
+  @Test
+  void personQuerySlotRoundTrip() {
+    RouterDecision d = new RouterDecision();
+    d.setPath("person_permissions");
+    d.setPersonQuery("Kowalski, Anna");
+    assertEquals("person_permissions", d.getPath());
+    assertEquals("Kowalski, Anna", d.getPersonQuery());
+  }
 }

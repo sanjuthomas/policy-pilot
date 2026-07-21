@@ -46,6 +46,20 @@ public final class RouterPrompts {
             → policy_directory, directoryCoveringLob=FICC (amount slots null)
           "exceeding $1M for FICC?" → policy_directory, amount + directoryCoveringLob=FICC
       Prefer policy_summary for "what is / explain the … policy" questions (no entity id).
+      Person permissions (named third party — NOT the signed-in subject):
+        path=person_permissions
+        personQuery = display name or user id (e.g. "Kowalski, Anna" or "pay-203")
+        Prefer for "permissions of / for <person>", "what can <person> do?",
+        "list/summarize permissions of <person>".
+        Prefer me / my_permissions for "my permissions" / "what can I do?".
+        Prefer policy_directory / who_can_create / who_covers_lob for "who can …" lists.
+        Examples:
+          "Can you list the permissions of Kowalski, Anna?"
+            → person_permissions, personQuery=Kowalski, Anna
+          "Summarize permissions for pay-203"
+            → person_permissions, personQuery=pay-203
+          "What can Kowalski, Anna do?"
+            → person_permissions, personQuery=Kowalski, Anna
       Me / identity & directory (logged-in subject — no payment/instruction id for most):
         path=me, set meKind (+ meAction / meEntityType when needed):
           who_am_i — "Who am I?" / "what is my identity?"

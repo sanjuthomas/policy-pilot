@@ -35,10 +35,10 @@ Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `
 | Who-approved payment golden | `done` | approval-lookup Thymeleaf; heuristic + entity_plan fallback |
 | FO/MO instruction VIEW goldens | `done` | `golden_instruction_view_fo_ficc` / `_mo_covering_ficc` |
 | **P3.5** — vector security summary | `done` | `golden_vector_security_summary` green on `:8096` |
-| **Next** — success bar / hygiene | `todo` | A/B Python parity closed; Java-only hygiene deferred |
+| **person_permissions** | `done` | Authz directory summary; `golden_person_permissions_kowalski` in prove bank |
+| **Next** — payment skills | `todo` | Soft-bank skill cases (create/submit/approve/cancel) |
 
-**Bank snapshot:** Java green **54** · Python-only still open **0** · Java-only hygiene **27** (not required for Python parity).
-
+**Bank snapshot:** Java prove bank **55** (incl. person_permissions) · Python-only still open **0** · Java-only hygiene **27** (not required for Python parity).
 ---
 
 ## Milestone M1 (shipped)

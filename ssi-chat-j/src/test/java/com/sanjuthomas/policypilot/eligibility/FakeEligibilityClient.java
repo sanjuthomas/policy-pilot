@@ -124,6 +124,15 @@ public class FakeEligibilityClient extends EligibilityClient {
   }
 
   @Override
+  public Map<String, Object> personPermissionSummary(
+      String query, String userBearerToken, String userSessionId) {
+    if (error != null) {
+      throw error;
+    }
+    return new HashMap<>(response);
+  }
+
+  @Override
   public java.util.List<Map<String, Object>> listPayments(
       String status, int limit, String userBearerToken, String userSessionId) {
     if (error != null) {

@@ -178,6 +178,20 @@ public class EligibilityClient {
   }
 
   /**
+   * ZITADEL directory permission summary for a named person / user id (not live OPA).
+   * Parity with Python {@code EligibilityClient.person_permission_summary}.
+   */
+  public Map<String, Object> personPermissionSummary(
+      String query, String userBearerToken, String userSessionId) {
+    String resolved = StringUtils.hasText(query) ? query.strip() : "";
+    String url =
+        trimSlash(properties.authorizationServiceUrl())
+            + "/api/v1/authorization/users/permission-summary?q="
+            + UriUtils.encodeQueryParam(resolved, StandardCharsets.UTF_8);
+    return getJson(url, oboHeaders(userBearerToken, userSessionId), "authorization service error: ");
+  }
+
+  /**
    * ZITADEL group members via authorization-service, optionally filtered by role / covering LOB.
    */
   public Map<String, Object> groupMembers(
