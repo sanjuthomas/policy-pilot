@@ -181,6 +181,18 @@ class ObservabilityTest {
   }
 
   @Test
+  void rateLimitedResponseIncludesRetryAfter() {
+    ChatResponse response =
+        finalizer.rateLimited(
+            "Who can approve payment 20260720-FICC-P-8?", "policies", "eligibility", 12.5);
+    assertEquals(30, response.retry_after_seconds());
+    assertEquals("llm.rate_limited", response.routing().intent_id());
+    assertEquals("Gemini rate limited", response.routing().label());
+    assertTrue(response.answer().contains("under stress"));
+    assertEquals(0.0, response.generation_ms());
+  }
+
+  @Test
   void fingerprintIsStable() {
     AnswerRouting.QuestionFingerprint a = AnswerRouting.fingerprint(" hello ");
     AnswerRouting.QuestionFingerprint b = AnswerRouting.fingerprint("hello");

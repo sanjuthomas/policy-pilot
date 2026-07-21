@@ -511,6 +511,26 @@ class ChatServiceTest {
   }
 
   @Test
+  void geminiRateLimitDuringRoutingReturnsSoftRetryResponse() {
+    when(callResponseSpec.entity(eq(RouterDecision.class)))
+        .thenThrow(
+            new RuntimeException(
+                "Failed to generate content: RESOURCE_EXHAUSTED: Resource exhausted"));
+
+    ChatResponse response =
+        chatService(new FakeEligibilityClient())
+            .ask(
+                new ChatRequest("Who can approve payment 20260720-FICC-P-8?", List.of(), "policies"),
+                subject());
+
+    assertTrue(response.answer().toLowerCase().contains("under stress"));
+    assertEquals(30, response.retry_after_seconds());
+    assertEquals("llm.rate_limited", response.routing().intent_id());
+    assertEquals("formatter", response.routing().answer_synthesis());
+    assertEquals("Gemini rate limited", response.routing().label());
+  }
+
+  @Test
   void neo4jDirectLaneFormatsAlertCount() {
     RouterDecision decision = new RouterDecision();
     decision.setPath("neo4j_direct");
