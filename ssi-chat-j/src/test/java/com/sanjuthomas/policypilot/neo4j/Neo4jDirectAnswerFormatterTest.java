@@ -19,12 +19,14 @@ class Neo4jDirectAnswerFormatterTest {
 
   @BeforeEach
   void setUp() {
+    PolicyBasisFormat basis = new PolicyBasisFormat();
     formatter =
         new Neo4jDirectAnswerFormatter(
             new AnswerRenderer(
                 new AnswerTemplateConfig().answerTemplateEngine(),
                 new MoneyFormat(),
-                new PolicyBasisFormat()));
+                basis),
+            basis);
   }
 
   @Test
@@ -177,5 +179,42 @@ class Neo4jDirectAnswerFormatterTest {
             List.of(),
             "payment.status_by_id");
     assertEquals("No payment with that ID was found in the graph.", answer);
+  }
+
+  @Test
+  void formatsPaymentApprovalLookupWithWhy() {
+    String answer =
+        formatter.format(
+            "Who approved payment 20260720-FICC-P-1 and why?",
+            Set.of("payment_approval_lookup"),
+            List.of(
+                Map.of(
+                    "payment_id",
+                    "20260720-FICC-P-1",
+                    "approver_display",
+                    "Vasquez, Elena (ficc-300)",
+                    "approved_at",
+                    "2026-07-04T12:29:42",
+                    "authorization_summary",
+                    "Vasquez was allowed to APPROVE because role FICC_SUPERVISOR",
+                    "authorization_basis",
+                    List.of("role FICC_SUPERVISOR"))),
+            "planned_graph");
+    assertTrue(answer.contains("WHO: Vasquez, Elena (ficc-300)"));
+    assertTrue(answer.contains("WHEN: 2026-07-04T12:29:42"));
+    assertTrue(answer.contains("WHY:"));
+    assertTrue(answer.contains("FICC_SUPERVISOR"));
+    assertTrue(!answer.contains("BASIS:"));
+  }
+
+  @Test
+  void formatsPaymentApprovalLookupMissing() {
+    String answer =
+        formatter.format(
+            "Who approved payment 20260720-FICC-P-9 and why?",
+            Set.of("payment_approval_lookup"),
+            List.of(),
+            "planned_graph");
+    assertEquals("No approval record was found for that payment in the graph.", answer);
   }
 }

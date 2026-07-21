@@ -970,3 +970,19 @@ cases:
     require_entity_recall: true
     min_answer_length: 5
     answer_contains_any: [created, creator, submitted]
+
+- id: golden_events_who_approved_payment
+  mode: events
+  retrieval: deterministic
+  tags: [golden, who, approve, neo4j_direct, ssi-chat-j]
+  question: Who approved payment {approved_payment_id} and why?
+  expect:
+    requires_context: [approved_payment_id]
+    require_routing: true
+    routing_path: neo4j_direct
+    cypher_class: deterministic
+    answer_synthesis: formatter
+    intent_id: planned_graph
+    require_entity_recall: true
+    min_answer_length: 20
+    answer_contains_any: [approv, allowed, because, role]

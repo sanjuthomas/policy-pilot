@@ -133,7 +133,8 @@ class ChatServiceTest {
                     new AnswerRenderer(
                         new AnswerTemplateConfig().answerTemplateEngine(),
                         new MoneyFormat(),
-                        new PolicyBasisFormat())))),
+                        new PolicyBasisFormat()),
+                    new PolicyBasisFormat()))),
         finalizer);
   }
 

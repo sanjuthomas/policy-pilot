@@ -95,8 +95,9 @@ public final class RouterPrompts {
         Prefer for "how many ALERT / policy denial / security events … today/this week?",
         "list / report all ALERTS today", "list instruction denial events this week",
         "which user triggered the most policy denial alerts …",
-        "what is the status of payment/instruction <id>", and "who created payment <id>".
-        Prefer document_extraction for show-by-id (full card), not status/creator.
+        "what is the status of payment/instruction <id>", "who created payment <id>",
+        and past-tense "who approved payment <id> and why?".
+        Prefer document_extraction for show-by-id (full card), not status/creator/approver.
         Examples:
           "How many ALERT events happened today?" → neo4j_direct
           "How many instruction policy denials happened this week?" → neo4j_direct
@@ -108,6 +109,7 @@ public final class RouterPrompts {
           "What is the status of 20260720-FICC-P-19?" → neo4j_direct
           "What is the status of instruction 20260720-FICC-I-1?" → neo4j_direct
           "Who created payment 20260720-FICC-P-1?" → neo4j_direct
+          "Who approved payment 20260720-FICC-P-1 and why?" → neo4j_direct
           (Entity id lookups apply regardless of UI search mode.)
       """;
 }

@@ -118,15 +118,31 @@ def test_plan_entity_detail_any_mode() -> None:
     assert "20260720-FICC-P-19" in body["planned"][0]["cypher"]
 
 
-def test_plan_payment_creator_any_mode() -> None:
+def test_plan_payment_approver_fallback_mode_all() -> None:
     response = client.post(
         "/v1/plan",
         json={
-            "question": "Who created payment 20260720-FICC-P-1?",
-            "mode": "policies",
+            "question": "Who approved payment 20260720-FICC-P-1 and why?",
+            "mode": "all",
         },
     )
     assert response.status_code == 200
     body = response.json()
     assert body["matched"] is True
-    assert body["intent_id"] == "payment.creator_by_id"
+    assert body["intent_id"] == "payment.approver_by_id"
+    assert body["planned"][0]["label"] == "payment_approval_lookup"
+
+
+def test_plan_payment_approver_events_via_heuristic() -> None:
+    response = client.post(
+        "/v1/plan",
+        json={
+            "question": "Who approved payment 20260720-FICC-P-1 and why?",
+            "mode": "events",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["matched"] is True
+    assert body["intent_id"] == "planned_graph"
+    assert body["planned"][0]["label"] == "payment_approval_lookup"

@@ -31,10 +31,11 @@ Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `
 | Document extraction (API) | `done` | `path=document_extraction` → instruction/payment GET |
 | Phase 2 cypher bridge | `done` | Merged [#99](https://github.com/sanjuthomas/policy-pilot/pull/99); `cypher-builder-svc` `:8097` |
 | **P3.4** — neo4j_direct security-event / denial formatters | `done` | Thymeleaf templates + LOB scope; 8 denial/alert goldens |
-| Entity status / creator goldens | `done` | status + payment creator via bridge YAML-parity; live prove pending |
-| **Next** — `golden_events_who_approved_payment` | `todo` | Separate PR; neo4j_direct |
+| Entity status / creator goldens | `done` | status + payment creator via bridge YAML-parity |
+| Who-approved payment golden | `done` | approval-lookup Thymeleaf; heuristic + entity_plan fallback |
+| **Next** — FO/MO instruction view goldens | `todo` | `golden_instruction_view_fo_ficc` / `_mo_covering_ficc` |
 
-**Bank snapshot:** Java green **50** · Python-only still open **4** · Java-only hygiene **27** (not required for Python parity).
+**Bank snapshot:** Java green **51** · Python-only still open **3** · Java-only hygiene **27** (not required for Python parity).
 
 ---
 
@@ -103,7 +104,7 @@ Implement only what golden cases require; mark each golden id when green.
 | P3.5 | Vector / hybrid only if a golden case needs it | `todo` | `golden_vector_security_summary` |
 | P3.6 | Skills only if a golden case needs them | `deferred` | Likely after golden |
 
-### Golden case checklist — Java bank green (50)
+### Golden case checklist — Java bank green (51)
 
 | Golden case id | Status | Notes |
 |----------------|--------|-------|
@@ -132,14 +133,14 @@ Implement only what golden cases require; mark each golden id when green.
 | `golden_payment_status` | `done` | entity detail via cypher bridge |
 | `golden_instruction_status` | `done` | entity detail via cypher bridge |
 | `golden_payment_creator` | `done` | entity detail via cypher bridge |
+| `golden_events_who_approved_payment` | `done` | payment_approval_lookup + Thymeleaf WHO/WHEN/WHY |
 
-### Remaining Python-only (4) — open for A/B parity
+### Remaining Python-only (3) — open for A/B parity
 
 From `ssi-chat/regression/eval_golden.yaml`, not yet in the Java bank:
 
 | Golden case id | Status | Likely lane |
 |----------------|--------|-------------|
-| `golden_events_who_approved_payment` | `todo` | neo4j_direct |
 | `golden_instruction_view_fo_ficc` | `todo` | LOB / authz view |
 | `golden_instruction_view_mo_covering_ficc` | `todo` | LOB / authz view |
 | `golden_vector_security_summary` | `todo` | vector (P3.5) |
@@ -159,7 +160,7 @@ From `ssi-chat/regression/eval_golden.yaml`, not yet in the Java bank:
 | P4.1 | Run seed + eligibility golden against `:8096` | `done` | `prove-eligibility.sh` / warm `--no-seed` |
 | P4.2 | Triage failures into Phase 3 backlog | `todo` | Who-approved / LOB view / vector next |
 | P4.3 | Document A/B how-to (switch `CHAT_BASE_URL`) | `done` | `ssi-chat-j/README.md` + `eval/README.md` |
-| P4.4 | **Success bar met** | `todo` | 4 Python-only cases still open |
+| P4.4 | **Success bar met** | `todo` | 3 Python-only cases still open |
 
 ---
 

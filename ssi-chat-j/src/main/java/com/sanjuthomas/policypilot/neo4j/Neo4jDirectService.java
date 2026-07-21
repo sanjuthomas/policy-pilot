@@ -70,7 +70,15 @@ public class Neo4jDirectService {
    * Prefer entity detail / list / ranking when present; otherwise count; else first planned query.
    */
   static PlannedQuery selectQuery(List<PlannedQuery> planned) {
-    PlannedQuery byLabel = findLabel(planned, "payment_detail");
+    PlannedQuery byLabel = findLabel(planned, "payment_approval_lookup");
+    if (byLabel != null) {
+      return byLabel;
+    }
+    byLabel = findLabel(planned, "approval_lookup");
+    if (byLabel != null) {
+      return byLabel;
+    }
+    byLabel = findLabel(planned, "payment_detail");
     if (byLabel != null) {
       return byLabel;
     }
