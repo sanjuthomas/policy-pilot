@@ -3,56 +3,37 @@ package com.sanjuthomas.policypilot.service;
 import com.sanjuthomas.policypilot.api.ApiModels.ChatRequest;
 import com.sanjuthomas.policypilot.api.ApiModels.ChatResponse;
 import com.sanjuthomas.policypilot.auth.Subject;
-import com.sanjuthomas.policypilot.extraction.DocumentExtractionResult;
-import com.sanjuthomas.policypilot.extraction.DocumentExtractionService;
-import com.sanjuthomas.policypilot.eligibility.EligibilityAnswerFormatter;
-import com.sanjuthomas.policypilot.eligibility.EligibilityClient;
-import com.sanjuthomas.policypilot.me.MeIntentResult;
-import com.sanjuthomas.policypilot.me.MeIntentService;
-import com.sanjuthomas.policypilot.neo4j.Neo4jDirectService;
-import com.sanjuthomas.policypilot.neo4j.Neo4jDirectService.Neo4jDirectResult;
 import com.sanjuthomas.policypilot.observability.ChatAnswerFinalizer;
+import com.sanjuthomas.policypilot.pipeline.LaneAnswer;
 import com.sanjuthomas.policypilot.pipeline.RouterDecision;
-import com.sanjuthomas.policypilot.policydirectory.PolicyDirectoryService;
-import com.sanjuthomas.policypilot.policysummary.PolicySummaryAnswerFormatter;
-import com.sanjuthomas.policypilot.routing.InstructionIdParser;
 import com.sanjuthomas.policypilot.routing.IntentRouter;
-import com.sanjuthomas.policypilot.routing.PaymentIdParser;
+import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import org.springframework.stereotype.Service;
 
+/**
+ * Chat entrypoint: route → {@link ChatPathDispatcher} → {@link ChatAnswerFinalizer}. Domain work
+ * lives in path lane services.
+ */
 @Service
 public class ChatService {
 
+  private static final String UNSUPPORTED_ANSWER =
+      "ssi-chat-j answers payment/instruction eligibility, document extraction "
+          + "(show payment/instruction by id), policy-directory, policy-summary, "
+          + "me-centric questions, and neo4j_direct graph answers "
+          + "(ALERT counts/lists, entity status/creator by id). ";
+
   private final IntentRouter intentRouter;
-  private final EligibilityClient eligibilityClient;
-  private final EligibilityAnswerFormatter eligibilityAnswerFormatter;
-  private final DocumentExtractionService documentExtractionService;
-  private final PolicyDirectoryService policyDirectoryService;
-  private final PolicySummaryAnswerFormatter policySummaryAnswerFormatter;
-  private final MeIntentService meIntentService;
-  private final Neo4jDirectService neo4jDirectService;
+  private final ChatPathDispatcher pathDispatcher;
   private final ChatAnswerFinalizer answerFinalizer;
 
   public ChatService(
       IntentRouter intentRouter,
-      EligibilityClient eligibilityClient,
-      EligibilityAnswerFormatter eligibilityAnswerFormatter,
-      DocumentExtractionService documentExtractionService,
-      PolicyDirectoryService policyDirectoryService,
-      PolicySummaryAnswerFormatter policySummaryAnswerFormatter,
-      MeIntentService meIntentService,
-      Neo4jDirectService neo4jDirectService,
+      ChatPathDispatcher pathDispatcher,
       ChatAnswerFinalizer answerFinalizer) {
     this.intentRouter = intentRouter;
-    this.eligibilityClient = eligibilityClient;
-    this.eligibilityAnswerFormatter = eligibilityAnswerFormatter;
-    this.documentExtractionService = documentExtractionService;
-    this.policyDirectoryService = policyDirectoryService;
-    this.policySummaryAnswerFormatter = policySummaryAnswerFormatter;
-    this.meIntentService = meIntentService;
-    this.neo4jDirectService = neo4jDirectService;
+    this.pathDispatcher = pathDispatcher;
     this.answerFinalizer = answerFinalizer;
   }
 
@@ -62,251 +43,43 @@ public class ChatService {
     double generationMs = (System.nanoTime() - routeStartNs) / 1_000_000.0;
     String requestedPath = decision.getPath();
 
-    if ("me".equals(decision.getPath())) {
-      return meIntent(request, subject, decision, generationMs);
-    }
-
-    if ("policy_summary".equals(decision.getPath())) {
-      return policySummary(request, subject, decision, requestedPath, generationMs);
-    }
-
-    if ("policy_directory".equals(decision.getPath())) {
-      long retrievalStartNs = System.nanoTime();
-      String answer = policyDirectoryService.answer(request.message(), subject, decision);
-      double retrievalMs = (System.nanoTime() - retrievalStartNs) / 1_000_000.0;
-      return answer(
-          request,
-          answer,
-          "policy_directory",
-          "policy_directory_api",
-          requestedPath,
-          retrievalMs,
-          generationMs,
-          null);
-    }
-
-    if ("document_extraction".equals(decision.getPath())) {
-      long retrievalStartNs = System.nanoTime();
-      DocumentExtractionResult result =
-          documentExtractionService.answer(request.message(), subject, decision);
-      double retrievalMs = (System.nanoTime() - retrievalStartNs) / 1_000_000.0;
-      return answer(
-          request,
-          result.answer(),
-          "document_extraction",
-          "formatter",
-          requestedPath,
-          retrievalMs,
-          generationMs,
-          result.intentId());
-    }
-
-    if ("neo4j_direct".equals(decision.getPath())) {
-      return neo4jDirect(request, subject, requestedPath, generationMs);
-    }
-
-    if ("eligibility".equals(decision.getPath())) {
-      String target = nullToEmpty(decision.getEligibilityTarget()).toLowerCase();
-      String action = nullToEmpty(decision.getEligibilityAction()).toUpperCase();
-      if ("payment".equals(target) && "APPROVE".equals(action)) {
-        return paymentApprovers(request, subject, requestedPath, generationMs);
-      }
-      if ("payment".equals(target) && "SUBMIT".equals(action)) {
-        return paymentSubmitters(request, subject, requestedPath, generationMs);
-      }
-      if ("instruction".equals(target)
-          && (action.isEmpty() || "APPROVE".equals(action))) {
-        return instructionApprovers(request, subject, requestedPath, generationMs);
-      }
-    }
-
-    return answer(
-        request,
-        "ssi-chat-j answers payment/instruction eligibility, document extraction "
-            + "(show payment/instruction by id), policy-directory, policy-summary, "
-            + "me-centric questions, and neo4j_direct graph answers "
-            + "(ALERT counts/lists, entity status/creator by id). "
-            + "Routed as path="
-            + decision.getPath()
-            + ".",
-        decision.getPath(),
-        "stub",
-        requestedPath,
-        0.0,
-        generationMs,
-        null);
-  }
-
-  private ChatResponse neo4jDirect(
-      ChatRequest request, Subject subject, String requestedPath, double generationMs) {
     long retrievalStartNs = System.nanoTime();
-    Neo4jDirectResult result =
-        neo4jDirectService.answer(request.message(), request.mode(), subject);
+    LaneAnswer lane = pathDispatcher.dispatch(decision, request, subject);
     double retrievalMs = (System.nanoTime() - retrievalStartNs) / 1_000_000.0;
-    if (answerFinalizer == null) {
-      return ChatResponse.of(result.answer(), null);
-    }
-    return answerFinalizer.of(
-        request.message(),
-        request.mode(),
-        result.answer(),
-        "neo4j_direct",
-        "formatter",
-        requestedPath,
-        retrievalMs,
-        generationMs,
-        result.intentId(),
-        result.cypher(),
-        result.graphRows(),
-        result.cypherProvenance());
-  }
 
-  /**
-   * Python records me-intents as {@code path=eligibility} + {@code intent_id=me.*} for OpenSLO /
-   * golden parity (not {@code path=me}).
-   */
-  private ChatResponse meIntent(
-      ChatRequest request, Subject subject, RouterDecision decision, double generationMs) {
-    MeIntentResult result = meIntentService.answer(decision, request.message(), subject);
-    return answer(
-        request,
-        result.answer(),
-        "eligibility",
-        "formatter",
-        null,
-        0.0,
-        generationMs,
-        result.intentId());
-  }
+    // Me lane records path=eligibility for OpenSLO parity; do not treat router "me" as requested.
+    String effectiveRequested = "me".equals(requestedPath) ? null : requestedPath;
 
-  private ChatResponse policySummary(
-      ChatRequest request,
-      Subject subject,
-      RouterDecision decision,
-      String requestedPath,
-      double generationMs) {
-    String domain =
-        org.springframework.util.StringUtils.hasText(decision.getPolicyDomain())
-            ? decision.getPolicyDomain().strip().toLowerCase()
-            : "payment";
-    String action =
-        org.springframework.util.StringUtils.hasText(decision.getPolicyAction())
-            ? decision.getPolicyAction().strip().toUpperCase()
-            : "APPROVE";
-    long retrievalStartNs = System.nanoTime();
-    Map<String, Object> data =
-        eligibilityClient.policySummary(
-            domain, action, subject.bearerToken(), subject.sessionId());
-    String answerText = policySummaryAnswerFormatter.format(data);
-    double retrievalMs = (System.nanoTime() - retrievalStartNs) / 1_000_000.0;
-    return answer(
-        request,
-        answerText,
-        "policy_summary",
-        "eligibility_api",
-        requestedPath,
-        retrievalMs,
-        generationMs,
-        null);
-  }
-
-  private ChatResponse paymentApprovers(
-      ChatRequest request, Subject subject, String requestedPath, double generationMs) {
-    Optional<String> paymentId = PaymentIdParser.extract(request.message());
-    if (paymentId.isEmpty()) {
-      return answer(
+    if (lane == null) {
+      return finalize(
           request,
-          "Please include a payment id, for example: "
-              + "Who can approve payment 20260720-FICC-P-8?",
-          "eligibility",
-          "eligibility_api",
-          requestedPath,
+          UNSUPPORTED_ANSWER + "Routed as path=" + decision.getPath() + ".",
+          decision.getPath(),
+          "stub",
+          effectiveRequested,
           0.0,
           generationMs,
-          null);
+          null,
+          null,
+          null,
+          "none");
     }
-    long retrievalStartNs = System.nanoTime();
-    Map<String, Object> data =
-        eligibilityClient.eligibleApproversForPayment(
-            paymentId.get(), subject.bearerToken(), subject.sessionId());
-    String answerText = eligibilityAnswerFormatter.formatEligiblePaymentApproversAnswer(data);
-    double retrievalMs = (System.nanoTime() - retrievalStartNs) / 1_000_000.0;
-    return answer(
+
+    return finalize(
         request,
-        answerText,
-        "eligibility",
-        "eligibility_api",
-        requestedPath,
+        lane.answer(),
+        lane.recordedPath(),
+        lane.synthesis(),
+        effectiveRequested,
         retrievalMs,
         generationMs,
-        null);
+        lane.intentId(),
+        lane.cypher(),
+        lane.graphRows(),
+        lane.cypherProvenance());
   }
 
-  private ChatResponse paymentSubmitters(
-      ChatRequest request, Subject subject, String requestedPath, double generationMs) {
-    Optional<String> paymentId = PaymentIdParser.extract(request.message());
-    if (paymentId.isEmpty()) {
-      return answer(
-          request,
-          "Please include a payment id, for example: "
-              + "Who can submit payment 20260720-FICC-P-8 for approval?",
-          "eligibility",
-          "eligibility_api",
-          requestedPath,
-          0.0,
-          generationMs,
-          null);
-    }
-    long retrievalStartNs = System.nanoTime();
-    Map<String, Object> data =
-        eligibilityClient.eligibleSubmittersForPayment(
-            paymentId.get(), subject.bearerToken(), subject.sessionId());
-    String answerText = eligibilityAnswerFormatter.formatEligiblePaymentSubmittersAnswer(data);
-    double retrievalMs = (System.nanoTime() - retrievalStartNs) / 1_000_000.0;
-    return answer(
-        request,
-        answerText,
-        "eligibility",
-        "eligibility_api",
-        requestedPath,
-        retrievalMs,
-        generationMs,
-        null);
-  }
-
-  private ChatResponse instructionApprovers(
-      ChatRequest request, Subject subject, String requestedPath, double generationMs) {
-    Optional<String> instructionId = InstructionIdParser.extract(request.message());
-    if (instructionId.isEmpty()) {
-      return answer(
-          request,
-          "Please include an instruction id, for example: "
-              + "Who can approve instruction 20260720-FICC-I-1?",
-          "eligibility",
-          "eligibility_api",
-          requestedPath,
-          0.0,
-          generationMs,
-          null);
-    }
-    long retrievalStartNs = System.nanoTime();
-    Map<String, Object> data =
-        eligibilityClient.eligibleApproversForInstruction(
-            instructionId.get(), subject.bearerToken(), subject.sessionId());
-    String answerText = eligibilityAnswerFormatter.formatEligibleInstructionApproversAnswer(data);
-    double retrievalMs = (System.nanoTime() - retrievalStartNs) / 1_000_000.0;
-    return answer(
-        request,
-        answerText,
-        "eligibility",
-        "eligibility_api",
-        requestedPath,
-        retrievalMs,
-        generationMs,
-        null);
-  }
-
-  private ChatResponse answer(
+  private ChatResponse finalize(
       ChatRequest request,
       String answerText,
       String path,
@@ -314,7 +87,10 @@ public class ChatService {
       String requestedPath,
       double retrievalMs,
       double generationMs,
-      String intentId) {
+      String intentId,
+      String cypher,
+      List<Map<String, Object>> graphRows,
+      String cypherProvenance) {
     if (answerFinalizer == null) {
       return ChatResponse.of(answerText, null);
     }
@@ -327,10 +103,9 @@ public class ChatService {
         requestedPath,
         retrievalMs,
         generationMs,
-        intentId);
-  }
-
-  private static String nullToEmpty(String value) {
-    return value == null ? "" : value;
+        intentId,
+        cypher,
+        graphRows,
+        cypherProvenance);
   }
 }

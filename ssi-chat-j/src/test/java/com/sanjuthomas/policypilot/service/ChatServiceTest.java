@@ -14,6 +14,7 @@ import com.sanjuthomas.policypilot.auth.Subject;
 import com.sanjuthomas.policypilot.extraction.DocumentExtractionService;
 import com.sanjuthomas.policypilot.extraction.PaymentDetailAnswerFormatter;
 import com.sanjuthomas.policypilot.eligibility.EligibilityAnswerFormatter;
+import com.sanjuthomas.policypilot.eligibility.EligibilityLaneService;
 import com.sanjuthomas.policypilot.eligibility.FakeEligibilityClient;
 import com.sanjuthomas.policypilot.formatting.AnswerRenderer;
 import com.sanjuthomas.policypilot.formatting.AnswerTemplateConfig;
@@ -42,6 +43,7 @@ import com.sanjuthomas.policypilot.pipeline.RouterDecision;
 import com.sanjuthomas.policypilot.policydirectory.PolicyDirectoryAnswerFormatter;
 import com.sanjuthomas.policypilot.policydirectory.PolicyDirectoryService;
 import com.sanjuthomas.policypilot.policysummary.PolicySummaryAnswerFormatter;
+import com.sanjuthomas.policypilot.policysummary.PolicySummaryService;
 import com.sanjuthomas.policypilot.routing.IntentRouter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
@@ -115,21 +117,23 @@ class ChatServiceTest {
             new SkillMetrics(registry));
     return new ChatService(
         intentRouter,
-        eligibilityClient,
-        eligibilityAnswerFormatter,
-        new DocumentExtractionService(
-            eligibilityClient,
-            instructionDetailAnswerFormatter,
-            paymentDetailAnswerFormatter),
-        new PolicyDirectoryService(eligibilityClient, policyDirectoryAnswerFormatter),
-        policySummaryAnswerFormatter,
-        meIntentService,
-        new Neo4jDirectService(
-            null, null, new Neo4jDirectAnswerFormatter(
-                new AnswerRenderer(
-                    new AnswerTemplateConfig().answerTemplateEngine(),
-                    new MoneyFormat(),
-                    new PolicyBasisFormat()))),
+        new ChatPathDispatcher(
+            meIntentService,
+            new EligibilityLaneService(eligibilityClient, eligibilityAnswerFormatter),
+            new PolicySummaryService(eligibilityClient, policySummaryAnswerFormatter),
+            new PolicyDirectoryService(eligibilityClient, policyDirectoryAnswerFormatter),
+            new DocumentExtractionService(
+                eligibilityClient,
+                instructionDetailAnswerFormatter,
+                paymentDetailAnswerFormatter),
+            new Neo4jDirectService(
+                null,
+                null,
+                new Neo4jDirectAnswerFormatter(
+                    new AnswerRenderer(
+                        new AnswerTemplateConfig().answerTemplateEngine(),
+                        new MoneyFormat(),
+                        new PolicyBasisFormat())))),
         finalizer);
   }
 
@@ -492,17 +496,19 @@ class ChatServiceTest {
     ChatService chatService =
         new ChatService(
             intentRouter,
-            new FakeEligibilityClient(),
-            eligibilityAnswerFormatter,
-            new DocumentExtractionService(
-                new FakeEligibilityClient(),
-                instructionDetailAnswerFormatter,
-                paymentDetailAnswerFormatter),
-            new PolicyDirectoryService(
-                new FakeEligibilityClient(), policyDirectoryAnswerFormatter),
-            policySummaryAnswerFormatter,
-            meIntentService,
-            neo4j,
+            new ChatPathDispatcher(
+                meIntentService,
+                new EligibilityLaneService(
+                    new FakeEligibilityClient(), eligibilityAnswerFormatter),
+                new PolicySummaryService(
+                    new FakeEligibilityClient(), policySummaryAnswerFormatter),
+                new PolicyDirectoryService(
+                    new FakeEligibilityClient(), policyDirectoryAnswerFormatter),
+                new DocumentExtractionService(
+                    new FakeEligibilityClient(),
+                    instructionDetailAnswerFormatter,
+                    paymentDetailAnswerFormatter),
+                neo4j),
             finalizer);
 
     ChatResponse response =
