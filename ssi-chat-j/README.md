@@ -22,7 +22,8 @@ Not wired into the root `docker-compose.yml` yet — run locally with Maven agai
   - authz `policy-summary?domain=&action=`
 - `POST /api/chat` me-centric lane (`path=me` → recorded as `eligibility` + `me.*` intents)
 - `POST /api/chat` neo4j_direct (via **cypher-builder-svc** `:8097` + Neo4j as `svc_chat`):
-  - e.g. `How many ALERT events happened today?`
+  - alert/denial counts, alert lists, top-denial ranking (Thymeleaf templates)
+  - subject LOB scope for FO/MO (parity with Python issue #63)
 - Observability (Micrometer → OTLP, same chat SLI names as Python; **no Prometheus scrape**):
   - `POST /api/chat/feedback`
   - `GET /api/routing-stats`, `GET /api/feedback-stats`

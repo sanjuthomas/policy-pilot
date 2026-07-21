@@ -1,0 +1,1 @@
+[# th:if="${m.missing}"]No payment with that ID was found in the graph.[/][# th:if="${m.noCreator}"]No creator is recorded for payment [(${m.entityId})].[/][# th:if="${!m.missing and !m.noCreator}"]Payment [(${m.entityId})] was created by [(${m.creatorDisplay})].[/]

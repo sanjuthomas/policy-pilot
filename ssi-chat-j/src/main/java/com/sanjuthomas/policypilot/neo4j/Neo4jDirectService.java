@@ -1,11 +1,15 @@
 package com.sanjuthomas.policypilot.neo4j;
 
+import com.sanjuthomas.policypilot.auth.RetrievalScope;
+import com.sanjuthomas.policypilot.auth.Subject;
 import com.sanjuthomas.policypilot.cypher.CypherBuilderClient;
 import com.sanjuthomas.policypilot.cypher.CypherBuilderModels.PlanResponse;
 import com.sanjuthomas.policypilot.cypher.CypherBuilderModels.PlannedQuery;
 import com.sanjuthomas.policypilot.cypher.CypherBuilderModels.ValidateResponse;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.stereotype.Service;
@@ -27,8 +31,9 @@ public class Neo4jDirectService {
     this.answerFormatter = answerFormatter;
   }
 
-  public Neo4jDirectResult answer(String question, String mode) {
-    PlanResponse plan = cypherBuilderClient.plan(question, mode);
+  public Neo4jDirectResult answer(String question, String mode, Subject subject) {
+    Set<String> allowedLobs = RetrievalScope.allowedRetrievalLobs(subject);
+    PlanResponse plan = cypherBuilderClient.plan(question, mode, allowedLobs);
     if (!plan.matched() || plan.planned() == null || plan.planned().isEmpty()) {
       return Neo4jDirectResult.unmatched(
           "I could not match that question to a deterministic graph query yet.");
@@ -53,26 +58,87 @@ public class Neo4jDirectService {
               + (validated.error() == null ? "." : ": " + validated.error()));
     }
 
-    List<Map<String, Object>> rows = neo4jQueryExecutor.runRead(validated.cypher());
-    String answer = answerFormatter.format(question, labels, rows);
+    List<Map<String, Object>> rows =
+        filterRowsByRetrievalLobs(neo4jQueryExecutor.runRead(validated.cypher()), allowedLobs);
+    String intentId = plan.intentId() == null ? "planned_graph" : plan.intentId();
+    String answer = answerFormatter.format(question, labels, rows, intentId);
     return new Neo4jDirectResult(
-        answer,
-        plan.intentId() == null ? "planned_graph" : plan.intentId(),
-        validated.cypher(),
-        rows,
-        "predefined_planned");
+        answer, intentId, validated.cypher(), rows, provenanceForIntent(intentId));
   }
 
-  /** Prefer the count query when present (skip expensive details for count answers). */
+  /**
+   * Prefer entity detail / list / ranking when present; otherwise count; else first planned query.
+   */
   static PlannedQuery selectQuery(List<PlannedQuery> planned) {
-    for (PlannedQuery query : planned) {
-      if (query != null && "count".equals(query.label())) {
-        return query;
-      }
+    PlannedQuery byLabel = findLabel(planned, "payment_detail");
+    if (byLabel != null) {
+      return byLabel;
+    }
+    byLabel = findLabel(planned, "instruction_detail");
+    if (byLabel != null) {
+      return byLabel;
+    }
+    byLabel = findLabel(planned, "security_event_alert_list");
+    if (byLabel != null) {
+      return byLabel;
+    }
+    byLabel = findLabel(planned, "ranking");
+    if (byLabel != null) {
+      return byLabel;
+    }
+    byLabel = findLabel(planned, "count");
+    if (byLabel != null) {
+      return byLabel;
     }
     for (PlannedQuery query : planned) {
       if (query != null) {
         return query;
+      }
+    }
+    return null;
+  }
+
+  static String provenanceForIntent(String intentId) {
+    if (intentId != null
+        && (intentId.startsWith("payment.") || intentId.startsWith("instruction."))) {
+      return "predefined_yaml";
+    }
+    return "predefined_planned";
+  }
+
+  private static PlannedQuery findLabel(List<PlannedQuery> planned, String label) {
+    for (PlannedQuery query : planned) {
+      if (query != null && label.equals(query.label())) {
+        return query;
+      }
+    }
+    return null;
+  }
+
+  /** Defense-in-depth row filter (parity with Python {@code filter_rows_by_retrieval_lobs}). */
+  static List<Map<String, Object>> filterRowsByRetrievalLobs(
+      List<Map<String, Object>> rows, Set<String> allowedLobs) {
+    if (allowedLobs == null || rows == null) {
+      return rows == null ? List.of() : rows;
+    }
+    List<Map<String, Object>> kept = new ArrayList<>();
+    for (Map<String, Object> row : rows) {
+      String lob = rowOwningLob(row);
+      if (lob == null || allowedLobs.contains(lob)) {
+        kept.add(row);
+      }
+    }
+    return kept;
+  }
+
+  private static String rowOwningLob(Map<String, Object> row) {
+    if (row == null) {
+      return null;
+    }
+    for (String key : List.of("owning_lob", "lob", "instruction_owning_lob")) {
+      Object value = row.get(key);
+      if (value instanceof String text && !text.isBlank()) {
+        return text.strip().toUpperCase(Locale.ROOT);
       }
     }
     return null;

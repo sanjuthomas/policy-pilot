@@ -26,10 +26,15 @@ Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `
 | Item | Status | Notes |
 |------|--------|-------|
 | Plan + todo docs | `done` | This file + `ssi-chat-j-plan.md` |
-| **M1** — health + login + eligibility golden | `done` | Three eligibility goldens via `prove-eligibility.sh`; Maven on `:8096` (no root Compose) |
+| **M1** — health + login + eligibility golden | `done` | `prove-eligibility.sh` on `:8096` |
 | Observability (Micrometer → OTLP) | `done` | Same chat SLI names as Python; no Prometheus scrape |
 | Document extraction (API) | `done` | `path=document_extraction` → instruction/payment GET |
-| Phase 2 cypher bridge | `done` | `cypher-builder-svc` :8097 + Java client + `golden_events_count_today` |
+| Phase 2 cypher bridge | `done` | Merged [#99](https://github.com/sanjuthomas/policy-pilot/pull/99); `cypher-builder-svc` `:8097` |
+| **P3.4** — neo4j_direct security-event / denial formatters | `done` | Thymeleaf templates + LOB scope; 8 denial/alert goldens |
+| Entity status / creator goldens | `done` | status + payment creator via bridge YAML-parity; live prove pending |
+| **Next** — `golden_events_who_approved_payment` | `todo` | Separate PR; neo4j_direct |
+
+**Bank snapshot:** Java green **50** · Python-only still open **4** · Java-only hygiene **27** (not required for Python parity).
 
 ---
 
@@ -93,55 +98,57 @@ Implement only what golden cases require; mark each golden id when green.
 |----|------|--------|-------|
 | P3.1 | Pipeline: route → handler lanes (path is law) | `in_progress` | Eligibility + directory + summary + me + document_extraction + neo4j_direct |
 | P3.2 | Eligibility / policy tools as needed by golden | `done` | Eligibility + directory + `policy_summary` |
-| P3.3 | Me / who-am-i if in golden | `done` | All Python meKinds live (incl. waiting_for_me / who_else_can_act) |
-| P3.4 | neo4j_direct + formatters for golden graph cases | `in_progress` | Bridge live; expand formatters beyond alert counts |
-| P3.5 | Vector / hybrid only if a golden case needs it | `todo` | |
+| P3.3 | Me / who-am-i if in golden | `done` | All Python meKinds live |
+| P3.4 | neo4j_direct + formatters for golden graph cases | `done` | Counts / lists / ranking / status / creator; LOB scope |
+| P3.5 | Vector / hybrid only if a golden case needs it | `todo` | `golden_vector_security_summary` |
 | P3.6 | Skills only if a golden case needs them | `deferred` | Likely after golden |
 
-### Golden case checklist
+### Golden case checklist — Java bank green (50)
 
 | Golden case id | Status | Notes |
 |----------------|--------|-------|
-| `golden_policies_eligible_approvers_payment` | `done` | `ssi-chat-j/eval/eligibility_golden.yaml` |
-| `golden_policies_eligible_submitters_payment` | `done` | same |
-| `golden_policies_eligible_approvers_instruction` | `done` | same |
-| `golden_policies_amount_club_directory` | `done` | amount-club policy directory |
-| `golden_policies_covering_lob_directory` | `done` | covering-LOB policy directory |
-| `golden_policies_instruction_approval_summary` | `done` | `policy_summary` via authz OBO |
-| `golden_policies_payment_approval_summary` | `done` | funding / payment APPROVE summary |
-| `golden_me_who_am_i_identity_tokens_pay205` | `done` | who-am-I identity token backticks |
-| `golden_me_my_permissions_pay205` | `done` | my_permissions for pay-205 |
-| `golden_me_can_create_payment_yes_pay205` | `done` | can_act CREATE yes |
-| `golden_me_can_create_payment_fo_submitter` | `done` | FO create → fo_submitter |
-| `golden_me_who_covers_lob_ficc` | `done` | who_covers_lob FICC |
-| `golden_me_who_can_create_payment_ficc` | `done` | who_can_create payment for FICC |
-| `golden_me_users_like_me_pay205` | `done` | users_like_me |
-| `golden_me_can_approve_payment_capability` | `done` | can_approve directory-level |
-| `golden_me_can_submit_payment_fo_fx` | `done` | can_submit FO yes |
-| `golden_me_who_can_create_instruction` | `done` | who_can_create instruction |
-| `golden_policies_payment_create_summary` | `done` | payment CREATE summary |
-| `golden_policies_payment_cancel_summary` | `done` | payment CANCEL summary |
-| `golden_policies_amount_club_inclusive_1b` | `done` | inclusive $1B directory |
-| `golden_policies_amount_and_covering_combo` | `done` | amount + FICC covering |
-| `golden_me_waiting_for_me_not_approver_fo` | `done` | FO not_approver |
-| `golden_me_waiting_for_me_worklist_pay205` | `done` | live SUBMITTED + OPA worklist |
-| `golden_me_who_else_can_act_need_id` | `done` | who_else need_id |
-| `golden_me_who_else_can_act_submitted` | `done` | who_else on submitted payment |
-| `golden_me_can_approve_instruction_no_pay205` | `done` | instruction APPROVE ≠ payment APPROVE |
-| `golden_me_can_approve_instruction_yes_ficc300` | `done` | instruction APPROVE yes (desk FO) |
-| `golden_me_can_create_instruction_no_pay205` | `done` | CREATE instruction ≠ payment CREATE |
-| `golden_me_can_create_instruction_yes_mo` | `done` | CREATE instruction yes (mo-100) |
-| `golden_me_can_approve_payment_no_fo` | `done` | FO cannot funding-approve |
-| `golden_instruction_show_by_id_with_noun` | `done` | `document_extraction` |
-| `golden_instruction_show_by_id_bare` | `done` | same |
-| `golden_payment_show_by_id_with_noun` | `done` | same |
-| `golden_payment_show_by_id_bare` | `done` | same |
-| `golden_instruction_show_by_id_not_found` | `done` | negative |
-| `golden_payment_show_by_id_not_found` | `done` | negative |
-| `golden_instruction_show_by_id_forbidden_fo` | `done` | FO 403 UX |
-| `golden_payment_show_by_id_forbidden_fo` | `done` | FO 403 UX |
+| `golden_policies_eligible_approvers_payment` | `done` | |
+| `golden_policies_eligible_submitters_payment` | `done` | |
+| `golden_policies_eligible_approvers_instruction` | `done` | |
+| `golden_policies_amount_club_directory` | `done` | |
+| `golden_policies_covering_lob_directory` | `done` | |
+| `golden_policies_instruction_approval_summary` | `done` | |
+| `golden_policies_payment_approval_summary` | `done` | |
+| `golden_policies_payment_create_summary` | `done` | |
+| `golden_policies_payment_cancel_summary` | `done` | |
+| `golden_policies_amount_club_inclusive_1b` | `done` | |
+| `golden_policies_amount_and_covering_combo` | `done` | |
+| `golden_me_*` (18 cases) | `done` | who_am_i through can_approve_payment_no_fo |
+| `golden_instruction_show_by_id_*` / `golden_payment_show_by_id_*` (8) | `done` | `document_extraction` |
 | `golden_events_count_today` | `done` | neo4j_direct via cypher bridge |
-| _(remaining from full `eval_golden.yaml`)_ | `todo` | ~19 Python-only (graph / denials / vector) |
+| `golden_instruction_denials_count_week` | `done` | Thymeleaf count template |
+| `golden_instruction_denials_list_week` | `done` | Thymeleaf list template |
+| `golden_payment_denials_count_today` | `done` | Thymeleaf count template |
+| `golden_alerts_list_today_entity_ids` | `done` | Thymeleaf list template |
+| `golden_events_top_denial_user` | `done` | Thymeleaf ranking template |
+| `golden_fo_fx_instruction_denials_scoped` | `done` | subject LOB scope |
+| `golden_fo_fx_payment_denials_scoped` | `done` | subject LOB scope |
+| `golden_fo_ficc_instruction_denials_positive` | `done` | subject LOB scope |
+| `golden_payment_status` | `done` | entity detail via cypher bridge |
+| `golden_instruction_status` | `done` | entity detail via cypher bridge |
+| `golden_payment_creator` | `done` | entity detail via cypher bridge |
+
+### Remaining Python-only (4) — open for A/B parity
+
+From `ssi-chat/regression/eval_golden.yaml`, not yet in the Java bank:
+
+| Golden case id | Status | Likely lane |
+|----------------|--------|-------------|
+| `golden_events_who_approved_payment` | `todo` | neo4j_direct |
+| `golden_instruction_view_fo_ficc` | `todo` | LOB / authz view |
+| `golden_instruction_view_mo_covering_ficc` | `todo` | LOB / authz view |
+| `golden_vector_security_summary` | `todo` | vector (P3.5) |
+
+### Hygiene (deferred for success bar)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Promote 27 Java-only goldens into Python bank | `deferred` | A/B hygiene; not blocking Java success bar |
 
 ---
 
@@ -150,9 +157,9 @@ Implement only what golden cases require; mark each golden id when green.
 | ID | Item | Status | Notes |
 |----|------|--------|-------|
 | P4.1 | Run seed + eligibility golden against `:8096` | `done` | `prove-eligibility.sh` / warm `--no-seed` |
-| P4.2 | Triage failures into Phase 3 backlog | `todo` | |
+| P4.2 | Triage failures into Phase 3 backlog | `todo` | Who-approved / LOB view / vector next |
 | P4.3 | Document A/B how-to (switch `CHAT_BASE_URL`) | `done` | `ssi-chat-j/README.md` + `eval/README.md` |
-| P4.4 | **Success bar met** | `todo` | Full golden suite still open |
+| P4.4 | **Success bar met** | `todo` | 4 Python-only cases still open |
 
 ---
 
@@ -177,3 +184,6 @@ Implement only what golden cases require; mark each golden id when green.
 | 2026-07-20 | Removed `ssi-chat-j` from root `docker-compose.yml` (Maven-only until Compose is wanted) |
 | 2026-07-20 | Java chat observability: Micrometer → OTLP (same chat SLI names as Python); no Prometheus scrape endpoint yet |
 | 2026-07-20 | Phase 2 cypher bridge: `cypher-builder-svc` wraps `plan_graph_queries` + validate; Java neo4j_direct proven by `golden_events_count_today` |
+| 2026-07-20 | Merged [#99](https://github.com/sanjuthomas/policy-pilot/pull/99) to main; next focus = P3.4 denial/alert formatters (15 Python-only remaining) |
+| 2026-07-21 | P3.4: Thymeleaf neo4j_direct count/list/ranking templates + subject LOB scope on cypher-builder-svc; 8 denial/alert goldens |
+| 2026-07-21 | Entity status/creator: cypher-builder-svc YAML-parity plan fallback + Thymeleaf formatters; `golden_payment_status` / `golden_instruction_status` / `golden_payment_creator` |
