@@ -1386,21 +1386,33 @@ def _payment_approval_lookup_queries(payment_id: str) -> list[tuple[str, str]]:
     safe_id = _escape_cypher_literal(payment_id)
     # Start from CURRENT payment version so cancelled / never-approved payments still
     # return status for deterministic "was not approved" answers (Python + Java).
+    # Approve SecurityEvents may be attached to a non-CURRENT version with the same
+    # payment_id — match events by PaymentVersion.payment_id, not only CURRENT.
+    # has_approval mirrors instruction lookup: event OR version approver_user_id.
     return [
         (
             "payment_approval_lookup",
             f"""MATCH (pay:Payment {{payment_id: '{safe_id}'}})-[:CURRENT]->(pv:PaymentVersion)
-OPTIONAL MATCH (e:SecurityEvent)-[:FOR]->(pv)
+OPTIONAL MATCH (approverUser:User {{user_id: pv.approver_user_id}})
+OPTIONAL MATCH (e:SecurityEvent)-[:FOR]->(eventPv:PaymentVersion {{payment_id: '{safe_id}'}})
 WHERE e.action IN ['APPROVE', 'APPROVE_PAYMENT'] AND e.outcome = 'success'
 OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(e)
-WITH pv, e, actor
+WITH pv, approverUser, e, actor
 ORDER BY e.timestamp DESC
-WITH pv, head(collect({{event: e, actor: actor}})) AS top
+WITH pv, approverUser, head(collect({{event: e, actor: actor}})) AS top
 RETURN pv.payment_id AS payment_id,
        pv.status AS status,
-       (top.event IS NOT NULL) AS has_approval,
+       (top.event IS NOT NULL OR (
+         pv.approver_user_id IS NOT NULL AND trim(toString(pv.approver_user_id)) <> ''
+       )) AS has_approval,
        coalesce(pv.approved_at, top.event.timestamp) AS approved_at,
-       coalesce(top.actor.display_name, top.actor.user_id, pv.approver_user_id, '') AS approver_display,
+       coalesce(
+         top.actor.display_name,
+         top.actor.user_id,
+         approverUser.display_name,
+         pv.approver_user_id,
+         ''
+       ) AS approver_display,
        coalesce(
          CASE WHEN pv.authorization_summary IS NULL OR trim(toString(pv.authorization_summary)) = ''
               THEN null ELSE pv.authorization_summary END,

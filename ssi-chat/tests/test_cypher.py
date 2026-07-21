@@ -227,6 +227,9 @@ class TestPlanGraphQueries:
         assert "APPROVE_PAYMENT" in planned[0][1]
         assert "has_approval" in planned[0][1]
         assert "Payment" in planned[0][1]
+        assert f"PaymentVersion {{payment_id: '{pid}'}}" in planned[0][1]
+        assert "approverUser" in planned[0][1]
+        assert "approver_user_id IS NOT NULL" in planned[0][1]
 
     def test_payment_approval_lookup_bare_sequence_id(self) -> None:
         pid = "20260720-FICC-P-19"
