@@ -62,7 +62,8 @@ public final class RouterPrompts {
         (policy_directory is funding-approver clubs).
       Prefer policy_directory over eligibility when there is no payment/instruction id and the
         question asks who may approve by amount / desk covering LOB.
-      Prefer eligibility when a specific payment or instruction id is present.
+      Prefer eligibility when a specific payment or instruction id is present for who-can /
+        live OPA questions.
       Examples:
         "Who can approve payment …?" / "Who can approve 20260720-FICC-P-8?"
           → eligibility, payment, APPROVE
@@ -72,6 +73,21 @@ public final class RouterPrompts {
         "Can I create a payment?" → me, can_act_on_entity, meAction=CREATE, meEntityType=payment
         "Who covers LOB FICC?" → me, who_covers_lob
         "Who can create payments for FICC?" → me, who_can_create, meEntityType=payment
+      Document extraction (GET payment/instruction by id via domain API — not Neo4j):
+        path=document_extraction
+        extractionTarget=payment|instruction
+        Prefer document_extraction over eligibility when the user asks to show / get / display /
+        look up / open a payment or instruction (or a bare sequence id with show/get language),
+        not who can approve it. Sequence ids encode type: -P- → payment, -I- → instruction.
+        Examples:
+          "Show me instruction 20260720-FICC-I-1"
+            → document_extraction, extractionTarget=instruction
+          "Can you show me the instruction 20260720-FICC-I-1?"
+            → document_extraction, extractionTarget=instruction
+          "Can you show me 20260720-FICC-I-1?"
+            → document_extraction, extractionTarget=instruction
+          "Show me payment 20260720-FICC-P-8" / "Can you show me 20260720-FICC-P-8?"
+            → document_extraction, extractionTarget=payment
       Prefer eligibility over neo4j_direct for live OPA approver/submitter questions.
       Prefer eligibility+SUBMIT over skill for "who can submit" (not "please submit").
       """;

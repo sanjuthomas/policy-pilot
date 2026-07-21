@@ -28,6 +28,7 @@ Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `
 | Plan + todo docs | `done` | This file + `ssi-chat-j-plan.md` |
 | **M1** — health + login + eligibility golden | `done` | Three eligibility goldens via `prove-eligibility.sh`; Maven on `:8096` (no root Compose) |
 | Observability (Micrometer → OTLP) | `done` | Same chat SLI names as Python; no Prometheus scrape |
+| Document extraction (API) | `done` | `path=document_extraction` → instruction/payment GET |
 | Phase 2 cypher bridge | `todo` | Next for neo4j_direct goldens |
 
 ---

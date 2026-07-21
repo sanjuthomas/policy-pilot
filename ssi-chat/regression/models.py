@@ -16,6 +16,7 @@ RetrievalStrategy = Literal[
     "policy_directory",
     "policy_summary",
     "skill",
+    "document_extraction",
 ]
 
 DEFAULT_PERSONA_PASSWORD = "Password1!"

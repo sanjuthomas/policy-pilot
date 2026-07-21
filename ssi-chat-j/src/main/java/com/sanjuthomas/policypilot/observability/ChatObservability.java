@@ -10,7 +10,14 @@ public final class ChatObservability {
   public static final Set<String> SOURCE_CHANNELS = Set.of("vector", "neo4j", "exact");
 
   public static final Set<String> RETRIEVAL_STRATEGIES =
-      Set.of("deterministic", "graph", "vector", "eligibility", "policy_directory", "skill");
+      Set.of(
+          "deterministic",
+          "graph",
+          "vector",
+          "eligibility",
+          "policy_directory",
+          "skill",
+          "document_extraction");
 
   private ChatObservability() {}
 
@@ -32,6 +39,9 @@ public final class ChatObservability {
       int graphRowCount) {
     if ("eligibility".equals(path)) {
       return "eligibility";
+    }
+    if ("instruction_show".equals(path) || "document_extraction".equals(path)) {
+      return "document_extraction";
     }
     if ("policy_directory".equals(path)) {
       return "policy_directory";

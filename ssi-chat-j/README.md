@@ -13,6 +13,9 @@ Not wired into the root `docker-compose.yml` yet — run locally with Maven agai
   - payment APPROVE → payment-service `eligible-approvers`
   - payment SUBMIT → authz `eligible-submitters`
   - instruction APPROVE → instruction-service `eligible-approvers`
+- `POST /api/chat` document extraction (`path=document_extraction`):
+  - instruction → instruction-service `GET /api/v1/instructions/{id}` (OBO)
+  - payment → payment-service `GET /api/v1/payments/{id}` (OBO)
 - `POST /api/chat` policy directory (amount club):
   - authz `payment-amount-limits` + `groups/{club}/members`
 - `POST /api/chat` policy summary (normative OPA):

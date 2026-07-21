@@ -3,6 +3,8 @@ package com.sanjuthomas.policypilot.service;
 import com.sanjuthomas.policypilot.api.ApiModels.ChatRequest;
 import com.sanjuthomas.policypilot.api.ApiModels.ChatResponse;
 import com.sanjuthomas.policypilot.auth.Subject;
+import com.sanjuthomas.policypilot.extraction.DocumentExtractionResult;
+import com.sanjuthomas.policypilot.extraction.DocumentExtractionService;
 import com.sanjuthomas.policypilot.eligibility.EligibilityAnswerFormatter;
 import com.sanjuthomas.policypilot.eligibility.EligibilityClient;
 import com.sanjuthomas.policypilot.me.MeIntentResult;
@@ -17,7 +19,6 @@ import com.sanjuthomas.policypilot.routing.PaymentIdParser;
 import java.util.Map;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 
 @Service
 public class ChatService {
@@ -25,6 +26,7 @@ public class ChatService {
   private final IntentRouter intentRouter;
   private final EligibilityClient eligibilityClient;
   private final EligibilityAnswerFormatter eligibilityAnswerFormatter;
+  private final DocumentExtractionService documentExtractionService;
   private final PolicyDirectoryService policyDirectoryService;
   private final PolicySummaryAnswerFormatter policySummaryAnswerFormatter;
   private final MeIntentService meIntentService;
@@ -34,6 +36,7 @@ public class ChatService {
       IntentRouter intentRouter,
       EligibilityClient eligibilityClient,
       EligibilityAnswerFormatter eligibilityAnswerFormatter,
+      DocumentExtractionService documentExtractionService,
       PolicyDirectoryService policyDirectoryService,
       PolicySummaryAnswerFormatter policySummaryAnswerFormatter,
       MeIntentService meIntentService,
@@ -41,6 +44,7 @@ public class ChatService {
     this.intentRouter = intentRouter;
     this.eligibilityClient = eligibilityClient;
     this.eligibilityAnswerFormatter = eligibilityAnswerFormatter;
+    this.documentExtractionService = documentExtractionService;
     this.policyDirectoryService = policyDirectoryService;
     this.policySummaryAnswerFormatter = policySummaryAnswerFormatter;
     this.meIntentService = meIntentService;
@@ -76,6 +80,22 @@ public class ChatService {
           null);
     }
 
+    if ("document_extraction".equals(decision.getPath())) {
+      long retrievalStartNs = System.nanoTime();
+      DocumentExtractionResult result =
+          documentExtractionService.answer(request.message(), subject, decision);
+      double retrievalMs = (System.nanoTime() - retrievalStartNs) / 1_000_000.0;
+      return answer(
+          request,
+          result.answer(),
+          "document_extraction",
+          "formatter",
+          requestedPath,
+          retrievalMs,
+          generationMs,
+          result.intentId());
+    }
+
     if ("eligibility".equals(decision.getPath())) {
       String target = nullToEmpty(decision.getEligibilityTarget()).toLowerCase();
       String action = nullToEmpty(decision.getEligibilityAction()).toUpperCase();
@@ -93,8 +113,9 @@ public class ChatService {
 
     return answer(
         request,
-        "ssi-chat-j answers payment/instruction eligibility, policy-directory, "
-            + "policy-summary, and me-centric questions "
+        "ssi-chat-j answers payment/instruction eligibility, document extraction "
+            + "(show payment/instruction by id), policy-directory, policy-summary, "
+            + "and me-centric questions "
             + "(e.g. Who can approve payment 20260720-FICC-P-8?). "
             + "Routed as path="
             + decision.getPath()
@@ -132,11 +153,11 @@ public class ChatService {
       String requestedPath,
       double generationMs) {
     String domain =
-        StringUtils.hasText(decision.getPolicyDomain())
+        org.springframework.util.StringUtils.hasText(decision.getPolicyDomain())
             ? decision.getPolicyDomain().strip().toLowerCase()
             : "payment";
     String action =
-        StringUtils.hasText(decision.getPolicyAction())
+        org.springframework.util.StringUtils.hasText(decision.getPolicyAction())
             ? decision.getPolicyAction().strip().toUpperCase()
             : "APPROVE";
     long retrievalStartNs = System.nanoTime();

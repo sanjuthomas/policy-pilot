@@ -634,3 +634,149 @@ cases:
     answer_contains_any:
     - payment APPROVE
     - Funding approval
+
+# Document lookup via domain API GET (not Neo4j) — LOB/authz enforced by services.
+- id: golden_instruction_show_by_id_with_noun
+  mode: instructions
+  retrieval: document_extraction
+  tags: [golden, show, id_lookup, instruction, ssi-chat-j]
+  question: Can you show me the instruction {approved_instruction_id}?
+  expect:
+    requires_context: [approved_instruction_id]
+    require_routing: true
+    routing_path: document_extraction
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: instruction.show_by_id
+    require_entity_recall: true
+    min_answer_length: 10
+    answer_contains_any: [instruction, status, approved, ficc, fx]
+
+- id: golden_instruction_show_by_id_bare
+  mode: instructions
+  retrieval: document_extraction
+  tags: [golden, show, id_lookup, instruction, ssi-chat-j]
+  question: Can you show me {approved_instruction_id}?
+  expect:
+    requires_context: [approved_instruction_id]
+    require_routing: true
+    routing_path: document_extraction
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: instruction.show_by_id
+    require_entity_recall: true
+    min_answer_length: 10
+    answer_contains_any: [instruction, status, approved, ficc, fx]
+
+- id: golden_payment_show_by_id_with_noun
+  mode: payments
+  retrieval: document_extraction
+  tags: [golden, show, id_lookup, payment, ssi-chat-j]
+  question: Can you show me the payment {approved_payment_id}?
+  expect:
+    requires_context: [approved_payment_id]
+    require_routing: true
+    routing_path: document_extraction
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: payment.show_by_id
+    require_entity_recall: true
+    min_answer_length: 10
+    answer_contains_any: [payment, status, amount, approved]
+
+- id: golden_payment_show_by_id_bare
+  mode: payments
+  retrieval: document_extraction
+  tags: [golden, show, id_lookup, payment, ssi-chat-j]
+  question: Can you show me {approved_payment_id}?
+  expect:
+    requires_context: [approved_payment_id]
+    require_routing: true
+    routing_path: document_extraction
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: payment.show_by_id
+    require_entity_recall: true
+    min_answer_length: 10
+    answer_contains_any: [payment, status, amount, approved]
+
+# Negatives: missing entity / LOB denial (friendly prose, not FastAPI JSON).
+- id: golden_instruction_show_by_id_not_found
+  mode: instructions
+  retrieval: document_extraction
+  tags: [golden, show, id_lookup, instruction, negative, not_found, ssi-chat-j]
+  question: Can you show me the instruction 20991231-FICC-I-99999?
+  expect:
+    require_routing: true
+    routing_path: document_extraction
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: instruction.show_by_id
+    min_answer_length: 20
+    answer_contains_all:
+    - No instruction with that ID was found.
+    answer_not_contains:
+    - '{"detail"'
+    - Field
+    - Status
+
+- id: golden_payment_show_by_id_not_found
+  mode: payments
+  retrieval: document_extraction
+  tags: [golden, show, id_lookup, payment, negative, not_found, ssi-chat-j]
+  question: Can you show me the payment 20991231-FICC-P-99999?
+  expect:
+    require_routing: true
+    routing_path: document_extraction
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: payment.show_by_id
+    min_answer_length: 20
+    answer_contains_all:
+    - No payment with that ID was found.
+    answer_not_contains:
+    - '{"detail"'
+    - Field
+    - Amount
+
+- id: golden_instruction_show_by_id_forbidden_fo
+  mode: instructions
+  retrieval: document_extraction
+  tags: [golden, show, id_lookup, instruction, negative, forbidden, fo, ssi-chat-j]
+  persona: fo-fx-101
+  question: Can you show me the instruction {approved_instruction_id}?
+  expect:
+    requires_context: [approved_instruction_id]
+    require_routing: true
+    routing_path: document_extraction
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: instruction.show_by_id
+    min_answer_length: 20
+    answer_contains_all:
+    - You are not authorized to view this instruction.
+    answer_not_contains:
+    - '{"detail"'
+    - Field
+    - Status
+
+- id: golden_payment_show_by_id_forbidden_fo
+  mode: payments
+  retrieval: document_extraction
+  tags: [golden, show, id_lookup, payment, negative, forbidden, fo, ssi-chat-j]
+  persona: fo-fx-101
+  question: Can you show me the payment {approved_payment_id}?
+  expect:
+    requires_context: [approved_payment_id]
+    require_routing: true
+    routing_path: document_extraction
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: payment.show_by_id
+    min_answer_length: 20
+    answer_contains_all:
+    - You are not authorized to view this payment.
+    answer_not_contains:
+    - '{"detail"'
+    - Field
+    - Amount

@@ -37,6 +37,14 @@ public class RouterDecision {
   private String eligibilityAction;
 
   /**
+   * When path is document_extraction: payment vs instruction entity to load by id via domain API
+   * (not Neo4j). Sequence ids encode type (-P- vs -I-); set explicitly when the noun is present.
+   */
+  @JsonPropertyDescription(
+      "document_extraction only: payment or instruction (sequence id encodes type if omitted).")
+  private String extractionTarget;
+
+  /**
    * When path is policy_directory: USD amount threshold as a number (e.g. 1e9 for \"a billion\" /
    * \"$1 billion\"). Semantic amount extraction — do not leave null when the question implies a
    * money size.
