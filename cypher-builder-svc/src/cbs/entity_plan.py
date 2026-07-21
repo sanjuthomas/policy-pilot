@@ -2,6 +2,9 @@
 
 ssi-chat matches these via neo4j_direct.yaml before plan_graph_queries; the bridge
 reproduces the same CypherQueryBuilder.payment_detail / instruction_detail path.
+
+Mode is ignored when a payment/instruction id is present — parity with Python
+``_intent_mode_applies`` (ID-based lookups work from Events / Policies / any UI mode).
 """
 
 from __future__ import annotations
@@ -36,29 +39,28 @@ _BUILDER = CypherQueryBuilder()
 
 def plan_entity_detail(request: PlanRequest) -> PlanResponse | None:
     question = request.question
-    mode = request.mode
     payment_ids = extract_payment_ids(question)
     instruction_ids = extract_instruction_ids(question)
 
     if _STATUS_RE.search(question):
-        if payment_ids and mode in ("payments", "all"):
+        if payment_ids:
             return _detail_response(
                 "payment.status_by_id",
                 _BUILDER.payment_detail(payment_ids[0]),
             )
-        if instruction_ids and mode in ("instructions", "all"):
+        if instruction_ids:
             return _detail_response(
                 "instruction.status_by_id",
                 _BUILDER.instruction_detail(instruction_ids[0]),
             )
 
     if _CREATOR_RE.search(question) and not _APPROVE_RE.search(question):
-        if payment_ids and mode in ("payments", "all"):
+        if payment_ids:
             return _detail_response(
                 "payment.creator_by_id",
                 _BUILDER.payment_detail(payment_ids[0]),
             )
-        if instruction_ids and mode in ("instructions", "all"):
+        if instruction_ids:
             return _detail_response(
                 "instruction.creator_by_id",
                 _BUILDER.instruction_detail(instruction_ids[0]),
