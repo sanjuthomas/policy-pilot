@@ -196,6 +196,24 @@ class TestNeo4jFormatters:
         assert "WHY:" in text
         assert "BASIS:" not in text
 
+    def test_payment_approver_not_approved_with_status(self) -> None:
+        from chat_application.formatting.neo4j import format_payment_approver_by_id
+
+        text = format_payment_approver_by_id(
+            "Who approved 20260720-FICC-P-19?",
+            [
+                {
+                    "payment_id": "20260720-FICC-P-19",
+                    "status": "CANCELLED",
+                    "has_approval": False,
+                    "approver_display": "",
+                }
+            ],
+        )
+        assert text == (
+            "Payment 20260720-FICC-P-19 was not approved. Its status is CANCELLED."
+        )
+
     def test_instruction_mutual_approval_table(self) -> None:
         text = format_instruction_mutual_approval(
             "q",

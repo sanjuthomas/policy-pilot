@@ -30,6 +30,7 @@ public class IntentRouter {
       if (decision == null) {
         throw new IllegalStateException("null RouterDecision from Spring AI");
       }
+      decision = RouteClamps.apply(decision, question);
       log.info(
           "RouterDecision via Spring AI: path={} target={} action={} reasoning={}",
           decision.getPath(),

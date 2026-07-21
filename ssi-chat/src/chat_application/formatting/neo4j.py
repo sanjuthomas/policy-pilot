@@ -203,7 +203,25 @@ def format_instruction_creator_and_approver_by_id(
     return "\n".join(lines)
 
 
-def format_approval_lookup_answer(row: dict[str, Any]) -> str:
+def format_approval_lookup_answer(row: dict[str, Any], *, entity_noun: str = "payment") -> str:
+    """WHO/WHEN/WHY for an approval, or a short not-approved status line."""
+    payment_id = row.get("payment_id")
+    instruction_id = row.get("instruction_id")
+    if entity_noun == "instruction" or (instruction_id and not payment_id):
+        noun = "instruction"
+        entity_id = instruction_id or "unknown"
+        display_noun = "Instruction"
+    else:
+        noun = "payment"
+        entity_id = payment_id or "unknown"
+        display_noun = "Payment"
+
+    if not _row_has_approval(row):
+        status = str(row.get("status") or "").strip()
+        if status:
+            return f"{display_noun} {entity_id} was not approved. Its status is {status}."
+        return f"No approval record was found for that {noun} in the graph."
+
     approver = row.get("approver_display") or "unknown"
     when = row.get("approved_at") or row.get("v.approved_at")
     summary = row.get("v.authorization_summary") or row.get("authorization_summary")
@@ -217,11 +235,30 @@ def format_approval_lookup_answer(row: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _row_has_approval(row: dict[str, Any]) -> bool:
+    flag = row.get("has_approval")
+    if isinstance(flag, bool):
+        return flag
+    if flag is not None and str(flag).strip().lower() in {"true", "false"}:
+        return str(flag).strip().lower() == "true"
+    approver = str(row.get("approver_display") or "").strip()
+    if not approver or approver.lower() in {"unknown", "—", "-", "none", "null"}:
+        return False
+    return True
+
+
 def format_instruction_approver_by_id(question: str, rows: list[dict[str, Any]]) -> str | None:
     row = _first_row(rows)
     if row is None:
-        return "No approval record was found for that instruction in the graph."
-    return format_approval_lookup_answer(row)
+        return "No instruction with that ID was found in the graph."
+    return format_approval_lookup_answer(row, entity_noun="instruction")
+
+
+def format_payment_approver_by_id(question: str, rows: list[dict[str, Any]]) -> str | None:
+    row = _first_row(rows)
+    if row is None:
+        return "No payment with that ID was found in the graph."
+    return format_approval_lookup_answer(row, entity_noun="payment")
 
 
 def format_instruction_inventory_table(question: str, rows: list[dict[str, Any]]) -> str | None:
@@ -505,6 +542,7 @@ FORMATTERS: dict[str, Formatter] = {
     "instruction_status_by_id": format_instruction_status_by_id,
     "instruction_creator_and_approver_by_id": format_instruction_creator_and_approver_by_id,
     "instruction_approver_by_id": format_instruction_approver_by_id,
+    "payment_approver_by_id": format_payment_approver_by_id,
     "payment_creator_by_id": format_payment_creator_by_id,
     "payment_status_by_id": format_payment_status_by_id,
     "payment_creator_and_approver_by_id": format_payment_creator_and_approver_by_id,

@@ -69,6 +69,13 @@ def _build_instruction_approval_lookup(context: dict[str, Any], _question: str, 
     return _GRAPH_BUILDER.instruction_approval_lookup(instruction_id)
 
 
+def _build_payment_approval_lookup(context: dict[str, Any], _question: str, _mode: SearchMode):
+    payment_id = _payment_id_from_context(context)
+    if not payment_id:
+        return []
+    return _GRAPH_BUILDER.payment_approval_lookup(payment_id)
+
+
 def _build_instruction_list_by_type(context: dict[str, Any], question: str, _mode: SearchMode):
     from chat_application.graph.cypher import (
         instruction_status_filter_from_question,
@@ -178,6 +185,7 @@ QUERY_BUILDERS: dict[str, QueryBuilder] = {
     "payment_detail_by_id": _build_payment_detail,
     "payment_versions_by_id": _build_payment_versions,
     "instruction_approval_lookup": _build_instruction_approval_lookup,
+    "payment_approval_lookup": _build_payment_approval_lookup,
     "instruction_list_by_type": _build_instruction_list_by_type,
     "instruction_list_by_status": _build_instruction_list_by_status,
     "instructions_created_by_user": _build_instructions_created_by_user,

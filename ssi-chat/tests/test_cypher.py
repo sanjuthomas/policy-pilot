@@ -225,6 +225,18 @@ class TestPlanGraphQueries:
         assert pid in planned[0][1]
         assert "APPROVE" in planned[0][1]
         assert "APPROVE_PAYMENT" in planned[0][1]
+        assert "has_approval" in planned[0][1]
+        assert "Payment" in planned[0][1]
+
+    def test_payment_approval_lookup_bare_sequence_id(self) -> None:
+        pid = "20260720-FICC-P-19"
+        planned = plan_graph_queries(
+            f"Who approved {pid}?",
+            mode="events",
+        )
+        assert planned is not None
+        assert planned[0][0] == "payment_approval_lookup"
+        assert pid in planned[0][1]
 
     def test_instruction_approver_via_payment(self) -> None:
         pid = "20260629-FICC-P-1"

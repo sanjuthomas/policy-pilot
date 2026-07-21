@@ -215,6 +215,27 @@ class Neo4jDirectAnswerFormatterTest {
             Set.of("payment_approval_lookup"),
             List.of(),
             "planned_graph");
-    assertEquals("No approval record was found for that payment in the graph.", answer);
+    assertEquals("No payment with that ID was found in the graph.", answer);
+  }
+
+  @Test
+  void formatsPaymentApprovalLookupNotApprovedWithStatus() {
+    String answer =
+        formatter.format(
+            "Who approved 20260720-FICC-P-19?",
+            Set.of("payment_approval_lookup"),
+            List.of(
+                Map.of(
+                    "payment_id",
+                    "20260720-FICC-P-19",
+                    "status",
+                    "CANCELLED",
+                    "has_approval",
+                    false,
+                    "approver_display",
+                    "")),
+            "payment.approver_by_id");
+    assertEquals(
+        "Payment 20260720-FICC-P-19 was not approved. Its status is CANCELLED.", answer);
   }
 }

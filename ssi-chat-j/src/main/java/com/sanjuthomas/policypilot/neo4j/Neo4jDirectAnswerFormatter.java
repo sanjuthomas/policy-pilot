@@ -174,9 +174,27 @@ public class Neo4jDirectAnswerFormatter {
   }
 
   ApprovalLookupView toApprovalLookupView(List<Map<String, Object>> rows, String entityNoun) {
+    String noun = entityNoun == null || entityNoun.isBlank() ? "payment" : entityNoun;
+    String displayNoun = "instruction".equalsIgnoreCase(noun) ? "Instruction" : "Payment";
     Map<String, Object> row = firstRow(rows);
     if (row == null) {
-      return new ApprovalLookupView(true, entityNoun, null, null, List.of());
+      return new ApprovalLookupView(true, false, noun, displayNoun, null, null, null, null, List.of());
+    }
+    String entityId =
+        displayOrUnknown(
+            "instruction".equalsIgnoreCase(noun) ? row.get("instruction_id") : row.get("payment_id"));
+    if ("unknown".equals(entityId)) {
+      entityId =
+          displayOrUnknown(
+              row.get("payment_id") != null ? row.get("payment_id") : row.get("instruction_id"));
+    }
+    if (!rowHasApproval(row)) {
+      String status = displayOrUnknown(row.get("status"));
+      if (!"unknown".equals(status)) {
+        return new ApprovalLookupView(
+            false, true, noun, displayNoun, entityId, status, null, null, List.of());
+      }
+      return new ApprovalLookupView(true, false, noun, displayNoun, null, null, null, null, List.of());
     }
     String who = displayOrUnknown(row.get("approver_display"));
     Object whenRaw = row.get("approved_at");
@@ -195,7 +213,27 @@ public class Neo4jDirectAnswerFormatter {
     List<String> authLines =
         policyBasisFormat.formatApprovalAuthLines(
             summary == null ? null : summary.toString(), basis);
-    return new ApprovalLookupView(false, entityNoun, who, when, authLines);
+    return new ApprovalLookupView(
+        false, false, noun, displayNoun, entityId, null, who, when, authLines);
+  }
+
+  static boolean rowHasApproval(Map<String, Object> row) {
+    Object flag = row.get("has_approval");
+    if (flag instanceof Boolean bool) {
+      return bool;
+    }
+    if (flag != null) {
+      String text = flag.toString().trim().toLowerCase(Locale.ROOT);
+      if ("true".equals(text) || "false".equals(text)) {
+        return Boolean.parseBoolean(text);
+      }
+    }
+    String approver = displayOrNull(row.get("approver_display"));
+    if (approver == null) {
+      return false;
+    }
+    String lower = approver.toLowerCase(Locale.ROOT);
+    return !(lower.equals("unknown") || lower.equals("—") || lower.equals("-") || lower.equals("none"));
   }
 
   static SecurityEventAlertCountView toCountView(String question, List<Map<String, Object>> rows) {

@@ -66,6 +66,19 @@ class IntentRouterTest {
   }
 
   @Test
+  void routeClampsPastWhoApprovedAwayFromEligibility() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("eligibility");
+    decision.setEligibilityTarget("payment");
+    decision.setEligibilityAction("APPROVE");
+    when(callResponseSpec.entity(eq(RouterDecision.class))).thenReturn(decision);
+
+    RouterDecision result = intentRouter.route("Who approved 20260720-FICC-P-19?");
+
+    assertEquals("neo4j_direct", result.getPath());
+  }
+
+  @Test
   void routePropagatesRuntimeFailures() {
     when(callResponseSpec.entity(eq(RouterDecision.class)))
         .thenThrow(new IllegalStateException("model down"));
