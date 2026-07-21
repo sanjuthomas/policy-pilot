@@ -27,7 +27,7 @@ public class ChatService {
   private static final String UNSUPPORTED_ANSWER =
       "ssi-chat-j answers payment/instruction eligibility, document extraction "
           + "(show payment/instruction by id), policy-directory, policy-summary, "
-          + "me-centric questions, neo4j_direct graph answers "
+          + "person-permissions, me-centric questions, neo4j_direct graph answers "
           + "(ALERT counts/lists, entity status/creator by id), and vector/full_rag "
           + "security-event narratives. ";
 

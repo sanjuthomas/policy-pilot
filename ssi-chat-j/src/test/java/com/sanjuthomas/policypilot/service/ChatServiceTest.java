@@ -41,6 +41,8 @@ import com.sanjuthomas.policypilot.observability.RoutingMetrics;
 import com.sanjuthomas.policypilot.observability.SkillMetrics;
 import com.sanjuthomas.policypilot.pipeline.LaneAnswer;
 import com.sanjuthomas.policypilot.pipeline.RouterDecision;
+import com.sanjuthomas.policypilot.person.PersonPermissionSummaryAnswerFormatter;
+import com.sanjuthomas.policypilot.person.PersonPermissionSummaryService;
 import com.sanjuthomas.policypilot.policydirectory.PolicyDirectoryAnswerFormatter;
 import com.sanjuthomas.policypilot.policydirectory.PolicyDirectoryService;
 import com.sanjuthomas.policypilot.policysummary.PolicySummaryAnswerFormatter;
@@ -118,12 +120,21 @@ class ChatServiceTest {
         new ChatAnswerFinalizer(
             new RoutingMetrics(registry, new RoutingDistributionTracker()),
             new SkillMetrics(registry));
+    AnswerRenderer renderer =
+        new AnswerRenderer(
+            new AnswerTemplateConfig().answerTemplateEngine(),
+            new MoneyFormat(),
+            new PolicyBasisFormat());
+    IdentityTokenFormat identityTokenFormat = new IdentityTokenFormat();
     return new ChatService(
         intentRouter,
         new ChatPathDispatcher(
             meIntentService,
             new EligibilityLaneService(eligibilityClient, eligibilityAnswerFormatter),
             new PolicySummaryService(eligibilityClient, policySummaryAnswerFormatter),
+            new PersonPermissionSummaryService(
+                eligibilityClient,
+                new PersonPermissionSummaryAnswerFormatter(renderer, identityTokenFormat)),
             new PolicyDirectoryService(eligibilityClient, policyDirectoryAnswerFormatter),
             new DocumentExtractionService(
                 eligibilityClient,
@@ -552,6 +563,12 @@ class ChatServiceTest {
         new ChatAnswerFinalizer(
             new RoutingMetrics(registry, new RoutingDistributionTracker()),
             new SkillMetrics(registry));
+    AnswerRenderer renderer =
+        new AnswerRenderer(
+            new AnswerTemplateConfig().answerTemplateEngine(),
+            new MoneyFormat(),
+            new PolicyBasisFormat());
+    IdentityTokenFormat identityTokenFormat = new IdentityTokenFormat();
     ChatService chatService =
         new ChatService(
             intentRouter,
@@ -561,6 +578,9 @@ class ChatServiceTest {
                     new FakeEligibilityClient(), eligibilityAnswerFormatter),
                 new PolicySummaryService(
                     new FakeEligibilityClient(), policySummaryAnswerFormatter),
+                new PersonPermissionSummaryService(
+                    new FakeEligibilityClient(),
+                    new PersonPermissionSummaryAnswerFormatter(renderer, identityTokenFormat)),
                 new PolicyDirectoryService(
                     new FakeEligibilityClient(), policyDirectoryAnswerFormatter),
                 new DocumentExtractionService(
@@ -815,6 +835,70 @@ class ChatServiceTest {
     assertTrue(response.answer().contains("authorization-service"));
     assertEquals("policy_summary", response.routing().path());
     assertEquals("eligibility_api", response.routing().answer_synthesis());
+  }
+
+  @Test
+  void personPermissionsLaneFormatsDirectorySummary() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("person_permissions");
+    decision.setPersonQuery("Kowalski, Anna");
+    when(callResponseSpec.entity(eq(RouterDecision.class))).thenReturn(decision);
+
+    FakeEligibilityClient eligibilityClient =
+        new FakeEligibilityClient()
+            .returning(
+                Map.of(
+                    "query",
+                    "Kowalski, Anna",
+                    "count",
+                    1,
+                    "matches",
+                    List.of(
+                        Map.of(
+                            "user_id",
+                            "pay-203",
+                            "display_name",
+                            "Kowalski, Anna",
+                            "title",
+                            "Associate",
+                            "lob",
+                            "",
+                            "roles",
+                            List.of("PAYMENT_CREATOR", "FUNDING_APPROVER"),
+                            "groups",
+                            List.of("MIDDLE_OFFICE"),
+                            "amount_clubs",
+                            List.of("UP_TO_100_MILLION_CLUB"),
+                            "covering_lobs",
+                            List.of("FX"),
+                            "capabilities",
+                            List.of(
+                                Map.of(
+                                    "kind",
+                                    "funding_approve",
+                                    "description",
+                                    "Approve/reject payments for covering LOBs (FX)")),
+                            "narrative",
+                            "Kowalski, Anna (pay-203) is a dual-role funding approver.")),
+                    "source",
+                    "user_directory"));
+
+    ChatResponse response =
+        chatService(eligibilityClient)
+            .ask(
+                new ChatRequest(
+                    "Can you list the permissions of Kowalski, Anna?", List.of(), "policies"),
+                subject());
+
+    assertTrue(response.answer().contains("Kowalski, Anna"));
+    assertTrue(response.answer().contains("pay-203"));
+    assertTrue(response.answer().contains("funding_approve"));
+    assertTrue(response.answer().contains("`UP_TO_100_MILLION_CLUB`"));
+    assertTrue(response.answer().contains("`FUNDING_APPROVER`"));
+    assertTrue(response.answer().contains("ZITADEL"));
+    assertEquals("person_permissions", response.routing().path());
+    assertEquals("eligibility_api", response.routing().answer_synthesis());
+    assertEquals("eligibility", response.routing().retrieval_strategy());
   }
 
   @Test

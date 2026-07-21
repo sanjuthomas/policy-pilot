@@ -11,6 +11,7 @@ import com.sanjuthomas.policypilot.neo4j.Neo4jDirectService;
 import com.sanjuthomas.policypilot.neo4j.Neo4jDirectService.Neo4jDirectResult;
 import com.sanjuthomas.policypilot.pipeline.LaneAnswer;
 import com.sanjuthomas.policypilot.pipeline.RouterDecision;
+import com.sanjuthomas.policypilot.person.PersonPermissionSummaryService;
 import com.sanjuthomas.policypilot.policydirectory.PolicyDirectoryService;
 import com.sanjuthomas.policypilot.policysummary.PolicySummaryService;
 import com.sanjuthomas.policypilot.vector.FullRagLaneService;
@@ -26,6 +27,7 @@ public class ChatPathDispatcher {
   private final MeIntentService meIntentService;
   private final EligibilityLaneService eligibilityLaneService;
   private final PolicySummaryService policySummaryService;
+  private final PersonPermissionSummaryService personPermissionSummaryService;
   private final PolicyDirectoryService policyDirectoryService;
   private final DocumentExtractionService documentExtractionService;
   private final Neo4jDirectService neo4jDirectService;
@@ -35,6 +37,7 @@ public class ChatPathDispatcher {
       MeIntentService meIntentService,
       EligibilityLaneService eligibilityLaneService,
       PolicySummaryService policySummaryService,
+      PersonPermissionSummaryService personPermissionSummaryService,
       PolicyDirectoryService policyDirectoryService,
       DocumentExtractionService documentExtractionService,
       Neo4jDirectService neo4jDirectService,
@@ -42,6 +45,7 @@ public class ChatPathDispatcher {
     this.meIntentService = meIntentService;
     this.eligibilityLaneService = eligibilityLaneService;
     this.policySummaryService = policySummaryService;
+    this.personPermissionSummaryService = personPermissionSummaryService;
     this.policyDirectoryService = policyDirectoryService;
     this.documentExtractionService = documentExtractionService;
     this.neo4jDirectService = neo4jDirectService;
@@ -55,6 +59,8 @@ public class ChatPathDispatcher {
     return switch (decision.getPath()) {
       case "me" -> me(request, subject, decision);
       case "policy_summary" -> policySummaryService.answer(subject, decision);
+      case "person_permissions" ->
+          personPermissionSummaryService.answer(request.message(), subject, decision);
       case "policy_directory" ->
           LaneAnswer.of(
               policyDirectoryService.answer(request.message(), subject, decision),
