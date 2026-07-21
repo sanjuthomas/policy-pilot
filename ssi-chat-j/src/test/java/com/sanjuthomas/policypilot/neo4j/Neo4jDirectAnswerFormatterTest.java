@@ -171,6 +171,66 @@ class Neo4jDirectAnswerFormatterTest {
   }
 
   @Test
+  void formatsInstructionCreatorById() {
+    String answer =
+        formatter.format(
+            "Who created instruction 20260720-FICC-I-1?",
+            Set.of("instruction_detail"),
+            List.of(
+                Map.of(
+                    "instruction_id",
+                    "20260720-FICC-I-1",
+                    "creator_display",
+                    "Okonkwo, David (mo-050)")),
+            "instruction.creator_by_id");
+    assertEquals(
+        "Instruction 20260720-FICC-I-1 was created by Okonkwo, David (mo-050).", answer);
+  }
+
+  @Test
+  void formatsPaymentCreatorAndApproverById() {
+    String answer =
+        formatter.format(
+            "Who created payment 20260720-FICC-P-1 and who approved it?",
+            Set.of("payment_detail"),
+            List.of(
+                Map.of(
+                    "payment_id",
+                    "20260720-FICC-P-1",
+                    "creator_display",
+                    "Alice Ops",
+                    "approver_display",
+                    "Vasquez, Elena (ficc-300)",
+                    "approved_at",
+                    "2026-07-04T12:29:42")),
+            "payment.creator_and_approver_by_id");
+    assertTrue(answer.contains("Payment: 20260720-FICC-P-1"));
+    assertTrue(answer.contains("Creator: Alice Ops"));
+    assertTrue(answer.contains("Approver: Vasquez, Elena (ficc-300)"));
+    assertTrue(answer.contains("Approved at: 2026-07-04T12:29:42"));
+  }
+
+  @Test
+  void formatsInstructionCreatorAndApproverById() {
+    String answer =
+        formatter.format(
+            "Who created instruction 20260720-FICC-I-1 and who approved it?",
+            Set.of("instruction_detail"),
+            List.of(
+                Map.of(
+                    "instruction_id",
+                    "20260720-FICC-I-1",
+                    "creator_display",
+                    "Okonkwo, David (mo-050)",
+                    "approver_display",
+                    "Nguyen, Caroline (ficc-500)")),
+            "instruction.creator_and_approver_by_id");
+    assertTrue(answer.contains("Instruction: 20260720-FICC-I-1"));
+    assertTrue(answer.contains("Creator: Okonkwo, David (mo-050)"));
+    assertTrue(answer.contains("Approver: Nguyen, Caroline (ficc-500)"));
+  }
+
+  @Test
   void formatsPaymentStatusMissing() {
     String answer =
         formatter.format(

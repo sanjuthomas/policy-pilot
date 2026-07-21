@@ -125,6 +125,8 @@ public final class RouterPrompts {
           "What is the status of 20260720-FICC-P-19?" → neo4j_direct
           "What is the status of instruction 20260720-FICC-I-1?" → neo4j_direct
           "Who created payment 20260720-FICC-P-1?" → neo4j_direct
+          "Who created payment 20260720-FICC-P-1 and who approved it?" → neo4j_direct
+          "Who created instruction 20260720-FICC-I-1 and who approved it?" → neo4j_direct
           "Who approved payment 20260720-FICC-P-1 and why?" → neo4j_direct
           "Who approved 20260720-FICC-P-19?" → neo4j_direct
           (Entity id lookups apply regardless of UI search mode.)

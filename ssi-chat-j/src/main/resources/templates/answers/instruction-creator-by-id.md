@@ -1,0 +1,1 @@
+[# th:if="${m.missing}"]No instruction with that ID was found in the graph.[/][# th:if="${m.noCreator}"]No creator is recorded for instruction [(${m.entityId})].[/][# th:if="${!m.missing and !m.noCreator}"]Instruction [(${m.entityId})] was created by [(${m.creatorDisplay})].[/]

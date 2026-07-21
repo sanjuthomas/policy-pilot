@@ -40,6 +40,15 @@ def plan(request: PlanRequest) -> PlanResponse:
 
 
 def _plan_unscoped(request: PlanRequest) -> PlanResponse:
+    # Combined creator+approver must beat heuristic who-approved plans (parity with
+    # ssi-chat neo4j_direct.yaml priority over plan_graph_queries).
+    early = plan_entity_detail(request)
+    if early is not None and early.intent_id in {
+        "payment.creator_and_approver_by_id",
+        "instruction.creator_and_approver_by_id",
+    }:
+        return early
+
     planned = plan_graph_queries(request.question, mode=request.mode)
     if planned:
         queries = [
@@ -58,7 +67,7 @@ def _plan_unscoped(request: PlanRequest) -> PlanResponse:
             },
         )
 
-    entity = plan_entity_detail(request)
+    entity = early if early is not None else plan_entity_detail(request)
     if entity is not None:
         return entity
 
