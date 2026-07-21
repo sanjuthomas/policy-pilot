@@ -162,6 +162,8 @@ Prerequisites and GCP Vertex setup: **[How it works — Quick start](docs/how-it
 | Payment service | [payment-service](payment-service/README.md) | 8093 |
 | Authorization service | [authorization-service](authorization-service/README.md) | 8094 |
 | Sequence service | [sequence-service](sequence-service/README.md) | 8095 |
+| Java chat A/B | [ssi-chat-j](ssi-chat-j/README.md) | 8096 |
+| Cypher builder HTTP bridge | [cypher-builder-svc](cypher-builder-svc/README.md) | 8097 |
 | Kafka Connect | [kafka-connect](kafka-connect/README.md) | 8083 |
 | Cypher builder | [shared/cypher_builder](shared/cypher_builder/README.md) | — |
 | Authz client | [shared/authz_client](shared/authz_client/README.md) | — |

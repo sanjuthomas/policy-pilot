@@ -9,6 +9,8 @@ import com.sanjuthomas.policypilot.eligibility.EligibilityAnswerFormatter;
 import com.sanjuthomas.policypilot.eligibility.EligibilityClient;
 import com.sanjuthomas.policypilot.me.MeIntentResult;
 import com.sanjuthomas.policypilot.me.MeIntentService;
+import com.sanjuthomas.policypilot.neo4j.Neo4jDirectService;
+import com.sanjuthomas.policypilot.neo4j.Neo4jDirectService.Neo4jDirectResult;
 import com.sanjuthomas.policypilot.observability.ChatAnswerFinalizer;
 import com.sanjuthomas.policypilot.pipeline.RouterDecision;
 import com.sanjuthomas.policypilot.policydirectory.PolicyDirectoryService;
@@ -30,6 +32,7 @@ public class ChatService {
   private final PolicyDirectoryService policyDirectoryService;
   private final PolicySummaryAnswerFormatter policySummaryAnswerFormatter;
   private final MeIntentService meIntentService;
+  private final Neo4jDirectService neo4jDirectService;
   private final ChatAnswerFinalizer answerFinalizer;
 
   public ChatService(
@@ -40,6 +43,7 @@ public class ChatService {
       PolicyDirectoryService policyDirectoryService,
       PolicySummaryAnswerFormatter policySummaryAnswerFormatter,
       MeIntentService meIntentService,
+      Neo4jDirectService neo4jDirectService,
       ChatAnswerFinalizer answerFinalizer) {
     this.intentRouter = intentRouter;
     this.eligibilityClient = eligibilityClient;
@@ -48,6 +52,7 @@ public class ChatService {
     this.policyDirectoryService = policyDirectoryService;
     this.policySummaryAnswerFormatter = policySummaryAnswerFormatter;
     this.meIntentService = meIntentService;
+    this.neo4jDirectService = neo4jDirectService;
     this.answerFinalizer = answerFinalizer;
   }
 
@@ -96,6 +101,10 @@ public class ChatService {
           result.intentId());
     }
 
+    if ("neo4j_direct".equals(decision.getPath())) {
+      return neo4jDirect(request, requestedPath, generationMs);
+    }
+
     if ("eligibility".equals(decision.getPath())) {
       String target = nullToEmpty(decision.getEligibilityTarget()).toLowerCase();
       String action = nullToEmpty(decision.getEligibilityAction()).toUpperCase();
@@ -115,8 +124,8 @@ public class ChatService {
         request,
         "ssi-chat-j answers payment/instruction eligibility, document extraction "
             + "(show payment/instruction by id), policy-directory, policy-summary, "
-            + "and me-centric questions "
-            + "(e.g. Who can approve payment 20260720-FICC-P-8?). "
+            + "me-centric questions, and neo4j_direct security-event counts "
+            + "(e.g. How many ALERT events happened today?). "
             + "Routed as path="
             + decision.getPath()
             + ".",
@@ -126,6 +135,29 @@ public class ChatService {
         0.0,
         generationMs,
         null);
+  }
+
+  private ChatResponse neo4jDirect(
+      ChatRequest request, String requestedPath, double generationMs) {
+    long retrievalStartNs = System.nanoTime();
+    Neo4jDirectResult result = neo4jDirectService.answer(request.message(), request.mode());
+    double retrievalMs = (System.nanoTime() - retrievalStartNs) / 1_000_000.0;
+    if (answerFinalizer == null) {
+      return ChatResponse.of(result.answer(), null);
+    }
+    return answerFinalizer.of(
+        request.message(),
+        request.mode(),
+        result.answer(),
+        "neo4j_direct",
+        "formatter",
+        requestedPath,
+        retrievalMs,
+        generationMs,
+        result.intentId(),
+        result.cypher(),
+        result.graphRows(),
+        result.cypherProvenance());
   }
 
   /**

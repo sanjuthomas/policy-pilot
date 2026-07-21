@@ -22,6 +22,7 @@ jobs:
           - ssi-chat
           - ssi-indexer
           - ssi-demo-harness
+          - cypher-builder-svc
 
     steps:
       - uses: actions/checkout@v4
@@ -70,6 +71,10 @@ jobs:
             extra: regression
             # Fixture RouterDecision contract; no Gemini in CI (issue #13).
             fail_under: 70
+          - service: cypher-builder-svc
+            package: cbs
+            extra: dev
+            fail_under: 80
           - service: shared/telemetry
             package: telemetry
             extra: dev
@@ -173,6 +178,9 @@ jobs:
           - service: ssi-demo-harness
             context: .
             dockerfile: ssi-demo-harness/Dockerfile
+          - service: cypher-builder-svc
+            context: .
+            dockerfile: cypher-builder-svc/Dockerfile
 
     steps:
       - uses: actions/checkout@v4

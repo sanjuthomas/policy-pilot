@@ -29,7 +29,7 @@ Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `
 | **M1** — health + login + eligibility golden | `done` | Three eligibility goldens via `prove-eligibility.sh`; Maven on `:8096` (no root Compose) |
 | Observability (Micrometer → OTLP) | `done` | Same chat SLI names as Python; no Prometheus scrape |
 | Document extraction (API) | `done` | `path=document_extraction` → instruction/payment GET |
-| Phase 2 cypher bridge | `todo` | Next for neo4j_direct goldens |
+| Phase 2 cypher bridge | `done` | `cypher-builder-svc` :8097 + Java client + `golden_events_count_today` |
 
 ---
 
@@ -76,12 +76,12 @@ Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `
 
 | ID | Item | Status | Notes |
 |----|------|--------|-------|
-| P2.1 | Create `cypher-builder-svc` (FastAPI) wrapping `shared/cypher_builder` | `todo` | See plan: HTTP JSON protocol |
-| P2.2 | `POST /v1/plan` + `POST /v1/validate` + `/health` | `todo` | |
-| P2.3 | Compose wire-up (port **8097**) | `todo` | |
-| P2.4 | Java `CypherBuilderClient` (WebClient) | `todo` | |
-| P2.5 | Neo4j read execution as `svc_chat` | `todo` | |
-| P2.6 | One end-to-end neo4j_direct golden case via bridge | `todo` | Proves protocol |
+| P2.1 | Create `cypher-builder-svc` (FastAPI) wrapping `shared/cypher_builder` | `done` | Port **8097** |
+| P2.2 | `POST /v1/plan` + `POST /v1/validate` + `/health` | `done` | |
+| P2.3 | Compose wire-up (port **8097**) | `done` | Root compose service |
+| P2.4 | Java `CypherBuilderClient` (RestTemplate) | `done` | |
+| P2.5 | Neo4j read execution as `svc_chat` | `done` | neo4j-java-driver |
+| P2.6 | One end-to-end neo4j_direct golden case via bridge | `done` | `golden_events_count_today` |
 
 ---
 
@@ -91,10 +91,10 @@ Implement only what golden cases require; mark each golden id when green.
 
 | ID | Item | Status | Notes |
 |----|------|--------|-------|
-| P3.1 | Pipeline: route → handler lanes (path is law) | `in_progress` | Eligibility + directory + summary + me |
+| P3.1 | Pipeline: route → handler lanes (path is law) | `in_progress` | Eligibility + directory + summary + me + document_extraction + neo4j_direct |
 | P3.2 | Eligibility / policy tools as needed by golden | `done` | Eligibility + directory + `policy_summary` |
 | P3.3 | Me / who-am-i if in golden | `done` | All Python meKinds live (incl. waiting_for_me / who_else_can_act) |
-| P3.4 | neo4j_direct + formatters for golden graph cases | `todo` | Via cypher bridge |
+| P3.4 | neo4j_direct + formatters for golden graph cases | `in_progress` | Bridge live; expand formatters beyond alert counts |
 | P3.5 | Vector / hybrid only if a golden case needs it | `todo` | |
 | P3.6 | Skills only if a golden case needs them | `deferred` | Likely after golden |
 
@@ -132,7 +132,16 @@ Implement only what golden cases require; mark each golden id when green.
 | `golden_me_can_create_instruction_no_pay205` | `done` | CREATE instruction ≠ payment CREATE |
 | `golden_me_can_create_instruction_yes_mo` | `done` | CREATE instruction yes (mo-100) |
 | `golden_me_can_approve_payment_no_fo` | `done` | FO cannot funding-approve |
-| _(remaining from full `eval_golden.yaml`)_ | `todo` | ~20 Python-only (graph / denials / vector) |
+| `golden_instruction_show_by_id_with_noun` | `done` | `document_extraction` |
+| `golden_instruction_show_by_id_bare` | `done` | same |
+| `golden_payment_show_by_id_with_noun` | `done` | same |
+| `golden_payment_show_by_id_bare` | `done` | same |
+| `golden_instruction_show_by_id_not_found` | `done` | negative |
+| `golden_payment_show_by_id_not_found` | `done` | negative |
+| `golden_instruction_show_by_id_forbidden_fo` | `done` | FO 403 UX |
+| `golden_payment_show_by_id_forbidden_fo` | `done` | FO 403 UX |
+| `golden_events_count_today` | `done` | neo4j_direct via cypher bridge |
+| _(remaining from full `eval_golden.yaml`)_ | `todo` | ~19 Python-only (graph / denials / vector) |
 
 ---
 
@@ -167,3 +176,4 @@ Implement only what golden cases require; mark each golden id when green.
 | 2026-07-20 | Eligibility trio owned under `ssi-chat-j/eval/`; `prove-eligibility.sh` HTTP black-box vs `:8096` |
 | 2026-07-20 | Removed `ssi-chat-j` from root `docker-compose.yml` (Maven-only until Compose is wanted) |
 | 2026-07-20 | Java chat observability: Micrometer → OTLP (same chat SLI names as Python); no Prometheus scrape endpoint yet |
+| 2026-07-20 | Phase 2 cypher bridge: `cypher-builder-svc` wraps `plan_graph_queries` + validate; Java neo4j_direct proven by `golden_events_count_today` |

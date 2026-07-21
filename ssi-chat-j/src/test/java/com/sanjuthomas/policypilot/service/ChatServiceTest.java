@@ -32,6 +32,8 @@ import com.sanjuthomas.policypilot.me.WhoAmIService;
 import com.sanjuthomas.policypilot.me.WhoCanCreateService;
 import com.sanjuthomas.policypilot.me.WhoCoversLobService;
 import com.sanjuthomas.policypilot.me.WhoElseCanActService;
+import com.sanjuthomas.policypilot.neo4j.Neo4jDirectAnswerFormatter;
+import com.sanjuthomas.policypilot.neo4j.Neo4jDirectService;
 import com.sanjuthomas.policypilot.observability.ChatAnswerFinalizer;
 import com.sanjuthomas.policypilot.observability.RoutingDistributionTracker;
 import com.sanjuthomas.policypilot.observability.RoutingMetrics;
@@ -122,6 +124,8 @@ class ChatServiceTest {
         new PolicyDirectoryService(eligibilityClient, policyDirectoryAnswerFormatter),
         policySummaryAnswerFormatter,
         meIntentService,
+        new Neo4jDirectService(
+            null, null, new Neo4jDirectAnswerFormatter()),
         finalizer);
   }
 
@@ -448,15 +452,64 @@ class ChatServiceTest {
   @Test
   void otherPathsReturnStub() {
     RouterDecision decision = new RouterDecision();
-    decision.setPath("neo4j_direct");
+    decision.setPath("full_rag");
     when(callResponseSpec.entity(eq(RouterDecision.class))).thenReturn(decision);
 
     ChatResponse response =
         chatService(new FakeEligibilityClient())
-            .ask(new ChatRequest("How many alerts?", List.of(), "events"), subject());
+            .ask(new ChatRequest("Summarize the corpus", List.of(), "events"), subject());
 
-    assertTrue(response.answer().contains("payment/instruction eligibility"));
+    assertTrue(response.answer().contains("neo4j_direct"));
     assertEquals("stub", response.routing().answer_synthesis());
+  }
+
+  @Test
+  void neo4jDirectLaneFormatsAlertCount() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("neo4j_direct");
+    when(callResponseSpec.entity(eq(RouterDecision.class))).thenReturn(decision);
+
+    Neo4jDirectService neo4j =
+        org.mockito.Mockito.mock(Neo4jDirectService.class);
+    when(neo4j.answer(anyString(), anyString()))
+        .thenReturn(
+            new Neo4jDirectService.Neo4jDirectResult(
+                "There were 2 ALERT events today.",
+                "planned_graph",
+                "MATCH (e) RETURN count(e) AS total",
+                List.of(Map.of("total", 2L)),
+                "predefined_planned"));
+
+    SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    ChatAnswerFinalizer finalizer =
+        new ChatAnswerFinalizer(
+            new RoutingMetrics(registry, new RoutingDistributionTracker()),
+            new SkillMetrics(registry));
+    ChatService chatService =
+        new ChatService(
+            intentRouter,
+            new FakeEligibilityClient(),
+            eligibilityAnswerFormatter,
+            new DocumentExtractionService(
+                new FakeEligibilityClient(),
+                instructionDetailAnswerFormatter,
+                paymentDetailAnswerFormatter),
+            new PolicyDirectoryService(
+                new FakeEligibilityClient(), policyDirectoryAnswerFormatter),
+            policySummaryAnswerFormatter,
+            meIntentService,
+            neo4j,
+            finalizer);
+
+    ChatResponse response =
+        chatService.ask(
+            new ChatRequest("How many ALERT events happened today?", List.of(), "events"),
+            subject());
+
+    assertTrue(response.answer().contains("2 ALERT events"));
+    assertEquals("neo4j_direct", response.routing().path());
+    assertEquals("formatter", response.routing().answer_synthesis());
+    assertEquals("planned_graph", response.routing().intent_id());
   }
 
   @Test

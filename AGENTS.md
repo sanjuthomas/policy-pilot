@@ -20,7 +20,8 @@ for svc in \
   ssi-chat \
   ssi-indexer \
   ssi-demo-harness \
-  payment-service
+  payment-service \
+  cypher-builder-svc
 do
   ruff check "$svc/src/" --select E,F,W,I --ignore E501 --fix
 done
@@ -33,7 +34,8 @@ for svc in \
   ssi-chat \
   ssi-indexer \
   ssi-demo-harness \
-  payment-service
+  payment-service \
+  cypher-builder-svc
 do
   echo "=== $svc ==="
   ruff check "$svc/src/" --select E,F,W,I --ignore E501
@@ -63,6 +65,7 @@ Package `[tool.coverage.report] fail_under` must match the gate above so local `
 | `sequence-service` | `seq` |
 | `ssi-indexer` | `etl` |
 | `ssi-chat` | `chat_application` |
+| `cypher-builder-svc` | `cbs` |
 | `shared/telemetry` | `telemetry` |
 | `shared/platform_auth` | `platform_auth` |
 | `shared/sequence_client` | `sequence_client` |
@@ -87,6 +90,7 @@ for spec in \
   "sequence-service:seq:80" \
   "ssi-indexer:etl:80" \
   "ssi-chat:chat_application:70" \
+  "cypher-builder-svc:cbs:80" \
   "shared/telemetry:telemetry:80" \
   "shared/platform_auth:platform_auth:80" \
   "shared/sequence_client:sequence_client:80" \
@@ -102,6 +106,9 @@ do
   echo "=== $svc (≥${gate}% on $pkg) ==="
   (
     cd "$svc"
+    if [ "$svc" = "cypher-builder-svc" ]; then
+      pip install -q -e ../shared/telemetry -e ../shared/cypher_builder
+    fi
     pip install -q -e .
     pip install -q pytest pytest-cov
     pytest --cov="$pkg" --cov-report=term-missing --cov-fail-under="$gate"
@@ -131,7 +138,8 @@ for svc in \
   ssi-chat \
   ssi-indexer \
   ssi-demo-harness \
-  payment-service
+  payment-service \
+  cypher-builder-svc
 do
   echo "=== $svc ==="
   ruff check "$svc/src/" --select E,F,W,I --ignore E501
@@ -161,8 +169,9 @@ inside each service directory listed in the lint matrix:
 - `ssi-chat`
 - `ssi-indexer`
 - `ssi-demo-harness`
+- `cypher-builder-svc`
 
-It also builds Docker images for those application services (including `payment-service` and `ssi-chat-j`) and runs Rego unit tests under `opa-policy-seed/policies` via the official OPA image.
+It also builds Docker images for those application services (including `payment-service`, `ssi-chat-j`, and `cypher-builder-svc`) and runs Rego unit tests under `opa-policy-seed/policies` via the official OPA image.
 
 For **`ssi-chat-j`** (Java A/B chat), the same workflow runs **Maven** `verify` (Java 21, JaCoCo **≥ 80%** line coverage) and a Docker image build. Details: [`ssi-chat-j/AGENTS.md`](ssi-chat-j/AGENTS.md).
 
@@ -174,6 +183,7 @@ The same workflow runs **unit test coverage** (≥ 80% line coverage, **ssi-chat
 - `sequence-service` (`seq`)
 - `ssi-indexer` (`etl`)
 - `ssi-chat` (`chat_application`, gate **70%**)
+- `cypher-builder-svc` (`cbs`)
 - `shared/telemetry` (`telemetry`)
 - `shared/platform_auth` (`platform_auth`)
 - `shared/sequence_client` (`sequence_client`)
@@ -236,6 +246,7 @@ When removing a symbol from code, **remove its import** in the same edit (`F401`
 | `ssi-indexer` | `etl` | 8090 |
 | `ssi-chat` | `chat_application` | 8092 |
 | `ssi-chat-j` | Java (`com.sanjuthomas.policypilot`) | 8096 |
+| `cypher-builder-svc` | `cbs` | 8097 |
 | `ssi-demo-harness` | `harness` | 8091 |
 
 See the root [README.md](README.md) for architecture, storage names, and demo URLs.

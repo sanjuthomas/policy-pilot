@@ -780,3 +780,20 @@ cases:
     - '{"detail"'
     - Field
     - Amount
+
+- id: golden_events_count_today
+  mode: events
+  retrieval: graph
+  tags: [golden, counts, neo4j_direct, ssi-chat-j]
+  question: How many ALERT events happened today?
+  expect:
+    require_routing: true
+    routing_path: neo4j_direct
+    cypher_class: deterministic
+    answer_synthesis: formatter
+    intent_id: planned_graph
+    answer_has_number: true
+    min_answer_length: 10
+    answer_contains_all:
+    - ALERT
+    - today
