@@ -3,6 +3,7 @@ package com.sanjuthomas.policypilot.observability;
 import com.sanjuthomas.policypilot.api.ApiModels.AnswerRoutingInfo;
 import com.sanjuthomas.policypilot.api.ApiModels.ChatResponse;
 import com.sanjuthomas.policypilot.api.ApiModels.SourceHit;
+import com.sanjuthomas.policypilot.gemini.GeminiErrors;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -98,6 +99,31 @@ public class ChatAnswerFinalizer {
         skillActivities == null ? List.of() : skillActivities,
         skillConfirmation,
         retryAfterSeconds);
+  }
+
+  /**
+   * Soft HTTP 200 rate-limit UX (Gemini 429). Client shows the Vendor-under-stress countdown then
+   * Retry — parity with Python {@code _rate_limited_response}.
+   */
+  public ChatResponse rateLimited(
+      String message, String mode, String path, Double retrievalMs) {
+    return finalizeAnswer(
+        message,
+        mode,
+        GeminiErrors.RATE_LIMIT_ANSWER,
+        List.of(),
+        null,
+        List.of(),
+        retrievalMs,
+        0.0,
+        path == null || path.isBlank() ? "full_rag" : path,
+        "none",
+        "formatter",
+        GeminiErrors.RATE_LIMIT_INTENT_ID,
+        List.of(),
+        null,
+        GeminiErrors.RATE_LIMIT_RETRY_SECONDS,
+        null);
   }
 
   public ChatResponse of(
@@ -220,6 +246,9 @@ public class ChatAnswerFinalizer {
   }
 
   private static String formatLabel(AnswerRouting routing) {
+    if (GeminiErrors.RATE_LIMIT_INTENT_ID.equals(routing.intentId())) {
+      return "Gemini rate limited";
+    }
     String pathLabel =
         switch (routing.path()) {
           case "eligibility" -> "Eligibility shortcut";
