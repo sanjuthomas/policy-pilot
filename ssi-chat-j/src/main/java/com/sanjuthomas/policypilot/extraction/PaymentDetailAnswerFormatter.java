@@ -2,6 +2,7 @@ package com.sanjuthomas.policypilot.extraction;
 
 import com.sanjuthomas.policypilot.formatting.AnswerRenderer;
 import com.sanjuthomas.policypilot.formatting.MoneyFormat;
+import com.sanjuthomas.policypilot.formatting.TimestampFormat;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -14,10 +15,13 @@ public class PaymentDetailAnswerFormatter {
 
   private final AnswerRenderer answerRenderer;
   private final MoneyFormat moneyFormat;
+  private final TimestampFormat timestampFormat;
 
-  public PaymentDetailAnswerFormatter(AnswerRenderer answerRenderer, MoneyFormat moneyFormat) {
+  public PaymentDetailAnswerFormatter(
+      AnswerRenderer answerRenderer, MoneyFormat moneyFormat, TimestampFormat timestampFormat) {
     this.answerRenderer = answerRenderer;
     this.moneyFormat = moneyFormat;
+    this.timestampFormat = timestampFormat;
   }
 
   public String format(Map<String, Object> data) {
@@ -35,8 +39,8 @@ public class PaymentDetailAnswerFormatter {
         dash(str(data.get("owning_lob"))),
         EntityUserDisplay.creator(data.get("created_by")),
         EntityUserDisplay.approver(data.get("approved_by")),
-        blankToNull(str(data.get("created_at"))),
-        blankToNull(str(data.get("approved_at"))));
+        timestampFormat.formatLocal(data.get("created_at")),
+        timestampFormat.formatLocal(data.get("approved_at")));
   }
 
   private String amountCell(Object amount, String currency) {
@@ -52,10 +56,6 @@ public class PaymentDetailAnswerFormatter {
 
   private static String dash(String value) {
     return StringUtils.hasText(value) ? value : "—";
-  }
-
-  private static String blankToNull(String value) {
-    return StringUtils.hasText(value) ? value : null;
   }
 
   private static String str(Object value) {

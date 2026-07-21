@@ -20,6 +20,7 @@ import com.sanjuthomas.policypilot.formatting.AnswerTemplateConfig;
 import com.sanjuthomas.policypilot.formatting.IdentityTokenFormat;
 import com.sanjuthomas.policypilot.formatting.MoneyFormat;
 import com.sanjuthomas.policypilot.formatting.PolicyBasisFormat;
+import com.sanjuthomas.policypilot.formatting.TimestampFormat;
 import com.sanjuthomas.policypilot.instruction.InstructionDetailAnswerFormatter;
 import com.sanjuthomas.policypilot.me.CanActOnEntityService;
 import com.sanjuthomas.policypilot.me.MeIntentResolver;
@@ -81,8 +82,10 @@ class ChatServiceTest {
             new PolicyBasisFormat());
     IdentityTokenFormat identityTokenFormat = new IdentityTokenFormat();
     eligibilityAnswerFormatter = new EligibilityAnswerFormatter(renderer);
-    instructionDetailAnswerFormatter = new InstructionDetailAnswerFormatter(renderer);
-    paymentDetailAnswerFormatter = new PaymentDetailAnswerFormatter(renderer, new MoneyFormat());
+    instructionDetailAnswerFormatter =
+        new InstructionDetailAnswerFormatter(renderer, new TimestampFormat());
+    paymentDetailAnswerFormatter =
+        new PaymentDetailAnswerFormatter(renderer, new MoneyFormat(), new TimestampFormat());
     policyDirectoryAnswerFormatter = new PolicyDirectoryAnswerFormatter(renderer);
     policySummaryAnswerFormatter =
         new PolicySummaryAnswerFormatter(renderer, identityTokenFormat);

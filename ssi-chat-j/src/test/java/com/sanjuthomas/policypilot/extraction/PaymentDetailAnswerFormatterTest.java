@@ -7,6 +7,7 @@ import com.sanjuthomas.policypilot.formatting.AnswerRenderer;
 import com.sanjuthomas.policypilot.formatting.AnswerTemplateConfig;
 import com.sanjuthomas.policypilot.formatting.MoneyFormat;
 import com.sanjuthomas.policypilot.formatting.PolicyBasisFormat;
+import com.sanjuthomas.policypilot.formatting.TimestampFormat;
 import com.sanjuthomas.policypilot.pipeline.RouterDecision;
 import java.util.HashMap;
 import java.util.Map;
@@ -16,16 +17,19 @@ import org.junit.jupiter.api.Test;
 class PaymentDetailAnswerFormatterTest {
 
   private PaymentDetailAnswerFormatter formatter;
+  private TimestampFormat timestampFormat;
 
   @BeforeEach
   void setUp() {
+    timestampFormat = new TimestampFormat();
     formatter =
         new PaymentDetailAnswerFormatter(
             new AnswerRenderer(
                 new AnswerTemplateConfig().answerTemplateEngine(),
                 new MoneyFormat(),
                 new PolicyBasisFormat()),
-            new MoneyFormat());
+            new MoneyFormat(),
+            timestampFormat);
   }
 
   @Test
@@ -44,13 +48,14 @@ class PaymentDetailAnswerFormatterTest {
     payload.put(
         "approved_by",
         Map.of("user_id", "ficc-500", "given_name", "Caroline", "family_name", "Nguyen"));
-    payload.put("approved_at", "2026-07-12T10:00:00");
+    payload.put("approved_at", "2026-07-12T10:00:00Z");
 
     String answer = formatter.format(payload);
     assertTrue(answer.contains("### Payment `20260712-FICC-P-2`"));
     assertTrue(answer.contains("USD 15,000,000"));
     assertTrue(answer.contains("Rodriguez, Emily (pay-101)"));
-    assertTrue(answer.contains("Approved at: 2026-07-12T10:00:00"));
+    assertTrue(
+        answer.contains("Approved at: " + timestampFormat.formatLocal("2026-07-12T10:00:00Z")));
   }
 
   @Test

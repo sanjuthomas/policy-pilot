@@ -7,6 +7,7 @@ import com.sanjuthomas.policypilot.formatting.AnswerRenderer;
 import com.sanjuthomas.policypilot.formatting.AnswerTemplateConfig;
 import com.sanjuthomas.policypilot.formatting.MoneyFormat;
 import com.sanjuthomas.policypilot.formatting.PolicyBasisFormat;
+import com.sanjuthomas.policypilot.formatting.TimestampFormat;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,15 +15,18 @@ import org.junit.jupiter.api.Test;
 class InstructionDetailAnswerFormatterTest {
 
   private InstructionDetailAnswerFormatter formatter;
+  private TimestampFormat timestampFormat;
 
   @BeforeEach
   void setUp() {
+    timestampFormat = new TimestampFormat();
     formatter =
         new InstructionDetailAnswerFormatter(
             new AnswerRenderer(
                 new AnswerTemplateConfig().answerTemplateEngine(),
                 new MoneyFormat(),
-                new PolicyBasisFormat()));
+                new PolicyBasisFormat()),
+            timestampFormat);
   }
 
   @Test
@@ -43,7 +47,7 @@ class InstructionDetailAnswerFormatterTest {
     payload.put(
         "approved_by",
         Map.of("user_id", "ficc-500", "given_name", "Caroline", "family_name", "Nguyen"));
-    payload.put("approved_at", "2026-07-17T10:00:00");
+    payload.put("approved_at", "2026-07-17T10:00:00Z");
     payload.put("creditor", Map.of("name", "Acme"));
     payload.put("creditor_account", Map.of("identification", "999"));
 
@@ -55,14 +59,15 @@ class InstructionDetailAnswerFormatterTest {
     assertTrue(answer.contains("Okonkwo, David (mo-050)"));
     assertTrue(answer.contains("Nguyen, Caroline (ficc-500)"));
     assertTrue(answer.contains("Acme (`999`)"));
-    assertTrue(answer.contains("Approved at: 2026-07-17T10:00:00"));
+    assertTrue(answer.contains("Approved at: " + timestampFormat.formatLocal("2026-07-17T10:00:00Z")));
+    assertTrue(!answer.contains("Approved at: 2026-07-17T10:00:00"));
     assertTrue(answer.contains("| Field") && answer.contains("| Value"));
   }
 
   @Test
   void approverMissingUsesNotYetApproved() {
     InstructionDetailAnswerView view =
-        InstructionDetailAnswerFormatter.toView(
+        formatter.toView(
             Map.of(
                 "instruction_id",
                 "INS-1",

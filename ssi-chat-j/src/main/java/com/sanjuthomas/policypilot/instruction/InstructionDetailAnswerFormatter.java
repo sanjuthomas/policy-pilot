@@ -2,6 +2,7 @@ package com.sanjuthomas.policypilot.instruction;
 
 import com.sanjuthomas.policypilot.extraction.EntityUserDisplay;
 import com.sanjuthomas.policypilot.formatting.AnswerRenderer;
+import com.sanjuthomas.policypilot.formatting.TimestampFormat;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -13,16 +14,19 @@ public class InstructionDetailAnswerFormatter {
   private static final String TEMPLATE = "instruction-detail";
 
   private final AnswerRenderer answerRenderer;
+  private final TimestampFormat timestampFormat;
 
-  public InstructionDetailAnswerFormatter(AnswerRenderer answerRenderer) {
+  public InstructionDetailAnswerFormatter(
+      AnswerRenderer answerRenderer, TimestampFormat timestampFormat) {
     this.answerRenderer = answerRenderer;
+    this.timestampFormat = timestampFormat;
   }
 
   public String format(Map<String, Object> data) {
     return answerRenderer.render(TEMPLATE, toView(data));
   }
 
-  static InstructionDetailAnswerView toView(Map<String, Object> data) {
+  InstructionDetailAnswerView toView(Map<String, Object> data) {
     return new InstructionDetailAnswerView(
         dash(str(data.get("instruction_id"))),
         dash(str(data.get("status"))),
@@ -36,8 +40,8 @@ public class InstructionDetailAnswerFormatter {
         versionCell(data.get("version_number")),
         EntityUserDisplay.creator(data.get("created_by")),
         EntityUserDisplay.approver(data.get("approved_by")),
-        blankToNull(str(data.get("created_at"))),
-        blankToNull(str(data.get("approved_at"))));
+        timestampFormat.formatLocal(data.get("created_at")),
+        timestampFormat.formatLocal(data.get("approved_at")));
   }
 
   static String creditorDisplay(Object creditor, Object account) {
@@ -76,10 +80,6 @@ public class InstructionDetailAnswerFormatter {
 
   private static String dash(String value) {
     return StringUtils.hasText(value) ? value : "—";
-  }
-
-  private static String blankToNull(String value) {
-    return StringUtils.hasText(value) ? value : null;
   }
 
   private static String str(Object value) {
