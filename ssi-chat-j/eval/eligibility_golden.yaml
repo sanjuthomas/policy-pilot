@@ -986,3 +986,38 @@ cases:
     require_entity_recall: true
     min_answer_length: 20
     answer_contains_any: [approv, allowed, because, role]
+
+# Positive LOB entitlement — FO desk FICC and MO covering FICC can VIEW FICC instruction status.
+- id: golden_instruction_view_fo_ficc
+  mode: instructions
+  retrieval: deterministic
+  tags: [golden, view, positive, fo, ficc, neo4j_direct, ssi-chat-j]
+  persona: fo-ficc-101
+  question: What is the status of instruction {ficc_standing_instruction_id}?
+  expect:
+    requires_context: [ficc_standing_instruction_id]
+    require_routing: true
+    routing_path: neo4j_direct
+    cypher_class: deterministic
+    answer_synthesis: formatter
+    intent_id: instruction.status_by_id
+    require_entity_recall: true
+    min_answer_length: 5
+    answer_contains_any: [approved, status, instruction, ficc]
+
+- id: golden_instruction_view_mo_covering_ficc
+  mode: instructions
+  retrieval: deterministic
+  tags: [golden, view, positive, mo, ficc, neo4j_direct, ssi-chat-j]
+  persona: pay-101
+  question: What is the status of instruction {ficc_standing_instruction_id}?
+  expect:
+    requires_context: [ficc_standing_instruction_id]
+    require_routing: true
+    routing_path: neo4j_direct
+    cypher_class: deterministic
+    answer_synthesis: formatter
+    intent_id: instruction.status_by_id
+    require_entity_recall: true
+    min_answer_length: 5
+    answer_contains_any: [approved, status, instruction, ficc]

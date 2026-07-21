@@ -40,12 +40,12 @@ public class ChatService {
   public ChatResponse ask(ChatRequest request, Subject subject) {
     long routeStartNs = System.nanoTime();
     RouterDecision decision = intentRouter.route(request.message());
-    double generationMs = (System.nanoTime() - routeStartNs) / 1_000_000.0;
+    double routeMs = (System.nanoTime() - routeStartNs) / 1_000_000.0;
     String requestedPath = decision.getPath();
 
     long retrievalStartNs = System.nanoTime();
     LaneAnswer lane = pathDispatcher.dispatch(decision, request, subject);
-    double retrievalMs = (System.nanoTime() - retrievalStartNs) / 1_000_000.0;
+    double laneMs = (System.nanoTime() - retrievalStartNs) / 1_000_000.0;
 
     // Me lane records path=eligibility for OpenSLO parity; do not treat router "me" as requested.
     String effectiveRequested = "me".equals(requestedPath) ? null : requestedPath;
@@ -57,13 +57,19 @@ public class ChatService {
           decision.getPath(),
           "stub",
           effectiveRequested,
+          routeMs + laneMs,
           0.0,
-          generationMs,
           null,
           null,
           null,
           "none");
     }
+
+    // Parity with Python neo4j_direct / document_extraction: formatter answers report
+    // generation_ms=0 (deterministic quality gate max is 100ms); router+lane → retrieval_ms.
+    boolean formatterOnly = "formatter".equals(lane.synthesis());
+    double retrievalMs = formatterOnly ? routeMs + laneMs : laneMs;
+    double generationMs = formatterOnly ? 0.0 : routeMs;
 
     return finalize(
         request,
