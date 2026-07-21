@@ -33,9 +33,10 @@ Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `
 | **P3.4** — neo4j_direct security-event / denial formatters | `done` | Thymeleaf templates + LOB scope; 8 denial/alert goldens |
 | Entity status / creator goldens | `done` | status + payment creator via bridge YAML-parity |
 | Who-approved payment golden | `done` | approval-lookup Thymeleaf; heuristic + entity_plan fallback |
-| **Next** — FO/MO instruction view goldens | `todo` | `golden_instruction_view_fo_ficc` / `_mo_covering_ficc` |
+| FO/MO instruction VIEW goldens | `done` | `golden_instruction_view_fo_ficc` / `_mo_covering_ficc` |
+| **Next** — vector security summary | `todo` | `golden_vector_security_summary` (P3.5) |
 
-**Bank snapshot:** Java green **51** · Python-only still open **3** · Java-only hygiene **27** (not required for Python parity).
+**Bank snapshot:** Java green **53** · Python-only still open **1** · Java-only hygiene **27** (not required for Python parity).
 
 ---
 
@@ -134,15 +135,15 @@ Implement only what golden cases require; mark each golden id when green.
 | `golden_instruction_status` | `done` | entity detail via cypher bridge |
 | `golden_payment_creator` | `done` | entity detail via cypher bridge |
 | `golden_events_who_approved_payment` | `done` | payment_approval_lookup + Thymeleaf WHO/WHEN/WHY |
+| `golden_instruction_view_fo_ficc` | `done` | FO FICC desk LOB VIEW via neo4j_direct status |
+| `golden_instruction_view_mo_covering_ficc` | `done` | MO covering-FICC VIEW via neo4j_direct status |
 
-### Remaining Python-only (3) — open for A/B parity
+### Remaining Python-only (1) — open for A/B parity
 
 From `ssi-chat/regression/eval_golden.yaml`, not yet in the Java bank:
 
 | Golden case id | Status | Likely lane |
 |----------------|--------|-------------|
-| `golden_instruction_view_fo_ficc` | `todo` | LOB / authz view |
-| `golden_instruction_view_mo_covering_ficc` | `todo` | LOB / authz view |
 | `golden_vector_security_summary` | `todo` | vector (P3.5) |
 
 ### Hygiene (deferred for success bar)
@@ -158,9 +159,9 @@ From `ssi-chat/regression/eval_golden.yaml`, not yet in the Java bank:
 | ID | Item | Status | Notes |
 |----|------|--------|-------|
 | P4.1 | Run seed + eligibility golden against `:8096` | `done` | `prove-eligibility.sh` / warm `--no-seed` |
-| P4.2 | Triage failures into Phase 3 backlog | `todo` | Who-approved / LOB view / vector next |
+| P4.2 | Triage failures into Phase 3 backlog | `todo` | Vector summary next |
 | P4.3 | Document A/B how-to (switch `CHAT_BASE_URL`) | `done` | `ssi-chat-j/README.md` + `eval/README.md` |
-| P4.4 | **Success bar met** | `todo` | 3 Python-only cases still open |
+| P4.4 | **Success bar met** | `todo` | 1 Python-only case still open |
 
 ---
 
@@ -188,3 +189,4 @@ From `ssi-chat/regression/eval_golden.yaml`, not yet in the Java bank:
 | 2026-07-20 | Merged [#99](https://github.com/sanjuthomas/policy-pilot/pull/99) to main; next focus = P3.4 denial/alert formatters (15 Python-only remaining) |
 | 2026-07-21 | P3.4: Thymeleaf neo4j_direct count/list/ranking templates + subject LOB scope on cypher-builder-svc; 8 denial/alert goldens |
 | 2026-07-21 | Entity status/creator: cypher-builder-svc YAML-parity plan fallback + Thymeleaf formatters; `golden_payment_status` / `golden_instruction_status` / `golden_payment_creator` |
+| 2026-07-21 | FO/MO instruction VIEW goldens (`fo-ficc-101`, `pay-101`); formatter `generation_ms=0` parity with Python neo4j_direct |

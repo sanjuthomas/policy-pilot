@@ -521,6 +521,8 @@ class ChatServiceTest {
     assertEquals("neo4j_direct", response.routing().path());
     assertEquals("formatter", response.routing().answer_synthesis());
     assertEquals("planned_graph", response.routing().intent_id());
+    // Parity with Python neo4j_direct: formatter answers report generation_ms=0.
+    assertEquals(0.0, response.generation_ms());
   }
 
   @Test
