@@ -27,6 +27,19 @@ class TimestampFormatTest {
   }
 
   @Test
+  void formatsPaymentAwareIsoWithRedundantZ() {
+    // payment-service: datetime.now(UTC).isoformat() + "Z"
+    String raw = "2026-07-17T10:00:00.123456+00:00Z";
+    String expected =
+        DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
+            .withLocale(Locale.getDefault())
+            .withZone(ZoneId.systemDefault())
+            .format(Instant.parse("2026-07-17T10:00:00.123456Z"));
+    assertEquals(expected, timestamps.formatLocal(raw));
+    assertFalse(timestamps.formatLocal(raw).contains("+00:00"));
+  }
+
+  @Test
   void treatsNaiveIsoAsUtc() {
     String withZ = timestamps.formatLocal("2026-07-17T10:00:00Z");
     String naive = timestamps.formatLocal("2026-07-17T10:00:00");

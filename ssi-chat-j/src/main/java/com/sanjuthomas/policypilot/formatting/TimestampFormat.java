@@ -1,5 +1,6 @@
 package com.sanjuthomas.policypilot.formatting;
 
+import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -14,8 +15,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 /**
- * Formats API timestamps (UTC ISO-8601, often with trailing {@code Z}) for chat prose in the JVM
- * default timezone / locale.
+ * Formats API timestamps (UTC ISO-8601) for chat prose in the JVM default timezone / locale.
+ *
+ * <p>Payment-service appends {@code Z} even when {@code isoformat()} already includes {@code
+ * +00:00} (aware UTC), producing {@code ...+00:00Z} — that form is normalized here.
  */
 @Component
 public class TimestampFormat {
@@ -28,24 +31,31 @@ public class TimestampFormat {
     if (value == null) {
       return null;
     }
+    if (value instanceof Instant instant) {
+      return formatInstant(instant);
+    }
     String raw = String.valueOf(value).strip();
     if (!StringUtils.hasText(raw)) {
       return null;
     }
     try {
-      Instant instant = toInstant(raw);
-      ZonedDateTime local = instant.atZone(ZoneId.systemDefault());
-      return DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
-          .withLocale(Locale.getDefault())
-          .withZone(ZoneId.systemDefault())
-          .format(local);
-    } catch (DateTimeParseException ex) {
+      return formatInstant(toInstant(raw));
+    } catch (DateTimeException ex) {
       return raw;
     }
   }
 
+  private static String formatInstant(Instant instant) {
+    ZoneId zone = ZoneId.systemDefault();
+    ZonedDateTime local = instant.atZone(zone);
+    return DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
+        .withLocale(Locale.getDefault())
+        .withZone(zone)
+        .format(local);
+  }
+
   static Instant toInstant(String raw) {
-    String text = raw.strip();
+    String text = normalizeApiTimestamp(raw.strip());
     try {
       return Instant.parse(text);
     } catch (DateTimeParseException ignored) {
@@ -56,8 +66,24 @@ public class TimestampFormat {
     } catch (DateTimeParseException ignored) {
       // fall through
     }
-    // API sometimes omits zone; timestamps are UTC (isoformat + "Z" path may drop Z in tests).
+    // Naive ISO — treat as UTC (instruction-service utcnow path).
     LocalDateTime local = LocalDateTime.parse(text);
     return local.toInstant(ZoneOffset.UTC);
+  }
+
+  /**
+   * Normalize quirky API forms: {@code 2026-07-17T10:00:00+00:00Z} → {@code
+   * 2026-07-17T10:00:00+00:00}.
+   */
+  static String normalizeApiTimestamp(String text) {
+    // Offset already present; trailing Z is redundant / invalid.
+    if (text.endsWith("Z") && text.length() > 1) {
+      String withoutZ = text.substring(0, text.length() - 1);
+      if (withoutZ.indexOf('+', 10) >= 0
+          || withoutZ.lastIndexOf('-') > withoutZ.indexOf('T')) {
+        return withoutZ;
+      }
+    }
+    return text;
   }
 }
