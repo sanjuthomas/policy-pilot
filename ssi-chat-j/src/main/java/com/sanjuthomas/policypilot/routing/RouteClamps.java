@@ -6,8 +6,25 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * Deterministic post-router clamps (parity with Python {@code prefer_neo4j_direct_when_matched},
- * past-tense approval audit routing, and {@code prefer_vector_for_open_narrative}).
+ * Deterministic <em>post-router</em> path clamps — the documented exception to “path comes from
+ * Spring AI only.”
+ *
+ * <p>Primary intent is still Spring AI structured {@code RouterDecision}. These helpers may rewrite
+ * {@code path} <strong>before</strong> {@code ChatPathDispatcher}, matching Python {@code
+ * prefer_neo4j_direct_when_matched} / past-tense approval audit routing / {@code
+ * prefer_vector_for_open_narrative}.
+ *
+ * <ul>
+ *   <li>Past {@code who approv} + payment/instruction id (not {@code who can approv}) → {@code
+ *       neo4j_direct}
+ *   <li>Open narrative / denial-activity audit prose (no entity id) → {@code vector}
+ * </ul>
+ *
+ * <p>Java’s open-narrative clamp is slightly broader than Python: it also rewrites {@code
+ * neo4j_direct} / {@code eligibility} so those lanes cannot steal the vector golden. See {@code
+ * ssi-chat-j/AGENTS.md} and {@code .cursor/rules/ssi-chat-j-intent-routing.mdc}.
+ *
+ * <p>Do not add undeclared path-force regex outside this class.
  */
 public final class RouteClamps {
 
