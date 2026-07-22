@@ -43,9 +43,22 @@ Prefer hermetic unit tests (mocks for ZITADEL, payment-service, Spring AI `ChatC
 
 ### Thumb rule — no heuristic routing
 
-**Intent / `RouterDecision.path` comes from Spring AI structured output only.** Do not add regex, keyword, or fuzzy classifiers that choose the path. Grow `RouterPrompts.ROUTER_SYSTEM` and `RouterDecision` slots instead.
+**Primary intent / `RouterDecision.path` comes from Spring AI structured output.** Do not add regex, keyword, or fuzzy classifiers that *choose* the path. Grow `RouterPrompts.ROUTER_SYSTEM` and `RouterDecision` slots instead.
 
 For `policy_directory`, money size is an LLM slot only (`directoryAmount`, `directoryAmountStrict`) — no regex amount NLU. Regex remains OK for **stable tokens** (sequence ids, explicit `UP_TO_*_CLUB`).
+
+#### Documented exception — post-route clamps
+
+After Spring AI returns a decision, `routing.RouteClamps` may **rewrite `path` before dispatch**. This is intentional Python parity, not a silent handler override:
+
+| Clamp | When | Effect |
+|-------|------|--------|
+| Past who-approved audit | `who approv…` + payment/instruction id, not `who can approv` | → `neo4j_direct` |
+| Open narrative | brief narrative / denial-activity audit prose, no entity id | → `vector` (recorded as `full_rag`) |
+
+- **Do** grow clamps only as named, tested parity with Python (`prefer_neo4j_direct_when_matched`, `prefer_vector_for_open_narrative`) or an explicitly documented Java widening.
+- **Do not** add ad-hoc regex that invents new primary lanes outside `RouteClamps` / the router prompt.
+- Java’s open-narrative clamp is **slightly broader** than Python: it also rewrites `neo4j_direct` / `eligibility` so those lanes cannot steal the vector golden. Keep that difference documented when changing either side.
 
 Cursor rule: [`.cursor/rules/ssi-chat-j-intent-routing.mdc`](../.cursor/rules/ssi-chat-j-intent-routing.mdc) (mirrors Python [`intent-semantic-routing.mdc`](../.cursor/rules/intent-semantic-routing.mdc)).
 

@@ -15,12 +15,25 @@ Same bar as Python `ssi-chat` (`intent-semantic-routing.mdc`): people phrase the
 - Route via Spring AI structured output (`RouterDecision.path` and path-specific slots such as `eligibilityTarget` / `eligibilityAction`).
 - Grow `prompts/RouterPrompts.ROUTER_SYSTEM` and the `RouterDecision` schema when adding a lane — not `if (message.contains(...))` classifiers.
 - Keep **deterministic execution** after the route (authz/payment HTTP, club math from OPA catalog, Thymeleaf formatters).
-- **Path is law:** `ChatService` dispatches on `path` only; do not silently override another path with regex “force” lanes.
+- **Path is law:** `ChatPathDispatcher` dispatches on `path` only; handlers must not silently override another path.
 - Use regex only as **slot parsers** after path is known (payment/instruction ids, explicit
   `UP_TO_*_CLUB` tokens) — never as primary NLU.
 - For **policy_directory** money size, use LLM slots `directoryAmount` /
   `directoryAmountStrict` on `RouterDecision` only (including worded amounts like "a billion").
   Do not add regex amount parsers.
+
+## Documented exception — post-route clamps
+
+After Spring AI returns a decision, **`routing.RouteClamps` may rewrite `path` before handlers** (Python parity). These are the only approved regex path overrides:
+
+| Clamp | Match shape | Rewrites path to |
+|-------|-------------|------------------|
+| Past who-approved audit | `who approv` + sequence id; not `who can approv` | `neo4j_direct` |
+| Open narrative | brief narrative / recent denial-activity audit prose; no entity id | `vector` |
+
+- Mirrors Python `prefer_neo4j_direct_when_matched` / `prefer_vector_for_open_narrative`.
+- Java open-narrative clamp is **slightly broader** than Python (also clamps `neo4j_direct` / `eligibility`) so those lanes cannot steal the vector security-summary golden — keep that documented if you change either side.
+- New clamps require an explicit name, tests in `RouteClampsTest`, and a note here / in `ssi-chat-j/AGENTS.md`. Do not add undeclared “force lane” regex elsewhere.
 
 ## Don't
 
@@ -28,5 +41,6 @@ Same bar as Python `ssi-chat` (`intent-semantic-routing.mdc`): people phrase the
 - Infer `eligibility` vs `policy_directory` vs `me` from regex before or instead of Spring AI.
 - Treat slot parsers (`PaymentIdParser`, `InstructionIdParser`, explicit club-name tokens, …) as
   intent classifiers.
+- Add path-rewriting regex outside `RouteClamps` (or Python’s documented clamp helpers).
 
 Canonical write-up: `docs/intent-determination.md`. Module notes: `ssi-chat-j/AGENTS.md`.

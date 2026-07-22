@@ -25,7 +25,14 @@ People can express the same intent with many wordings. Regex and keyword heurist
 | Regex / extractors for **slots** once intent is known (ids, amounts, dates, person name) | Fuzzy keyword scoring as the classifier |
 | Heuristic router **only** when the LLM call fails (resilience) | New regex-first skill or me-intent detectors |
 
-`RouterDecision.path` is the primary dispatch key (`skill`, `me`, `policy_summary`, `policy_directory`, `person_permissions`, `eligibility`, `neo4j_direct`, `graph`, `vector`, `hybrid`). **Path is law:** handlers do not silently override another path's execution (issue #8). After Gemini routes, a documented clamp may upgrade `graph`/`hybrid` → `neo4j_direct` when the Neo4j YAML matcher hits (never upgrades pure `vector`). See `.cursor/rules/intent-semantic-routing.mdc`.
+`RouterDecision.path` is the primary dispatch key (`skill`, `me`, `policy_summary`, `policy_directory`, `person_permissions`, `eligibility`, `neo4j_direct`, `graph`, `vector`, `hybrid`). **Path is law:** handlers do not silently override another path's execution (issue #8). After the LLM routes, **documented post-route clamps** may rewrite `path` before handlers — this is the approved exception to “path is LLM-only,” not ad-hoc handler force-lanes:
+
+| Stack | Clamp helpers | Typical rewrites |
+|-------|---------------|------------------|
+| Python `ssi-chat` | `prefer_neo4j_direct_when_matched`, `prefer_vector_for_open_narrative` | YAML-matched shapes → `neo4j_direct`; open narrative → `vector` (never upgrades pure `vector` away) |
+| Java `ssi-chat-j` | `routing.RouteClamps` | Past who-approved + id → `neo4j_direct`; open narrative → `vector` (also clamps `neo4j_direct` / `eligibility`, slightly broader than Python) |
+
+See `.cursor/rules/intent-semantic-routing.mdc`, `.cursor/rules/ssi-chat-j-intent-routing.mdc`, and `ssi-chat-j/AGENTS.md`.
 
 ## End-to-end flow
 
