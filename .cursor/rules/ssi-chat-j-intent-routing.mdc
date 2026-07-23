@@ -16,11 +16,9 @@ Same bar as Python `ssi-chat` (`intent-semantic-routing.mdc`): people phrase the
 - Grow `prompts/RouterPrompts.ROUTER_SYSTEM` and the `RouterDecision` schema when adding a lane — not `if (message.contains(...))` classifiers.
 - Keep **deterministic execution** after the route (authz/payment HTTP, club math from OPA catalog, Thymeleaf formatters).
 - **Path is law:** `ChatPathDispatcher` dispatches on `path` only; handlers must not silently override another path.
-- Use regex only as **slot parsers** after path is known (payment/instruction ids, explicit
-  `UP_TO_*_CLUB` tokens) — never as primary NLU.
-- For **policy_directory** money size, use LLM slots `directoryAmount` /
-  `directoryAmountStrict` on `RouterDecision` only (including worded amounts like "a billion").
-  Do not add regex amount parsers.
+- Map **open-vocabulary** filters with LLM slots — e.g. `entityStatus` / `instructionType` / `extractionFacet` for `document_extraction`, and `directoryAmount` / `directoryAmountStrict` for `policy_directory`. Do **not** add synonym/lemma/typo tables (`paused`→`SUSPENDED`, …).
+- Use regex only for **stable tokens** after path is known (payment/instruction ids, explicit
+  `UP_TO_*_CLUB`, literal enum strings already in the question) — never as primary NLU.
 
 ## Documented exception — post-route clamps
 
@@ -28,7 +26,8 @@ After Spring AI returns a decision, **`routing.RouteClamps` may rewrite `path` b
 
 | Clamp | Match shape | Rewrites path to |
 |-------|-------------|------------------|
-| Past who-approved audit | `who approv` + sequence id; not `who can approv` | `neo4j_direct` |
+| Past who-approved audit | `who approv` + sequence id; not `who can approv`; not creator+approver | `neo4j_direct` |
+| Entity API preference | router filled `extractionFacet` / `entityStatus` / `instructionType`, or by-id status/creator shape, while path was `neo4j_direct` | `document_extraction` |
 | Open narrative | brief narrative / recent denial-activity audit prose; no entity id | `vector` |
 
 - Mirrors Python `prefer_neo4j_direct_when_matched` / `prefer_vector_for_open_narrative`.
@@ -39,6 +38,7 @@ After Spring AI returns a decision, **`routing.RouteClamps` may rewrite `path` b
 
 - Add `HeuristicRouter`, keyword/phrase lists, or fuzzy matchers that choose `path`.
 - Infer `eligibility` vs `policy_directory` vs `me` from regex before or instead of Spring AI.
+- Maintain lemma / synonym tables for domain enums — grow `RouterDecision` + `RouterPrompts` instead.
 - Treat slot parsers (`PaymentIdParser`, `InstructionIdParser`, explicit club-name tokens, …) as
   intent classifiers.
 - Add path-rewriting regex outside `RouteClamps` (or Python’s documented clamp helpers).

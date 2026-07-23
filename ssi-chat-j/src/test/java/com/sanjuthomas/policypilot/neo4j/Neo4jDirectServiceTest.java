@@ -18,6 +18,7 @@ import com.sanjuthomas.policypilot.formatting.AnswerTemplateConfig;
 import com.sanjuthomas.policypilot.formatting.MoneyFormat;
 import com.sanjuthomas.policypilot.formatting.PolicyBasisFormat;
 import com.sanjuthomas.policypilot.neo4j.Neo4jDirectService.Neo4jDirectResult;
+import com.sanjuthomas.policypilot.pipeline.RouterDecision;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,8 +65,13 @@ class Neo4jDirectServiceTest {
 
     Neo4jDirectService service =
         new Neo4jDirectService(cypherBuilderClient, neo4jQueryExecutor, formatter);
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("neo4j_direct");
+    decision.setGraphTimeWindow("today");
+    decision.setGraphEventKind("alert");
     Neo4jDirectResult result =
-        service.answer("How many ALERT events happened today?", "events", complianceSubject());
+        service.answer(
+            "How many ALERT events happened today?", "events", complianceSubject(), decision);
 
     assertEquals("There were 3 ALERT events today.", result.answer());
     assertEquals("planned_graph", result.intentId());
@@ -91,8 +97,10 @@ class Neo4jDirectServiceTest {
     PlannedQuery list = new PlannedQuery("security_event_alert_list", "l");
     PlannedQuery ranking = new PlannedQuery("ranking", "r");
     PlannedQuery paymentDetail = new PlannedQuery("payment_detail", "p");
+    PlannedQuery inventory = new PlannedQuery("instruction_inventory", "inv");
     assertEquals(
         paymentDetail, Neo4jDirectService.selectQuery(List.of(details, count, paymentDetail)));
+    assertEquals(inventory, Neo4jDirectService.selectQuery(List.of(details, count, inventory)));
     assertEquals(list, Neo4jDirectService.selectQuery(List.of(details, count, list)));
     assertEquals(ranking, Neo4jDirectService.selectQuery(List.of(details, ranking, count)));
     assertEquals(count, Neo4jDirectService.selectQuery(List.of(details, count)));

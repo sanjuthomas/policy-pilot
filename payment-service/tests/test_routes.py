@@ -174,6 +174,23 @@ def test_get_payment(api_client: TestClient, versioned_payment) -> None:
     assert response.status_code == 200
 
 
+def test_list_payment_versions(api_client: TestClient, versioned_payment) -> None:
+    api_client.mock_service.list_versions.return_value = [versioned_payment]
+    response = api_client.get(
+        f"/api/v1/payments/{versioned_payment.payment.payment_id}/versions",
+        headers=_headers(),
+    )
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    api_client.mock_service.list_versions.assert_awaited_once()
+
+
+def test_list_payment_versions_not_found(api_client: TestClient) -> None:
+    api_client.mock_service.list_versions.side_effect = LookupError("missing")
+    response = api_client.get("/api/v1/payments/missing/versions", headers=_headers())
+    assert response.status_code == 404
+
+
 def test_get_payment_not_found(api_client: TestClient) -> None:
     api_client.mock_service.get.side_effect = LookupError("missing")
     response = api_client.get("/api/v1/payments/missing", headers=_headers())

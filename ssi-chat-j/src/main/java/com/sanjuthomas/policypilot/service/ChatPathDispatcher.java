@@ -67,7 +67,7 @@ public class ChatPathDispatcher {
               "policy_directory",
               "policy_directory_api");
       case "document_extraction" -> documentExtraction(request, subject, decision);
-      case "neo4j_direct" -> neo4jDirect(request, subject);
+      case "neo4j_direct" -> neo4jDirect(request, subject, decision);
       case "eligibility" ->
           eligibilityLaneService.answer(request.message(), subject, decision);
       case "vector", "full_rag" ->
@@ -93,9 +93,9 @@ public class ChatPathDispatcher {
         result.answer(), "document_extraction", "formatter", result.intentId());
   }
 
-  private LaneAnswer neo4jDirect(ChatRequest request, Subject subject) {
+  private LaneAnswer neo4jDirect(ChatRequest request, Subject subject, RouterDecision decision) {
     Neo4jDirectResult result =
-        neo4jDirectService.answer(request.message(), request.mode(), subject);
+        neo4jDirectService.answer(request.message(), request.mode(), subject, decision);
     return LaneAnswer.neo4j(
         result.answer(),
         result.intentId(),

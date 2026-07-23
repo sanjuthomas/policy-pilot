@@ -15,11 +15,13 @@ People phrase the same intent many ways. Growing regex or heuristic keyword list
 - Route open-ended NLU (skills, me-intents, eligibility vs audit, `neo4j_direct` vs graph vs vector, policy tools) via LLM structured output (`path`).
 - Keep **deterministic execution** after the route decision (scripted skill steps, OPA, Neo4j, formatters).
 - **Path is law:** do not let Neo4j-direct or policies eligibility run by silently overriding another path. Documented post-route clamps (`prefer_vector_for_open_narrative`, `prefer_neo4j_direct_when_matched`; Java `RouteClamps`) may rewrite `path` **before** handlers — see `docs/intent-determination.md` and `ssi-chat-j/AGENTS.md`.
-- Use regex / ID extractors only as **parsers** (instruction id, amount, dates, person name) once intent is known — or as **LLM-failure fallback**, not primary NLU. Do not add undeclared path-force regex outside those clamp helpers.
+- Map **open-vocabulary** filters (lifecycle status, instruction type, worded amounts, …) with **LLM structured slots** on `RouterDecision` — not synonym/lemma/typo tables in code.
+- Use regex / ID extractors only for **stable tokens** (instruction/payment id, explicit club names, literal enum strings already present) once intent is known — or as **LLM-failure fallback**, not primary NLU. Do not add undeclared path-force regex outside those clamp helpers.
 
 ## Don't
 
 - Add new primary intent detectors as regex / fuzzy keyword lists.
+- Maintain lemma / synonym tables (`paused`→`SUSPENDED`, `canceled`→`CANCELLED`, …) for domain enums — grow the router schema + prompt instead.
 - Treat heuristic fallback as the long-term classifier.
 
 Canonical write-up: `docs/intent-determination.md`.

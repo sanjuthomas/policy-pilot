@@ -188,6 +188,21 @@ async def get_payment(
         raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
+@router.get("/{payment_id}/versions", response_model=list[PaymentResponse])
+async def list_payment_versions(
+    payment_id: str,
+    subject: Subject = Depends(get_subject),
+    service: PaymentService = Depends(get_service),
+) -> list[PaymentResponse]:
+    try:
+        records = await service.list_versions(payment_id, subject)
+        return [_to_response(record) for record in records]
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
 @router.post("/{payment_id}/submit", response_model=PaymentResponse)
 async def submit_payment(
     payment_id: str,

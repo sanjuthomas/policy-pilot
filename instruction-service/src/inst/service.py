@@ -574,13 +574,19 @@ class InstructionService:
         *,
         owning_lob: str | None = None,
         status: str | None = None,
+        instruction_type: str | None = None,
+        created_by_user_id: str | None = None,
         limit: int = 100,
         include_cancelled: bool = False,
         bearer_token: str | None = None,
         session_id: str | None = None,
     ) -> list[InstructionResponse]:
         records = await self.repository.list_current(
-            owning_lob=owning_lob, status=status, limit=limit
+            owning_lob=owning_lob,
+            status=status,
+            instruction_type=instruction_type,
+            created_by_user_id=created_by_user_id,
+            limit=limit,
         )
         visible = []
         for record in records:

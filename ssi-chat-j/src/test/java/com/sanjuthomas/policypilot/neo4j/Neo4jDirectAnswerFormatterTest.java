@@ -35,22 +35,32 @@ class Neo4jDirectAnswerFormatterTest {
         formatter.format(
             "How many ALERT events happened today?",
             Set.of("count", "details"),
-            List.of(Map.of("total", 5)));
+            List.of(Map.of("total", 5)),
+            null,
+            new GraphAnswerHints("today", null, "alert"));
     assertEquals("There were 5 ALERT events today.", answer);
   }
 
   @Test
   void formatsSingularAndZero() {
+    GraphAnswerHints hints = new GraphAnswerHints("today", null, "alert");
     assertTrue(
         formatter
             .format(
                 "How many ALERT events happened today?",
                 Set.of("count"),
-                List.of(Map.of("total", 1)))
+                List.of(Map.of("total", 1)),
+                null,
+                hints)
             .contains("1 ALERT event"));
     assertTrue(
         formatter
-            .format("How many ALERT events happened today?", Set.of("count"), List.of())
+            .format(
+                "How many ALERT events happened today?",
+                Set.of("count"),
+                List.of(),
+                null,
+                hints)
             .contains("no ALERT events"));
   }
 
@@ -60,7 +70,9 @@ class Neo4jDirectAnswerFormatterTest {
         formatter.format(
             "How many instruction policy denials happened this week?",
             Set.of("count"),
-            List.of(Map.of("total", 4)));
+            List.of(Map.of("total", 4)),
+            null,
+            new GraphAnswerHints("week", "instruction", "denial"));
     assertEquals("There were 4 instruction policy denial events this week.", answer);
   }
 
@@ -70,7 +82,9 @@ class Neo4jDirectAnswerFormatterTest {
         formatter.format(
             "How many payment policy denial alerts happened today?",
             Set.of("count"),
-            List.of(Map.of("total", 3)));
+            List.of(Map.of("total", 3)),
+            null,
+            new GraphAnswerHints("today", "payment", "denial"));
     assertEquals("There were 3 payment policy denial events today.", answer);
   }
 
@@ -93,7 +107,9 @@ class Neo4jDirectAnswerFormatterTest {
                     "actor_display",
                     "Ada",
                     "action",
-                    "VIEW")));
+                    "VIEW")),
+            null,
+            new GraphAnswerHints("week", "instruction", "denial"));
     assertTrue(answer.contains("ALERT security events (1)"));
     assertTrue(answer.contains("Entity ID"));
     assertTrue(answer.contains("20260720-FICC-I-1"));
@@ -116,7 +132,9 @@ class Neo4jDirectAnswerFormatterTest {
                     "payment_alerts",
                     2,
                     "instruction_alerts",
-                    0)));
+                    0)),
+            null,
+            new GraphAnswerHints("week", null, "denial"));
     assertTrue(answer.contains("pay-101"));
     assertTrue(answer.contains("most policy denial alerts"));
   }
@@ -228,6 +246,45 @@ class Neo4jDirectAnswerFormatterTest {
     assertTrue(answer.contains("Instruction: 20260720-FICC-I-1"));
     assertTrue(answer.contains("Creator: Okonkwo, David (mo-050)"));
     assertTrue(answer.contains("Approver: Nguyen, Caroline (ficc-500)"));
+  }
+
+  @Test
+  void formatsInstructionInventoryTable() {
+    String answer =
+        formatter.format(
+            "Can you list all approved instructions?",
+            Set.of("instruction_inventory"),
+            List.of(
+                Map.of(
+                    "instruction_id",
+                    "20260720-FICC-I-1",
+                    "status",
+                    "APPROVED",
+                    "owning_lob",
+                    "FICC",
+                    "currency",
+                    "USD",
+                    "creator_display",
+                    "Okonkwo, David (mo-050)",
+                    "approver_display",
+                    "Nguyen, Caroline (ficc-500)")),
+            "instruction.list_by_status");
+    assertTrue(answer.contains("Found 1 instruction(s)."));
+    assertTrue(answer.contains("Instruction ID"));
+    assertTrue(answer.contains("20260720-FICC-I-1"));
+    assertTrue(answer.contains("APPROVED"));
+    assertTrue(answer.contains("Okonkwo, David (mo-050)"));
+  }
+
+  @Test
+  void formatsInstructionInventoryEmpty() {
+    String answer =
+        formatter.format(
+            "Can you list all approved instructions?",
+            Set.of("instruction_inventory"),
+            List.of(),
+            "instruction.list_by_status");
+    assertEquals("No matching instructions were found in the graph.", answer);
   }
 
   @Test

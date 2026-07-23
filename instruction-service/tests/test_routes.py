@@ -139,9 +139,21 @@ def test_create_permission_denied(api_client: TestClient, mock_service: MagicMoc
 
 def test_list_instructions(api_client: TestClient, mock_service: MagicMock) -> None:
     mock_service.list.return_value = [_sample_response()]
-    response = api_client.get("/api/v1/instructions")
+    response = api_client.get(
+        "/api/v1/instructions",
+        params={
+            "status": "APPROVED",
+            "instruction_type": "STANDING",
+            "created_by_user_id": "mo-050",
+        },
+    )
     assert response.status_code == 200
     assert len(response.json()) == 1
+    mock_service.list.assert_awaited_once()
+    kwargs = mock_service.list.await_args.kwargs
+    assert kwargs["status"] == "APPROVED"
+    assert kwargs["instruction_type"] == "STANDING"
+    assert kwargs["created_by_user_id"] == "mo-050"
 
 
 def test_get_instruction_not_found(api_client: TestClient, mock_service: MagicMock) -> None:

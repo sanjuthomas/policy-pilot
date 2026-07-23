@@ -214,7 +214,7 @@ class MeIntentServiceTest {
     decision.setPath("me");
     decision.setMeKind("can_act_on_entity");
     decision.setMeAction("APPROVE");
-    // LLM may omit meEntityType; message text must still select instruction.
+    decision.setMeEntityType("instruction");
     MeIntentResult result = service.answer(decision, "Can I approve an instruction?", pay205());
     assertEquals("me.can_approve_instruction.no", result.intentId());
     assertTrue(result.answer().contains("INSTRUCTION_APPROVER"));
@@ -241,6 +241,7 @@ class MeIntentServiceTest {
     decision.setPath("me");
     decision.setMeKind("can_act_on_entity");
     decision.setMeAction("APPROVE");
+    decision.setMeEntityType("instruction");
     MeIntentResult result = service.answer(decision, "Can I approve an instruction?", ficc300);
     assertEquals("me.can_approve_instruction.yes", result.intentId());
     assertTrue(result.answer().contains("FICC"));
@@ -253,6 +254,7 @@ class MeIntentServiceTest {
     decision.setPath("me");
     decision.setMeKind("can_act_on_entity");
     decision.setMeAction("CREATE");
+    decision.setMeEntityType("instruction");
     MeIntentResult result = service.answer(decision, "Can I create an instruction?", pay205());
     assertEquals("me.can_create_instruction.no", result.intentId());
     assertTrue(result.answer().contains("INSTRUCTION_CREATOR"));

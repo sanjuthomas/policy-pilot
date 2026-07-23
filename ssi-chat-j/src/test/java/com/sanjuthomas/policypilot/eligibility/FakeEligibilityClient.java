@@ -152,4 +152,58 @@ public class FakeEligibilityClient extends EligibilityClient {
     }
     return java.util.List.of();
   }
+
+  @Override
+  public java.util.List<Map<String, Object>> listInstructions(
+      String status,
+      String instructionType,
+      String createdByUserId,
+      String owningLob,
+      int limit,
+      String userBearerToken,
+      String userSessionId) {
+    if (error != null) {
+      throw error;
+    }
+    Object list = response.get("instructions");
+    if (list instanceof java.util.List<?> rows) {
+      java.util.List<Map<String, Object>> out = new java.util.ArrayList<>();
+      for (Object row : rows) {
+        if (row instanceof Map<?, ?> map) {
+          @SuppressWarnings("unchecked")
+          Map<String, Object> cast = (Map<String, Object>) map;
+          out.add(cast);
+        }
+      }
+      return out;
+    }
+    return java.util.List.of();
+  }
+
+  @Override
+  public java.util.List<Map<String, Object>> listInstructionVersions(
+      String instructionId, String userBearerToken, String userSessionId) {
+    if (error != null) {
+      throw error;
+    }
+    Object list = response.get("versions");
+    if (list instanceof java.util.List<?> rows) {
+      java.util.List<Map<String, Object>> out = new java.util.ArrayList<>();
+      for (Object row : rows) {
+        if (row instanceof Map<?, ?> map) {
+          @SuppressWarnings("unchecked")
+          Map<String, Object> cast = (Map<String, Object>) map;
+          out.add(cast);
+        }
+      }
+      return out;
+    }
+    return java.util.List.of();
+  }
+
+  @Override
+  public java.util.List<Map<String, Object>> listPaymentVersions(
+      String paymentId, String userBearerToken, String userSessionId) {
+    return listInstructionVersions(paymentId, userBearerToken, userSessionId);
+  }
 }
