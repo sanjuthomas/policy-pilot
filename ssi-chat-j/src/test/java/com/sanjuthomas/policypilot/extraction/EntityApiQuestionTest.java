@@ -2,6 +2,7 @@ package com.sanjuthomas.policypilot.extraction;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sanjuthomas.policypilot.extraction.EntityApiQuestion.Facet;
@@ -20,23 +21,27 @@ class EntityApiQuestionTest {
   }
 
   @Test
-  void enrichesByIdStatusAndCreatorShapes() {
-    RouterDecision decision = new RouterDecision();
-    decision.setPath("neo4j_direct");
+  void doesNotPhraseInferByIdFacetsWithoutLlmSlots() {
+    RouterDecision status = new RouterDecision();
     EntityApiQuestion.enrichDecision(
-        decision, "What is the status of payment 20260720-FICC-P-1?");
-    assertEquals("status", decision.getExtractionFacet());
+        status, "What is the status of payment 20260720-FICC-P-1?");
+    assertNull(status.getExtractionFacet());
 
     RouterDecision creator = new RouterDecision();
     EntityApiQuestion.enrichDecision(creator, "Who created payment 20260720-FICC-P-1?");
-    assertEquals("creator", creator.getExtractionFacet());
-
-    RouterDecision combo = new RouterDecision();
-    EntityApiQuestion.enrichDecision(
-        combo, "Who created payment 20260720-FICC-P-1 and who approved it?");
-    assertEquals("creator_and_approver", combo.getExtractionFacet());
+    assertNull(creator.getExtractionFacet());
 
     RouterDecision approver = new RouterDecision();
+    EntityApiQuestion.enrichDecision(
+        approver, "Who approved payment 20260720-FICC-P-1 and why?");
+    assertNull(approver.getExtractionFacet());
+    assertNull(approver.getEntityStatus());
+  }
+
+  @Test
+  void preservesLlmFacetSlots() {
+    RouterDecision approver = new RouterDecision();
+    approver.setExtractionFacet("approver");
     EntityApiQuestion.enrichDecision(
         approver, "Who approved payment 20260720-FICC-P-1 and why?");
     assertEquals("approver", approver.getExtractionFacet());
@@ -62,6 +67,30 @@ class EntityApiQuestionTest {
     EntityApiQuestion.enrichDecision(single, "Can you list the single-use instructions?");
     assertEquals("SINGLE_USE", single.getInstructionType());
     assertEquals("list_single_use", single.getExtractionFacet());
+  }
+
+  @Test
+  void doesNotTreatApprovedByVerbAsStatusFilter() {
+    RouterDecision decision = new RouterDecision();
+    EntityApiQuestion.enrichDecision(
+        decision,
+        "Are there any instructions approved by someone who directly reports to the creator?");
+    assertNull(decision.getEntityStatus());
+    assertNull(decision.getExtractionFacet());
+  }
+
+  @Test
+  void doesNotTreatMutualApprovedVerbAsStatusFilter() {
+    RouterDecision decision = new RouterDecision();
+    EntityApiQuestion.enrichDecision(
+        decision,
+        "Are there any mutual approval cases (A approved B's instruction and B approved A's)?");
+    assertNull(decision.getEntityStatus());
+    assertNull(decision.getExtractionFacet());
+    assertFalse(
+        EntityApiQuestion.isEntityApiQuestion(
+            decision,
+            "Are there any mutual approval cases (A approved B's instruction and B approved A's)?"));
   }
 
   @Test

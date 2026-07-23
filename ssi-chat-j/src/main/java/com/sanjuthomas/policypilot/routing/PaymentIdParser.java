@@ -7,8 +7,8 @@ import java.util.regex.Pattern;
 /**
  * Slot parsing only — not intent classification.
  *
- * <p>Prefers Policy Pilot sequence payment ids ({@code YYYYMMDD-LOB-P-n}), matching Python
- * {@code extract_payment_ids}. Falls back to {@code payment &lt;token&gt;} for legacy tokens.
+ * <p>Extracts Policy Pilot sequence payment ids ({@code YYYYMMDD-LOB-P-n}), matching Python
+ * {@code extract_payment_ids}.
  */
 public final class PaymentIdParser {
 
@@ -20,9 +20,6 @@ public final class PaymentIdParser {
       Pattern.compile(
           "^(?<date>\\d{7,8})-(?<lob>[A-Za-z0-9_]+)-P-(?<seq>\\d+)$", Pattern.CASE_INSENSITIVE);
 
-  private static final Pattern LEGACY_PAYMENT_SLOT =
-      Pattern.compile("(?i)\\bpayment\\s+([A-Za-z0-9._:-]+)");
-
   private PaymentIdParser() {}
 
   public static Optional<String> extract(String question) {
@@ -30,10 +27,6 @@ public final class PaymentIdParser {
     Matcher sequence = SEQUENCE_PAYMENT_IN_TEXT.matcher(text);
     if (sequence.find()) {
       return normalizeSequencePayment(sequence.group());
-    }
-    Matcher legacy = LEGACY_PAYMENT_SLOT.matcher(text);
-    if (legacy.find()) {
-      return Optional.of(legacy.group(1).replaceAll("[?.!,;:]+$", ""));
     }
     return Optional.empty();
   }

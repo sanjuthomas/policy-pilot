@@ -5,6 +5,7 @@ import com.sanjuthomas.policypilot.formatting.PolicyBasisFormat;
 import com.sanjuthomas.policypilot.neo4j.SecurityEventAlertListView.AlertEventRow;
 import com.sanjuthomas.policypilot.neo4j.SecurityEventAlertRankingView.RankingRow;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -95,6 +96,29 @@ public class Neo4jDirectAnswerFormatter {
           INSTRUCTION_INVENTORY_TEMPLATE, toInstructionInventoryView(rows));
     }
 
+    if (labelSet.contains("mutual_approval")
+        || "instruction.mutual_approval".equals(intent)) {
+      return formatMutualApproval(rows);
+    }
+    if (labelSet.contains("cross_entity_reciprocal_approval")
+        || "instruction.cross_entity_reciprocal_approval".equals(intent)) {
+      return formatCrossEntityReciprocal(rows);
+    }
+    if (labelSet.contains("self_approval")
+        || labelSet.contains("hierarchy_violations")
+        || "instruction.self_approval".equals(intent)
+        || "instruction.subordinate_approver".equals(intent)) {
+      return formatComplianceTable(rows);
+    }
+    if (labelSet.contains("duplicate_routes")
+        || "instruction.duplicate_routes".equals(intent)) {
+      return formatConflictTable(rows);
+    }
+    if (labelSet.contains("instruction_timeline_targets")
+        || "events.instruction_timeline_by_id".equals(intent)) {
+      return formatSecurityEventTimeline(rows);
+    }
+
     // Template choice from planner labels — not free-text phrase detectors.
     if (labelSet.contains("ranking")) {
       return answerRenderer.render(RANKING_TEMPLATE, toRankingView(display, rows));
@@ -102,11 +126,200 @@ public class Neo4jDirectAnswerFormatter {
     if (labelSet.contains("security_event_alert_list")) {
       return answerRenderer.render(LIST_TEMPLATE, toListView(display, rows));
     }
-    if (labelSet.contains("count")) {
+    if (labelSet.contains("count") || labelSet.contains("alert_count_today")) {
       return answerRenderer.render(COUNT_TEMPLATE, toCountView(display, rows));
     }
     long total = extractTotal(rows);
     return "Graph query returned " + total + " row(s).";
+  }
+
+  static String formatMutualApproval(List<Map<String, Object>> rows) {
+    if (rows == null || rows.isEmpty()) {
+      return "No mutual approval cases were found in the graph.";
+    }
+    List<List<String>> tableRows = new ArrayList<>();
+    for (Map<String, Object> row : rows) {
+      tableRows.add(
+          List.of(
+              cell(row.get("user_a_display")),
+              cell(row.get("user_b_display")),
+              cell(row.get("approved_by_a")),
+              cell(row.get("approved_by_b"))));
+    }
+    return "Found "
+        + tableRows.size()
+        + " mutual approval case(s).\n\n"
+        + markdownTable(
+            List.of("User A", "User B", "B created, A approved", "A created, B approved"),
+            tableRows);
+  }
+
+  static String formatCrossEntityReciprocal(List<Map<String, Object>> rows) {
+    if (rows == null || rows.isEmpty()) {
+      return "No cross-entity reciprocal approval cases were found in the graph "
+          + "(instruction approval in one direction and payment approval on the same "
+          + "instruction route in the other).";
+    }
+    List<List<String>> tableRows = new ArrayList<>();
+    for (Map<String, Object> row : rows) {
+      tableRows.add(
+          List.of(
+              cell(row.get("instruction_creator_display")),
+              cell(row.get("instruction_approver_display")),
+              cell(row.get("payment_creator_display")),
+              cell(row.get("payment_approver_display")),
+              cell(row.get("instruction_id")),
+              cell(row.get("payment_id")),
+              cellOrDash(row.get("owning_lob"))));
+    }
+    return "Found "
+        + tableRows.size()
+        + " cross-entity reciprocal approval case(s).\n\n"
+        + markdownTable(
+            List.of(
+                "Instruction creator",
+                "Instruction approver",
+                "Payment creator",
+                "Payment approver",
+                "Instruction ID",
+                "Payment ID",
+                "LOB"),
+            tableRows);
+  }
+
+  static String formatComplianceTable(List<Map<String, Object>> rows) {
+    if (rows == null || rows.isEmpty()) {
+      return "No matching compliance cases were found in the graph.";
+    }
+    Map<String, Object> first = rows.get(0);
+    boolean hasApprover =
+        first.get("approver_display") != null
+            && !String.valueOf(first.get("approver_display")).isBlank();
+    List<List<String>> tableRows = new ArrayList<>();
+    List<String> headers;
+    if (hasApprover) {
+      headers = List.of("Instruction ID", "LOB", "Status", "Creator", "Approver");
+      for (Map<String, Object> row : rows) {
+        Object instructionId =
+            row.get("instruction_id") != null
+                ? row.get("instruction_id")
+                : row.get("v.instruction_id");
+        tableRows.add(
+            List.of(
+                cell(instructionId),
+                cellOrDash(row.get("owning_lob") != null ? row.get("owning_lob") : row.get("v.owning_lob")),
+                cellOrDash(row.get("status") != null ? row.get("status") : row.get("v.status")),
+                cellOrDash(row.get("creator_display")),
+                cellOrDash(row.get("approver_display"))));
+      }
+    } else {
+      headers = List.of("Instruction ID", "LOB", "Status", "Creator");
+      for (Map<String, Object> row : rows) {
+        tableRows.add(
+            List.of(
+                cell(row.get("instruction_id")),
+                cellOrDash(row.get("owning_lob")),
+                cellOrDash(row.get("status")),
+                cellOrDash(row.get("creator_display"))));
+      }
+    }
+    return "Found "
+        + tableRows.size()
+        + " matching instruction(s).\n\n"
+        + markdownTable(headers, tableRows);
+  }
+
+  static String formatConflictTable(List<Map<String, Object>> rows) {
+    if (rows == null || rows.isEmpty()) {
+      return "No duplicate settlement routes (CONFLICTS_WITH) were found in the graph.";
+    }
+    List<List<String>> tableRows = new ArrayList<>();
+    for (Map<String, Object> row : rows) {
+      tableRows.add(
+          List.of(
+              cell(row.get("instruction_id_a")),
+              cell(row.get("instruction_id_b")),
+              cellOrDash(row.get("owning_lob")),
+              cellOrDash(row.get("currency")),
+              cellOrDash(row.get("creditor_account"))));
+    }
+    return "Found "
+        + tableRows.size()
+        + " conflicting instruction pair(s).\n\n"
+        + markdownTable(
+            List.of("Instruction A", "Instruction B", "LOB", "Currency", "Creditor Account"),
+            tableRows);
+  }
+
+  static String formatSecurityEventTimeline(List<Map<String, Object>> rows) {
+    if (rows == null || rows.isEmpty()) {
+      return "No security events were found for that instruction in the graph.";
+    }
+    List<Map<String, Object>> deduped = new ArrayList<>();
+    Set<String> seen = new LinkedHashSet<>();
+    List<Map<String, Object>> sorted = new ArrayList<>(rows);
+    sorted.sort(
+        (a, b) ->
+            String.valueOf(a.get("timestamp") == null ? "" : a.get("timestamp"))
+                .compareTo(String.valueOf(b.get("timestamp") == null ? "" : b.get("timestamp"))));
+    for (Map<String, Object> row : sorted) {
+      String eventId = String.valueOf(row.get("event_id") == null ? "" : row.get("event_id"));
+      if (!eventId.isBlank() && !seen.add(eventId)) {
+        continue;
+      }
+      deduped.add(row);
+    }
+    List<List<String>> tableRows = new ArrayList<>();
+    for (Map<String, Object> row : deduped) {
+      tableRows.add(
+          List.of(
+              cellOrDash(row.get("timestamp")),
+              cellOrDash(row.get("action")),
+              cellOrDash(row.get("severity")),
+              cellOrDash(row.get("outcome")),
+              cellOrDash(row.get("actor_display")),
+              cellOrDash(row.get("event_id"))));
+    }
+    return "Security event timeline ("
+        + tableRows.size()
+        + " event(s)):\n\n"
+        + markdownTable(
+            List.of("Timestamp", "Action", "Severity", "Outcome", "Actor", "Event ID"), tableRows);
+  }
+
+  private static String markdownTable(List<String> headers, List<List<String>> rows) {
+    StringBuilder sb = new StringBuilder();
+    sb.append('|');
+    for (String header : headers) {
+      sb.append(' ').append(header).append(" |");
+    }
+    sb.append('\n').append('|');
+    for (int i = 0; i < headers.size(); i++) {
+      sb.append(" --- |");
+    }
+    sb.append('\n');
+    for (List<String> row : rows) {
+      sb.append('|');
+      for (int i = 0; i < headers.size(); i++) {
+        String cell = i < row.size() ? row.get(i) : "";
+        sb.append(' ').append(cell == null ? "" : cell.replace("|", "\\|")).append(" |");
+      }
+      sb.append('\n');
+    }
+    return sb.toString().stripTrailing();
+  }
+
+  private static String cell(Object value) {
+    if (value == null) {
+      return "";
+    }
+    String text = String.valueOf(value).strip();
+    return text;
+  }
+
+  private static String cellOrDash(Object value) {
+    String text = cell(value);
+    return text.isBlank() ? "—" : text;
   }
 
   static EntityStatusByIdView toPaymentStatusView(List<Map<String, Object>> rows) {

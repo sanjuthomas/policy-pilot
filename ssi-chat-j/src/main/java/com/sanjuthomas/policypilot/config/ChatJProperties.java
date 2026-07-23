@@ -9,7 +9,6 @@ public record ChatJProperties(
     String paymentServiceUrl,
     String instructionServiceUrl,
     String authorizationServiceUrl,
-    String cypherBuilderServiceUrl,
     String neo4jUri,
     String neo4jUser,
     String neo4jPassword,

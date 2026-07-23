@@ -5,44 +5,21 @@ import com.sanjuthomas.policypilot.person.PersonQueryParser;
 import com.sanjuthomas.policypilot.pipeline.RouterDecision;
 import java.util.Locale;
 import java.util.Set;
-import java.util.regex.Pattern;
 import org.springframework.util.StringUtils;
 
 /**
  * Deterministic <em>post-router</em> path clamps — the documented exception to “path comes from
  * Spring AI only.”
  *
- * <p>Primary intent is still Spring AI structured {@code RouterDecision}. These helpers may rewrite
+ * <p>Primary intent is Spring AI structured {@code RouterDecision}. These helpers may rewrite
  * {@code path} / fill blank entity-API slots <strong>before</strong> {@code ChatPathDispatcher}.
  *
- * <ul>
- *   <li>Entity status / creator / approver / inventory / versions (domain API) → {@code
- *       document_extraction}; blank facets filled from LLM sibling slots, literal enums, and
- *       narrow by-id shapes (including past {@code who approv} + id)
- *   <li>Third-party “permissions of/for …” → {@code person_permissions} (not {@code me})
- *   <li>Open narrative / denial-activity audit prose (no entity id) → {@code vector}
- * </ul>
- *
- * <p>Do not add undeclared path-force regex outside this class.
+ * <p><strong>Not NLU:</strong> do not add phrase detectors here (who-approved vs who-can, open
+ * narrative, SoD wordings). Those belong in {@code RouterPrompts} + {@code RouterDecision} slots.
+ * Clamps may only use LLM slots already set, stable tokens (sequence ids, literal enums), or
+ * named-person extraction for {@code person_permissions}.
  */
 public final class RouteClamps {
-
-  private static final Pattern WHO_APPROVED =
-      Pattern.compile("\\bwho\\s+approv", Pattern.CASE_INSENSITIVE);
-  private static final Pattern WHO_CAN_APPROVE =
-      Pattern.compile("\\bwho\\s+can\\s+approv", Pattern.CASE_INSENSITIVE);
-
-  /** Open prose / audit narratives — must stay on vector (no LLM Cypher planning). */
-  private static final Pattern OPEN_NARRATIVE =
-      Pattern.compile(
-          "(?i)\\b(brief\\s+)?narrative\\b|"
-              + "\\bwrite\\s+(me\\s+)?(a\\s+)?(brief\\s+)?(narrative|summary|overview|story)\\b|"
-              + "\\brecent\\s+policy\\s+denial\\s+activity\\b|"
-              + "\\bdenial\\s+activity\\b.+\\baudit\\s+log\\b|"
-              + "\\baudit\\s+log\\b.+\\b(denial|activity)\\b");
-
-  private static final Set<String> OPEN_NARRATIVE_CLAMP_PATHS =
-      Set.of("graph", "hybrid", "eligibility", "neo4j_direct", "full_rag");
 
   private static final Set<String> ENTITY_API_STEAL_PATHS =
       Set.of("neo4j_direct", "graph", "hybrid", "eligibility", "vector", "full_rag");
@@ -54,8 +31,7 @@ public final class RouteClamps {
       return null;
     }
     decision = clampPersonPermissions(decision, question);
-    decision = clampEntityApi(decision, question);
-    return clampOpenNarrativeToVector(decision, question);
+    return clampEntityApi(decision, question);
   }
 
   /**
@@ -86,8 +62,8 @@ public final class RouteClamps {
   }
 
   /**
-   * Prefer instruction/payment domain APIs; enrich blank facets from slots / stable tokens /
-   * narrow by-id shapes.
+   * Prefer instruction/payment domain APIs when LLM slots or stable inventory tokens say so.
+   * Does not phrase-match open narratives or SoD questions onto a path.
    */
   private static RouterDecision clampEntityApi(RouterDecision decision, String question) {
     EntityApiQuestion.enrichDecision(decision, question);
@@ -116,49 +92,9 @@ public final class RouteClamps {
     }
   }
 
-  private static RouterDecision clampOpenNarrativeToVector(
-      RouterDecision decision, String question) {
-    if (!isOpenNarrativeQuestion(question)) {
-      return decision;
-    }
-    String path = decision.getPath() == null ? "" : decision.getPath().toLowerCase(Locale.ROOT);
-    if ("vector".equals(path)) {
-      return decision;
-    }
-    if (!OPEN_NARRATIVE_CLAMP_PATHS.contains(path)) {
-      return decision;
-    }
-    String prior = decision.getPath();
-    decision.setPath("vector");
-    appendReasoning(decision, "forced vector for open narrative (was " + prior + ")");
-    return decision;
-  }
-
   private static void appendReasoning(RouterDecision decision, String note) {
     String reasoning = decision.getReasoning() == null ? "" : decision.getReasoning().trim();
     decision.setReasoning(reasoning.isEmpty() ? note : reasoning + "; " + note);
-  }
-
-  /** True for past-tense who-approved audit (not eligibility who-can / creator+approver combo). */
-  static boolean isPastWhoApprovedAudit(String question) {
-    String text = question == null ? "" : question;
-    if (EntityApiQuestion.isCreatorAndApproverShape(text)) {
-      return false;
-    }
-    if (!WHO_APPROVED.matcher(text).find()) {
-      return false;
-    }
-    return !WHO_CAN_APPROVE.matcher(text).find();
-  }
-
-  static boolean isOpenNarrativeQuestion(String question) {
-    if (question == null || question.isBlank()) {
-      return false;
-    }
-    if (hasEntityId(question)) {
-      return false;
-    }
-    return OPEN_NARRATIVE.matcher(question.strip()).find();
   }
 
   static boolean hasEntityId(String question) {

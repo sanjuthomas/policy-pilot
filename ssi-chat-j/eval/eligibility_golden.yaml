@@ -971,7 +971,7 @@ cases:
 - id: golden_payment_creator
   mode: payments
   retrieval: deterministic
-  tags: [golden, who, creator, neo4j_direct, ssi-chat-j]
+  tags: [golden, who, creator, document_extraction, ssi-chat-j]
   question: Who created payment {approved_payment_id}?
   expect:
     requires_context: [approved_payment_id]
@@ -984,10 +984,26 @@ cases:
     min_answer_length: 5
     answer_contains_any: [created, creator, submitted]
 
+- id: golden_instruction_creator
+  mode: instructions
+  retrieval: deterministic
+  tags: [golden, who, creator, document_extraction, ssi-chat-j]
+  question: Who created instruction {approved_instruction_id}?
+  expect:
+    requires_context: [approved_instruction_id]
+    require_routing: true
+    routing_path: document_extraction
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: instruction.creator_by_id
+    require_entity_recall: true
+    min_answer_length: 5
+    answer_contains_any: [created, creator, Instruction]
+
 - id: golden_payment_creator_and_approver
   mode: payments
   retrieval: deterministic
-  tags: [golden, who, creator, approver, neo4j_direct, ssi-chat-j]
+  tags: [golden, who, creator, approver, document_extraction, ssi-chat-j]
   question: Who created payment {approved_payment_id} and who approved it?
   expect:
     requires_context: [approved_payment_id]
@@ -1006,7 +1022,7 @@ cases:
 - id: golden_instruction_creator_and_approver
   mode: instructions
   retrieval: deterministic
-  tags: [golden, who, creator, approver, neo4j_direct, ssi-chat-j]
+  tags: [golden, who, creator, approver, document_extraction, ssi-chat-j]
   question: Who created instruction {approved_instruction_id} and who approved it?
   expect:
     requires_context: [approved_instruction_id]
@@ -1131,6 +1147,22 @@ cases:
     min_answer_length: 20
     answer_contains_any: [approv, allowed, because, role]
 
+- id: golden_instruction_who_approved
+  mode: instructions
+  retrieval: deterministic
+  tags: [golden, who, approve, document_extraction, ssi-chat-j]
+  question: Who approved instruction {approved_instruction_id} and why?
+  expect:
+    requires_context: [approved_instruction_id]
+    require_routing: true
+    routing_path: document_extraction
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: instruction.approver_by_id
+    require_entity_recall: true
+    min_answer_length: 20
+    answer_contains_any: [approv, allowed, because, role, WHO]
+
 # Positive LOB entitlement — FO desk FICC and MO covering FICC can VIEW FICC instruction status.
 - id: golden_instruction_view_fo_ficc
   mode: instructions
@@ -1203,3 +1235,118 @@ cases:
     - ZITADEL
     - amount clubs
     - Derived capabilities
+
+# ── Neo4j SoD / compliance (in-process GraphCypherPlanner) ─────────────────
+# Soft empty-or-found prose: policy-only seed usually has 0 self/mutual/cross rows;
+# mutual + cross goldens apply demo seeds in prove-eligibility.sh before the chat call.
+
+- id: golden_instructions_self_approval
+  mode: instructions
+  retrieval: deterministic
+  tags: [golden, sod, compliance, neo4j_direct, ssi-chat-j]
+  question: Show instructions where creator and approver are the same person.
+  expect:
+    require_routing: true
+    routing_path: neo4j_direct
+    cypher_class: deterministic
+    answer_synthesis: formatter
+    intent_id: instruction.self_approval
+    min_answer_length: 20
+    answer_contains_any:
+    - No matching compliance cases were found in the graph
+    - Found
+    - matching instruction
+
+- id: golden_instructions_subordinate_approver
+  mode: instructions
+  retrieval: deterministic
+  tags: [golden, sod, compliance, hierarchy, neo4j_direct, ssi-chat-j]
+  question: Are there any instructions approved by someone who directly reports to the creator?
+  expect:
+    require_routing: true
+    routing_path: neo4j_direct
+    cypher_class: deterministic
+    answer_synthesis: formatter
+    intent_id: instruction.subordinate_approver
+    min_answer_length: 20
+    answer_contains_any:
+    - No matching compliance cases were found in the graph
+    - Found
+    - matching instruction
+    - Creator
+    - Approver
+
+- id: golden_instructions_duplicate_routes
+  mode: instructions
+  retrieval: deterministic
+  tags: [golden, sod, conflicts, compliance, neo4j_direct, ssi-chat-j]
+  question: Are there active instructions sharing the same creditor account and currency?
+  expect:
+    require_routing: true
+    routing_path: neo4j_direct
+    cypher_class: deterministic
+    answer_synthesis: formatter
+    intent_id: instruction.duplicate_routes
+    min_answer_length: 20
+    answer_contains_any:
+    - No duplicate settlement routes
+    - CONFLICTS_WITH
+    - Found
+    - conflicting instruction
+    - Creditor Account
+
+- id: golden_instructions_mutual_approval
+  mode: instructions
+  retrieval: deterministic
+  tags: [golden, sod, compliance, neo4j_direct, ssi-chat-j]
+  question: Are there any mutual approval cases (A approved B's instruction and B approved A's)?
+  expect:
+    require_routing: true
+    routing_path: neo4j_direct
+    cypher_class: deterministic
+    answer_synthesis: formatter
+    intent_id: instruction.mutual_approval
+    min_answer_length: 20
+    answer_contains_any:
+    - No mutual approval cases were found in the graph
+    - mutual approval
+    - User A
+    - User B
+
+- id: golden_cross_entity_reciprocal_approval
+  mode: all
+  retrieval: deterministic
+  tags: [golden, sod, compliance, neo4j_direct, ssi-chat-j]
+  question: Find cross-entity reciprocal approval between instruction and payment
+  expect:
+    require_routing: true
+    routing_path: neo4j_direct
+    cypher_class: deterministic
+    answer_synthesis: formatter
+    intent_id: instruction.cross_entity_reciprocal_approval
+    min_answer_length: 20
+    answer_contains_any:
+    - No cross-entity reciprocal approval cases were found in the graph
+    - cross-entity reciprocal approval
+    - Instruction creator
+    - Payment creator
+
+- id: golden_events_instruction_timeline
+  mode: events
+  retrieval: deterministic
+  tags: [golden, sod, timeline, neo4j_direct, ssi-chat-j]
+  question: What is the full security event timeline for instruction {approved_instruction_id}?
+  expect:
+    requires_context: [approved_instruction_id]
+    require_routing: true
+    routing_path: neo4j_direct
+    cypher_class: deterministic
+    answer_synthesis: formatter
+    intent_id: events.instruction_timeline_by_id
+    require_entity_recall: true
+    min_answer_length: 20
+    answer_contains_any:
+    - Security event timeline
+    - No security events were found for that instruction in the graph
+    - Timestamp
+    - Event ID

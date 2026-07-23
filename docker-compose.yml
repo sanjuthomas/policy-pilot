@@ -638,7 +638,8 @@ services:
     networks:
       - security-event-net
 
-  # HTTP bridge for shared/cypher_builder — used by ssi-chat-j (Maven on :8096).
+  # Optional HTTP bridge wrapping shared/cypher_builder (Python tooling / legacy).
+  # ssi-chat-j plans Cypher in-process and does not depend on this service.
   cypher-builder-svc:
     build:
       context: .

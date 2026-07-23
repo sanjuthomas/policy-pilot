@@ -2,10 +2,10 @@ package com.sanjuthomas.policypilot.neo4j;
 
 import com.sanjuthomas.policypilot.auth.RetrievalScope;
 import com.sanjuthomas.policypilot.auth.Subject;
-import com.sanjuthomas.policypilot.cypher.CypherBuilderClient;
-import com.sanjuthomas.policypilot.cypher.CypherBuilderModels.PlanResponse;
-import com.sanjuthomas.policypilot.cypher.CypherBuilderModels.PlannedQuery;
-import com.sanjuthomas.policypilot.cypher.CypherBuilderModels.ValidateResponse;
+import com.sanjuthomas.policypilot.cypher.GraphCypherPlanner;
+import com.sanjuthomas.policypilot.cypher.GraphPlanModels.PlanResponse;
+import com.sanjuthomas.policypilot.cypher.GraphPlanModels.PlannedQuery;
+import com.sanjuthomas.policypilot.cypher.GraphPlanModels.ValidateResult;
 import com.sanjuthomas.policypilot.pipeline.RouterDecision;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -15,19 +15,19 @@ import java.util.Map;
 import java.util.Set;
 import org.springframework.stereotype.Service;
 
-/** neo4j_direct lane: plan via cypher-builder-svc → validate → Neo4j → formatter. */
+/** neo4j_direct lane: in-process Cypher plan → validate → Neo4j → formatter. */
 @Service
 public class Neo4jDirectService {
 
-  private final CypherBuilderClient cypherBuilderClient;
+  private final GraphCypherPlanner graphCypherPlanner;
   private final Neo4jQueryExecutor neo4jQueryExecutor;
   private final Neo4jDirectAnswerFormatter answerFormatter;
 
   public Neo4jDirectService(
-      CypherBuilderClient cypherBuilderClient,
+      GraphCypherPlanner graphCypherPlanner,
       Neo4jQueryExecutor neo4jQueryExecutor,
       Neo4jDirectAnswerFormatter answerFormatter) {
-    this.cypherBuilderClient = cypherBuilderClient;
+    this.graphCypherPlanner = graphCypherPlanner;
     this.neo4jQueryExecutor = neo4jQueryExecutor;
     this.answerFormatter = answerFormatter;
   }
@@ -39,7 +39,7 @@ public class Neo4jDirectService {
   public Neo4jDirectResult answer(
       String question, String mode, Subject subject, RouterDecision decision) {
     Set<String> allowedLobs = RetrievalScope.allowedRetrievalLobs(subject);
-    PlanResponse plan = cypherBuilderClient.plan(question, mode, allowedLobs);
+    PlanResponse plan = graphCypherPlanner.plan(question, mode, allowedLobs);
     if (!plan.matched() || plan.planned() == null || plan.planned().isEmpty()) {
       return Neo4jDirectResult.unmatched(
           "I could not match that question to a deterministic graph query yet.");
@@ -57,7 +57,7 @@ public class Neo4jDirectService {
       return Neo4jDirectResult.unmatched("Planner returned an empty Cypher plan.");
     }
 
-    ValidateResponse validated = cypherBuilderClient.validate(selected.cypher());
+    ValidateResult validated = graphCypherPlanner.validate(selected.cypher());
     if (!validated.ok() || validated.cypher() == null) {
       return Neo4jDirectResult.unmatched(
           "Planned Cypher failed read-only validation"
@@ -75,7 +75,8 @@ public class Neo4jDirectService {
   }
 
   /**
-   * Prefer entity detail / list / ranking when present; otherwise count; else first planned query.
+   * Prefer entity detail / list / ranking / SoD when present; otherwise count; else first planned
+   * query.
    */
   static PlannedQuery selectQuery(List<PlannedQuery> planned) {
     PlannedQuery byLabel = findLabel(planned, "payment_approval_lookup");
@@ -102,6 +103,30 @@ public class Neo4jDirectService {
     if (byLabel != null) {
       return byLabel;
     }
+    byLabel = findLabel(planned, "mutual_approval");
+    if (byLabel != null) {
+      return byLabel;
+    }
+    byLabel = findLabel(planned, "cross_entity_reciprocal_approval");
+    if (byLabel != null) {
+      return byLabel;
+    }
+    byLabel = findLabel(planned, "self_approval");
+    if (byLabel != null) {
+      return byLabel;
+    }
+    byLabel = findLabel(planned, "hierarchy_violations");
+    if (byLabel != null) {
+      return byLabel;
+    }
+    byLabel = findLabel(planned, "duplicate_routes");
+    if (byLabel != null) {
+      return byLabel;
+    }
+    byLabel = findLabel(planned, "instruction_timeline_targets");
+    if (byLabel != null) {
+      return byLabel;
+    }
     byLabel = findLabel(planned, "security_event_alert_list");
     if (byLabel != null) {
       return byLabel;
@@ -111,6 +136,10 @@ public class Neo4jDirectService {
       return byLabel;
     }
     byLabel = findLabel(planned, "count");
+    if (byLabel != null) {
+      return byLabel;
+    }
+    byLabel = findLabel(planned, "alert_count_today");
     if (byLabel != null) {
       return byLabel;
     }
@@ -124,7 +153,8 @@ public class Neo4jDirectService {
 
   static String provenanceForIntent(String intentId) {
     if (intentId != null
-        && (intentId.startsWith("payment.") || intentId.startsWith("instruction."))) {
+        && (intentId.startsWith("payment.") || intentId.startsWith("instruction.")
+            || intentId.startsWith("events."))) {
       return "predefined_yaml";
     }
     return "predefined_planned";

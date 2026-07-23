@@ -28,11 +28,17 @@ class PaymentIdParserTest {
   }
 
   @Test
-  void extractsLegacyPaymentSlot() {
+  void ignoresLegacyPaymentTokens() {
     assertEquals(
-        Optional.of("PAY-abc123"),
-        PaymentIdParser.extract("Who can approve payment PAY-abc123?"));
+        Optional.empty(), PaymentIdParser.extract("Who can approve payment PAY-abc123?"));
     assertEquals(Optional.empty(), PaymentIdParser.extract("Who am I?"));
+  }
+
+  @Test
+  void doesNotTreatPaymentAndAsId() {
+    assertEquals(
+        Optional.empty(),
+        PaymentIdParser.extract("Find reciprocal approval between payment and instruction"));
   }
 
   @Test
