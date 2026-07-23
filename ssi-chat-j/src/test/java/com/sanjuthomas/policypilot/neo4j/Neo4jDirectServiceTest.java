@@ -49,7 +49,7 @@ class Neo4jDirectServiceTest {
 
   @Test
   void plansValidatesExecutesAndFormats() {
-    when(graphCypherPlanner.plan(anyString(), eq("events"), isNull()))
+    when(graphCypherPlanner.plan(anyString(), eq("events"), isNull(), any()))
         .thenReturn(
             new PlanResponse(
                 true,
@@ -81,7 +81,7 @@ class Neo4jDirectServiceTest {
 
   @Test
   void unmatchedWhenPlannerMisses() {
-    when(graphCypherPlanner.plan(anyString(), anyString(), any()))
+    when(graphCypherPlanner.plan(anyString(), anyString(), any(), any()))
         .thenReturn(PlanResponse.unmatched());
     Neo4jDirectService service =
         new Neo4jDirectService(graphCypherPlanner, neo4jQueryExecutor, formatter);
@@ -108,7 +108,7 @@ class Neo4jDirectServiceTest {
 
   @Test
   void formatsPaymentStatusViaEntityIntent() {
-    when(graphCypherPlanner.plan(anyString(), eq("payments"), isNull()))
+    when(graphCypherPlanner.plan(anyString(), eq("payments"), isNull(), any()))
         .thenReturn(
             new PlanResponse(
                 true,

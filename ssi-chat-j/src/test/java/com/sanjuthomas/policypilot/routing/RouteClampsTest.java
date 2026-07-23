@@ -140,16 +140,30 @@ class RouteClampsTest {
   }
 
   @Test
-  void clampsPersonPermissionsFromMePath() {
+  void clampsPersonPermissionsWhenLlmSetPersonQueryOnMePath() {
     RouterDecision decision = new RouterDecision();
     decision.setPath("me");
     decision.setMeKind("my_permissions");
+    decision.setPersonQuery("Kowalski, Anna");
 
     RouterDecision clamped =
         RouteClamps.apply(decision, "Can you list the permissions of Kowalski, Anna?");
 
     assertEquals("person_permissions", clamped.getPath());
     assertEquals("Kowalski, Anna", clamped.getPersonQuery());
+    assertTrue(clamped.getReasoning().contains("personQuery slot"));
+  }
+
+  @Test
+  void doesNotPhraseExtractPersonQueryOntoPersonPermissions() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("me");
+    decision.setMeKind("my_permissions");
+
+    RouterDecision result =
+        RouteClamps.apply(decision, "Can you list the permissions of Kowalski, Anna?");
+
+    assertEquals("me", result.getPath());
   }
 
   @Test
@@ -163,6 +177,49 @@ class RouteClampsTest {
     assertEquals("document_extraction", clamped.getPath());
     assertEquals("list_by_status", clamped.getExtractionFacet());
     assertEquals("APPROVED", clamped.getEntityStatus());
+    assertEquals("instruction", clamped.getExtractionTarget());
+  }
+
+  @Test
+  void doesNotPhraseStealVersionsOrCreatedByOntoDocumentExtraction() {
+    RouterDecision versions = new RouterDecision();
+    versions.setPath("neo4j_direct");
+    assertEquals(
+        "neo4j_direct",
+        RouteClamps.apply(versions, "List all versions of instruction 20260720-FICC-I-1")
+            .getPath());
+
+    RouterDecision createdBy = new RouterDecision();
+    createdBy.setPath("neo4j_direct");
+    assertEquals(
+        "neo4j_direct",
+        RouteClamps.apply(createdBy, "Which instructions were created by mo-050?").getPath());
+  }
+
+  @Test
+  void clampsVersionsWhenLlmSetFacetOnWrongPath() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("neo4j_direct");
+    decision.setExtractionFacet("versions");
+
+    RouterDecision clamped =
+        RouteClamps.apply(decision, "List all versions of instruction 20260720-FICC-I-1");
+
+    assertEquals("document_extraction", clamped.getPath());
+    assertEquals("versions", clamped.getExtractionFacet());
+  }
+
+  @Test
+  void clampsCreatedByUserWhenLlmSetFacetOnWrongPath() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("neo4j_direct");
+    decision.setExtractionFacet("created_by_user");
+
+    RouterDecision clamped =
+        RouteClamps.apply(decision, "Which instructions were created by mo-050?");
+
+    assertEquals("document_extraction", clamped.getPath());
+    assertEquals("created_by_user", clamped.getExtractionFacet());
     assertEquals("instruction", clamped.getExtractionTarget());
   }
 }

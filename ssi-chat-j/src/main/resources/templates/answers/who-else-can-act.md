@@ -1,6 +1,4 @@
 [# th:switch="${m.variant}"]
-[# th:case="'need_id'"]Include a payment id, for example: “Who else can approve payment 20260705-FX-P-534?”
-[/]
 [# th:case="'blocked'"]Payment `[(${m.paymentId})]` is not open for funding approval[# th:if="${m.blockedReason != null}"]: [(${m.blockedReason})][/][# th:if="${m.blockedReason == null}"].[/]
 [/]
 [# th:case="'empty'"]No other users currently satisfy APPROVE policy for payment `[(${m.paymentId})]` (you are the only eligible approver, or none remain after excluding you).

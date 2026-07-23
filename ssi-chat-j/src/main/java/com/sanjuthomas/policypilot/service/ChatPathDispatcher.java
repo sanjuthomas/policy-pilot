@@ -60,7 +60,7 @@ public class ChatPathDispatcher {
       case "me" -> me(request, subject, decision);
       case "policy_summary" -> policySummaryService.answer(subject, decision);
       case "person_permissions" ->
-          personPermissionSummaryService.answer(request.message(), subject, decision);
+          personPermissionSummaryService.answer(subject, decision);
       case "policy_directory" ->
           LaneAnswer.of(
               policyDirectoryService.answer(request.message(), subject, decision),

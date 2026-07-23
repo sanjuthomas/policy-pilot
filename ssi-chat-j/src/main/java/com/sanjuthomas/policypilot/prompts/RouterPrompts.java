@@ -140,8 +140,12 @@ public final class RouterPrompts {
           "Show standing instructions"
             → document_extraction, extractionTarget=instruction, extractionFacet=list_standing,
               instructionType=STANDING
+          "Which instructions were created by mo-050?"
+            → document_extraction, extractionTarget=instruction, extractionFacet=created_by_user
           "List versions of instruction 20260720-FICC-I-1"
             → document_extraction, extractionTarget=instruction, extractionFacet=versions
+          "Show version history for payment 20260720-FICC-P-1"
+            → document_extraction, extractionTarget=payment, extractionFacet=versions
       Prefer eligibility over neo4j_direct for live OPA approver/submitter questions.
       Prefer eligibility+SUBMIT over skill for "who can submit" (not "please submit").
       Neo4j direct (SecurityEvent aggregates / graph SoD — no mutation):
@@ -158,36 +162,43 @@ public final class RouterPrompts {
           security event timeline for a named instruction id.
         Do NOT use neo4j_direct for entity status/creator/approver/inventory/versions
         (use document_extraction).
-        For alert/count/list/ranking answers, ALWAYS set display slots (no free-text paraphrase parsing):
+        ALWAYS set graphIntent (planner does not phrase-match free text):
+          alert_count | alert_list | alert_ranking |
+          self_approval | mutual_approval | subordinate_approver |
+          duplicate_routes | cross_entity_reciprocal_approval | instruction_timeline
+        For alert/count/list/ranking answers, ALSO set display slots:
           graphTimeWindow = today|week|all
           graphEventScope = payment|instruction (omit when not scoped)
           graphEventKind = alert|denial|approval_denial
             (denial for "policy denial" / "denied"; approval_denial only for approval-denial lists)
         Examples:
           "How many ALERT events happened today?"
-            → neo4j_direct, graphTimeWindow=today, graphEventKind=alert
+            → neo4j_direct, graphIntent=alert_count, graphTimeWindow=today, graphEventKind=alert
           "How many instruction policy denials happened this week?"
-            → neo4j_direct, graphTimeWindow=week, graphEventScope=instruction, graphEventKind=denial
+            → neo4j_direct, graphIntent=alert_count, graphTimeWindow=week,
+              graphEventScope=instruction, graphEventKind=denial
           "How many payment policy denial alerts happened today?"
-            → neo4j_direct, graphTimeWindow=today, graphEventScope=payment, graphEventKind=denial
+            → neo4j_direct, graphIntent=alert_count, graphTimeWindow=today,
+              graphEventScope=payment, graphEventKind=denial
           "Can you list all instruction denial events for this week?"
-            → neo4j_direct, graphTimeWindow=week, graphEventScope=instruction, graphEventKind=denial
+            → neo4j_direct, graphIntent=alert_list, graphTimeWindow=week,
+              graphEventScope=instruction, graphEventKind=denial
           "Can you report all ALERTS today?"
-            → neo4j_direct, graphTimeWindow=today, graphEventKind=alert
+            → neo4j_direct, graphIntent=alert_list, graphTimeWindow=today, graphEventKind=alert
           "Which user triggered the most policy denial alerts this week?"
-            → neo4j_direct, graphTimeWindow=week, graphEventKind=denial
+            → neo4j_direct, graphIntent=alert_ranking, graphTimeWindow=week, graphEventKind=denial
           "Show instructions where creator and approver are the same person."
-            → neo4j_direct
+            → neo4j_direct, graphIntent=self_approval
           "Are there any instructions approved by someone who directly reports to the creator?"
-            → neo4j_direct
+            → neo4j_direct, graphIntent=subordinate_approver
           "Are there active instructions sharing the same creditor account and currency?"
-            → neo4j_direct
+            → neo4j_direct, graphIntent=duplicate_routes
           "Are there any mutual approval cases (A approved B's instruction and B approved A's)?"
-            → neo4j_direct
+            → neo4j_direct, graphIntent=mutual_approval
           "Find cross-entity reciprocal approval between instruction and payment"
-            → neo4j_direct
+            → neo4j_direct, graphIntent=cross_entity_reciprocal_approval
           "What is the full security event timeline for instruction 20260720-FICC-I-1?"
-            → neo4j_direct
+            → neo4j_direct, graphIntent=instruction_timeline
           (Entity id lookups apply regardless of UI search mode.)
       Vector (open narrative / semantic audit overview — no entity id, no how-many/list):
         path=vector

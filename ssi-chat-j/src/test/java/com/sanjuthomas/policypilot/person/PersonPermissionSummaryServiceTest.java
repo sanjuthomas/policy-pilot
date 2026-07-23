@@ -61,7 +61,7 @@ class PersonPermissionSummaryServiceTest {
 
     LaneAnswer lane =
         new PersonPermissionSummaryService(client, formatter)
-            .answer("ignored text", subject(), decision);
+            .answer(subject(), decision);
 
     assertEquals("person_permissions", lane.recordedPath());
     assertEquals("eligibility_api", lane.synthesis());
@@ -69,42 +69,16 @@ class PersonPermissionSummaryServiceTest {
   }
 
   @Test
-  void fallsBackToSlotParseWhenPersonQueryMissing() {
-    FakeEligibilityClient client =
-        new FakeEligibilityClient()
-            .returning(
-                Map.of(
-                    "query",
-                    "Kowalski, Anna",
-                    "matches",
-                    List.of(
-                        Map.of(
-                            "user_id",
-                            "pay-203",
-                            "display_name",
-                            "Kowalski, Anna",
-                            "title",
-                            "Associate",
-                            "roles",
-                            List.of(),
-                            "groups",
-                            List.of(),
-                            "amount_clubs",
-                            List.of(),
-                            "covering_lobs",
-                            List.of(),
-                            "capabilities",
-                            List.of(),
-                            "narrative",
-                            ""))));
+  void asksForClarificationWhenPersonQuerySlotMissing() {
     RouterDecision decision = new RouterDecision();
     decision.setPath("person_permissions");
 
     LaneAnswer lane =
-        new PersonPermissionSummaryService(client, formatter)
-            .answer("permissions of Kowalski, Anna", subject(), decision);
+        new PersonPermissionSummaryService(new FakeEligibilityClient(), formatter)
+            .answer(subject(), decision);
 
-    assertTrue(lane.answer().contains("Kowalski, Anna"));
+    assertTrue(lane.answer().contains("Ask again"));
+    assertEquals("person_permissions", lane.recordedPath());
   }
 
   @Test
@@ -113,7 +87,7 @@ class PersonPermissionSummaryServiceTest {
     decision.setPath("person_permissions");
     LaneAnswer lane =
         new PersonPermissionSummaryService(new FakeEligibilityClient(), formatter)
-            .answer("tell me something vague", subject(), decision);
+            .answer(subject(), decision);
     assertTrue(lane.answer().contains("Ask again"));
     assertEquals("person_permissions", lane.recordedPath());
   }

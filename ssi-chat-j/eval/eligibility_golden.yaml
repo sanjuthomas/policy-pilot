@@ -492,23 +492,6 @@ cases:
     - No SUBMITTED payments currently list you
     - pay-205
 
-- id: golden_me_who_else_can_act_need_id
-  mode: all
-  retrieval: eligibility
-  tags: [golden, me, who_else_can_act, ssi-chat-j]
-  persona: pay-205
-  question: Who else can approve?
-  expect:
-    require_routing: true
-    routing_path: eligibility
-    cypher_class: none
-    answer_synthesis: formatter
-    intent_id: me.who_else_can_act.need_id
-    min_answer_length: 20
-    answer_contains_any:
-    - payment id
-    - Include
-
 - id: golden_me_who_else_can_act_submitted
   mode: all
   retrieval: eligibility
