@@ -49,8 +49,8 @@ public class RouterDecision {
    * versions, …). Prefer this over regex facet detection.
    */
   @JsonPropertyDescription(
-      "document_extraction only: show|status|creator|creator_and_approver|list_by_status|"
-          + "list_standing|list_single_use|created_by_user|versions")
+      "document_extraction only: show|status|creator|creator_and_approver|approver|"
+          + "list_by_status|list_standing|list_single_use|created_by_user|versions")
   private String extractionFacet;
 
   /**

@@ -49,6 +49,7 @@ public final class EntityApiQuestion {
     STATUS,
     CREATOR,
     CREATOR_AND_APPROVER,
+    APPROVER,
     VERSIONS,
     LIST_BY_STATUS,
     LIST_STANDING,
@@ -110,11 +111,6 @@ public final class EntityApiQuestion {
       return false;
     }
     enrichDecision(decision, question);
-    // Past-tense approver audit stays on neo4j_direct (see RouteClamps).
-    if (isPastWhoApprovedOnly(question)
-        && facetFromSlot(decision.getExtractionFacet()) == null) {
-      return false;
-    }
     if (facetFromSlot(decision.getExtractionFacet()) != null) {
       return true;
     }
@@ -204,6 +200,7 @@ public final class EntityApiQuestion {
       case "status" -> Facet.STATUS;
       case "creator" -> Facet.CREATOR;
       case "creator_and_approver" -> Facet.CREATOR_AND_APPROVER;
+      case "approver" -> Facet.APPROVER;
       case "versions", "version" -> Facet.VERSIONS;
       case "list_by_status", "list" -> Facet.LIST_BY_STATUS;
       case "list_standing", "standing" -> Facet.LIST_STANDING;
@@ -271,6 +268,9 @@ public final class EntityApiQuestion {
       }
       if (isCreatorAndApproverShape(question)) {
         return Facet.CREATOR_AND_APPROVER;
+      }
+      if (isPastWhoApprovedOnly(question)) {
+        return Facet.APPROVER;
       }
       if (isStatusShape(question)) {
         return Facet.STATUS;
@@ -344,6 +344,7 @@ public final class EntityApiQuestion {
       case STATUS -> "status";
       case CREATOR -> "creator";
       case CREATOR_AND_APPROVER -> "creator_and_approver";
+      case APPROVER -> "approver";
       case VERSIONS -> "versions";
       case LIST_BY_STATUS -> "list_by_status";
       case LIST_STANDING -> "list_standing";

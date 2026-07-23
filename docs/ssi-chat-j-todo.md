@@ -56,6 +56,7 @@ Skip: `*.show_by_id` (intentional Java `document_extraction`).
 | `instruction.list_single_use` | `done` | API list `instruction_type=SINGLE_USE` |
 | `instruction.created_by_user` | `done` | API list `created_by_user_id=` |
 | `instruction.versions_by_id` / `payment.versions_by_id` | `done` | domain `/versions` APIs |
+| `payment.approver_by_id` / `instruction.approver_by_id` | `done` | domain GET + lifecycle/approved_by (`golden_events_who_approved_payment`) |
 | `instruction.self_approval` | `todo` | **next** (keep Neo4j) |
 | `instruction.subordinate_approver` | `todo` | keep Neo4j |
 | `instruction.duplicate_routes` | `todo` | keep Neo4j |

@@ -80,14 +80,14 @@ public final class RouterPrompts {
       Prefer policy_directory over eligibility when there is no payment/instruction id and the
         question asks who may approve by amount / desk covering LOB.
       Prefer eligibility when a specific payment or instruction id is present for who-can /
-        live OPA questions — not past-tense "who approved" (that is neo4j_direct audit).
+        live OPA questions — not past-tense "who approved" (that is document_extraction approver).
       Examples:
         "Who can approve payment …?" / "Who can approve 20260720-FICC-P-8?"
           → eligibility, payment, APPROVE
         "Who can submit … for approval?" → eligibility, payment, SUBMIT
         "Who can approve instruction …?" / "Who can approve 20260720-FICC-I-1?"
           → eligibility, instruction, APPROVE
-        "Who approved 20260720-FICC-P-19?" → neo4j_direct
+        "Who approved 20260720-FICC-P-19?" → document_extraction, payment, approver
         "Can I create a payment?" → me, can_act_on_entity, meAction=CREATE, meEntityType=payment
         "Who covers LOB FICC?" → me, who_covers_lob
         "Who can create payments for FICC?" → me, who_can_create, meEntityType=payment
@@ -95,8 +95,8 @@ public final class RouterPrompts {
         path=document_extraction
         extractionTarget=payment|instruction
         ALWAYS set extractionFacet when path=document_extraction:
-          show | status | creator | creator_and_approver | list_by_status | list_standing |
-          list_single_use | created_by_user | versions
+          show | status | creator | creator_and_approver | approver | list_by_status |
+          list_standing | list_single_use | created_by_user | versions
         When listing/filtering instructions, ALWAYS set domain enums (map paraphrases → enum;
         the client does NOT parse synonyms):
           entityStatus = SUBMITTED|APPROVED|REJECTED|SUSPENDED|EXPIRED|CANCELLED|DRAFT|USED
@@ -109,6 +109,7 @@ public final class RouterPrompts {
         not who can approve it. Sequence ids encode type: -P- → payment, -I- → instruction.
         Also prefer document_extraction (not neo4j_direct) for:
           status of payment/instruction <id>, who created <id>, who created + who approved <id>,
+          past-tense who approved <id> / who approved payment <id> and why?,
           list approved|standing|single-use|paused instructions, instructions created by <user-id>,
           list/show version history for <id>.
         Examples:
@@ -126,6 +127,10 @@ public final class RouterPrompts {
             → document_extraction, extractionTarget=payment, extractionFacet=creator
           "Who created payment 20260720-FICC-P-1 and who approved it?"
             → document_extraction, extractionTarget=payment, extractionFacet=creator_and_approver
+          "Who approved payment 20260720-FICC-P-1 and why?"
+            → document_extraction, extractionTarget=payment, extractionFacet=approver
+          "Who approved 20260720-FICC-P-19?"
+            → document_extraction, extractionTarget=payment, extractionFacet=approver
           "Can you list all approved instructions?"
             → document_extraction, extractionTarget=instruction, extractionFacet=list_by_status,
               entityStatus=APPROVED
@@ -139,14 +144,13 @@ public final class RouterPrompts {
             → document_extraction, extractionTarget=instruction, extractionFacet=versions
       Prefer eligibility over neo4j_direct for live OPA approver/submitter questions.
       Prefer eligibility+SUBMIT over skill for "who can submit" (not "please submit").
-      Neo4j direct (SecurityEvent aggregates / graph SoD / past-tense who-approved — no mutation):
+      Neo4j direct (SecurityEvent aggregates / graph SoD — no mutation):
         path=neo4j_direct
         Prefer for "how many ALERT / policy denial / security events … today/this week?",
         "list / report all ALERTS today", "list instruction denial events this week",
-        "which user triggered the most policy denial alerts …",
-        and past-tense "who approved <id>" / "who approved payment <id> and why?"
-        (noun optional when a payment or instruction id is present).
-        Do NOT use neo4j_direct for entity status/creator/inventory/versions (use document_extraction).
+        "which user triggered the most policy denial alerts …".
+        Do NOT use neo4j_direct for entity status/creator/approver/inventory/versions
+        (use document_extraction).
         For alert/count/list/ranking answers, ALWAYS set display slots (no free-text paraphrase parsing):
           graphTimeWindow = today|week|all
           graphEventScope = payment|instruction (omit when not scoped)
@@ -165,8 +169,6 @@ public final class RouterPrompts {
             → neo4j_direct, graphTimeWindow=today, graphEventKind=alert
           "Which user triggered the most policy denial alerts this week?"
             → neo4j_direct, graphTimeWindow=week, graphEventKind=denial
-          "Who approved payment 20260720-FICC-P-1 and why?" → neo4j_direct
-          "Who approved 20260720-FICC-P-19?" → neo4j_direct
           (Entity id lookups apply regardless of UI search mode.)
       Vector (open narrative / semantic audit overview — no entity id, no how-many/list):
         path=vector

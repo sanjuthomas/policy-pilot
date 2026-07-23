@@ -16,10 +16,9 @@ import org.springframework.util.StringUtils;
  * {@code path} / fill blank entity-API slots <strong>before</strong> {@code ChatPathDispatcher}.
  *
  * <ul>
- *   <li>Past {@code who approv} + payment/instruction id (not {@code who can approv}, not
- *       creator+approver combo) → {@code neo4j_direct}
- *   <li>Entity status / creator / inventory / versions (domain API) → {@code document_extraction};
- *       blank facets filled from LLM sibling slots, literal enums, and narrow by-id shapes
+ *   <li>Entity status / creator / approver / inventory / versions (domain API) → {@code
+ *       document_extraction}; blank facets filled from LLM sibling slots, literal enums, and
+ *       narrow by-id shapes (including past {@code who approv} + id)
  *   <li>Third-party “permissions of/for …” → {@code person_permissions} (not {@code me})
  *   <li>Open narrative / denial-activity audit prose (no entity id) → {@code vector}
  * </ul>
@@ -54,30 +53,9 @@ public final class RouteClamps {
     if (decision == null) {
       return null;
     }
-    decision = clampPastWhoApproved(decision, question);
     decision = clampPersonPermissions(decision, question);
     decision = clampEntityApi(decision, question);
     return clampOpenNarrativeToVector(decision, question);
-  }
-
-  private static RouterDecision clampPastWhoApproved(RouterDecision decision, String question) {
-    EntityApiQuestion.enrichDecision(decision, question);
-    if (EntityApiQuestion.isEntityApiQuestion(decision, question)) {
-      return decision;
-    }
-    if (!isPastWhoApprovedAudit(question)) {
-      return decision;
-    }
-    if (!hasEntityId(question)) {
-      return decision;
-    }
-    if ("neo4j_direct".equals(decision.getPath())) {
-      return decision;
-    }
-    String prior = decision.getPath();
-    decision.setPath("neo4j_direct");
-    appendReasoning(decision, "clamped neo4j_direct (past who-approved audit; was " + prior + ")");
-    return decision;
   }
 
   /**
@@ -161,6 +139,7 @@ public final class RouteClamps {
     decision.setReasoning(reasoning.isEmpty() ? note : reasoning + "; " + note);
   }
 
+  /** True for past-tense who-approved audit (not eligibility who-can / creator+approver combo). */
   static boolean isPastWhoApprovedAudit(String question) {
     String text = question == null ? "" : question;
     if (EntityApiQuestion.isCreatorAndApproverShape(text)) {

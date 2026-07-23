@@ -35,7 +35,7 @@ class DocumentExtractionServiceTest {
             client,
             new InstructionDetailAnswerFormatter(renderer, new TimestampFormat()),
             new PaymentDetailAnswerFormatter(renderer, new MoneyFormat(), new TimestampFormat()),
-            new EntityApiAnswerFormatter(renderer));
+            new EntityApiAnswerFormatter(renderer, new PolicyBasisFormat()));
   }
 
   @Test
@@ -129,6 +129,54 @@ class DocumentExtractionServiceTest {
     assertEquals("instruction.versions_by_id", result.intentId());
     assertTrue(result.answer().contains("versions (1)"));
     assertTrue(result.answer().contains("APPROVED"));
+  }
+
+  @Test
+  void formatsPaymentApproverFromApiLifecycle() {
+    client.returning(
+        Map.of(
+            "payment_id",
+            "20260720-FICC-P-1",
+            "status",
+            "APPROVED",
+            "approved_by",
+            Map.of(
+                "user_id",
+                "pay-201",
+                "given_name",
+                "Sophie",
+                "family_name",
+                "Laurent",
+                "roles",
+                List.of("FUNDING_APPROVER")),
+            "approved_at",
+            "2026-07-20T01:19:04.508813Z",
+            "lifecycle_events",
+            List.of(
+                Map.of(
+                    "action",
+                    "APPROVE",
+                    "details",
+                    Map.of(
+                        "authorization",
+                        Map.of(
+                            "summary",
+                            "Laurent, Sophie (pay-201) was allowed to APPROVE because role FUNDING_APPROVER",
+                            "allow_basis",
+                            List.of("role FUNDING_APPROVER")))))));
+
+    RouterDecision decision = new RouterDecision();
+    decision.setExtractionTarget("payment");
+    decision.setExtractionFacet("approver");
+    DocumentExtractionResult result =
+        service.answer(
+            "Who approved payment 20260720-FICC-P-1 and why?", subject(), decision);
+
+    assertEquals("payment.approver_by_id", result.intentId());
+    assertTrue(result.answer().contains("Payment: 20260720-FICC-P-1"));
+    assertTrue(result.answer().contains("WHO: Laurent, Sophie (pay-201)"));
+    assertTrue(result.answer().contains("FUNDING_APPROVER"));
+    assertTrue(result.answer().contains("allowed"));
   }
 
   private static Subject subject() {

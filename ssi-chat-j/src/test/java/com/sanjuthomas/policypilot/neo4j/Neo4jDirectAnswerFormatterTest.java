@@ -317,6 +317,7 @@ class Neo4jDirectAnswerFormatterTest {
                     "authorization_basis",
                     List.of("role FICC_SUPERVISOR"))),
             "planned_graph");
+    assertTrue(answer.contains("Payment: 20260720-FICC-P-1"));
     assertTrue(answer.contains("WHO: Vasquez, Elena (ficc-300)"));
     assertTrue(answer.contains("WHEN: 2026-07-04T12:29:42"));
     assertTrue(answer.contains("BASIS:"));
@@ -332,7 +333,7 @@ class Neo4jDirectAnswerFormatterTest {
             Set.of("payment_approval_lookup"),
             List.of(),
             "planned_graph");
-    assertEquals("No payment with that ID was found in the graph.", answer);
+    assertEquals("No payment with that ID was found.", answer);
   }
 
   @Test
@@ -377,6 +378,7 @@ class Neo4jDirectAnswerFormatterTest {
                     "authorization_summary",
                     "Laurent, Sophie (pay-201) was allowed to APPROVE because role FUNDING_APPROVER")),
             "planned_graph");
+    assertTrue(answer.contains("Payment: 20260720-FICC-P-1"));
     assertTrue(answer.contains("WHO: Laurent, Sophie (pay-201)"));
     assertTrue(answer.contains("WHEN: 2026-07-20T01:19:04.508813Z"));
     assertTrue(answer.contains("BASIS:"));

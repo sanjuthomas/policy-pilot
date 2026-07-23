@@ -26,11 +26,10 @@ After Spring AI returns a decision, **`routing.RouteClamps` may rewrite `path` b
 
 | Clamp | Match shape | Rewrites path to |
 |-------|-------------|------------------|
-| Past who-approved audit | `who approv` + sequence id; not `who can approv`; not creator+approver | `neo4j_direct` |
-| Entity API preference | router filled `extractionFacet` / `entityStatus` / `instructionType`, or by-id status/creator shape, while path was `neo4j_direct` | `document_extraction` |
+| Entity API preference | status / creator / past who-approved / inventory / versions (slots or by-id shapes) while on `neo4j_direct` / `eligibility` / … | `document_extraction` |
 | Open narrative | brief narrative / recent denial-activity audit prose; no entity id | `vector` |
 
-- Mirrors Python `prefer_neo4j_direct_when_matched` / `prefer_vector_for_open_narrative`.
+- Entity inventory/approver prefer domain APIs on Java (Python may still match neo4j_direct YAML for some shapes).
 - Java open-narrative clamp is **slightly broader** than Python (also clamps `neo4j_direct` / `eligibility`) so those lanes cannot steal the vector security-summary golden — keep that documented if you change either side.
 - New clamps require an explicit name, tests in `RouteClampsTest`, and a note here / in `ssi-chat-j/AGENTS.md`. Do not add undeclared “force lane” regex elsewhere.
 

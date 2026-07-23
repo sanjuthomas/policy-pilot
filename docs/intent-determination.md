@@ -36,7 +36,7 @@ Examples: `paused` / `on hold` → `SUSPENDED`; `a billion` → `directoryAmount
 | Stack | Clamp helpers | Typical rewrites |
 |-------|---------------|------------------|
 | Python `ssi-chat` | `prefer_neo4j_direct_when_matched`, `prefer_vector_for_open_narrative` | YAML-matched shapes → `neo4j_direct`; open narrative → `vector` (never upgrades pure `vector` away) |
-| Java `ssi-chat-j` | `routing.RouteClamps` | Past who-approved + id → `neo4j_direct`; open narrative → `vector` (also clamps `neo4j_direct` / `eligibility`, slightly broader than Python) |
+| Java `ssi-chat-j` | `routing.RouteClamps` | Entity API shapes (incl. past who-approved + id) → `document_extraction`; open narrative → `vector` (also clamps `neo4j_direct` / `eligibility`, slightly broader than Python) |
 
 See `.cursor/rules/intent-semantic-routing.mdc`, `.cursor/rules/ssi-chat-j-intent-routing.mdc`, and `ssi-chat-j/AGENTS.md`.
 

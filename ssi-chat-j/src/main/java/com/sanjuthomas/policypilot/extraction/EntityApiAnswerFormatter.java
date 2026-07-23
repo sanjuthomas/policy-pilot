@@ -1,6 +1,8 @@
 package com.sanjuthomas.policypilot.extraction;
 
 import com.sanjuthomas.policypilot.formatting.AnswerRenderer;
+import com.sanjuthomas.policypilot.formatting.PolicyBasisFormat;
+import com.sanjuthomas.policypilot.neo4j.ApprovalLookupView;
 import com.sanjuthomas.policypilot.neo4j.EntityCreatorAndApproverView;
 import com.sanjuthomas.policypilot.neo4j.EntityCreatorByIdView;
 import com.sanjuthomas.policypilot.neo4j.EntityStatusByIdView;
@@ -14,8 +16,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 /**
- * Facet formatters for entity document_extraction answers (status / creator / inventory /
- * versions) — same Thymeleaf templates previously used on the neo4j_direct lane.
+ * Facet formatters for entity document_extraction answers (status / creator / approver /
+ * inventory / versions) — same Thymeleaf templates previously used on the neo4j_direct lane.
  */
 @Component
 public class EntityApiAnswerFormatter {
@@ -25,14 +27,18 @@ public class EntityApiAnswerFormatter {
   private static final String PAYMENT_CREATOR = "payment-creator-by-id";
   private static final String INSTRUCTION_CREATOR = "instruction-creator-by-id";
   private static final String CREATOR_AND_APPROVER = "entity-creator-and-approver";
+  private static final String APPROVAL_LOOKUP = "approval-lookup";
   private static final String INVENTORY = "instruction-inventory-table";
   private static final String INSTRUCTION_VERSIONS = "instruction-versions-table";
   private static final String PAYMENT_VERSIONS = "payment-versions-table";
 
   private final AnswerRenderer answerRenderer;
+  private final PolicyBasisFormat policyBasisFormat;
 
-  public EntityApiAnswerFormatter(AnswerRenderer answerRenderer) {
+  public EntityApiAnswerFormatter(
+      AnswerRenderer answerRenderer, PolicyBasisFormat policyBasisFormat) {
     this.answerRenderer = answerRenderer;
+    this.policyBasisFormat = policyBasisFormat;
   }
 
   public String formatPaymentStatus(Map<String, Object> data) {
@@ -59,6 +65,14 @@ public class EntityApiAnswerFormatter {
   public String formatInstructionCreatorAndApprover(Map<String, Object> data) {
     return answerRenderer.render(
         CREATOR_AND_APPROVER, toCreatorAndApproverView(data, "Instruction", "instruction_id"));
+  }
+
+  public String formatPaymentApprover(Map<String, Object> data) {
+    return answerRenderer.render(APPROVAL_LOOKUP, toApprovalLookupView(data, "payment"));
+  }
+
+  public String formatInstructionApprover(Map<String, Object> data) {
+    return answerRenderer.render(APPROVAL_LOOKUP, toApprovalLookupView(data, "instruction"));
   }
 
   public String formatInstructionInventory(List<Map<String, Object>> rows) {
@@ -94,6 +108,35 @@ public class EntityApiAnswerFormatter {
       return new EntityCreatorByIdView(false, true, entityId, null);
     }
     return new EntityCreatorByIdView(false, false, entityId, creator);
+  }
+
+  ApprovalLookupView toApprovalLookupView(Map<String, Object> data, String entityNoun) {
+    String noun = entityNoun == null || entityNoun.isBlank() ? "payment" : entityNoun;
+    String displayNoun = "instruction".equalsIgnoreCase(noun) ? "Instruction" : "Payment";
+    String idKey = "instruction".equalsIgnoreCase(noun) ? "instruction_id" : "payment_id";
+    if (data == null || data.isEmpty()) {
+      return new ApprovalLookupView(true, false, noun, displayNoun, null, null, null, null, List.of());
+    }
+    String entityId = displayOrUnknown(data.get(idKey));
+    String who = displayApprover(data.get("approved_by"));
+    if ("—".equals(who)) {
+      return new ApprovalLookupView(
+          false,
+          true,
+          noun,
+          displayNoun,
+          entityId,
+          displayOrUnknown(data.get("status")),
+          null,
+          null,
+          List.of());
+    }
+    String when = displayOrNull(data.get("approved_at"));
+    String summary = authorizationSummary(data, who);
+    Object basis = authorizationBasis(data);
+    List<String> authLines = policyBasisFormat.formatApprovalAuthLines(summary, basis);
+    return new ApprovalLookupView(
+        false, false, noun, displayNoun, entityId, null, who, when, authLines);
   }
 
   static EntityCreatorAndApproverView toCreatorAndApproverView(
@@ -165,6 +208,69 @@ public class EntityApiAnswerFormatter {
   private static String displayApprover(Object approvedBy) {
     String text = EntityUserDisplay.approver(approvedBy);
     return "— (not yet approved)".equals(text) ? "—" : text;
+  }
+
+  @SuppressWarnings("unchecked")
+  private static String authorizationSummary(Map<String, Object> data, String who) {
+    Map<String, Object> auth = approveAuthorization(data);
+    if (auth != null) {
+      Object summary = auth.get("summary");
+      if (summary != null && !summary.toString().isBlank()) {
+        return summary.toString().strip();
+      }
+    }
+    // Instruction GET has no lifecycle_events; synthesize from approved_by roles.
+    Object approvedBy = data.get("approved_by");
+    if (!(approvedBy instanceof Map<?, ?> map)) {
+      return null;
+    }
+    Object rolesRaw = map.get("roles");
+    if (!(rolesRaw instanceof List<?> roles) || roles.isEmpty()) {
+      return null;
+    }
+    String role =
+        roles.stream()
+            .filter(r -> r != null && !r.toString().isBlank())
+            .map(Object::toString)
+            .findFirst()
+            .orElse(null);
+    if (role == null) {
+      return null;
+    }
+    return who + " was allowed to APPROVE because role " + role;
+  }
+
+  private static Object authorizationBasis(Map<String, Object> data) {
+    Map<String, Object> auth = approveAuthorization(data);
+    return auth == null ? null : auth.get("allow_basis");
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> approveAuthorization(Map<String, Object> data) {
+    Object events = data.get("lifecycle_events");
+    if (!(events instanceof List<?> list)) {
+      return null;
+    }
+    for (int i = list.size() - 1; i >= 0; i--) {
+      Object item = list.get(i);
+      if (!(item instanceof Map<?, ?> event)) {
+        continue;
+      }
+      Object action = event.get("action");
+      if (action == null || !"APPROVE".equalsIgnoreCase(action.toString())) {
+        continue;
+      }
+      Object details = event.get("details");
+      if (!(details instanceof Map<?, ?> detailsMap)) {
+        return null;
+      }
+      Object authorization = detailsMap.get("authorization");
+      if (authorization instanceof Map<?, ?> authMap) {
+        return (Map<String, Object>) authMap;
+      }
+      return null;
+    }
+    return null;
   }
 
   private static String display(Object value) {

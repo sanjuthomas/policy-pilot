@@ -53,8 +53,7 @@ After Spring AI returns a decision, `routing.RouteClamps` may **rewrite `path` b
 
 | Clamp | When | Effect |
 |-------|------|--------|
-| Past who-approved audit | `who approv…` + payment/instruction id, not `who can approv`, not creator+approver | → `neo4j_direct` |
-| Entity API preference | router filled document_extraction slots, or by-id status/creator, while on `neo4j_direct` | → `document_extraction` |
+| Entity API preference | status / creator / past who-approved / inventory / versions (slots or by-id shapes), while on `neo4j_direct` / `eligibility` / … | → `document_extraction` |
 | Open narrative | brief narrative / denial-activity audit prose, no entity id | → `vector` (recorded as `full_rag`) |
 
 - **Do** grow clamps only as named, tested parity with Python (`prefer_neo4j_direct_when_matched`, `prefer_vector_for_open_narrative`) or an explicitly documented Java widening.

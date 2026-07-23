@@ -35,6 +35,14 @@ class EntityApiQuestionTest {
     EntityApiQuestion.enrichDecision(
         combo, "Who created payment 20260720-FICC-P-1 and who approved it?");
     assertEquals("creator_and_approver", combo.getExtractionFacet());
+
+    RouterDecision approver = new RouterDecision();
+    EntityApiQuestion.enrichDecision(
+        approver, "Who approved payment 20260720-FICC-P-1 and why?");
+    assertEquals("approver", approver.getExtractionFacet());
+    assertTrue(
+        EntityApiQuestion.isEntityApiQuestion(
+            approver, "Who approved payment 20260720-FICC-P-1 and why?"));
   }
 
   @Test

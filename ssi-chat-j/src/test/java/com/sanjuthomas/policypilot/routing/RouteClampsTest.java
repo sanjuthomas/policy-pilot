@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 class RouteClampsTest {
 
   @Test
-  void clampsPastWhoApprovedFromEligibility() {
+  void clampsPastWhoApprovedFromEligibilityToDocumentExtraction() {
     RouterDecision decision = new RouterDecision();
     decision.setPath("eligibility");
     decision.setEligibilityTarget("payment");
@@ -19,8 +19,9 @@ class RouteClampsTest {
     RouterDecision clamped =
         RouteClamps.apply(decision, "Who approved 20260720-FICC-P-19?");
 
-    assertEquals("neo4j_direct", clamped.getPath());
-    assertTrue(clamped.getReasoning().contains("clamped neo4j_direct"));
+    assertEquals("document_extraction", clamped.getPath());
+    assertEquals("approver", clamped.getExtractionFacet());
+    assertTrue(clamped.getReasoning().contains("entity API"));
   }
 
   @Test

@@ -144,6 +144,10 @@ public class DocumentExtractionService {
             new DocumentExtractionResult(
                 entityApiAnswerFormatter.formatInstructionCreatorAndApprover(data),
                 "instruction.creator_and_approver_by_id");
+        case APPROVER ->
+            new DocumentExtractionResult(
+                entityApiAnswerFormatter.formatInstructionApprover(data),
+                "instruction.approver_by_id");
         default ->
             new DocumentExtractionResult(
                 instructionDetailAnswerFormatter.format(data), "instruction.show_by_id");
@@ -154,6 +158,7 @@ public class DocumentExtractionService {
             case STATUS -> "instruction.status_by_id";
             case CREATOR -> "instruction.creator_by_id";
             case CREATOR_AND_APPROVER -> "instruction.creator_and_approver_by_id";
+            case APPROVER -> "instruction.approver_by_id";
             default -> "instruction.show_by_id";
           };
       return mapHttpError(
@@ -189,6 +194,9 @@ public class DocumentExtractionService {
             new DocumentExtractionResult(
                 entityApiAnswerFormatter.formatPaymentCreatorAndApprover(data),
                 "payment.creator_and_approver_by_id");
+        case APPROVER ->
+            new DocumentExtractionResult(
+                entityApiAnswerFormatter.formatPaymentApprover(data), "payment.approver_by_id");
         default ->
             new DocumentExtractionResult(
                 paymentDetailAnswerFormatter.format(data), "payment.show_by_id");
@@ -199,6 +207,7 @@ public class DocumentExtractionService {
             case STATUS -> "payment.status_by_id";
             case CREATOR -> "payment.creator_by_id";
             case CREATOR_AND_APPROVER -> "payment.creator_and_approver_by_id";
+            case APPROVER -> "payment.approver_by_id";
             default -> "payment.show_by_id";
           };
       return mapHttpError(

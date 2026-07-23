@@ -1,4 +1,5 @@
-[# th:if="${m.missing}"]No [(${m.entityNoun})] with that ID was found in the graph.[/][# th:if="${m.notApproved}"][(${m.displayNoun})] [(${m.entityId})] was not approved. Its status is [(${m.status})].[/][# th:if="${!m.missing and !m.notApproved}"]WHO: [(${m.who})]
+[# th:if="${m.missing}"]No [(${m.entityNoun})] with that ID was found.[/][# th:if="${m.notApproved}"][(${m.displayNoun})] [(${m.entityId})] was not approved. Its status is [(${m.status})].[/][# th:if="${!m.missing and !m.notApproved}"][(${m.displayNoun})]: [(${m.entityId})]
+WHO: [(${m.who})]
 [# th:if="${m.when != null}"]WHEN: [(${m.when})]
 [/][# th:each="line : ${m.authLines}"][(${line})]
 [/][/]
