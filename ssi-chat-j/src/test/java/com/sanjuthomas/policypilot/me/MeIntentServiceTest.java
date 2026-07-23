@@ -165,12 +165,12 @@ class MeIntentServiceTest {
   }
 
   @Test
-  void whoElseNeedsId() {
+  void whoElseWithoutPaymentIdIsUnresolved() {
     RouterDecision decision = new RouterDecision();
     decision.setPath("me");
     decision.setMeKind("who_else_can_act");
     MeIntentResult result = service.answer(decision, "Who else can approve?", pay205());
-    assertEquals("me.who_else_can_act.need_id", result.intentId());
+    assertEquals("me.unresolved", result.intentId());
   }
 
   @Test

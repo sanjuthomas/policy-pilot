@@ -1,7 +1,6 @@
 package com.sanjuthomas.policypilot.routing;
 
 import com.sanjuthomas.policypilot.extraction.EntityApiQuestion;
-import com.sanjuthomas.policypilot.person.PersonQueryParser;
 import com.sanjuthomas.policypilot.pipeline.RouterDecision;
 import java.util.Locale;
 import java.util.Set;
@@ -15,9 +14,9 @@ import org.springframework.util.StringUtils;
  * {@code path} / fill blank entity-API slots <strong>before</strong> {@code ChatPathDispatcher}.
  *
  * <p><strong>Not NLU:</strong> do not add phrase detectors here (who-approved vs who-can, open
- * narrative, SoD wordings). Those belong in {@code RouterPrompts} + {@code RouterDecision} slots.
- * Clamps may only use LLM slots already set, stable tokens (sequence ids, literal enums), or
- * named-person extraction for {@code person_permissions}.
+ * narrative, SoD wordings, named-person phrase extractors). Those belong in {@code RouterPrompts}
+ * + {@code RouterDecision} slots. Clamps may only use LLM slots already set or stable tokens
+ * (sequence ids, literal enums).
  */
 public final class RouteClamps {
 
@@ -30,23 +29,20 @@ public final class RouteClamps {
     if (decision == null) {
       return null;
     }
-    decision = clampPersonPermissions(decision, question);
+    decision = clampPersonPermissions(decision);
     return clampEntityApi(decision, question);
   }
 
   /**
-   * Named-person directory permissions must not land on {@code me} / my_permissions.
+   * When the LLM already set {@code personQuery} but chose {@code me} / {@code eligibility}, prefer
+   * {@code person_permissions}. Does not phrase-extract names from the question.
    */
-  private static RouterDecision clampPersonPermissions(RouterDecision decision, String question) {
-    String extracted = PersonQueryParser.extract(question);
-    if (!StringUtils.hasText(extracted)) {
+  private static RouterDecision clampPersonPermissions(RouterDecision decision) {
+    if (!StringUtils.hasText(decision.getPersonQuery())) {
       return decision;
     }
     String path = decision.getPath() == null ? "" : decision.getPath().toLowerCase(Locale.ROOT);
     if ("person_permissions".equals(path)) {
-      if (!StringUtils.hasText(decision.getPersonQuery())) {
-        decision.setPersonQuery(extracted);
-      }
       return decision;
     }
     if (!"me".equals(path) && !"eligibility".equals(path)) {
@@ -54,10 +50,7 @@ public final class RouteClamps {
     }
     String prior = decision.getPath();
     decision.setPath("person_permissions");
-    if (!StringUtils.hasText(decision.getPersonQuery())) {
-      decision.setPersonQuery(extracted);
-    }
-    appendReasoning(decision, "clamped person_permissions (named person; was " + prior + ")");
+    appendReasoning(decision, "clamped person_permissions (personQuery slot; was " + prior + ")");
     return decision;
   }
 
@@ -95,10 +88,5 @@ public final class RouteClamps {
   private static void appendReasoning(RouterDecision decision, String note) {
     String reasoning = decision.getReasoning() == null ? "" : decision.getReasoning().trim();
     decision.setReasoning(reasoning.isEmpty() ? note : reasoning + "; " + note);
-  }
-
-  static boolean hasEntityId(String question) {
-    return PaymentIdParser.extract(question).isPresent()
-        || InstructionIdParser.extract(question).isPresent();
   }
 }

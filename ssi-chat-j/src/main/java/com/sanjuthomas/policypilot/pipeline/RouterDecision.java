@@ -128,6 +128,16 @@ public class RouterDecision {
   private String meEntityType;
 
   /**
+   * When path is neo4j_direct: which deterministic graph plan to run. Map paraphrases here — the
+   * Cypher planner does not phrase-match SoD / alert shapes from free text.
+   */
+  @JsonPropertyDescription(
+      "neo4j_direct only: alert_count|alert_list|alert_ranking|self_approval|mutual_approval|"
+          + "subordinate_approver|duplicate_routes|cross_entity_reciprocal_approval|"
+          + "instruction_timeline")
+  private String graphIntent;
+
+  /**
    * When path is neo4j_direct for alert/denial aggregates: time window for answer wording.
    * Map paraphrases here — the formatter does not parse "today"/"this week" from free text.
    */

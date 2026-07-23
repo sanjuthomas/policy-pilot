@@ -39,7 +39,7 @@ public class Neo4jDirectService {
   public Neo4jDirectResult answer(
       String question, String mode, Subject subject, RouterDecision decision) {
     Set<String> allowedLobs = RetrievalScope.allowedRetrievalLobs(subject);
-    PlanResponse plan = graphCypherPlanner.plan(question, mode, allowedLobs);
+    PlanResponse plan = graphCypherPlanner.plan(question, mode, allowedLobs, decision);
     if (!plan.matched() || plan.planned() == null || plan.planned().isEmpty()) {
       return Neo4jDirectResult.unmatched(
           "I could not match that question to a deterministic graph query yet.");

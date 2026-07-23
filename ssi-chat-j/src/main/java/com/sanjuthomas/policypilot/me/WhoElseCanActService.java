@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 /** Live who-else-can-approve: eligible-approvers minus the caller. */
@@ -28,13 +27,6 @@ public class WhoElseCanActService {
   }
 
   public MeIntentResult answer(MeIntent intent, Subject subject) {
-    if (!StringUtils.hasText(intent.entityId())) {
-      return new MeIntentResult(
-          answerRenderer.render(
-              TEMPLATE, new WhoElseCanActAnswerView("need_id", null, null, List.of())),
-          "me.who_else_can_act.need_id");
-    }
-
     String paymentId = intent.entityId().strip();
     try {
       Map<String, Object> data =

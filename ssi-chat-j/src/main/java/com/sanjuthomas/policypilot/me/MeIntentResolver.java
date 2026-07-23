@@ -53,13 +53,17 @@ public class MeIntentResolver {
               entityType != null ? entityType : "payment",
               entityId,
               null);
-      case "who_else_can_act" ->
-          new MeIntent(
-              kind,
-              action != null ? action : "APPROVE",
-              entityType != null ? entityType : "payment",
-              entityId,
-              null);
+      case "who_else_can_act" -> {
+        if (entityId == null) {
+          yield null;
+        }
+        yield new MeIntent(
+            kind,
+            action != null ? action : "APPROVE",
+            entityType != null ? entityType : "payment",
+            entityId,
+            null);
+      }
       case "waiting_for_me" ->
           new MeIntent(
               kind,

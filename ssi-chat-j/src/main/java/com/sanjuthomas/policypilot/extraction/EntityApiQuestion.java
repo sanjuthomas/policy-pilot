@@ -1,8 +1,6 @@
 package com.sanjuthomas.policypilot.extraction;
 
 import com.sanjuthomas.policypilot.pipeline.RouterDecision;
-import com.sanjuthomas.policypilot.routing.InstructionIdParser;
-import com.sanjuthomas.policypilot.routing.PaymentIdParser;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -12,10 +10,10 @@ import org.springframework.util.StringUtils;
 /**
  * Stable-token helpers for {@code document_extraction}.
  *
- * <p>Open-vocabulary paraphrase → enum mapping belongs on {@link RouterDecision} LLM slots. This
- * class may read <strong>stable tokens</strong> already in the question (ids, literal enums, LOB
- * codes, {@code single-use}) and apply narrow by-id structural facet cues used by {@code
- * RouteClamps} — not synonym/lemma tables.
+ * <p>Open-vocabulary paraphrase → enum / facet mapping belongs on {@link RouterDecision} LLM slots.
+ * This class may read <strong>stable tokens</strong> already in the question (ids, literal enums,
+ * LOB codes, {@code single-use}) for inventory filters — not synonym/lemma tables or facet phrase
+ * cues (versions / created-by).
  */
 public final class EntityApiQuestion {
 
@@ -46,11 +44,6 @@ public final class EntityApiQuestion {
 
   private static final Pattern LOB_TOKEN =
       Pattern.compile("\\b(FICC|FX|RATES)\\b", Pattern.CASE_INSENSITIVE);
-
-  /** By-id versions cue (product vocabulary — not open-vocab status paraphrases). */
-  private static final Pattern VERSIONS_CUE =
-      Pattern.compile(
-          "\\bversions?\\b|\\bversion\\s+history\\b", Pattern.CASE_INSENSITIVE);
 
   private EntityApiQuestion() {}
 
@@ -86,8 +79,8 @@ public final class EntityApiQuestion {
   }
 
   /**
-   * Fill blank document_extraction slots from LLM sibling fields, stable tokens, and narrow by-id
-   * structural cues. Does not map paraphrases (paused→SUSPENDED).
+   * Fill blank document_extraction slots from LLM sibling fields and stable inventory tokens.
+   * Does not map paraphrases (paused→SUSPENDED) or invent versions / created-by facets from phrases.
    */
   public static void enrichDecision(RouterDecision decision, String question) {
     if (decision == null) {
@@ -254,16 +247,10 @@ public final class EntityApiQuestion {
     return null;
   }
 
-  /** Stable id presence for clamps / extractors — not NLU. */
-  public static boolean hasEntityId(String question) {
-    return PaymentIdParser.extract(question).isPresent()
-        || InstructionIdParser.extract(question).isPresent();
-  }
-
   /**
-   * Facet inference for clamps: LLM sibling slots, literal enums, sequence id + versions cue, or
-   * created-by + stable user id. Does <em>not</em> phrase-match who-approved / status-of / who-created
-   * — those facets come from {@code RouterDecision.extractionFacet}.
+   * Facet inference for clamps from literal inventory enums only. Does <em>not</em> phrase-match
+   * versions / created-by / who-approved / status-of / who-created — those facets come from {@code
+   * RouterDecision.extractionFacet}.
    */
   static Facet inferFacet(String question, RouterDecision decision) {
     String status = normalizeStatusEnum(decision == null ? null : decision.getEntityStatus());
@@ -275,13 +262,6 @@ public final class EntityApiQuestion {
       type = instructionTypeEnumToken(question);
     }
 
-    if (hasEntityId(question) && VERSIONS_CUE.matcher(question == null ? "" : question).find()) {
-      return Facet.VERSIONS;
-    }
-
-    if (extractUserId(question).isPresent() && isCreatedByShape(question)) {
-      return Facet.CREATED_BY_USER;
-    }
     if ("STANDING".equals(type)) {
       return Facet.LIST_STANDING;
     }
@@ -297,11 +277,6 @@ public final class EntityApiQuestion {
   public static boolean isCreatorAndApproverShape(String question) {
     String q = lower(question);
     return q.contains("who created") && q.contains("who approv");
-  }
-
-  public static boolean isCreatedByShape(String question) {
-    String q = lower(question);
-    return q.contains("created by") || q.contains("were created by") || q.contains("was created by");
   }
 
   /**

@@ -39,6 +39,44 @@ class EntityApiQuestionTest {
   }
 
   @Test
+  void doesNotPhraseInferVersionsOrCreatedByWithoutLlmSlots() {
+    RouterDecision versions = new RouterDecision();
+    EntityApiQuestion.enrichDecision(
+        versions, "List all versions of instruction 20260720-FICC-I-1");
+    assertNull(versions.getExtractionFacet());
+    assertFalse(
+        EntityApiQuestion.isEntityApiQuestion(
+            versions, "List all versions of instruction 20260720-FICC-I-1"));
+
+    RouterDecision createdBy = new RouterDecision();
+    EntityApiQuestion.enrichDecision(createdBy, "Which instructions were created by mo-050?");
+    assertNull(createdBy.getExtractionFacet());
+    assertFalse(
+        EntityApiQuestion.isEntityApiQuestion(
+            createdBy, "Which instructions were created by mo-050?"));
+  }
+
+  @Test
+  void preservesVersionsAndCreatedByLlmFacetSlots() {
+    RouterDecision versions = new RouterDecision();
+    versions.setExtractionFacet("versions");
+    EntityApiQuestion.enrichDecision(
+        versions, "List all versions of instruction 20260720-FICC-I-1");
+    assertEquals("versions", versions.getExtractionFacet());
+    assertTrue(
+        EntityApiQuestion.isEntityApiQuestion(
+            versions, "List all versions of instruction 20260720-FICC-I-1"));
+
+    RouterDecision createdBy = new RouterDecision();
+    createdBy.setExtractionFacet("created_by_user");
+    EntityApiQuestion.enrichDecision(createdBy, "Which instructions were created by mo-050?");
+    assertEquals("created_by_user", createdBy.getExtractionFacet());
+    assertTrue(
+        EntityApiQuestion.isEntityApiQuestion(
+            createdBy, "Which instructions were created by mo-050?"));
+  }
+
+  @Test
   void preservesLlmFacetSlots() {
     RouterDecision approver = new RouterDecision();
     approver.setExtractionFacet("approver");

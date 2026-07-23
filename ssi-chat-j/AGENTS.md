@@ -35,7 +35,7 @@ Prefer hermetic unit tests (mocks for ZITADEL, payment-service, Spring AI `ChatC
 | Path | Role |
 |------|------|
 | `src/main/java/com/sanjuthomas/policypilot/` | Application code |
-| `src/main/java/.../cypher/` | In-process neo4j_direct Cypher planner (alerts + SoD + timeline) |
+| `src/main/java/.../cypher/` | In-process neo4j_direct Cypher planner — plan from `RouterDecision.graphIntent` (+ time/scope/kind); stable tokens for instruction ids / LOB codes only |
 | `src/main/resources/templates/answers/` | Thymeleaf TEXT answer templates |
 | `src/test/java/` | Unit tests |
 | `scripts/prove-m1.sh` | Optional live golden against `:8096` |
@@ -50,16 +50,16 @@ For **open-vocabulary** filters (lifecycle status, instruction type, worded mone
 
 #### Documented exception — post-route clamps
 
-After Spring AI returns a decision, `routing.RouteClamps` may **rewrite `path` before dispatch**. These clamps are **not** phrase NLU — they only act on LLM slots already set, stable tokens (sequence ids, literal enums), or named-person extraction:
+After Spring AI returns a decision, `routing.RouteClamps` may **rewrite `path` before dispatch**. These clamps are **not** phrase NLU — they only act on LLM slots already set or stable tokens (sequence ids, literal enums):
 
 | Clamp | When | Effect |
 |-------|------|--------|
-| Entity API preference | `extractionFacet` / `entityStatus` / `instructionType` slots (or literal inventory enums / versions+id) while on `neo4j_direct` / `eligibility` / … | → `document_extraction` |
-| Person permissions | Named “permissions of …” on `me` / `eligibility` | → `person_permissions` |
+| Entity API preference | `extractionFacet` / `entityStatus` / `instructionType` slots (or literal inventory enums) while on `neo4j_direct` / `eligibility` / … | → `document_extraction` |
+| Person permissions | LLM `personQuery` already set while on `me` / `eligibility` | → `person_permissions` |
 
-- **Do** grow clamps only for slot/token repair with tests in `RouteClampsTest` — not who-approved / open-narrative / SoD phrase lists.
+- **Do** grow clamps only for slot/token repair with tests in `RouteClampsTest` — not who-approved / open-narrative / SoD / named-person phrase lists.
 - **Do not** add ad-hoc regex that invents new primary lanes. Intent paraphrases belong in `RouterPrompts` + `RouterDecision` slots.
-- Open narrative, past who-approved vs who-can, and graph SoD wordings are **router-only** (no Java phrase clamp).
+- Open narrative, past who-approved vs who-can, graph SoD, and named-person display names are **router-only** (no Java phrase clamp / `PersonQueryParser`).
 
 Cursor rule: [`.cursor/rules/ssi-chat-j-intent-routing.mdc`](../.cursor/rules/ssi-chat-j-intent-routing.mdc) (mirrors Python [`intent-semantic-routing.mdc`](../.cursor/rules/intent-semantic-routing.mdc)).
 

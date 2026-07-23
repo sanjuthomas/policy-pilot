@@ -24,11 +24,11 @@ public class PersonPermissionSummaryService {
     this.answerFormatter = answerFormatter;
   }
 
-  public LaneAnswer answer(String message, Subject subject, RouterDecision decision) {
+  public LaneAnswer answer(Subject subject, RouterDecision decision) {
     String query =
         decision != null && StringUtils.hasText(decision.getPersonQuery())
             ? decision.getPersonQuery().strip()
-            : PersonQueryParser.extract(message);
+            : null;
     if (!StringUtils.hasText(query)) {
       return LaneAnswer.of(
           "Ask again with a user id (e.g. `pay-203`) or a `Family, Given` display name.",

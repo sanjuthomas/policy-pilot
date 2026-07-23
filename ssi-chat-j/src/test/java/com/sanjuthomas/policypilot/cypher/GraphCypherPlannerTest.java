@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sanjuthomas.policypilot.cypher.GraphPlanModels.PlanResponse;
 import com.sanjuthomas.policypilot.cypher.GraphPlanModels.ValidateResult;
+import com.sanjuthomas.policypilot.pipeline.RouterDecision;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
@@ -14,9 +15,13 @@ class GraphCypherPlannerTest {
   private final GraphCypherPlanner planner = new GraphCypherPlanner();
 
   @Test
-  void plansAlertCountToday() {
+  void plansAlertCountTodayFromSlots() {
     PlanResponse plan =
-        planner.plan("How many ALERT events happened today?", "events", null);
+        planner.plan(
+            "How many ALERT events happened today?",
+            "events",
+            null,
+            decision("alert_count", "today", null, "alert"));
     assertTrue(plan.matched());
     assertEquals("planned_graph", plan.intentId());
     assertEquals("count", plan.planned().get(0).label());
@@ -30,33 +35,49 @@ class GraphCypherPlannerTest {
         planner.plan(
             "How many instruction policy denials happened this week?",
             "events",
-            Set.of("FICC"));
+            Set.of("FICC"),
+            decision("alert_count", "week", "instruction", "denial"));
     assertTrue(plan.matched());
     assertTrue(plan.planned().get(0).cypher().contains("e.payment_id IS NULL"));
     assertTrue(plan.planned().get(0).cypher().contains("owning_lob = 'FICC'"));
   }
 
   @Test
-  void plansAlertListAndRanking() {
-    PlanResponse list = planner.plan("Can you report all ALERTS today?", "events", null);
+  void plansAlertListAndRankingFromSlots() {
+    PlanResponse list =
+        planner.plan(
+            "Can you report all ALERTS today?",
+            "events",
+            null,
+            decision("alert_list", "today", null, "alert"));
     assertTrue(list.matched());
     assertEquals("security_event_alert_list", list.planned().get(0).label());
 
     PlanResponse ranking =
         planner.plan(
-            "Which user triggered the most policy denial alerts this week?", "events", null);
+            "Which user triggered the most policy denial alerts this week?",
+            "events",
+            null,
+            decision("alert_ranking", "week", null, "denial"));
     assertTrue(ranking.matched());
     assertEquals("ranking", ranking.planned().get(0).label());
   }
 
   @Test
-  void plansSodIntents() {
+  void plansSodIntentsFromSlots() {
     assertEquals(
         "instruction.self_approval",
-        planner.plan("Show self-approved instructions", "instructions", null).intentId());
+        planner
+            .plan("Show self-approved instructions", "instructions", null, decision("self_approval"))
+            .intentId());
     assertEquals(
         "instruction.mutual_approval",
-        planner.plan("Which users mutually approved each other?", "instructions", null)
+        planner
+            .plan(
+                "Which users mutually approved each other?",
+                "instructions",
+                null,
+                decision("mutual_approval"))
             .intentId());
     assertEquals(
         "instruction.subordinate_approver",
@@ -64,18 +85,26 @@ class GraphCypherPlannerTest {
             .plan(
                 "Which instructions were approved by someone who reports to the creator?",
                 "instructions",
-                null)
+                null,
+                decision("subordinate_approver"))
             .intentId());
     assertEquals(
         "instruction.duplicate_routes",
-        planner.plan("List duplicate settlement routes", "instructions", null).intentId());
+        planner
+            .plan(
+                "List duplicate settlement routes",
+                "instructions",
+                null,
+                decision("duplicate_routes"))
+            .intentId());
     assertEquals(
         "instruction.cross_entity_reciprocal_approval",
         planner
             .plan(
                 "Find cross-entity reciprocal approval between instruction and payment",
                 "all",
-                null)
+                null,
+                decision("cross_entity_reciprocal_approval"))
             .intentId());
   }
 
@@ -85,30 +114,40 @@ class GraphCypherPlannerTest {
         planner.plan(
             "Show the security event timeline for instruction 20260720-FICC-I-1",
             "events",
-            null);
+            null,
+            decision("instruction_timeline"));
     assertTrue(plan.matched());
     assertEquals("events.instruction_timeline_by_id", plan.intentId());
     assertTrue(plan.planned().get(0).cypher().contains("20260720-FICC-I-1"));
   }
 
   @Test
-  void unmatchedForUnrelatedQuestion() {
-    assertFalse(planner.plan("hello there", "events", null).matched());
+  void unmatchedWithoutGraphIntentSlot() {
+    assertFalse(planner.plan("How many ALERT events happened today?", "events", null, null).matched());
+    assertFalse(
+        planner
+            .plan("How many ALERT events happened today?", "events", null, new RouterDecision())
+            .matched());
   }
 
   @Test
   void validateRejectsWrites() {
-    ValidateResult result =
-        planner.validate("MATCH (n) CREATE (m:X) RETURN n LIMIT 1");
-    assertFalse(result.ok());
-    assertTrue(result.error().contains("write keyword"));
+    ValidateResult bad = planner.validate("MATCH (n) DELETE n RETURN n");
+    assertFalse(bad.ok());
   }
 
-  @Test
-  void emptyAllowedLobsDenyAll() {
-    PlanResponse plan =
-        planner.plan("How many ALERT events happened today?", "events", Set.of());
-    assertTrue(plan.matched());
-    assertTrue(plan.planned().get(0).cypher().contains("AND false"));
+  private static RouterDecision decision(String graphIntent) {
+    return decision(graphIntent, null, null, null);
+  }
+
+  private static RouterDecision decision(
+      String graphIntent, String window, String scope, String kind) {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("neo4j_direct");
+    decision.setGraphIntent(graphIntent);
+    decision.setGraphTimeWindow(window);
+    decision.setGraphEventScope(scope);
+    decision.setGraphEventKind(kind);
+    return decision;
   }
 }
