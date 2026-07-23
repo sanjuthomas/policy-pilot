@@ -12,6 +12,7 @@ import com.sanjuthomas.policypilot.TestFixtures;
 import com.sanjuthomas.policypilot.auth.ChatUsersDirectory;
 import com.sanjuthomas.policypilot.auth.Subject;
 import com.sanjuthomas.policypilot.extraction.DocumentExtractionService;
+import com.sanjuthomas.policypilot.extraction.EntityApiAnswerFormatter;
 import com.sanjuthomas.policypilot.extraction.PaymentDetailAnswerFormatter;
 import com.sanjuthomas.policypilot.eligibility.EligibilityAnswerFormatter;
 import com.sanjuthomas.policypilot.eligibility.EligibilityLaneService;
@@ -71,6 +72,7 @@ class ChatServiceTest {
   private EligibilityAnswerFormatter eligibilityAnswerFormatter;
   private InstructionDetailAnswerFormatter instructionDetailAnswerFormatter;
   private PaymentDetailAnswerFormatter paymentDetailAnswerFormatter;
+  private EntityApiAnswerFormatter entityApiAnswerFormatter;
   private PolicyDirectoryAnswerFormatter policyDirectoryAnswerFormatter;
   private PolicySummaryAnswerFormatter policySummaryAnswerFormatter;
   private MeIntentService meIntentService;
@@ -95,6 +97,7 @@ class ChatServiceTest {
         new InstructionDetailAnswerFormatter(renderer, new TimestampFormat());
     paymentDetailAnswerFormatter =
         new PaymentDetailAnswerFormatter(renderer, new MoneyFormat(), new TimestampFormat());
+    entityApiAnswerFormatter = new EntityApiAnswerFormatter(renderer, new PolicyBasisFormat());
     policyDirectoryAnswerFormatter = new PolicyDirectoryAnswerFormatter(renderer);
     policySummaryAnswerFormatter =
         new PolicySummaryAnswerFormatter(renderer, identityTokenFormat);
@@ -139,7 +142,8 @@ class ChatServiceTest {
             new DocumentExtractionService(
                 eligibilityClient,
                 instructionDetailAnswerFormatter,
-                paymentDetailAnswerFormatter),
+                paymentDetailAnswerFormatter,
+                entityApiAnswerFormatter),
             new Neo4jDirectService(
                 null,
                 null,
@@ -549,7 +553,11 @@ class ChatServiceTest {
 
     Neo4jDirectService neo4j =
         org.mockito.Mockito.mock(Neo4jDirectService.class);
-    when(neo4j.answer(anyString(), anyString(), org.mockito.ArgumentMatchers.any()))
+    when(neo4j.answer(
+            anyString(),
+            anyString(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any()))
         .thenReturn(
             new Neo4jDirectService.Neo4jDirectResult(
                 "There were 2 ALERT events today.",
@@ -586,7 +594,8 @@ class ChatServiceTest {
                 new DocumentExtractionService(
                     new FakeEligibilityClient(),
                     instructionDetailAnswerFormatter,
-                    paymentDetailAnswerFormatter),
+                    paymentDetailAnswerFormatter,
+                    entityApiAnswerFormatter),
                 neo4j,
                 fullRagLaneService),
             finalizer);

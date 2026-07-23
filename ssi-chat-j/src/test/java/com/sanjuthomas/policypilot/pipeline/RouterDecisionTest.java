@@ -54,4 +54,31 @@ class RouterDecisionTest {
     assertEquals("person_permissions", d.getPath());
     assertEquals("Kowalski, Anna", d.getPersonQuery());
   }
+
+  @Test
+  void documentExtractionSlotsRoundTrip() {
+    RouterDecision d = new RouterDecision();
+    d.setPath("document_extraction");
+    d.setExtractionTarget("instruction");
+    d.setExtractionFacet("list_by_status");
+    d.setEntityStatus("SUSPENDED");
+    d.setInstructionType("STANDING");
+    assertEquals("document_extraction", d.getPath());
+    assertEquals("instruction", d.getExtractionTarget());
+    assertEquals("list_by_status", d.getExtractionFacet());
+    assertEquals("SUSPENDED", d.getEntityStatus());
+    assertEquals("STANDING", d.getInstructionType());
+  }
+
+  @Test
+  void graphAnswerSlotsRoundTrip() {
+    RouterDecision d = new RouterDecision();
+    d.setPath("neo4j_direct");
+    d.setGraphTimeWindow("week");
+    d.setGraphEventScope("instruction");
+    d.setGraphEventKind("denial");
+    assertEquals("week", d.getGraphTimeWindow());
+    assertEquals("instruction", d.getGraphEventScope());
+    assertEquals("denial", d.getGraphEventKind());
+  }
 }

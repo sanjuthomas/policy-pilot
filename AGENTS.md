@@ -256,6 +256,6 @@ See the root [README.md](README.md) for architecture, storage names, and demo UR
 - Match existing code style in each service (imports, naming, FastAPI patterns).
 - Keep changes focused; avoid unrelated refactors.
 - Maintain gated test coverage on application packages (`inst`, `ps`, `authz`, `seq`, `etl`, `chat_application` at **70%**, others **80%**) and all `shared/*` packages listed above; `ssi-demo-harness` is exempt. For Java `ssi-chat-j`, maintain **≥ 80%** JaCoCo line coverage (`mvn verify` in `ssi-chat-j/`).
-- **ssi-chat intent thumb rule:** determine natural-language intent with Gemini structured output / LLM semantic routing (`RouterDecision.path`) — not regex or fuzzy classification. Regex is OK for slot parsing (ids, amounts) and LLM-failure fallback only. Details: [docs/intent-determination.md](docs/intent-determination.md) and `.cursor/rules/intent-semantic-routing.mdc`.
+- **ssi-chat intent thumb rule:** determine natural-language intent with Gemini structured output / LLM semantic routing (`RouterDecision.path`) — not regex or fuzzy classification. Map open-vocabulary filters (status, type, worded amounts) with **LLM slots**, not synonym/lemma tables. Regex is OK for stable tokens (ids, explicit clubs, literal enums) and LLM-failure fallback only. Details: [docs/intent-determination.md](docs/intent-determination.md) and `.cursor/rules/intent-semantic-routing.mdc`.
 - Do not commit secrets (`.env`, PAT files, credentials).
 - Only create git commits when the user explicitly asks.

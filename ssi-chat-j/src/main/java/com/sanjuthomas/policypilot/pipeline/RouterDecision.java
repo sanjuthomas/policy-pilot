@@ -45,6 +45,33 @@ public class RouterDecision {
   private String extractionTarget;
 
   /**
+   * When path is document_extraction: which API facet to answer (full card, status, creator, list,
+   * versions, …). Prefer this over regex facet detection.
+   */
+  @JsonPropertyDescription(
+      "document_extraction only: show|status|creator|creator_and_approver|approver|"
+          + "list_by_status|list_standing|list_single_use|created_by_user|versions")
+  private String extractionFacet;
+
+  /**
+   * When path is document_extraction and listing/filtering by lifecycle status: domain enum only.
+   * Map paraphrases (paused, pending, …) to the enum here — the client does not maintain synonym
+   * tables.
+   */
+  @JsonPropertyDescription(
+      "document_extraction list/filter: SUBMITTED|APPROVED|REJECTED|SUSPENDED|EXPIRED|"
+          + "CANCELLED|DRAFT|USED (map paraphrases like paused→SUSPENDED)")
+  private String entityStatus;
+
+  /**
+   * When path is document_extraction and listing by instruction type: domain enum only.
+   * Map paraphrases (evergreen, one-time, …) to STANDING or SINGLE_USE.
+   */
+  @JsonPropertyDescription(
+      "document_extraction list/filter: STANDING|SINGLE_USE (map paraphrases like evergreen→STANDING)")
+  private String instructionType;
+
+  /**
    * When path is policy_directory: USD amount threshold as a number (e.g. 1e9 for \"a billion\" /
    * \"$1 billion\"). Semantic amount extraction — do not leave null when the question implies a
    * money size.
@@ -99,6 +126,25 @@ public class RouterDecision {
   /** When path is me: payment vs instruction for who_can_create / can_act. */
   @JsonPropertyDescription("me only: payment or instruction when relevant")
   private String meEntityType;
+
+  /**
+   * When path is neo4j_direct for alert/denial aggregates: time window for answer wording.
+   * Map paraphrases here — the formatter does not parse "today"/"this week" from free text.
+   */
+  @JsonPropertyDescription("neo4j_direct alert/count/list/ranking: today|week|all")
+  private String graphTimeWindow;
+
+  /**
+   * When path is neo4j_direct for alert/denial aggregates: entity scope for answer wording.
+   */
+  @JsonPropertyDescription("neo4j_direct alert aggregates: payment|instruction (or omit)")
+  private String graphEventScope;
+
+  /**
+   * When path is neo4j_direct for alert aggregates: ALERT vs policy-denial wording.
+   */
+  @JsonPropertyDescription("neo4j_direct alert aggregates: alert|denial|approval_denial")
+  private String graphEventKind;
 
   /** Model rationale for logs — not used for dispatch. */
   @JsonPropertyDescription("Brief explanation of the routing choice.")

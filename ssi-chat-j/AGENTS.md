@@ -45,7 +45,7 @@ Prefer hermetic unit tests (mocks for ZITADEL, payment-service, Spring AI `ChatC
 
 **Primary intent / `RouterDecision.path` comes from Spring AI structured output.** Do not add regex, keyword, or fuzzy classifiers that *choose* the path. Grow `RouterPrompts.ROUTER_SYSTEM` and `RouterDecision` slots instead.
 
-For `policy_directory`, money size is an LLM slot only (`directoryAmount`, `directoryAmountStrict`) — no regex amount NLU. Regex remains OK for **stable tokens** (sequence ids, explicit `UP_TO_*_CLUB`).
+For **open-vocabulary** filters (lifecycle status, instruction type, worded money amounts), use LLM slots (`entityStatus`, `instructionType`, `directoryAmount`, …) — **not** synonym/lemma/typo tables in Java. Regex remains OK only for **stable tokens** (sequence ids, explicit `UP_TO_*_CLUB`, literal enum strings already in the question) and documented post-route clamps.
 
 #### Documented exception — post-route clamps
 
@@ -53,7 +53,7 @@ After Spring AI returns a decision, `routing.RouteClamps` may **rewrite `path` b
 
 | Clamp | When | Effect |
 |-------|------|--------|
-| Past who-approved audit | `who approv…` + payment/instruction id, not `who can approv` | → `neo4j_direct` |
+| Entity API preference | status / creator / past who-approved / inventory / versions (slots or by-id shapes), while on `neo4j_direct` / `eligibility` / … | → `document_extraction` |
 | Open narrative | brief narrative / denial-activity audit prose, no entity id | → `vector` (recorded as `full_rag`) |
 
 - **Do** grow clamps only as named, tested parity with Python (`prefer_neo4j_direct_when_matched`, `prefer_vector_for_open_narrative`) or an explicitly documented Java widening.

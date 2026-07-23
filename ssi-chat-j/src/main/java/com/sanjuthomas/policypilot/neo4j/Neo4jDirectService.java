@@ -6,6 +6,7 @@ import com.sanjuthomas.policypilot.cypher.CypherBuilderClient;
 import com.sanjuthomas.policypilot.cypher.CypherBuilderModels.PlanResponse;
 import com.sanjuthomas.policypilot.cypher.CypherBuilderModels.PlannedQuery;
 import com.sanjuthomas.policypilot.cypher.CypherBuilderModels.ValidateResponse;
+import com.sanjuthomas.policypilot.pipeline.RouterDecision;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -32,6 +33,11 @@ public class Neo4jDirectService {
   }
 
   public Neo4jDirectResult answer(String question, String mode, Subject subject) {
+    return answer(question, mode, subject, null);
+  }
+
+  public Neo4jDirectResult answer(
+      String question, String mode, Subject subject, RouterDecision decision) {
     Set<String> allowedLobs = RetrievalScope.allowedRetrievalLobs(subject);
     PlanResponse plan = cypherBuilderClient.plan(question, mode, allowedLobs);
     if (!plan.matched() || plan.planned() == null || plan.planned().isEmpty()) {
@@ -61,7 +67,9 @@ public class Neo4jDirectService {
     List<Map<String, Object>> rows =
         filterRowsByRetrievalLobs(neo4jQueryExecutor.runRead(validated.cypher()), allowedLobs);
     String intentId = plan.intentId() == null ? "planned_graph" : plan.intentId();
-    String answer = answerFormatter.format(question, labels, rows, intentId);
+    String answer =
+        answerFormatter.format(
+            question, labels, rows, intentId, GraphAnswerHints.from(decision));
     return new Neo4jDirectResult(
         answer, intentId, validated.cypher(), rows, provenanceForIntent(intentId));
   }
@@ -83,6 +91,14 @@ public class Neo4jDirectService {
       return byLabel;
     }
     byLabel = findLabel(planned, "instruction_detail");
+    if (byLabel != null) {
+      return byLabel;
+    }
+    byLabel = findLabel(planned, "instruction_inventory");
+    if (byLabel != null) {
+      return byLabel;
+    }
+    byLabel = findLabel(planned, "instructions_by_creator");
     if (byLabel != null) {
       return byLabel;
     }

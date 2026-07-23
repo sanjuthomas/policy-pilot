@@ -843,6 +843,13 @@ class PaymentService:
             raise PermissionError("not authorized to view payment")
         return record
 
+    async def list_versions(
+        self, payment_id: str, subject: Subject
+    ) -> list[VersionedPayment]:
+        # AuthZ against current version first (parity with instruction-service).
+        await self.get(payment_id, subject)
+        return await self.repo.list_versions(payment_id)
+
     async def list(
         self,
         subject: Subject,

@@ -78,6 +78,8 @@ async def create_instruction(
 async def list_instructions(
     owning_lob: str | None = Query(default=None),
     status: str | None = Query(default=None),
+    instruction_type: str | None = Query(default=None),
+    created_by_user_id: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     subject: Subject = Depends(get_subject),
     service: InstructionService = Depends(get_service),
@@ -96,6 +98,8 @@ async def list_instructions(
             subject,
             owning_lob=owning_lob,
             status=status,
+            instruction_type=instruction_type,
+            created_by_user_id=created_by_user_id,
             limit=limit,
             bearer_token=ctx.user_token,
             session_id=ctx.user_session_id,

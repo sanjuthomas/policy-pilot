@@ -240,6 +240,67 @@ public class EligibilityClient {
         "payment service error: ");
   }
 
+  /**
+   * List instructions visible to the OBO subject, optionally filtered by status / type / creator.
+   */
+  public List<Map<String, Object>> listInstructions(
+      String status,
+      String instructionType,
+      String createdByUserId,
+      String owningLob,
+      int limit,
+      String userBearerToken,
+      String userSessionId) {
+    StringBuilder url =
+        new StringBuilder(
+            trimSlash(properties.instructionServiceUrl()) + "/api/v1/instructions?");
+    List<String> params = new ArrayList<>();
+    if (StringUtils.hasText(status)) {
+      params.add("status=" + UriUtils.encodeQueryParam(status.strip(), StandardCharsets.UTF_8));
+    }
+    if (StringUtils.hasText(instructionType)) {
+      params.add(
+          "instruction_type="
+              + UriUtils.encodeQueryParam(instructionType.strip(), StandardCharsets.UTF_8));
+    }
+    if (StringUtils.hasText(createdByUserId)) {
+      params.add(
+          "created_by_user_id="
+              + UriUtils.encodeQueryParam(createdByUserId.strip(), StandardCharsets.UTF_8));
+    }
+    if (StringUtils.hasText(owningLob)) {
+      params.add(
+          "owning_lob=" + UriUtils.encodeQueryParam(owningLob.strip(), StandardCharsets.UTF_8));
+    }
+    params.add("limit=" + Math.max(1, Math.min(limit, 500)));
+    url.append(String.join("&", params));
+    return getJsonList(
+        url.toString(),
+        oboHeaders(userBearerToken, userSessionId),
+        "instruction service error: ");
+  }
+
+  public List<Map<String, Object>> listInstructionVersions(
+      String instructionId, String userBearerToken, String userSessionId) {
+    String url =
+        trimSlash(properties.instructionServiceUrl())
+            + "/api/v1/instructions/"
+            + instructionId
+            + "/versions";
+    return getJsonList(
+        url, oboHeaders(userBearerToken, userSessionId), "instruction service error: ");
+  }
+
+  public List<Map<String, Object>> listPaymentVersions(
+      String paymentId, String userBearerToken, String userSessionId) {
+    String url =
+        trimSlash(properties.paymentServiceUrl())
+            + "/api/v1/payments/"
+            + paymentId
+            + "/versions";
+    return getJsonList(url, oboHeaders(userBearerToken, userSessionId), "payment service error: ");
+  }
+
   private List<Map<String, Object>> getJsonList(
       String url, HttpHeaders headers, String errorPrefix) {
     try {

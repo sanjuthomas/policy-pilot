@@ -1,28 +1,27 @@
 package com.sanjuthomas.policypilot.routing;
 
+import com.sanjuthomas.policypilot.extraction.EntityApiQuestion;
+import com.sanjuthomas.policypilot.person.PersonQueryParser;
 import com.sanjuthomas.policypilot.pipeline.RouterDecision;
 import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
+import org.springframework.util.StringUtils;
 
 /**
  * Deterministic <em>post-router</em> path clamps — the documented exception to “path comes from
  * Spring AI only.”
  *
  * <p>Primary intent is still Spring AI structured {@code RouterDecision}. These helpers may rewrite
- * {@code path} <strong>before</strong> {@code ChatPathDispatcher}, matching Python {@code
- * prefer_neo4j_direct_when_matched} / past-tense approval audit routing / {@code
- * prefer_vector_for_open_narrative}.
+ * {@code path} / fill blank entity-API slots <strong>before</strong> {@code ChatPathDispatcher}.
  *
  * <ul>
- *   <li>Past {@code who approv} + payment/instruction id (not {@code who can approv}) → {@code
- *       neo4j_direct}
+ *   <li>Entity status / creator / approver / inventory / versions (domain API) → {@code
+ *       document_extraction}; blank facets filled from LLM sibling slots, literal enums, and
+ *       narrow by-id shapes (including past {@code who approv} + id)
+ *   <li>Third-party “permissions of/for …” → {@code person_permissions} (not {@code me})
  *   <li>Open narrative / denial-activity audit prose (no entity id) → {@code vector}
  * </ul>
- *
- * <p>Java’s open-narrative clamp is slightly broader than Python: it also rewrites {@code
- * neo4j_direct} / {@code eligibility} so those lanes cannot steal the vector golden. See {@code
- * ssi-chat-j/AGENTS.md} and {@code .cursor/rules/ssi-chat-j-intent-routing.mdc}.
  *
  * <p>Do not add undeclared path-force regex outside this class.
  */
@@ -45,39 +44,78 @@ public final class RouteClamps {
   private static final Set<String> OPEN_NARRATIVE_CLAMP_PATHS =
       Set.of("graph", "hybrid", "eligibility", "neo4j_direct", "full_rag");
 
+  private static final Set<String> ENTITY_API_STEAL_PATHS =
+      Set.of("neo4j_direct", "graph", "hybrid", "eligibility", "vector", "full_rag");
+
   private RouteClamps() {}
 
   public static RouterDecision apply(RouterDecision decision, String question) {
     if (decision == null) {
       return null;
     }
-    decision = clampPastWhoApproved(decision, question);
+    decision = clampPersonPermissions(decision, question);
+    decision = clampEntityApi(decision, question);
     return clampOpenNarrativeToVector(decision, question);
   }
 
   /**
-   * Past-tense "who approved &lt;id&gt;" is a graph audit — never live eligibility OPA cards.
+   * Named-person directory permissions must not land on {@code me} / my_permissions.
    */
-  private static RouterDecision clampPastWhoApproved(RouterDecision decision, String question) {
-    if (!isPastWhoApprovedAudit(question)) {
+  private static RouterDecision clampPersonPermissions(RouterDecision decision, String question) {
+    String extracted = PersonQueryParser.extract(question);
+    if (!StringUtils.hasText(extracted)) {
       return decision;
     }
-    if (!hasEntityId(question)) {
+    String path = decision.getPath() == null ? "" : decision.getPath().toLowerCase(Locale.ROOT);
+    if ("person_permissions".equals(path)) {
+      if (!StringUtils.hasText(decision.getPersonQuery())) {
+        decision.setPersonQuery(extracted);
+      }
       return decision;
     }
-    if ("neo4j_direct".equals(decision.getPath())) {
+    if (!"me".equals(path) && !"eligibility".equals(path)) {
       return decision;
     }
     String prior = decision.getPath();
-    decision.setPath("neo4j_direct");
-    appendReasoning(decision, "clamped neo4j_direct (past who-approved audit; was " + prior + ")");
+    decision.setPath("person_permissions");
+    if (!StringUtils.hasText(decision.getPersonQuery())) {
+      decision.setPersonQuery(extracted);
+    }
+    appendReasoning(decision, "clamped person_permissions (named person; was " + prior + ")");
     return decision;
   }
 
   /**
-   * Open narratives stay vector-only (recorded as full_rag). Slightly broader than Python: also
-   * clamps neo4j_direct / eligibility, which otherwise steal the denial-activity golden.
+   * Prefer instruction/payment domain APIs; enrich blank facets from slots / stable tokens /
+   * narrow by-id shapes.
    */
+  private static RouterDecision clampEntityApi(RouterDecision decision, String question) {
+    EntityApiQuestion.enrichDecision(decision, question);
+    if (!EntityApiQuestion.isEntityApiQuestion(decision, question)) {
+      return decision;
+    }
+    String path = decision.getPath() == null ? "" : decision.getPath().toLowerCase(Locale.ROOT);
+    if ("document_extraction".equals(path)) {
+      ensureInventoryTarget(decision);
+      return decision;
+    }
+    if (!ENTITY_API_STEAL_PATHS.contains(path)) {
+      return decision;
+    }
+    String prior = decision.getPath();
+    decision.setPath("document_extraction");
+    ensureInventoryTarget(decision);
+    appendReasoning(decision, "clamped document_extraction (entity API; was " + prior + ")");
+    return decision;
+  }
+
+  private static void ensureInventoryTarget(RouterDecision decision) {
+    if (EntityApiQuestion.isInventoryFacet(
+        EntityApiQuestion.facetFromSlot(decision.getExtractionFacet()))) {
+      decision.setExtractionTarget("instruction");
+    }
+  }
+
   private static RouterDecision clampOpenNarrativeToVector(
       RouterDecision decision, String question) {
     if (!isOpenNarrativeQuestion(question)) {
@@ -101,8 +139,12 @@ public final class RouteClamps {
     decision.setReasoning(reasoning.isEmpty() ? note : reasoning + "; " + note);
   }
 
+  /** True for past-tense who-approved audit (not eligibility who-can / creator+approver combo). */
   static boolean isPastWhoApprovedAudit(String question) {
     String text = question == null ? "" : question;
+    if (EntityApiQuestion.isCreatorAndApproverShape(text)) {
+      return false;
+    }
     if (!WHO_APPROVED.matcher(text).find()) {
       return false;
     }

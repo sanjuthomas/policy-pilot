@@ -47,21 +47,22 @@ Skip: `*.show_by_id` (intentional Java `document_extraction`).
 
 | Intent | Status | Golden |
 |--------|--------|--------|
-| `payment.creator_and_approver_by_id` | `done` | `golden_payment_creator_and_approver` |
-| `instruction.creator_and_approver_by_id` | `done` | `golden_instruction_creator_and_approver` |
-| `instruction.creator_by_id` | `done` | formatter parity (no dedicated golden yet) |
-| `instruction.list_by_status` | `todo` | **next** |
-| `instruction.list_single_use` | `todo` | |
-| `instruction.list_standing` | `todo` | |
-| `instruction.created_by_user` | `todo` | |
-| `instruction.self_approval` | `todo` | |
-| `instruction.subordinate_approver` | `todo` | |
-| `instruction.duplicate_routes` | `todo` | |
-| `instruction.mutual_approval` | `todo` | needs SoD seed |
-| `instruction.cross_entity_reciprocal_approval` | `todo` | |
-| `instruction.versions_by_id` | `todo` | |
-| `payment.versions_by_id` | `todo` | |
-| `events.instruction_timeline_by_id` | `todo` | |
+| `instruction.show_by_id` / `payment.show_by_id` | `done` | document_extraction (API) |
+| `payment.status_by_id` / `instruction.status_by_id` | `done` | document_extraction (API) |
+| `payment.creator_by_id` / `instruction.creator_by_id` | `done` | document_extraction (API) |
+| `payment.creator_and_approver_by_id` / `instruction.creator_and_approver_by_id` | `done` | document_extraction (API) |
+| `instruction.list_by_status` | `done` | `golden_instructions_list_by_status` (API) |
+| `instruction.list_standing` | `done` | API list `instruction_type=STANDING` |
+| `instruction.list_single_use` | `done` | API list `instruction_type=SINGLE_USE` |
+| `instruction.created_by_user` | `done` | API list `created_by_user_id=` |
+| `instruction.versions_by_id` / `payment.versions_by_id` | `done` | domain `/versions` APIs |
+| `payment.approver_by_id` / `instruction.approver_by_id` | `done` | domain GET + lifecycle/approved_by (`golden_events_who_approved_payment`) |
+| `instruction.self_approval` | `todo` | **next** (keep Neo4j) |
+| `instruction.subordinate_approver` | `todo` | keep Neo4j |
+| `instruction.duplicate_routes` | `todo` | keep Neo4j |
+| `instruction.mutual_approval` | `todo` | needs SoD seed; keep Neo4j |
+| `instruction.cross_entity_reciprocal_approval` | `todo` | keep Neo4j |
+| `events.instruction_timeline_by_id` | `todo` | keep Neo4j |
 | Facet counts / group-by (planned_graph formatters) | `todo` | GOLDEN_EVAL P1/P2 |
 
 ---
@@ -214,3 +215,5 @@ No Python-only golden cases remain open for the Java success bar.
 | 2026-07-21 | Entity status/creator: cypher-builder-svc YAML-parity plan fallback + Thymeleaf formatters; `golden_payment_status` / `golden_instruction_status` / `golden_payment_creator` |
 | 2026-07-21 | FO/MO instruction VIEW goldens (`fo-ficc-101`, `pay-101`); formatter `generation_ms=0` parity with Python neo4j_direct |
 | 2026-07-21 | P3.5: vector/full_rag lane (`EmbeddingModel` + Neo4j `queryNodes` + Gemini synthesize); `golden_vector_security_summary` green — A/B Python parity closed |
+| 2026-07-22 | `instruction.list_by_status`: cypher-builder inventory plan + Thymeleaf inventory table; `golden_instructions_list_by_status` |
+| 2026-07-22 | Entity inventory/detail (status/creator/combo/list/versions) moved to `document_extraction` domain APIs; Neo4j reserved for alerts/SoD/who-approved |

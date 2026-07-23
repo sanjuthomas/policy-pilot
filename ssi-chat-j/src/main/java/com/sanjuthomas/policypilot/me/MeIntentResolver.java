@@ -4,16 +4,17 @@ import com.sanjuthomas.policypilot.pipeline.RouterDecision;
 import com.sanjuthomas.policypilot.routing.LobFilterParser;
 import com.sanjuthomas.policypilot.routing.PaymentIdParser;
 import java.util.Locale;
-import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-/** Build {@link MeIntent} from Spring AI {@link RouterDecision} + deterministic slot parsers. */
+/**
+ * Build {@link MeIntent} from Spring AI {@link RouterDecision} + stable-token parsers (ids, LOB).
+ *
+ * <p>{@code meKind} / {@code meAction} / {@code meEntityType} come from the router — do not rewrite
+ * kinds from create/draft phrasing.
+ */
 @Component
 public class MeIntentResolver {
-
-  private static final Pattern CREATE_OR_DRAFT =
-      Pattern.compile("\\b(create|draft)\\b", Pattern.CASE_INSENSITIVE);
 
   public MeIntent resolve(RouterDecision decision, String message) {
     if (decision == null || !"me".equalsIgnoreCase(nullToEmpty(decision.getPath()))) {
@@ -38,33 +39,20 @@ public class MeIntentResolver {
 
     return switch (kind) {
       case "who_can_create" -> {
-        String resolvedType = entityType != null ? entityType : createEntityType(text);
-        if (resolvedType == null) {
+        if (entityType == null) {
           yield null;
         }
         yield new MeIntent(
-            kind, action != null ? action : "CREATE", resolvedType, null, coveringLob);
+            kind, action != null ? action : "CREATE", entityType, null, coveringLob);
       }
-      case "who_covers_lob" -> {
-        if (CREATE_OR_DRAFT.matcher(text).find()) {
-          String resolvedType = entityType != null ? entityType : createEntityType(text);
-          yield new MeIntent(
-              "who_can_create",
-              "CREATE",
-              resolvedType != null ? resolvedType : "payment",
-              null,
-              coveringLob);
-        }
-        yield new MeIntent(kind, null, null, null, coveringLob);
-      }
-      case "can_act_on_entity" -> {
-        String resolvedType = entityType != null ? entityType : createEntityType(text);
-        if (resolvedType == null) {
-          resolvedType = "payment";
-        }
-        yield new MeIntent(
-            kind, action != null ? action : "CREATE", resolvedType, entityId, null);
-      }
+      case "who_covers_lob" -> new MeIntent(kind, null, null, null, coveringLob);
+      case "can_act_on_entity" ->
+          new MeIntent(
+              kind,
+              action != null ? action : "CREATE",
+              entityType != null ? entityType : "payment",
+              entityId,
+              null);
       case "who_else_can_act" ->
           new MeIntent(
               kind,
@@ -81,17 +69,6 @@ public class MeIntentResolver {
               null);
       default -> new MeIntent(kind, action, entityType, entityId, coveringLob);
     };
-  }
-
-  private static String createEntityType(String text) {
-    String lower = text.toLowerCase(Locale.ROOT);
-    if (lower.contains("instruction")) {
-      return "instruction";
-    }
-    if (lower.contains("payment")) {
-      return "payment";
-    }
-    return null;
   }
 
   private static String nullToEmpty(String value) {

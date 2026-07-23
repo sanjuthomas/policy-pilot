@@ -135,6 +135,8 @@ class InstructionRepository:
         *,
         owning_lob: str | None = None,
         status: str | None = None,
+        instruction_type: str | None = None,
+        created_by_user_id: str | None = None,
         limit: int = 100,
     ) -> list[VersionedInstruction]:
         query: dict[str, Any] = {"out": INSTRUCTION_CURRENT_OUT}
@@ -142,6 +144,11 @@ class InstructionRepository:
             query["owning_lob"] = owning_lob
         if status:
             query["status"] = status
+        # Type / creator live in the versioned payload document (not top-level).
+        if instruction_type:
+            query["payload.instruction_type"] = instruction_type
+        if created_by_user_id:
+            query["payload.created_by.user_id"] = created_by_user_id
 
         cursor = self.collection.find(query).sort("in", -1).limit(limit)
         return [document_to_versioned_instruction(doc) async for doc in cursor]

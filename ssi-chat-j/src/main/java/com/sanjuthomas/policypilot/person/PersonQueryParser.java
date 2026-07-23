@@ -5,8 +5,8 @@ import java.util.regex.Pattern;
 import org.springframework.util.StringUtils;
 
 /**
- * Slot parse for {@code person_permissions} when the router omits {@code personQuery}.
- * Parity with Python {@code extract_person_name_heuristic} — not used to choose the path.
+ * Slot fallback for {@code person_permissions} when the router omits {@code personQuery}.
+ * Prefer the LLM {@code personQuery} slot; this extractor is resilience-only (not path NLU).
  */
 public final class PersonQueryParser {
 

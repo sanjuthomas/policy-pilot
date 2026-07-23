@@ -75,7 +75,8 @@ class IntentRouterTest {
 
     RouterDecision result = intentRouter.route("Who approved 20260720-FICC-P-19?");
 
-    assertEquals("neo4j_direct", result.getPath());
+    assertEquals("document_extraction", result.getPath());
+    assertEquals("approver", result.getExtractionFacet());
   }
 
   @Test

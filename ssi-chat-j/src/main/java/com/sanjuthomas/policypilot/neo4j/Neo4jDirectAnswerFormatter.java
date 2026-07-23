@@ -27,6 +27,7 @@ public class Neo4jDirectAnswerFormatter {
   private static final String INSTRUCTION_CREATOR_TEMPLATE = "instruction-creator-by-id";
   private static final String CREATOR_AND_APPROVER_TEMPLATE = "entity-creator-and-approver";
   private static final String APPROVAL_LOOKUP_TEMPLATE = "approval-lookup";
+  private static final String INSTRUCTION_INVENTORY_TEMPLATE = "instruction-inventory-table";
 
   private final AnswerRenderer answerRenderer;
   private final PolicyBasisFormat policyBasisFormat;
@@ -38,41 +39,41 @@ public class Neo4jDirectAnswerFormatter {
   }
 
   public String format(String question, Set<String> labels, List<Map<String, Object>> rows) {
-    return format(question, labels, rows, null);
+    return format(question, labels, rows, null, GraphAnswerHints.empty());
   }
 
   public String format(
       String question, Set<String> labels, List<Map<String, Object>> rows, String intentId) {
+    return format(question, labels, rows, intentId, GraphAnswerHints.empty());
+  }
+
+  public String format(
+      String question,
+      Set<String> labels,
+      List<Map<String, Object>> rows,
+      String intentId,
+      GraphAnswerHints hints) {
     Set<String> labelSet = labels == null ? Set.of() : labels;
     String intent = intentId == null ? "" : intentId;
+    GraphAnswerHints display = hints == null ? GraphAnswerHints.empty() : hints;
 
-    if ("payment.status_by_id".equals(intent)
-        || (labelSet.contains("payment_detail") && isStatusQuestion(question))) {
+    if ("payment.status_by_id".equals(intent)) {
       return answerRenderer.render(PAYMENT_STATUS_TEMPLATE, toPaymentStatusView(rows));
     }
-    if ("instruction.status_by_id".equals(intent)
-        || (labelSet.contains("instruction_detail") && isStatusQuestion(question))) {
+    if ("instruction.status_by_id".equals(intent)) {
       return answerRenderer.render(INSTRUCTION_STATUS_TEMPLATE, toInstructionStatusView(rows));
     }
     if ("payment.creator_and_approver_by_id".equals(intent)
-        || "instruction.creator_and_approver_by_id".equals(intent)
-        || ((labelSet.contains("payment_detail") || labelSet.contains("instruction_detail"))
-            && isCreatorAndApproverQuestion(question))) {
+        || "instruction.creator_and_approver_by_id".equals(intent)) {
       String displayNoun =
-          "instruction.creator_and_approver_by_id".equals(intent)
-                  || (!"payment.creator_and_approver_by_id".equals(intent)
-                      && labelSet.contains("instruction_detail"))
-              ? "Instruction"
-              : "Payment";
+          "instruction.creator_and_approver_by_id".equals(intent) ? "Instruction" : "Payment";
       return answerRenderer.render(
           CREATOR_AND_APPROVER_TEMPLATE, toCreatorAndApproverView(rows, displayNoun));
     }
-    if ("payment.creator_by_id".equals(intent)
-        || (labelSet.contains("payment_detail") && isCreatorQuestion(question))) {
+    if ("payment.creator_by_id".equals(intent)) {
       return answerRenderer.render(PAYMENT_CREATOR_TEMPLATE, toPaymentCreatorView(rows));
     }
-    if ("instruction.creator_by_id".equals(intent)
-        || (labelSet.contains("instruction_detail") && isCreatorQuestion(question))) {
+    if ("instruction.creator_by_id".equals(intent)) {
       return answerRenderer.render(INSTRUCTION_CREATOR_TEMPLATE, toInstructionCreatorView(rows));
     }
     if ("payment.approver_by_id".equals(intent)
@@ -80,82 +81,32 @@ public class Neo4jDirectAnswerFormatter {
         || labelSet.contains("payment_approval_lookup")
         || labelSet.contains("approval_lookup")) {
       String noun =
-          labelSet.contains("approval_lookup") && !labelSet.contains("payment_approval_lookup")
+          "instruction.approver_by_id".equals(intent)
+                  || (labelSet.contains("approval_lookup")
+                      && !labelSet.contains("payment_approval_lookup"))
               ? "instruction"
               : "payment";
-      if ("instruction.approver_by_id".equals(intent)) {
-        noun = "instruction";
-      }
       return answerRenderer.render(APPROVAL_LOOKUP_TEMPLATE, toApprovalLookupView(rows, noun));
     }
+    if ("instruction.list_by_status".equals(intent)
+        || labelSet.contains("instruction_inventory")
+        || labelSet.contains("instructions_by_creator")) {
+      return answerRenderer.render(
+          INSTRUCTION_INVENTORY_TEMPLATE, toInstructionInventoryView(rows));
+    }
 
-    if (labelSet.contains("ranking") && isAlertRankingQuestion(question)) {
-      return answerRenderer.render(RANKING_TEMPLATE, toRankingView(question, rows));
+    // Template choice from planner labels — not free-text phrase detectors.
+    if (labelSet.contains("ranking")) {
+      return answerRenderer.render(RANKING_TEMPLATE, toRankingView(display, rows));
     }
-    if (labelSet.contains("security_event_alert_list") && isAlertListQuestion(question)) {
-      return answerRenderer.render(LIST_TEMPLATE, toListView(question, rows));
+    if (labelSet.contains("security_event_alert_list")) {
+      return answerRenderer.render(LIST_TEMPLATE, toListView(display, rows));
     }
-    if (labelSet.contains("count") && isAlertCountQuestion(question)) {
-      return answerRenderer.render(COUNT_TEMPLATE, toCountView(question, rows));
+    if (labelSet.contains("count")) {
+      return answerRenderer.render(COUNT_TEMPLATE, toCountView(display, rows));
     }
     long total = extractTotal(rows);
     return "Graph query returned " + total + " row(s).";
-  }
-
-  static boolean isStatusQuestion(String question) {
-    String q = lower(question);
-    return q.contains("status of")
-        || q.contains("what is the status")
-        || q.contains("what's the status");
-  }
-
-  static boolean isCreatorQuestion(String question) {
-    String q = lower(question);
-    if (q.contains("approv")) {
-      return false;
-    }
-    return q.contains("who created") || q.contains("which user created");
-  }
-
-  static boolean isCreatorAndApproverQuestion(String question) {
-    String q = lower(question);
-    boolean created = q.contains("who created");
-    boolean approved = q.contains("who approv");
-    return created && approved;
-  }
-
-  static boolean isAlertCountQuestion(String question) {
-    String q = lower(question);
-    if (!(q.contains("how many") || q.contains("count") || q.contains("number of"))) {
-      return false;
-    }
-    return q.contains("alert")
-        || q.contains("denial")
-        || q.contains("denied")
-        || q.contains("security event");
-  }
-
-  static boolean isAlertListQuestion(String question) {
-    String q = lower(question);
-    boolean listVerb =
-        q.contains("list")
-            || q.contains("show")
-            || q.contains("report")
-            || q.contains("enumerate")
-            || q.contains("display")
-            || q.contains("all ");
-    boolean alertNoun =
-        q.contains("alert")
-            || q.contains("denial")
-            || q.contains("denied")
-            || q.contains("security event");
-    return listVerb && alertNoun;
-  }
-
-  static boolean isAlertRankingQuestion(String question) {
-    String q = lower(question);
-    return (q.contains("most") || q.contains("top") || q.contains("rank"))
-        && (q.contains("alert") || q.contains("denial") || q.contains("denied"));
   }
 
   static EntityStatusByIdView toPaymentStatusView(List<Map<String, Object>> rows) {
@@ -210,6 +161,28 @@ public class Neo4jDirectAnswerFormatter {
       return new EntityCreatorByIdView(false, true, entityId, null);
     }
     return new EntityCreatorByIdView(false, false, entityId, creator);
+  }
+
+  static InstructionInventoryTableView toInstructionInventoryView(
+      List<Map<String, Object>> rows) {
+    List<InstructionInventoryTableView.InventoryRow> tableRows = new ArrayList<>();
+    if (rows != null) {
+      for (Map<String, Object> row : rows) {
+        if (row == null || row.get("instruction_id") == null) {
+          continue;
+        }
+        tableRows.add(
+            new InstructionInventoryTableView.InventoryRow(
+                display(row.get("instruction_id")),
+                display(row.get("status")),
+                display(row.get("owning_lob")),
+                display(row.get("currency")),
+                display(row.get("creator_display")),
+                display(row.get("approver_display"))));
+      }
+    }
+    return new InstructionInventoryTableView(
+        "No matching instructions were found in the graph.", tableRows);
   }
 
   static EntityCreatorAndApproverView toCreatorAndApproverView(
@@ -304,30 +277,20 @@ public class Neo4jDirectAnswerFormatter {
         || lower.equals("null"));
   }
 
-  static SecurityEventAlertCountView toCountView(String question, List<Map<String, Object>> rows) {
-    String q = lower(question);
-    String scopePrefix = "";
-    if (q.contains("payment")) {
-      scopePrefix = "payment ";
-    } else if (q.contains("instruction")) {
-      scopePrefix = "instruction ";
-    }
-    String eventLabel = (q.contains("denial") || q.contains("denied")) ? "policy denial" : "ALERT";
-    String periodSuffix;
-    if (q.contains("today")) {
-      periodSuffix = " today";
-    } else if (q.contains("this week") || q.contains("week")) {
-      periodSuffix = " this week";
-    } else {
-      periodSuffix = "";
-    }
+  static SecurityEventAlertCountView toCountView(
+      GraphAnswerHints hints, List<Map<String, Object>> rows) {
+    GraphAnswerHints display = hints == null ? GraphAnswerHints.empty() : hints;
     return new SecurityEventAlertCountView(
-        extractTotal(rows), scopePrefix, eventLabel, periodSuffix);
+        extractTotal(rows),
+        display.scopePrefix(),
+        display.eventLabel(),
+        display.periodSuffix());
   }
 
-  static SecurityEventAlertListView toListView(String question, List<Map<String, Object>> rows) {
-    String q = lower(question);
-    boolean approvalDenial = q.contains("approval") && (q.contains("denial") || q.contains("denied"));
+  static SecurityEventAlertListView toListView(
+      GraphAnswerHints hints, List<Map<String, Object>> rows) {
+    GraphAnswerHints display = hints == null ? GraphAnswerHints.empty() : hints;
+    boolean approvalDenial = display.approvalDenialList();
     String title =
         approvalDenial ? "Approval denial ALERT security events" : "ALERT security events";
     String empty =
@@ -354,24 +317,10 @@ public class Neo4jDirectAnswerFormatter {
   }
 
   static SecurityEventAlertRankingView toRankingView(
-      String question, List<Map<String, Object>> rows) {
-    String q = lower(question);
-    String domain;
-    if (q.contains("payment") && !q.contains("instruction")) {
-      domain = "payment policy denial alerts";
-    } else if (q.contains("instruction") && !q.contains("payment")) {
-      domain = "instruction policy denial alerts";
-    } else {
-      domain = "policy denial alerts";
-    }
-    String period;
-    if (q.contains("today")) {
-      period = "today";
-    } else if (q.contains("this week") || q.contains("week")) {
-      period = "this week";
-    } else {
-      period = "all time";
-    }
+      GraphAnswerHints hints, List<Map<String, Object>> rows) {
+    GraphAnswerHints display = hints == null ? GraphAnswerHints.empty() : hints;
+    String domain = display.rankingDomain();
+    String period = display.periodWord();
     List<RankingRow> rankingRows = new ArrayList<>();
     if (rows != null) {
       for (Map<String, Object> row : rows) {
@@ -445,9 +394,5 @@ public class Neo4jDirectAnswerFormatter {
     }
     String text = value.toString().trim();
     return text.isEmpty() ? null : text;
-  }
-
-  private static String lower(String question) {
-    return question == null ? "" : question.toLowerCase(Locale.ROOT);
   }
 }
