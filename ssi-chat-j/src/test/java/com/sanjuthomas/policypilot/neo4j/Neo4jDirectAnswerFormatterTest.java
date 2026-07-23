@@ -386,4 +386,37 @@ class Neo4jDirectAnswerFormatterTest {
     assertTrue(!answer.contains("WHY:"));
     assertTrue(!answer.contains("was not approved"));
   }
+
+  @Test
+  void formatsSelfApprovalComplianceTable() {
+    String answer =
+        formatter.format(
+            "Show self-approved instructions",
+            Set.of("self_approval"),
+            List.of(
+                Map.of(
+                    "instruction_id",
+                    "20260720-FICC-I-1",
+                    "owning_lob",
+                    "FICC",
+                    "status",
+                    "APPROVED",
+                    "creator_display",
+                    "Ada")),
+            "instruction.self_approval");
+    assertTrue(answer.contains("Found 1 matching instruction(s)."));
+    assertTrue(answer.contains("20260720-FICC-I-1"));
+    assertTrue(answer.contains("Ada"));
+  }
+
+  @Test
+  void formatsMutualApprovalEmpty() {
+    String answer =
+        formatter.format(
+            "mutual approval",
+            Set.of("mutual_approval"),
+            List.of(),
+            "instruction.mutual_approval");
+    assertEquals("No mutual approval cases were found in the graph.", answer);
+  }
 }

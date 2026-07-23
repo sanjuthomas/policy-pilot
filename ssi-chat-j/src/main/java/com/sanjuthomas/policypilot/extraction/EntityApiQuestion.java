@@ -29,6 +29,16 @@ public final class EntityApiQuestion {
           "\\b(SUBMITTED|APPROVED|REJECTED|SUSPENDED|EXPIRED|CANCELLED|DRAFT|USED)\\b",
           Pattern.CASE_INSENSITIVE);
 
+  /**
+   * Past-tense approval verb — not a lifecycle status filter.
+   *
+   * <p>Matches {@code approved by …} and {@code A approved B's …}. Does <em>not</em> match the
+   * adjective form {@code approved instructions/payments} used for inventory filters.
+   */
+  private static final Pattern APPROVED_AS_VERB =
+      Pattern.compile(
+          "\\bapproved\\s+(?!instructions?\\b|payments?\\b)", Pattern.CASE_INSENSITIVE);
+
   /** Canonical type tokens, including the hyphenated product spelling {@code single-use}. */
   private static final Pattern TYPE_ENUM_TOKEN =
       Pattern.compile(
@@ -83,8 +93,10 @@ public final class EntityApiQuestion {
     if (decision == null) {
       return;
     }
-    // "Who approved …" contains the word approved — that is the verb, not a status filter.
-    if (!StringUtils.hasText(decision.getEntityStatus()) && !isWhoApprovedVerb(question)) {
+    // "Who approved …" / "A approved B …" — verb, not a status filter.
+    if (!StringUtils.hasText(decision.getEntityStatus())
+        && !isWhoApprovedVerb(question)
+        && !isApprovedAsVerb(question)) {
       String status = statusEnumToken(question);
       if (status != null) {
         decision.setEntityStatus(status);
@@ -249,12 +261,13 @@ public final class EntityApiQuestion {
   }
 
   /**
-   * Narrow by-id / inventory facet inference for clamps. Not paraphrase NLU: uses entity id +
-   * fixed shapes, or sibling slots / literal enums already in the question.
+   * Facet inference for clamps: LLM sibling slots, literal enums, sequence id + versions cue, or
+   * created-by + stable user id. Does <em>not</em> phrase-match who-approved / status-of / who-created
+   * — those facets come from {@code RouterDecision.extractionFacet}.
    */
   static Facet inferFacet(String question, RouterDecision decision) {
     String status = normalizeStatusEnum(decision == null ? null : decision.getEntityStatus());
-    if (status == null) {
+    if (status == null && !isWhoApprovedVerb(question) && !isApprovedAsVerb(question)) {
       status = statusEnumToken(question);
     }
     String type = normalizeTypeEnum(decision == null ? null : decision.getInstructionType());
@@ -262,23 +275,8 @@ public final class EntityApiQuestion {
       type = instructionTypeEnumToken(question);
     }
 
-    if (hasEntityId(question)) {
-      if (VERSIONS_CUE.matcher(question == null ? "" : question).find()) {
-        return Facet.VERSIONS;
-      }
-      if (isCreatorAndApproverShape(question)) {
-        return Facet.CREATOR_AND_APPROVER;
-      }
-      if (isPastWhoApprovedOnly(question)) {
-        return Facet.APPROVER;
-      }
-      if (isStatusShape(question)) {
-        return Facet.STATUS;
-      }
-      if (isCreatorShape(question)) {
-        return Facet.CREATOR;
-      }
-      return null;
+    if (hasEntityId(question) && VERSIONS_CUE.matcher(question == null ? "" : question).find()) {
+      return Facet.VERSIONS;
     }
 
     if (extractUserId(question).isPresent() && isCreatedByShape(question)) {
@@ -301,41 +299,26 @@ public final class EntityApiQuestion {
     return q.contains("who created") && q.contains("who approv");
   }
 
-  public static boolean isCreatorShape(String question) {
-    String q = lower(question);
-    if (q.contains("approv")) {
-      return false;
-    }
-    return q.contains("who created") || q.contains("which user created");
-  }
-
-  public static boolean isStatusShape(String question) {
-    String q = lower(question);
-    return q.contains("status of")
-        || q.contains("what is the status")
-        || q.contains("what's the status");
-  }
-
   public static boolean isCreatedByShape(String question) {
     String q = lower(question);
     return q.contains("created by") || q.contains("were created by") || q.contains("was created by");
   }
 
-  static boolean isPastWhoApprovedOnly(String question) {
-    String q = lower(question);
-    if (!q.contains("who approv")) {
-      return false;
-    }
-    if (q.contains("who can approv")) {
-      return false;
-    }
-    return !isCreatorAndApproverShape(question);
-  }
-
-  /** True when "approved" is the past-tense approval verb, not a lifecycle status filter. */
+  /**
+   * True when "approved" is the past-tense approval verb in a who-approved question — used only so
+   * status-token fallback does not treat it as lifecycle {@code APPROVED}.
+   */
   static boolean isWhoApprovedVerb(String question) {
     String q = lower(question);
     return q.contains("who approv") && !isCreatorAndApproverShape(question);
+  }
+
+  /**
+   * True when {@code approved} is a past-tense verb ({@code approved by}, {@code A approved B}),
+   * not the adjective in {@code approved instructions}.
+   */
+  static boolean isApprovedAsVerb(String question) {
+    return question != null && APPROVED_AS_VERB.matcher(question).find();
   }
 
   private static String facetSlotName(Facet facet) {

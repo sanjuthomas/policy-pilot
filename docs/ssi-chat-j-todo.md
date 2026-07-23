@@ -29,17 +29,18 @@ Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `
 | **M1** — health + login + eligibility golden | `done` | `prove-eligibility.sh` on `:8096` |
 | Observability (Micrometer → OTLP) | `done` | Same chat SLI names as Python; no Prometheus scrape |
 | Document extraction (API) | `done` | `path=document_extraction` → instruction/payment GET |
-| Phase 2 cypher bridge | `done` | Merged [#99](https://github.com/sanjuthomas/policy-pilot/pull/99); `cypher-builder-svc` `:8097` |
+| Phase 2 cypher bridge | `done` | Historical [#99](https://github.com/sanjuthomas/policy-pilot/pull/99); **superseded** by in-process Java planner |
+| In-process Java Cypher planner | `done` | `com.sanjuthomas.policypilot.cypher` — no HTTP bridge for `ssi-chat-j` |
 | **P3.4** — neo4j_direct security-event / denial formatters | `done` | Thymeleaf templates + LOB scope; 8 denial/alert goldens |
 | Entity status / creator goldens | `done` | status + payment creator via bridge YAML-parity |
 | Who-approved payment golden | `done` | approval-lookup Thymeleaf; heuristic + entity_plan fallback |
 | FO/MO instruction VIEW goldens | `done` | `golden_instruction_view_fo_ficc` / `_mo_covering_ficc` |
 | **P3.5** — vector security summary | `done` | `golden_vector_security_summary` green on `:8096` |
 | **person_permissions** | `done` | Authz directory summary; `golden_person_permissions_kowalski` in prove bank |
-| **neo4j_direct remaining port** | `in_progress` | Port Python YAML intents one-by-one + golden each |
-| **Next after neo4j_direct** | `todo` | Payment skills |
+| **neo4j_direct remaining port** | `done` | SoD goldens in prove bank; facet families still backlog |
+| **Next after neo4j_direct** | `todo` | Payment skills / GOLDEN_EVAL facet families |
 
-**Bank snapshot:** Java prove bank **57** · Python-only **0**. Soft bank not used for Java roadmap.
+**Bank snapshot:** Java prove bank **71** · Python-only **0**. Soft bank not used for Java roadmap.
 
 ### neo4j_direct remaining (from `ssi-chat/.../neo4j_direct.yaml`)
 
@@ -49,20 +50,20 @@ Skip: `*.show_by_id` (intentional Java `document_extraction`).
 |--------|--------|--------|
 | `instruction.show_by_id` / `payment.show_by_id` | `done` | document_extraction (API) |
 | `payment.status_by_id` / `instruction.status_by_id` | `done` | document_extraction (API) |
-| `payment.creator_by_id` / `instruction.creator_by_id` | `done` | document_extraction (API) |
+| `payment.creator_by_id` / `instruction.creator_by_id` | `done` | document_extraction (API); goldens `golden_payment_creator`, `golden_instruction_creator` |
 | `payment.creator_and_approver_by_id` / `instruction.creator_and_approver_by_id` | `done` | document_extraction (API) |
 | `instruction.list_by_status` | `done` | `golden_instructions_list_by_status` (API) |
 | `instruction.list_standing` | `done` | API list `instruction_type=STANDING` |
 | `instruction.list_single_use` | `done` | API list `instruction_type=SINGLE_USE` |
 | `instruction.created_by_user` | `done` | API list `created_by_user_id=` |
 | `instruction.versions_by_id` / `payment.versions_by_id` | `done` | domain `/versions` APIs |
-| `payment.approver_by_id` / `instruction.approver_by_id` | `done` | domain GET + lifecycle/approved_by (`golden_events_who_approved_payment`) |
-| `instruction.self_approval` | `todo` | **next** (keep Neo4j) |
-| `instruction.subordinate_approver` | `todo` | keep Neo4j |
-| `instruction.duplicate_routes` | `todo` | keep Neo4j |
-| `instruction.mutual_approval` | `todo` | needs SoD seed; keep Neo4j |
-| `instruction.cross_entity_reciprocal_approval` | `todo` | keep Neo4j |
-| `events.instruction_timeline_by_id` | `todo` | keep Neo4j |
+| `payment.approver_by_id` / `instruction.approver_by_id` | `done` | domain GET + lifecycle/approved_by (`golden_events_who_approved_payment`, `golden_instruction_who_approved`) |
+| `instruction.self_approval` | `done` | `golden_instructions_self_approval` (soft empty-or-found) |
+| `instruction.subordinate_approver` | `done` | `golden_instructions_subordinate_approver` |
+| `instruction.duplicate_routes` | `done` | `golden_instructions_duplicate_routes` |
+| `instruction.mutual_approval` | `done` | `golden_instructions_mutual_approval` (+ demo seed in prove) |
+| `instruction.cross_entity_reciprocal_approval` | `done` | `golden_cross_entity_reciprocal_approval` (+ demo seed in prove) |
+| `events.instruction_timeline_by_id` | `done` | `golden_events_instruction_timeline` |
 | Facet counts / group-by (planned_graph formatters) | `todo` | GOLDEN_EVAL P1/P2 |
 
 ---
@@ -196,7 +197,7 @@ No Python-only golden cases remain open for the Java success bar.
 | D.1 | Full `questions.yaml` bank | `deferred` | |
 | D.2 | Payment skills parity | `deferred` | |
 | D.3 | Replace Python chat | `deferred` | Explicitly **out of scope** for this experiment |
-| D.4 | Native Java `cypher_builder` port | `deferred` | Only if HTTP bridge fails scale/latency |
+| D.4 | Native Java `cypher_builder` port | `done` | In-process `com.sanjuthomas.policypilot.cypher` (alerts + SoD + timeline); no HTTP bridge |
 
 ---
 
@@ -217,3 +218,5 @@ No Python-only golden cases remain open for the Java success bar.
 | 2026-07-21 | P3.5: vector/full_rag lane (`EmbeddingModel` + Neo4j `queryNodes` + Gemini synthesize); `golden_vector_security_summary` green — A/B Python parity closed |
 | 2026-07-22 | `instruction.list_by_status`: cypher-builder inventory plan + Thymeleaf inventory table; `golden_instructions_list_by_status` |
 | 2026-07-22 | Entity inventory/detail (status/creator/combo/list/versions) moved to `document_extraction` domain APIs; Neo4j reserved for alerts/SoD/who-approved |
+| 2026-07-23 | Dropped cypher-builder HTTP bridge for Java; in-process `GraphCypherPlanner` covers alerts + SoD + timeline |
+| 2026-07-23 | Six Neo4j SoD goldens added to prove bank (self/subordinate/duplicate/mutual/cross/timeline); mutual+cross demo-seeded in prove |

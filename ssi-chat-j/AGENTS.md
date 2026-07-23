@@ -35,6 +35,7 @@ Prefer hermetic unit tests (mocks for ZITADEL, payment-service, Spring AI `ChatC
 | Path | Role |
 |------|------|
 | `src/main/java/com/sanjuthomas/policypilot/` | Application code |
+| `src/main/java/.../cypher/` | In-process neo4j_direct Cypher planner (alerts + SoD + timeline) |
 | `src/main/resources/templates/answers/` | Thymeleaf TEXT answer templates |
 | `src/test/java/` | Unit tests |
 | `scripts/prove-m1.sh` | Optional live golden against `:8096` |
@@ -49,16 +50,16 @@ For **open-vocabulary** filters (lifecycle status, instruction type, worded mone
 
 #### Documented exception — post-route clamps
 
-After Spring AI returns a decision, `routing.RouteClamps` may **rewrite `path` before dispatch**. This is intentional Python parity, not a silent handler override:
+After Spring AI returns a decision, `routing.RouteClamps` may **rewrite `path` before dispatch**. These clamps are **not** phrase NLU — they only act on LLM slots already set, stable tokens (sequence ids, literal enums), or named-person extraction:
 
 | Clamp | When | Effect |
 |-------|------|--------|
-| Entity API preference | status / creator / past who-approved / inventory / versions (slots or by-id shapes), while on `neo4j_direct` / `eligibility` / … | → `document_extraction` |
-| Open narrative | brief narrative / denial-activity audit prose, no entity id | → `vector` (recorded as `full_rag`) |
+| Entity API preference | `extractionFacet` / `entityStatus` / `instructionType` slots (or literal inventory enums / versions+id) while on `neo4j_direct` / `eligibility` / … | → `document_extraction` |
+| Person permissions | Named “permissions of …” on `me` / `eligibility` | → `person_permissions` |
 
-- **Do** grow clamps only as named, tested parity with Python (`prefer_neo4j_direct_when_matched`, `prefer_vector_for_open_narrative`) or an explicitly documented Java widening.
-- **Do not** add ad-hoc regex that invents new primary lanes outside `RouteClamps` / the router prompt.
-- Java’s open-narrative clamp is **slightly broader** than Python: it also rewrites `neo4j_direct` / `eligibility` so those lanes cannot steal the vector golden. Keep that difference documented when changing either side.
+- **Do** grow clamps only for slot/token repair with tests in `RouteClampsTest` — not who-approved / open-narrative / SoD phrase lists.
+- **Do not** add ad-hoc regex that invents new primary lanes. Intent paraphrases belong in `RouterPrompts` + `RouterDecision` slots.
+- Open narrative, past who-approved vs who-can, and graph SoD wordings are **router-only** (no Java phrase clamp).
 
 Cursor rule: [`.cursor/rules/ssi-chat-j-intent-routing.mdc`](../.cursor/rules/ssi-chat-j-intent-routing.mdc) (mirrors Python [`intent-semantic-routing.mdc`](../.cursor/rules/intent-semantic-routing.mdc)).
 

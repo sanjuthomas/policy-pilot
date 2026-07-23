@@ -66,11 +66,25 @@ class IntentRouterTest {
   }
 
   @Test
-  void routeClampsPastWhoApprovedAwayFromEligibility() {
+  void routeDoesNotPhraseClampPastWhoApprovedWithoutLlmFacet() {
     RouterDecision decision = new RouterDecision();
     decision.setPath("eligibility");
     decision.setEligibilityTarget("payment");
     decision.setEligibilityAction("APPROVE");
+    when(callResponseSpec.entity(eq(RouterDecision.class))).thenReturn(decision);
+
+    RouterDecision result = intentRouter.route("Who approved 20260720-FICC-P-19?");
+
+    assertEquals("eligibility", result.getPath());
+  }
+
+  @Test
+  void routeClampsWhenLlmSetApproverFacetOnWrongPath() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("eligibility");
+    decision.setEligibilityTarget("payment");
+    decision.setEligibilityAction("APPROVE");
+    decision.setExtractionFacet("approver");
     when(callResponseSpec.entity(eq(RouterDecision.class))).thenReturn(decision);
 
     RouterDecision result = intentRouter.route("Who approved 20260720-FICC-P-19?");

@@ -148,7 +148,14 @@ public final class RouterPrompts {
         path=neo4j_direct
         Prefer for "how many ALERT / policy denial / security events … today/this week?",
         "list / report all ALERTS today", "list instruction denial events this week",
-        "which user triggered the most policy denial alerts …".
+        "which user triggered the most policy denial alerts …",
+        and graph SoD / compliance investigations:
+          self-approval (creator and approver same person),
+          subordinate/reports-to-creator approvals,
+          mutual approval (A approved B and B approved A),
+          cross-entity reciprocal approval (instruction ↔ payment),
+          duplicate settlement routes / CONFLICTS_WITH / same creditor account+currency,
+          security event timeline for a named instruction id.
         Do NOT use neo4j_direct for entity status/creator/approver/inventory/versions
         (use document_extraction).
         For alert/count/list/ranking answers, ALWAYS set display slots (no free-text paraphrase parsing):
@@ -169,11 +176,25 @@ public final class RouterPrompts {
             → neo4j_direct, graphTimeWindow=today, graphEventKind=alert
           "Which user triggered the most policy denial alerts this week?"
             → neo4j_direct, graphTimeWindow=week, graphEventKind=denial
+          "Show instructions where creator and approver are the same person."
+            → neo4j_direct
+          "Are there any instructions approved by someone who directly reports to the creator?"
+            → neo4j_direct
+          "Are there active instructions sharing the same creditor account and currency?"
+            → neo4j_direct
+          "Are there any mutual approval cases (A approved B's instruction and B approved A's)?"
+            → neo4j_direct
+          "Find cross-entity reciprocal approval between instruction and payment"
+            → neo4j_direct
+          "What is the full security event timeline for instruction 20260720-FICC-I-1?"
+            → neo4j_direct
           (Entity id lookups apply regardless of UI search mode.)
       Vector (open narrative / semantic audit overview — no entity id, no how-many/list):
         path=vector
         Prefer for brief narratives, audit-log overviews, or "recent policy denial activity"
-        prose. Do NOT use neo4j_direct for open narratives (that path is for counts/lists/ids).
+        prose. Do NOT use neo4j_direct, graph, hybrid, or eligibility for open narratives
+        (those paths are for counts/lists/ids / OPA who-can — not free-form prose).
+        ALWAYS choose vector for these shapes even when the text mentions denial/alert/policy.
         Examples:
           "Write a brief narrative about recent policy denial activity in the audit log."
             → vector

@@ -17,9 +17,6 @@ public final class InstructionIdParser {
       Pattern.compile(
           "^(?<date>\\d{7,8})-(?<lob>[A-Za-z0-9_]+)-I-(?<seq>\\d+)$", Pattern.CASE_INSENSITIVE);
 
-  private static final Pattern LEGACY_INSTRUCTION_SLOT =
-      Pattern.compile("(?i)\\binstruction\\s+([A-Za-z0-9._:-]+)");
-
   private InstructionIdParser() {}
 
   public static Optional<String> extract(String question) {
@@ -27,12 +24,6 @@ public final class InstructionIdParser {
     Matcher sequence = SEQUENCE_INSTRUCTION_IN_TEXT.matcher(text);
     if (sequence.find()) {
       return normalize(sequence.group());
-    }
-    Matcher legacy = LEGACY_INSTRUCTION_SLOT.matcher(text);
-    if (legacy.find()) {
-      String token = legacy.group(1).replaceAll("[?.!,;:]+$", "");
-      Optional<String> asSequence = normalize(token);
-      return asSequence.isPresent() ? asSequence : Optional.of(token);
     }
     return Optional.empty();
   }

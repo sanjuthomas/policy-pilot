@@ -1,7 +1,6 @@
 package com.sanjuthomas.policypilot.routing;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sanjuthomas.policypilot.pipeline.RouterDecision;
@@ -10,11 +9,12 @@ import org.junit.jupiter.api.Test;
 class RouteClampsTest {
 
   @Test
-  void clampsPastWhoApprovedFromEligibilityToDocumentExtraction() {
+  void clampsWhenLlmSetApproverFacetButChoseEligibility() {
     RouterDecision decision = new RouterDecision();
     decision.setPath("eligibility");
     decision.setEligibilityTarget("payment");
     decision.setEligibilityAction("APPROVE");
+    decision.setExtractionFacet("approver");
 
     RouterDecision clamped =
         RouteClamps.apply(decision, "Who approved 20260720-FICC-P-19?");
@@ -25,7 +25,7 @@ class RouteClampsTest {
   }
 
   @Test
-  void leavesWhoCanApproveOnEligibility() {
+  void leavesWhoCanApproveOnEligibilityWithoutEntityApiSlots() {
     RouterDecision decision = new RouterDecision();
     decision.setPath("eligibility");
 
@@ -36,13 +36,14 @@ class RouteClampsTest {
   }
 
   @Test
-  void detectsPastWhoApprovedAudit() {
-    assertTrue(RouteClamps.isPastWhoApprovedAudit("Who approved payment 20260720-FICC-P-1?"));
-    assertTrue(RouteClamps.isPastWhoApprovedAudit("Who approved 20260720-FICC-P-19?"));
-    assertFalse(RouteClamps.isPastWhoApprovedAudit("Who can approve 20260720-FICC-P-8?"));
-    assertFalse(
-        RouteClamps.isPastWhoApprovedAudit(
-            "Who created payment 20260720-FICC-P-1 and who approved it?"));
+  void doesNotPhraseForceWhoApprovedOntoDocumentExtraction() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("eligibility");
+
+    RouterDecision result =
+        RouteClamps.apply(decision, "Who approved 20260720-FICC-P-19?");
+
+    assertEquals("eligibility", result.getPath());
   }
 
   @Test
@@ -99,15 +100,43 @@ class RouteClampsTest {
   }
 
   @Test
-  void clampsStatusFromNeo4jWithoutExplicitFacetSlot() {
+  void leavesOpenNarrativePathToLlmNoPhraseClamp() {
     RouterDecision decision = new RouterDecision();
     decision.setPath("neo4j_direct");
 
-    RouterDecision clamped =
-        RouteClamps.apply(decision, "What is the status of payment 20260720-FICC-P-1?");
+    RouterDecision result =
+        RouteClamps.apply(
+            decision,
+            "Write a brief narrative about recent policy denial activity in the audit log.");
 
-    assertEquals("document_extraction", clamped.getPath());
-    assertEquals("status", clamped.getExtractionFacet());
+    assertEquals("neo4j_direct", result.getPath());
+  }
+
+  @Test
+  void leavesGraphSodPathToLlmNoPhraseClamp() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("document_extraction");
+
+    RouterDecision result =
+        RouteClamps.apply(
+            decision,
+            "Are there any instructions approved by someone who directly reports to the creator?");
+
+    // No phrase SoD rewrite — router must choose neo4j_direct.
+    assertEquals("document_extraction", result.getPath());
+  }
+
+  @Test
+  void doesNotStealMutualApprovalOntoInventoryFromApprovedVerb() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("neo4j_direct");
+
+    RouterDecision result =
+        RouteClamps.apply(
+            decision,
+            "Are there any mutual approval cases (A approved B's instruction and B approved A's)?");
+
+    assertEquals("neo4j_direct", result.getPath());
   }
 
   @Test
@@ -135,44 +164,5 @@ class RouteClampsTest {
     assertEquals("list_by_status", clamped.getExtractionFacet());
     assertEquals("APPROVED", clamped.getEntityStatus());
     assertEquals("instruction", clamped.getExtractionTarget());
-  }
-
-  @Test
-  void clampsOpenNarrativeFromNeo4jDirectToVector() {
-    RouterDecision decision = new RouterDecision();
-    decision.setPath("neo4j_direct");
-
-    RouterDecision clamped =
-        RouteClamps.apply(
-            decision,
-            "Write a brief narrative about recent policy denial activity in the audit log.");
-
-    assertEquals("vector", clamped.getPath());
-    assertTrue(clamped.getReasoning().contains("forced vector for open narrative"));
-  }
-
-  @Test
-  void leavesOpenNarrativeAlreadyOnVector() {
-    RouterDecision decision = new RouterDecision();
-    decision.setPath("vector");
-
-    RouterDecision result =
-        RouteClamps.apply(
-            decision,
-            "Write a brief narrative about recent policy denial activity in the audit log.");
-
-    assertEquals("vector", result.getPath());
-  }
-
-  @Test
-  void detectsOpenNarrativeQuestion() {
-    assertTrue(
-        RouteClamps.isOpenNarrativeQuestion(
-            "Write a brief narrative about recent policy denial activity in the audit log."));
-    assertFalse(
-        RouteClamps.isOpenNarrativeQuestion("How many instruction policy denials happened this week?"));
-    assertFalse(
-        RouteClamps.isOpenNarrativeQuestion(
-            "Write a brief narrative about payment 20260720-FICC-P-1"));
   }
 }

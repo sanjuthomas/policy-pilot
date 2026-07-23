@@ -21,8 +21,9 @@ Not wired into the root `docker-compose.yml` yet — run locally with Maven agai
 - `POST /api/chat` policy summary (normative OPA):
   - authz `policy-summary?domain=&action=`
 - `POST /api/chat` me-centric lane (`path=me` → recorded as `eligibility` + `me.*` intents)
-- `POST /api/chat` neo4j_direct (via **cypher-builder-svc** `:8097` + Neo4j as `svc_chat`):
+- `POST /api/chat` neo4j_direct (in-process Cypher planner + Neo4j as `svc_chat`):
   - alert/denial counts, alert lists, top-denial ranking (Thymeleaf templates)
+  - SoD / compliance graph questions (self-approval, mutual, subordinate, duplicates, cross-entity, timeline)
   - subject LOB scope for FO/MO (parity with Python issue #63)
 - Observability (Micrometer → OTLP, same chat SLI names as Python; **no Prometheus scrape**):
   - `POST /api/chat/feedback`
@@ -30,18 +31,14 @@ Not wired into the root `docker-compose.yml` yet — run locally with Maven agai
 
 ## Run (Maven)
 
-With the usual Compose stack up (Python chat, payment, instruction, authz, ZITADEL, **cypher-builder-svc**, …):
+With the usual Compose stack up (Python chat, payment, instruction, authz, ZITADEL, Neo4j, …):
 
 ```bash
-# Cypher bridge (if not already up)
-docker compose up -d --build cypher-builder-svc
-
 cd ssi-chat-j
 # Optional: point at the mesh collector (defaults match Python OTEL_* )
 # export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 # export OTEL_EXPORTER_OTLP_PROTOCOL=grpc
 # export OTEL_SDK_DISABLED=true   # local only — still records in-process meters
-# export CYPHER_BUILDER_SERVICE_URL=http://localhost:8097
 # export NEO4J_URI=bolt://localhost:7687
 mvn -q spring-boot:run
 curl -s http://localhost:8096/health

@@ -9,10 +9,10 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 
 import com.sanjuthomas.policypilot.auth.Subject;
-import com.sanjuthomas.policypilot.cypher.CypherBuilderClient;
-import com.sanjuthomas.policypilot.cypher.CypherBuilderModels.PlanResponse;
-import com.sanjuthomas.policypilot.cypher.CypherBuilderModels.PlannedQuery;
-import com.sanjuthomas.policypilot.cypher.CypherBuilderModels.ValidateResponse;
+import com.sanjuthomas.policypilot.cypher.GraphCypherPlanner;
+import com.sanjuthomas.policypilot.cypher.GraphPlanModels.PlanResponse;
+import com.sanjuthomas.policypilot.cypher.GraphPlanModels.PlannedQuery;
+import com.sanjuthomas.policypilot.cypher.GraphPlanModels.ValidateResult;
 import com.sanjuthomas.policypilot.formatting.AnswerRenderer;
 import com.sanjuthomas.policypilot.formatting.AnswerTemplateConfig;
 import com.sanjuthomas.policypilot.formatting.MoneyFormat;
@@ -30,7 +30,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class Neo4jDirectServiceTest {
 
-  @Mock CypherBuilderClient cypherBuilderClient;
+  @Mock GraphCypherPlanner graphCypherPlanner;
   @Mock Neo4jQueryExecutor neo4jQueryExecutor;
 
   private Neo4jDirectAnswerFormatter formatter;
@@ -49,7 +49,7 @@ class Neo4jDirectServiceTest {
 
   @Test
   void plansValidatesExecutesAndFormats() {
-    when(cypherBuilderClient.plan(anyString(), eq("events"), isNull()))
+    when(graphCypherPlanner.plan(anyString(), eq("events"), isNull()))
         .thenReturn(
             new PlanResponse(
                 true,
@@ -59,12 +59,12 @@ class Neo4jDirectServiceTest {
                     new PlannedQuery("count", "MATCH (e) RETURN count(e) AS total"),
                     new PlannedQuery("details", "MATCH (e) RETURN e")),
                 Map.of()));
-    when(cypherBuilderClient.validate(anyString()))
-        .thenReturn(new ValidateResponse(true, "MATCH (e) RETURN count(e) AS total LIMIT 1", null));
+    when(graphCypherPlanner.validate(anyString()))
+        .thenReturn(ValidateResult.ok("MATCH (e) RETURN count(e) AS total LIMIT 1"));
     when(neo4jQueryExecutor.runRead(anyString())).thenReturn(List.of(Map.of("total", 3L)));
 
     Neo4jDirectService service =
-        new Neo4jDirectService(cypherBuilderClient, neo4jQueryExecutor, formatter);
+        new Neo4jDirectService(graphCypherPlanner, neo4jQueryExecutor, formatter);
     RouterDecision decision = new RouterDecision();
     decision.setPath("neo4j_direct");
     decision.setGraphTimeWindow("today");
@@ -81,10 +81,10 @@ class Neo4jDirectServiceTest {
 
   @Test
   void unmatchedWhenPlannerMisses() {
-    when(cypherBuilderClient.plan(anyString(), anyString(), any()))
-        .thenReturn(new PlanResponse(false, null, null, List.of(), Map.of()));
+    when(graphCypherPlanner.plan(anyString(), anyString(), any()))
+        .thenReturn(PlanResponse.unmatched());
     Neo4jDirectService service =
-        new Neo4jDirectService(cypherBuilderClient, neo4jQueryExecutor, formatter);
+        new Neo4jDirectService(graphCypherPlanner, neo4jQueryExecutor, formatter);
     Neo4jDirectResult result = service.answer("hello", "events", complianceSubject());
     assertNull(result.intentId());
     assertEquals("none", result.cypherProvenance());
@@ -108,7 +108,7 @@ class Neo4jDirectServiceTest {
 
   @Test
   void formatsPaymentStatusViaEntityIntent() {
-    when(cypherBuilderClient.plan(anyString(), eq("payments"), isNull()))
+    when(graphCypherPlanner.plan(anyString(), eq("payments"), isNull()))
         .thenReturn(
             new PlanResponse(
                 true,
@@ -116,8 +116,8 @@ class Neo4jDirectServiceTest {
                 "neo4j_direct",
                 List.of(new PlannedQuery("payment_detail", "MATCH (p) RETURN p")),
                 Map.of()));
-    when(cypherBuilderClient.validate(anyString()))
-        .thenReturn(new ValidateResponse(true, "MATCH (p) RETURN p LIMIT 1", null));
+    when(graphCypherPlanner.validate(anyString()))
+        .thenReturn(ValidateResult.ok("MATCH (p) RETURN p LIMIT 1"));
     when(neo4jQueryExecutor.runRead(anyString()))
         .thenReturn(
             List.of(
@@ -130,7 +130,7 @@ class Neo4jDirectServiceTest {
                     "FICC")));
 
     Neo4jDirectService service =
-        new Neo4jDirectService(cypherBuilderClient, neo4jQueryExecutor, formatter);
+        new Neo4jDirectService(graphCypherPlanner, neo4jQueryExecutor, formatter);
     Neo4jDirectResult result =
         service.answer(
             "What is the status of payment 20260720-FICC-P-1?", "payments", complianceSubject());

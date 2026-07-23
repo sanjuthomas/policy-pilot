@@ -22,21 +22,20 @@ Same bar as Python `ssi-chat` (`intent-semantic-routing.mdc`): people phrase the
 
 ## Documented exception — post-route clamps
 
-After Spring AI returns a decision, **`routing.RouteClamps` may rewrite `path` before handlers** (Python parity). These are the only approved regex path overrides:
+After Spring AI returns a decision, **`routing.RouteClamps` may rewrite `path` before handlers**. Clamps are **slot/token repair only** — not phrase NLU:
 
 | Clamp | Match shape | Rewrites path to |
 |-------|-------------|------------------|
-| Entity API preference | status / creator / past who-approved / inventory / versions (slots or by-id shapes) while on `neo4j_direct` / `eligibility` / … | `document_extraction` |
-| Open narrative | brief narrative / recent denial-activity audit prose; no entity id | `vector` |
+| Entity API preference | LLM `extractionFacet` / status / type slots, or literal inventory enums / versions+id, while on `neo4j_direct` / `eligibility` / … | `document_extraction` |
+| Person permissions | Named “permissions of …” on `me` / `eligibility` | `person_permissions` |
 
-- Entity inventory/approver prefer domain APIs on Java (Python may still match neo4j_direct YAML for some shapes).
-- Java open-narrative clamp is **slightly broader** than Python (also clamps `neo4j_direct` / `eligibility`) so those lanes cannot steal the vector security-summary golden — keep that documented if you change either side.
+- Open narrative → `vector`, past who-approved vs who-can, and graph SoD wordings are **router prompt + slots only** (no Java phrase clamp).
 - New clamps require an explicit name, tests in `RouteClampsTest`, and a note here / in `ssi-chat-j/AGENTS.md`. Do not add undeclared “force lane” regex elsewhere.
 
 ## Don't
 
 - Add `HeuristicRouter`, keyword/phrase lists, or fuzzy matchers that choose `path`.
-- Infer `eligibility` vs `policy_directory` vs `me` from regex before or instead of Spring AI.
+- Infer `eligibility` vs `policy_directory` vs `me` vs `vector` vs SoD from regex before or instead of Spring AI.
 - Maintain lemma / synonym tables for domain enums — grow `RouterDecision` + `RouterPrompts` instead.
 - Treat slot parsers (`PaymentIdParser`, `InstructionIdParser`, explicit club-name tokens, …) as
   intent classifiers.
