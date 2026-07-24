@@ -49,6 +49,12 @@ import com.sanjuthomas.policypilot.policydirectory.PolicyDirectoryService;
 import com.sanjuthomas.policypilot.policysummary.PolicySummaryAnswerFormatter;
 import com.sanjuthomas.policypilot.policysummary.PolicySummaryService;
 import com.sanjuthomas.policypilot.routing.IntentRouter;
+import com.sanjuthomas.policypilot.skill.ApprovePaymentSkill;
+import com.sanjuthomas.policypilot.skill.CancelPaymentSkill;
+import com.sanjuthomas.policypilot.skill.CreatePaymentSkill;
+import com.sanjuthomas.policypilot.skill.PaymentSkillService;
+import com.sanjuthomas.policypilot.skill.PendingSkillStore;
+import com.sanjuthomas.policypilot.skill.SubmitPaymentSkill;
 import com.sanjuthomas.policypilot.vector.FullRagLaneService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
@@ -117,6 +123,15 @@ class ChatServiceTest {
             new WhoElseCanActService(eligibilityForMe, renderer));
   }
 
+  private static PaymentSkillService paymentSkillService(FakeEligibilityClient eligibilityClient) {
+    PendingSkillStore store = new PendingSkillStore();
+    return new PaymentSkillService(
+        new CreatePaymentSkill(eligibilityClient, null, null, store),
+        new SubmitPaymentSkill(eligibilityClient, null, null, store),
+        new ApprovePaymentSkill(eligibilityClient, null, null, store),
+        new CancelPaymentSkill(eligibilityClient, null, null, store));
+  }
+
   private ChatService chatService(FakeEligibilityClient eligibilityClient) {
     SimpleMeterRegistry registry = new SimpleMeterRegistry();
     ChatAnswerFinalizer finalizer =
@@ -153,7 +168,8 @@ class ChatServiceTest {
                         new MoneyFormat(),
                         new PolicyBasisFormat()),
                     new PolicyBasisFormat())),
-            fullRagLaneService),
+            fullRagLaneService,
+            paymentSkillService(eligibilityClient)),
         finalizer);
   }
 
@@ -478,14 +494,31 @@ class ChatServiceTest {
   }
 
   @Test
-  void otherPathsReturnStub() {
+  void skillLaneWrongModeReturnsPaymentsHint() {
     RouterDecision decision = new RouterDecision();
     decision.setPath("skill");
+    decision.setSkill("create_payment");
     when(callResponseSpec.entity(eq(RouterDecision.class))).thenReturn(decision);
 
     ChatResponse response =
         chatService(new FakeEligibilityClient())
             .ask(new ChatRequest("Please create a payment", List.of(), "events"), subject());
+
+    assertTrue(response.answer().contains("Payments"));
+    assertEquals("skill", response.routing().path());
+    assertEquals("formatter", response.routing().answer_synthesis());
+    assertEquals("gate.skill_wrong_mode", response.routing().intent_id());
+  }
+
+  @Test
+  void unknownPathReturnsStub() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("totally_unknown");
+    when(callResponseSpec.entity(eq(RouterDecision.class))).thenReturn(decision);
+
+    ChatResponse response =
+        chatService(new FakeEligibilityClient())
+            .ask(new ChatRequest("something weird", List.of(), "events"), subject());
 
     assertTrue(response.answer().contains("vector/full_rag"));
     assertEquals("stub", response.routing().answer_synthesis());
@@ -597,7 +630,8 @@ class ChatServiceTest {
                     paymentDetailAnswerFormatter,
                     entityApiAnswerFormatter),
                 neo4j,
-                fullRagLaneService),
+                fullRagLaneService,
+                paymentSkillService(new FakeEligibilityClient())),
             finalizer);
 
     ChatResponse response =

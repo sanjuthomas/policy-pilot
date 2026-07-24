@@ -28,7 +28,8 @@ public class ChatService {
       "ssi-chat-j answers payment/instruction eligibility, document extraction "
           + "(show payment/instruction by id), policy-directory, policy-summary, "
           + "person-permissions, me-centric questions, neo4j_direct graph answers "
-          + "(ALERT counts/lists, entity status/creator by id), and vector/full_rag "
+          + "(ALERT counts/lists, entity status/creator by id), payment mutation skills "
+          + "(create/submit/approve/cancel), and vector/full_rag "
           + "security-event narratives. ";
 
   private final IntentRouter intentRouter;
@@ -82,7 +83,9 @@ public class ChatService {
             null,
             null,
             "none",
-            List.of());
+            List.of(),
+            List.of(),
+            null);
       }
 
       // Parity with Python neo4j_direct / document_extraction: formatter answers report
@@ -116,7 +119,9 @@ public class ChatService {
           lane.cypher(),
           lane.graphRows(),
           lane.cypherProvenance(),
-          lane.sources());
+          lane.sources(),
+          lane.skillActivities(),
+          lane.skillConfirmation());
     } catch (RuntimeException ex) {
       if (GeminiErrors.isRateLimit(ex)) {
         double elapsedMs = (System.nanoTime() - askStartNs) / 1_000_000.0;
@@ -144,7 +149,9 @@ public class ChatService {
       String cypher,
       List<Map<String, Object>> graphRows,
       String cypherProvenance,
-      List<SourceHit> sources) {
+      List<SourceHit> sources,
+      List<String> skillActivities,
+      Map<String, Object> skillConfirmation) {
     if (answerFinalizer == null) {
       return ChatResponse.of(answerText, null);
     }
@@ -161,6 +168,8 @@ public class ChatService {
         cypher,
         graphRows,
         cypherProvenance,
-        sources);
+        sources,
+        skillActivities,
+        skillConfirmation);
   }
 }

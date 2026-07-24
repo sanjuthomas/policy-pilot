@@ -85,6 +85,10 @@ def run_seed(harness_url: str, config: SeedConfig) -> dict[str, str]:
 def skill_fixture_need(requires_context: list[str]) -> str | None:
     """Derive setup-skill-fixture ``need`` from case placeholder requirements."""
     required = set(requires_context)
+    if "used_instruction_id" in required:
+        return "used_single_use"
+    if "suspended_instruction_id" in required:
+        return "suspended"
     if "submitted_payment_id" in required:
         return "submitted"
     if "draft_payment_id" in required:

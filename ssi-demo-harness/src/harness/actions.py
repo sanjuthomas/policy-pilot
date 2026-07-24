@@ -913,15 +913,16 @@ def _ficc_instruction_suspender(seed: SeedFile) -> str | None:
     return candidates[0] if candidates else None
 
 
-def _create_approved_ficc_standing(
+def _create_approved_ficc_instruction(
     settings: Settings,
     *,
     seed: SeedFile,
     auth: ZitadelAuthClient,
     instruction_service: InstructionServiceClient,
     result: HarnessActionResult,
+    instruction_type: str = "STANDING",
 ) -> str | None:
-    """Create → submit → approve a FICC STANDING instruction. Returns id or None."""
+    """Create → submit → approve a FICC instruction. Returns id or None."""
     ficc_creators = sorted(
         creator_id
         for creator_id, owning_lob in _valid_instruction_seed_pairs(seed)
@@ -946,8 +947,10 @@ def _create_approved_ficc_standing(
     approver_id = sorted(approvers)[0]
 
     creator_session = _session_for_user(auth, seed, settings, creator_id)
-    payload = build_instruction_payload(owning_lob="FICC", instruction_type="STANDING")
-    result.logs.append(f"create FICC STANDING instruction as {creator_id}")
+    payload = build_instruction_payload(
+        owning_lob="FICC", instruction_type=instruction_type
+    )
+    result.logs.append(f"create FICC {instruction_type} instruction as {creator_id}")
     response = instruction_service.create_instruction(creator_session, payload)
     if response.status_code != 201:
         result.logs.append(f"  -> create instruction HTTP {response.status_code} FAIL")
@@ -971,12 +974,37 @@ def _create_approved_ficc_standing(
         result.logs.append(f"     {response.text.strip()[:300]}")
         return None
 
-    result.context["ficc_standing_instruction_id"] = instruction_id
+    if instruction_type == "STANDING":
+        result.context["ficc_standing_instruction_id"] = instruction_id
     result.context["skill_fixture_instruction_creator"] = creator_id
     suspender = _ficc_instruction_suspender(seed)
     if suspender:
         result.context["skill_fixture_instruction_suspender"] = suspender
     return instruction_id
+
+
+def _create_approved_ficc_standing(
+    settings: Settings,
+    *,
+    seed: SeedFile,
+    auth: ZitadelAuthClient,
+    instruction_service: InstructionServiceClient,
+    result: HarnessActionResult,
+) -> str | None:
+    """Create → submit → approve a FICC STANDING instruction. Returns id or None."""
+    return _create_approved_ficc_instruction(
+        settings,
+        seed=seed,
+        auth=auth,
+        instruction_service=instruction_service,
+        result=result,
+        instruction_type="STANDING",
+    )
+
+
+_SKILL_FIXTURE_NEEDS = frozenset(
+    {"instruction", "draft", "submitted", "suspended", "used_single_use"}
+)
 
 
 def setup_skill_fixture(
@@ -991,18 +1019,28 @@ def setup_skill_fixture(
       - ``instruction`` — approved FICC STANDING instruction
       - ``draft`` — that instruction + a DRAFT payment
       - ``submitted`` — that instruction + a SUBMITTED payment
+      - ``suspended`` — approved FICC STANDING then SUSPENDED
+      - ``used_single_use`` — approved FICC SINGLE_USE consumed by a submitted payment
 
     Returns concrete ids in ``result.context``. Pair with
     :func:`teardown_skill_fixture` so each skill case is independent.
     """
-    if need not in {"instruction", "draft", "submitted"}:
+    if need not in _SKILL_FIXTURE_NEEDS:
         result = HarnessActionResult(action="setup_skill_fixture", requested=1, ok=False)
         result.logs.append(
-            f"error: need must be instruction|draft|submitted, got {need!r}"
+            "error: need must be "
+            "instruction|draft|submitted|suspended|used_single_use, "
+            f"got {need!r}"
         )
         return result
 
-    requested = {"instruction": 1, "draft": 2, "submitted": 2}[need]
+    requested = {
+        "instruction": 1,
+        "draft": 2,
+        "submitted": 2,
+        "suspended": 2,
+        "used_single_use": 2,
+    }[need]
     result = HarnessActionResult(action="setup_skill_fixture", requested=requested)
     if error := _require_pat(settings):
         result.logs.append(f"error: {error}")
@@ -1010,12 +1048,14 @@ def setup_skill_fixture(
         return result
 
     seed, auth, instruction_service = _clients(settings)
-    instruction_id = _create_approved_ficc_standing(
+    instruction_type = "SINGLE_USE" if need == "used_single_use" else "STANDING"
+    instruction_id = _create_approved_ficc_instruction(
         settings,
         seed=seed,
         auth=auth,
         instruction_service=instruction_service,
         result=result,
+        instruction_type=instruction_type,
     )
     if not instruction_id:
         result.failed += 1
@@ -1026,6 +1066,35 @@ def setup_skill_fixture(
     if need == "instruction":
         result.ok = True
         result.logs.append(f"Skill fixture ready (instruction): {instruction_id}")
+        return result
+
+    if need == "suspended":
+        suspender_id = (
+            result.context.get("skill_fixture_instruction_suspender")
+            or _ficc_instruction_suspender(seed)
+        )
+        if not suspender_id:
+            result.logs.append(
+                "error: no FICC Managing Director INSTRUCTION_APPROVER for suspend"
+            )
+            result.failed += 1
+            result.ok = False
+            return result
+        suspend_session = _session_for_user(auth, seed, settings, suspender_id)
+        result.logs.append(f"suspend instruction {instruction_id} as {suspender_id}")
+        response = instruction_service.suspend_instruction(
+            suspend_session, instruction_id
+        )
+        if response.status_code not in range(200, 300):
+            result.failed += 1
+            result.ok = False
+            result.logs.append(f"  -> suspend HTTP {response.status_code} FAIL")
+            result.logs.append(f"     {response.text.strip()[:300]}")
+            return result
+        result.context["suspended_instruction_id"] = instruction_id
+        result.succeeded += 1
+        result.ok = True
+        result.logs.append(f"Skill fixture ready (suspended): {instruction_id}")
         return result
 
     pay_creator_id = _ficc_payment_creator(seed)
@@ -1076,6 +1145,16 @@ def setup_skill_fixture(
 
     result.context["submitted_payment_id"] = payment_id
     result.succeeded += 1
+    if need == "used_single_use":
+        # Submit saga marks SINGLE_USE backing instruction USED.
+        result.context["used_instruction_id"] = instruction_id
+        result.ok = True
+        result.logs.append(
+            f"Skill fixture ready (used_single_use): instruction={instruction_id} "
+            f"payment={payment_id}"
+        )
+        return result
+
     result.ok = True
     result.logs.append(f"Skill fixture ready (submitted): {payment_id}")
     return result

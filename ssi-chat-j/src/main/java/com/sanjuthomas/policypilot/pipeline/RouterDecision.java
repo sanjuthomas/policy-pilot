@@ -30,6 +30,14 @@ public class RouterDecision {
   @JsonPropertyDescription("Primary intent path / handler lane.")
   private String path;
 
+  /**
+   * When path is skill: which payment mutation skill to run. Defaults to {@code create_payment}
+   * in the skill lane when the model leaves it blank.
+   */
+  @JsonPropertyDescription(
+      "skill only: create_payment|submit_payment|approve_payment|cancel_payment")
+  private String skill;
+
   @JsonPropertyDescription("Entity kind when path is eligibility.")
   private String eligibilityTarget;
 

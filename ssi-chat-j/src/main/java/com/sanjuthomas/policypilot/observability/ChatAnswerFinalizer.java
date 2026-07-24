@@ -215,6 +215,40 @@ public class ChatAnswerFinalizer {
       List<Map<String, Object>> graphRows,
       String cypherProvenance,
       List<SourceHit> sources) {
+    return of(
+        message,
+        mode,
+        answer,
+        path,
+        answerSynthesis,
+        requestedPath,
+        retrievalMs,
+        generationMs,
+        intentId,
+        cypher,
+        graphRows,
+        cypherProvenance,
+        sources,
+        List.of(),
+        null);
+  }
+
+  public ChatResponse of(
+      String message,
+      String mode,
+      String answer,
+      String path,
+      String answerSynthesis,
+      String requestedPath,
+      Double retrievalMs,
+      Double generationMs,
+      String intentId,
+      String cypher,
+      List<Map<String, Object>> graphRows,
+      String cypherProvenance,
+      List<SourceHit> sources,
+      List<String> skillActivities,
+      Map<String, Object> skillConfirmation) {
     return finalizeAnswer(
         message,
         mode,
@@ -228,8 +262,8 @@ public class ChatAnswerFinalizer {
         cypherProvenance == null ? "none" : cypherProvenance,
         answerSynthesis,
         intentId,
-        List.of(),
-        null,
+        skillActivities == null ? List.of() : skillActivities,
+        skillConfirmation,
         null,
         requestedPath);
   }

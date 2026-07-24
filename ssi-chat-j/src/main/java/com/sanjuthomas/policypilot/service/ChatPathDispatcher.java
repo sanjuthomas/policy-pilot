@@ -14,6 +14,9 @@ import com.sanjuthomas.policypilot.pipeline.RouterDecision;
 import com.sanjuthomas.policypilot.person.PersonPermissionSummaryService;
 import com.sanjuthomas.policypilot.policydirectory.PolicyDirectoryService;
 import com.sanjuthomas.policypilot.policysummary.PolicySummaryService;
+import com.sanjuthomas.policypilot.skill.PaymentSkillService;
+import com.sanjuthomas.policypilot.skill.SkillConfirmationApi;
+import com.sanjuthomas.policypilot.skill.SkillRunResult;
 import com.sanjuthomas.policypilot.vector.FullRagLaneService;
 import org.springframework.stereotype.Component;
 
@@ -32,6 +35,7 @@ public class ChatPathDispatcher {
   private final DocumentExtractionService documentExtractionService;
   private final Neo4jDirectService neo4jDirectService;
   private final FullRagLaneService fullRagLaneService;
+  private final PaymentSkillService paymentSkillService;
 
   public ChatPathDispatcher(
       MeIntentService meIntentService,
@@ -41,7 +45,8 @@ public class ChatPathDispatcher {
       PolicyDirectoryService policyDirectoryService,
       DocumentExtractionService documentExtractionService,
       Neo4jDirectService neo4jDirectService,
-      FullRagLaneService fullRagLaneService) {
+      FullRagLaneService fullRagLaneService,
+      PaymentSkillService paymentSkillService) {
     this.meIntentService = meIntentService;
     this.eligibilityLaneService = eligibilityLaneService;
     this.policySummaryService = policySummaryService;
@@ -50,6 +55,7 @@ public class ChatPathDispatcher {
     this.documentExtractionService = documentExtractionService;
     this.neo4jDirectService = neo4jDirectService;
     this.fullRagLaneService = fullRagLaneService;
+    this.paymentSkillService = paymentSkillService;
   }
 
   public LaneAnswer dispatch(RouterDecision decision, ChatRequest request, Subject subject) {
@@ -70,10 +76,18 @@ public class ChatPathDispatcher {
       case "neo4j_direct" -> neo4jDirect(request, subject, decision);
       case "eligibility" ->
           eligibilityLaneService.answer(request.message(), subject, decision);
+      case "skill" -> skill(request, subject, decision);
       case "vector", "full_rag" ->
           fullRagLaneService.answer(request.message(), request.mode(), subject);
       default -> null;
     };
+  }
+
+  private LaneAnswer skill(ChatRequest request, Subject subject, RouterDecision decision) {
+    SkillRunResult result =
+        paymentSkillService.phase1(decision, request.message(), request.mode(), subject);
+    return LaneAnswer.skill(
+        result.answer(), result.intentId(), result.activities(), SkillConfirmationApi.from(result));
   }
 
   /**
