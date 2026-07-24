@@ -1,27 +1,26 @@
 ---
-description: Thumb rule — use Gemini structured output for chat intent, not regex/fuzzy NLU
-globs: ssi-chat/**/*
+description: Intent detection thumb rule — LLM RouterDecision (historical Python path; use ssi-chat-j rule for chat)
+globs:
 alwaysApply: false
 ---
 
-# Intent detection thumb rule (ssi-chat)
+# Intent detection thumb rule
 
-**Natural-language intent is determined by Gemini structured output / LLM semantic routing — not regex phrase lists or fuzzy classification.**
+**Natural-language intent / path is determined by LLM structured `RouterDecision` — not regex, keyword lists, or fuzzy classification.**
 
-People phrase the same intent many ways. Growing regex or heuristic keyword lists will miss synonyms and drift. Prefer extending the Pydantic `RouterDecision` schema (`path`, skill/me/policy fields) and the router system prompt.
+Python `ssi-chat` is **retired**. For chat code, follow [`.cursor/rules/ssi-chat-j-intent-routing.mdc`](ssi-chat-j-intent-routing.mdc) and `ssi-chat-j/AGENTS.md`.
 
 ## Do
 
-- Route open-ended NLU (skills, me-intents, eligibility vs audit, `neo4j_direct` vs graph vs vector, policy tools) via LLM structured output (`path`).
-- Keep **deterministic execution** after the route decision (scripted skill steps, OPA, Neo4j, formatters).
-- **Path is law:** do not let Neo4j-direct or policies eligibility run by silently overriding another path. Documented post-route clamps (`prefer_vector_for_open_narrative`, `prefer_neo4j_direct_when_matched`; Java `RouteClamps`) may rewrite `path` **before** handlers — see `docs/intent-determination.md` and `ssi-chat-j/AGENTS.md`.
-- Map **open-vocabulary** filters (lifecycle status, instruction type, worded amounts, …) with **LLM structured slots** on `RouterDecision` — not synonym/lemma/typo tables in code.
-- Use regex / ID extractors only for **stable tokens** (instruction/payment id, explicit club names, literal enum strings already present) once intent is known — or as **LLM-failure fallback**, not primary NLU. Do not add undeclared path-force regex outside those clamp helpers.
+- Route via structured output (`RouterDecision.path` and path-specific slots).
+- Grow the router schema and system prompt when adding a lane — not `if (message.contains(...))` classifiers.
+- Keep **deterministic execution** after the route (authz/payment HTTP, formatters).
+- **Path is law:** do not silently override another path. Documented post-route clamps (`RouteClamps` in Java) may rewrite `path` **before** handlers — see `docs/intent-determination.md`.
+- Map **open-vocabulary** filters with LLM slots. Do **not** add synonym/lemma/typo tables or free-text amount/date regex for skills.
+- Use regex only for **stable tokens** after path is known (payment/instruction ids, explicit `UP_TO_*_CLUB`, literal enums already in the question).
 
 ## Don't
 
-- Add new primary intent detectors as regex / fuzzy keyword lists.
-- Maintain lemma / synonym tables (`paused`→`SUSPENDED`, `canceled`→`CANCELLED`, …) for domain enums — grow the router schema + prompt instead.
-- Treat heuristic fallback as the long-term classifier.
-
-Canonical write-up: `docs/intent-determination.md`.
+- Add heuristic routers or phrase lists that choose `path`.
+- Treat slot parsers as intent classifiers.
+- Reintroduce Python `ssi-chat` or `cypher-builder-svc` into Compose/CI.

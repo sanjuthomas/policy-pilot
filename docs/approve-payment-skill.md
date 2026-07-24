@@ -4,7 +4,7 @@ Policy Pilot mutation skill: funding-approve an existing **SUBMITTED** payment a
 
 | | |
 |--|--|
-| **Package** | [`ssi-chat/src/chat_application/skills/`](../ssi-chat/src/chat_application/skills/) (`approve_payment.py`) |
+| **Package** | [`ssi-chat-j/.../skill/`](../ssi-chat-j/src/main/java/com/sanjuthomas/policypilot/skill/) (`ApprovePaymentSkill`) |
 | **Demo users** | `pay-201`, `pay-202`, `pay-204`, `pay-400` (`FUNDING_APPROVER`) |
 | **Chat mode** | **Payments** |
 | **Router** | `path=skill`, `skill=approve_payment` |

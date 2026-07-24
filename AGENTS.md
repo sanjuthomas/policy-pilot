@@ -108,7 +108,7 @@ If a package has no `tests/` directory yet, create one and add tests for the cod
 
 Java chat: `cd ssi-chat-j && mvn -B verify` (≥ 80% JaCoCo).
 
-Golden eval prove (optional; needs a local warm stack). The Python regression runner may still live under a **local-only** `ssi-chat/` tree (gitignored):
+Golden eval prove (optional; needs a local warm stack; **98** cases in `ssi-chat-j/eval/`):
 
 ```bash
 ./ssi-chat-j/scripts/prove-eligibility.sh

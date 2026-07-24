@@ -10,7 +10,9 @@
 
 ## Executive summary
 
-Policy Pilot is an event-driven, policy-aware knowledge platform for the cash leg of Standard Settlement Instructions. Domain services enforce OPA policy and write versioned state **and** an immutable security event to MongoDB in a single transaction; CDC streams inserts through Kafka into `ssi-indexer`, which builds a shared Neo4j graph plus a dense vector index; `ssi-chat` answers questions via Route → Retrieve → Synthesize and runs scripted mutation skills.
+Policy Pilot is an event-driven, policy-aware knowledge platform for the cash leg of Standard Settlement Instructions. Domain services enforce OPA policy and write versioned state **and** an immutable security event to MongoDB in a single transaction; CDC streams inserts through Kafka into `ssi-indexer`, which builds a shared Neo4j graph plus a dense vector index; `ssi-chat-j` answers questions via Route → Retrieve → Synthesize and runs scripted mutation skills.
+
+> **Note (2026-07 cutover):** Chat is Java-only (`ssi-chat-j` :8096). Findings below that name `ssi-chat` refer to the chat product surface, now implemented in `ssi-chat-j`.
 
 **Strongest parts:** a single OPA gateway (`authorization-service`) on every mutation and live-policy path; a clean identity↔policy bridge where OPA evaluates only injected `input` and **never** contacts ZITADEL; fail-closed OBO (token-derived subject only); atomic co-persistence of state + audit; layered SoD / four-eyes / reporting-line / LOB / amount-club Rego; mature ETL resilience (DLQ-before-commit, pause-on-quarantine-failure, integrity banner); **chat graph + vector + REST VIEW LOB scoping** for operational personas (issue #63 2a/2b/2c).
 
@@ -60,7 +62,7 @@ Up from 8.5 because F-1 graph/vector/REST read-side authorization, F-2 audience,
 ## Trust-boundary map
 
 ```
-User JWT  →  ssi-chat / Classic UI
+User JWT  →  ssi-chat-j / Classic UI
                 │
                 ├─(allowed_retrieval_lobs)─→ Neo4j graph/vector  [LOB scoped; F-1b by-id residual]
                 │

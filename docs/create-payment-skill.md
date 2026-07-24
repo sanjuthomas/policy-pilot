@@ -8,7 +8,7 @@ Related: **[Submit-payment skill](submit-payment-skill.md)** (desk submits the D
 
 | | |
 |--|--|
-| **Package** | [`ssi-chat/src/chat_application/skills/`](../ssi-chat/src/chat_application/skills/) |
+| **Package** | [`ssi-chat-j/.../skill/`](../ssi-chat-j/src/main/java/com/sanjuthomas/policypilot/skill/) (`CreatePaymentSkill`, `SkillSlots`) |
 | **Demo users** | `pay-101`, `pay-205` (middle-office `PAYMENT_CREATOR`) |
 | **Chat mode** | **Payments** |
 | **Tag** | **`skill`** (see [sample questions](sample-questions.md)) |
@@ -32,8 +32,8 @@ Sign in as `pay-205` / `Password1!`, select **Payments**, then send the question
 
 | Step | Mechanism |
 |------|-----------|
-| Intent | Gemini `route_query` → `path=skill` |
-| Slot parse | Deterministic parsers for instruction id, amount, value date |
+| Intent | Spring AI `RouterDecision` → `path=skill`, `skill=create_payment` |
+| Slots | LLM `skillInstructionId` / `skillAmount` / `skillValueDate` (`SkillSlots`; id has stable-token fallback) |
 | Execution | Scripted preflight → Go / No Go → payment-service CREATE |
 
 Capability questions like “Can I create a payment?” should route to `path=me`, not this mutation skill.
@@ -47,7 +47,7 @@ Capability questions like “Can I create a payment?” should route to `path=me
 sequenceDiagram
     actor U as User (browser)
     participant UI as Policy Pilot UI
-    participant C as ssi-chat
+    participant C as ssi-chat-j
     participant L as Gemini (router)
     participant I as instruction-service
     participant A as authorization-service / OPA
@@ -57,9 +57,9 @@ sequenceDiagram
     U->>UI: Create payment (instruction, amount, value date)
     UI->>C: POST /api/chat (Bearer JWT)
 
-    C->>L: route_question → RouterDecision
-    L-->>C: path=skill, skill=create_payment
-    Note over C: parse slots (instruction id, amount, value date)
+    C->>L: Spring AI → RouterDecision
+    L-->>C: path=skill, skill=create_payment + slots
+    Note over C: SkillSlots (LLM amount/date; id slot or token fallback)
 
     Note over C: Phase 1 — preflight (no mutate)
     C-->>UI: activity: Parsed request…
@@ -146,13 +146,11 @@ Chat does **not** write Mongo directly. On **Go**, payment-service allocates the
 
 | Module | Role |
 |--------|------|
-| `skills/detect.py` | Phrase + instruction id + amount + value date (`today` / `tomorrow` / ISO) |
-| `skills/create_payment.py` | Phase 1 runner + confirm / Go path |
-| `skills/pending_store.py` | In-process TTL pending skills |
-| `skills/instruction_client.py` | Instruction GET (user / svc-chat OBO) |
-| `skills/payment_client.py` | Payment CREATE |
-| `skills/format.py` | Confirmation card + created report |
-| `pipeline/orchestrator.py` | Skill short-circuit before me-intents / RAG |
+| `pipeline/RouterDecision.java` | LLM slots (`skillInstructionId`, `skillAmount`, `skillValueDate`) |
+| `skill/SkillSlots.java` | Resolve create params (amount/date from LLM only) |
+| `skill/CreatePaymentSkill.java` | Phase 1 runner + confirm / Go path |
+| `skill/PendingSkillStore.java` | In-process TTL pending skills |
+| `skill/SkillFormat.java` | Confirmation card + created report |
 | `static/app.js` | Activity list + Go / No Go card |
 
-Tests: `ssi-chat/tests/test_create_payment_skill.py`.
+Tests: `ssi-chat-j/src/test/java/.../skill/CreatePaymentSkillTest.java` (and related skill tests).

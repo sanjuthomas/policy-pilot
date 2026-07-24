@@ -1,6 +1,6 @@
-# Ownership: ssi-chat-j eligibility golden set (HTTP black-box against :8096).
-# Copied from the Python eval bank so Java A/B does not depend on ssi-chat at runtime.
-# Harness CLI (temporary): python -m regression.runner --golden <this file> --chat-url …
+# Ownership: ssi-chat-j golden set (HTTP black-box against :8096).
+# Source of truth for Policy Pilot chat prove (98 cases). Prove via:
+#   ./ssi-chat-j/scripts/prove-eligibility.sh
 #
 # Seed plan matches the shared harness shape so truncate+reload keeps entity
 # bindings stable. With a warm stack, prefer --no-seed (fetch_context resolves ids).

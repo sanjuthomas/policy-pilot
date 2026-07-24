@@ -1,10 +1,10 @@
-"""Shared ZITADEL user-directory client.
+# zitadel_directory
 
-Used by authorization-service, ssi-chat, and ssi-demo-harness to list human users
-and hydrate custom metadata (`roles`, `groups`, `covering_lobs`, …).
+Shared ZITADEL user-directory client.
 
-`zitadel-seed/users.yaml` remains the seed source; this package is the runtime
-directory reader.
+Used by authorization-service, ssi-chat-j (seed-directory roles on login), and ssi-demo-harness to list human users and hydrate custom metadata (`roles`, `groups`, `covering_lobs`, …).
+
+`zitadel-seed/users.yaml` remains the seed source; this package is the runtime directory reader.
 
 ## API
 
@@ -13,11 +13,6 @@ directory reader.
 - `DirectoryCache` — shared TTL cache over `list_directory_users`
 - `DirectoryUser.seed_fields()` — map into service-local SeedUser models
 
-When `attach_org=True` and no `org_id` is supplied, the client resolves
-`x-zitadel-orgid` via `/management/v1/orgs/me`. Only
-`ZitadelDirectoryError` (e.g. 404) falls back to an unscoped client with a
-warning log; unexpected exceptions propagate.
+When `attach_org=True` and no `org_id` is supplied, the client resolves `x-zitadel-orgid` via `/management/v1/orgs/me`. Only `ZitadelDirectoryError` (e.g. 404) falls back to an unscoped client with a warning log; unexpected exceptions propagate.
 
-Services should not re-implement client construction, `with_org` fallback, or
-directory TTL caching.
-"""
+Services should not re-implement client construction, `with_org` fallback, or directory TTL caching.

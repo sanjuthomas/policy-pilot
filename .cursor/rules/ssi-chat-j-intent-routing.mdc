@@ -8,7 +8,7 @@ alwaysApply: false
 
 **Natural-language intent / path is determined by Spring AI structured `RouterDecision` — not regex, keyword lists, or fuzzy classification.**
 
-Same bar as Python `ssi-chat` (`intent-semantic-routing.mdc`): people phrase the same intent many ways. Do not grow heuristic routers in Java.
+People phrase the same intent many ways. Do not grow heuristic routers in Java. (Python `ssi-chat` is retired — this rule is the chat thumb rule.)
 
 ## Do
 
@@ -39,6 +39,6 @@ After Spring AI returns a decision, **`routing.RouteClamps` may rewrite `path` b
 - Maintain lemma / synonym tables for domain enums — grow `RouterDecision` + `RouterPrompts` instead.
 - Treat slot parsers (`PaymentIdParser`, `InstructionIdParser`, explicit club-name tokens, …) as
   intent classifiers.
-- Add path-rewriting regex outside `RouteClamps` (or Python’s documented clamp helpers).
+- Add path-rewriting regex outside `RouteClamps`.
 
 Canonical write-up: `docs/intent-determination.md`. Module notes: `ssi-chat-j/AGENTS.md`.

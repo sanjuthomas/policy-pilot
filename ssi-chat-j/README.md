@@ -1,6 +1,8 @@
 # ssi-chat-j
 
-Java / Spring Boot + Spring AI **PolicyPilot chat**. Listens on **8096** (Compose service `ssi-chat-j`).
+Java / Spring Boot + Spring AI **PolicyPilot chat** — the product chat surface. Listens on **8096** (Compose service `ssi-chat-j`).
+
+The former Python `ssi-chat` UI and `cypher-builder-svc` HTTP bridge are retired (local-only archives). Chat plans Neo4j Cypher **in-process** (`com.sanjuthomas.policypilot.cypher`). `shared/cypher_builder` remains for the **indexer** Search Console only.
 
 ## Current surface
 
@@ -21,10 +23,14 @@ Java / Spring Boot + Spring AI **PolicyPilot chat**. Listens on **8096** (Compos
   - authz `policy-summary?domain=&action=`
 - `POST /api/chat` me-centric lane (`path=me` → recorded as `eligibility` + `me.*` intents)
 - `POST /api/chat` neo4j_direct (in-process Cypher planner + Neo4j as `svc_chat`)
-- `POST /api/chat` payment skills (`path=skill`)
+- `POST /api/chat` payment skills (`path=skill`) — create / submit / approve / cancel
 - Observability (Micrometer → OTLP; **no Prometheus scrape**):
   - `POST /api/chat/feedback`
   - `GET /api/routing-stats`, `GET /api/feedback-stats`
+
+## Intent routing
+
+Natural-language intent uses Spring AI structured `RouterDecision` (path + LLM slots). Open-vocabulary filters (status, type, amounts, skill dates) are **slots**, not synonym tables or free-text amount/date regex. Regex is OK for stable tokens (sequence ids, explicit clubs) after path is known. Details: [`docs/intent-determination.md`](../docs/intent-determination.md), [`AGENTS.md`](AGENTS.md).
 
 ## Run (Compose)
 
@@ -51,12 +57,14 @@ curl -s http://localhost:8096/health
 
 Coverage: `mvn verify` (≥ 80% JaCoCo). See [`AGENTS.md`](AGENTS.md).
 
-## Eligibility golden eval (HTTP black-box)
+## Golden eval (HTTP black-box)
 
-Cases live under [`eval/`](eval/). Prove against a warm stack:
+**98** cases in [`eval/eligibility_golden.yaml`](eval/eligibility_golden.yaml). Prove against a warm stack:
 
 ```bash
 ./ssi-chat-j/scripts/prove-eligibility.sh
 ```
 
-Plan / todo: [`docs/ssi-chat-j-plan.md`](../docs/ssi-chat-j-plan.md), [`docs/ssi-chat-j-todo.md`](../docs/ssi-chat-j-todo.md).
+Family breakdown: [`eval/README.md`](eval/README.md).
+
+Historical plan / todo: [`docs/ssi-chat-j-plan.md`](../docs/ssi-chat-j-plan.md), [`docs/ssi-chat-j-todo.md`](../docs/ssi-chat-j-todo.md).

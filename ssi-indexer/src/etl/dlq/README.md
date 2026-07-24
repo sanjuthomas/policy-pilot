@@ -177,7 +177,7 @@ Compose (`ssi-indexer` service) currently sets URI/database/collection, schedule
 | `GET` | `/api/index-integrity` | None |
 | `GET` | `/health` | None (embeds `integrity`) |
 
-Chat proxies the same payload via `GET http://localhost:8092/api/index-integrity` (`INDEXER_URL`).
+Chat proxies the same payload via `GET http://localhost:8096/api/index-integrity` (`INDEXER_URL`).
 
 Banner shows when any of: `consumer_paused`, `kafka_lag_total > threshold`, `dlq.depth > 0`.
 
@@ -252,4 +252,4 @@ Notes:
 
 - Architecture finding **P0-1** (indexer skip-on-error → Neo4j under-counts)
 - Parent service: [ssi-indexer README](../../../README.md)
-- Chat integrity: `ssi-chat` `INDEXER_URL` + banner on `#index-integrity-banner`
+- Chat integrity: `ssi-chat-j` `INDEXER_URL` + banner on `#index-integrity-banner`

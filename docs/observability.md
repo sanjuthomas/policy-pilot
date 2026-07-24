@@ -9,8 +9,7 @@ The reference is a metrics + SLO stack for a single petstore service. We extend 
 ```mermaid
 flowchart TB
   subgraph Apps["Application services"]
-    CHAT["ssi-chat (Python)"]
-    CHATJ["ssi-chat-j (Java / Micrometer→OTLP)"]
+    CHAT["ssi-chat-j (Java / Micrometer→OTLP)"]
     AUTHZ["authorization-service"]
     INST["instruction-service"]
     PAY["payment-service"]
@@ -33,7 +32,7 @@ flowchart TB
   end
 
   Apps -->|"OTLP logs+metrics+traces"| OTEL
-  CHATJ -->|"OTLP metrics+traces (Micrometer)"| OTEL
+  CHAT -->|"OTLP metrics+traces (Micrometer)"| OTEL
   OTEL -->|metrics| PROM
   OTEL -->|logs| LOKI
   OTEL -->|traces| TEMPO
@@ -55,7 +54,7 @@ flowchart TB
 
 The `prometheus` exporter runs with `add_metric_suffixes: false` and `resource_to_telemetry_conversion: true`, so OTLP metrics keep predictable names (`http_server_request_duration_bucket`, `chat_answer_count`) and carry a `service_name` label lifted from the OTel resource.
 
-**ssi-chat-j** emits the same chat SLI instrument names via **Micrometer** (`micrometer-registry-otlp`, Micrometer Tracing → OTel). It does **not** expose a Prometheus scrape endpoint; series land under `service.name=ssi-chat-j` (A/B separate from `ssi-chat`). OpenSLO seed docs still target `ssi-chat` until a Java-specific catalog entry is added.
+**ssi-chat-j** emits chat SLI instrument names via **Micrometer** (`micrometer-registry-otlp`, Micrometer Tracing → OTel). It does **not** expose a Prometheus scrape endpoint; series land under `service.name=ssi-chat-j`. OpenSLO seed docs may still label the service `ssi-chat` in PromQL — treat that as the chat product surface (`ssi-chat-j` metrics) until the catalog is renamed.
 
 ## Services & ports
 
@@ -90,11 +89,11 @@ Seven OpenSLO documents are seeded (`observability/slo-catalog/seed-slos.sql`) a
 
 | SLO | Service | Target | Good / total (PromQL idea) |
 |-----|---------|--------|----------------------------|
-| `chat-answer-success-30d` | ssi-chat | 99.5% | non-5xx `/api/chat` / all `/api/chat` |
-| `chat-answer-latency-5s-30d` | ssi-chat | 95% | `/api/chat` histogram `le="5000"` / total |
-| `chat-answer-non-downvote-30d` | ssi-chat | 98% | (`chat_answer_count` - downvotes) / `chat_answer_count` |
+| `chat-answer-success-30d` | ssi-chat-j (catalog may say `ssi-chat`) | 99.5% | non-5xx `/api/chat` / all `/api/chat` |
+| `chat-answer-latency-5s-30d` | ssi-chat-j | 95% | `/api/chat` histogram `le="5000"` / total |
+| `chat-answer-non-downvote-30d` | ssi-chat-j | 98% | (`chat_answer_count` - downvotes) / `chat_answer_count` |
 | `authz-evaluate-latency-250ms-30d` | authorization-service | 99% | `authz_evaluate_duration` `le="250"` / total |
-| `skill-execution-success-30d` | ssi-chat | 99% | `chat_skill_outcome_count{status!="error"}` / all |
+| `skill-execution-success-30d` | ssi-chat-j | 99% | `chat_skill_outcome_count{status!="error"}` / all |
 | `platform-http-success-30d` | policy-pilot | 99.9% | non-5xx / all requests, every service |
 | `pipeline-consumer-success-30d` | ssi-indexer | 99.9% | `etl_consumer_processed` / (processed + (`etl_consumer_failed` or 0)) |
 
@@ -128,9 +127,9 @@ Users tend to stay silent when an answer is acceptable and vote when something i
 Most SLIs are derived from the shared HTTP histogram (`http.server.request.duration` in `shared/telemetry`) and existing chat/indexer counters. Two domain metrics were added:
 
 - **`authz.evaluate.count` / `authz.evaluate.duration`** — emitted from `OpaClient._evaluate` (`authorization-service/src/authz/metrics.py`) with an `authz.decision` (`allow`/`deny`) and `authz.package` attribute. Powers the deny-rate panel and the evaluate-latency SLO.
-- **`chat.skill.outcome.count`** — emitted from `finalize_chat_response` for every `path="skill"` response (`ssi-chat/src/chat_application/observability/skills.py`). The `skill.<name>.<outcome>` intent id is split into `chat.skill`, `chat.skill.outcome`, and `chat.skill.status` (`error` only for `*_error` outcomes). Powers the skill funnel and the skill-success SLO.
-- **`chat.feedback.count`** — existing thumbs-up/down feedback counter tagged by `chat.feedback_rating`. Downvotes burn the non-downvote SLO; upvotes and no-votes are good outcomes. No-vote is approximated in Prometheus as `chat_answer_count - chat_feedback_count`.
-- **`chat.routing.path_decision.count`** — every completed answer tagged with `chat.requested_path` (RouterDecision / LLM path), `chat.executed_path` (handler path), `chat.route_override` (`true` when they differ), and `chat.mode`. Powers the **Routing — requested vs executed** panels on [Domain SLIs](http://localhost:3000/d/policy-pilot-domain). Today Neo4j-direct can still override a confident LLM route on the happy path; once [#52](https://github.com/sanjuthomas/policy-pilot/issues/52) flips that, honored rate becomes the routing SLO signal.
+- **`chat.skill.outcome.count`** — emitted for every `path=skill` response in `ssi-chat-j` (Micrometer). Intent ids like `skill.<name>.<outcome>` feed `chat.skill` / `chat.skill.outcome` / `chat.skill.status` (`error` only for `*_error` outcomes). Powers the skill funnel and the skill-success SLO.
+- **`chat.feedback.count`** — thumbs-up/down feedback counter tagged by `chat.feedback_rating`. Downvotes burn the non-downvote SLO; upvotes and no-votes are good outcomes. No-vote is approximated in Prometheus as `chat_answer_count - chat_feedback_count`.
+- **`chat.routing.path_decision.count`** — every completed answer tagged with requested vs executed path (and override when clamps rewrite). Powers the **Routing — requested vs executed** panels on [Domain SLIs](http://localhost:3000/d/policy-pilot-domain).
 
 ## Kafka lag (follow-up)
 

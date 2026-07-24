@@ -1,9 +1,8 @@
 # ssi-chat-j — living todo
 
-Status tracker for the Java / Spring AI chat **A/B experiment**.  
-Plan details: [`ssi-chat-j-plan.md`](ssi-chat-j-plan.md).
+Status tracker for **Policy Pilot chat** (`ssi-chat-j`). Historical A/B plan: [`ssi-chat-j-plan.md`](ssi-chat-j-plan.md).
 
-**Success bar:** golden eval green against `http://localhost:8096` (Python `ssi-chat` remains on `8092`).
+**Success bar:** golden eval green against `http://localhost:8096` (**98** cases in `ssi-chat-j/eval/`). Python `ssi-chat` and `cypher-builder-svc` are **retired**.
 
 Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `blocked` · `deferred`.
 
@@ -38,12 +37,13 @@ Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `
 | **P3.5** — vector security summary | `done` | `golden_vector_security_summary` green on `:8096` |
 | **person_permissions** | `done` | Authz directory summary; `golden_person_permissions_kowalski` in prove bank |
 | **neo4j_direct remaining port** | `done` | SoD goldens in prove bank; facet families still backlog |
-| **Payment mutation skills** | `in-progress` | `path=skill` create/submit/approve/cancel — phase1 + Go/No Go confirm + Go mutate; `golden_skill_*` soft No Go + forbidden goldens |
-| **Next after skills** | `todo` | GOLDEN_EVAL facet families |
+| **Payment mutation skills** | `done` | `path=skill` + LLM `SkillSlots` (amount/date from router; id stable-token fallback); **17** `golden_skill_*` |
+| **Python chat + cypher HTTP bridge retired** | `done` | Compose/CI use `ssi-chat-j` only; UI vendored under `ssi-chat-j/.../static/` |
+| **Next** | `todo` | Facet-family goldens / prove flakes (seed context, LOB-scope denials) |
 
-**Bank snapshot:** Java prove bank **71** · Python-only **0**. Soft bank not used for Java roadmap.
+**Bank snapshot:** prove bank **98** (policies 11 · me 18 · skills 17 · graph/entity/SoD/vector remainder).
 
-### neo4j_direct remaining (from `ssi-chat/.../neo4j_direct.yaml`)
+### neo4j_direct / entity facets (historical Python YAML parity)
 
 Skip: `*.show_by_id` (intentional Java `document_extraction`).
 
@@ -73,7 +73,7 @@ Skip: `*.show_by_id` (intentional Java `document_extraction`).
 
 | ID | Item | Status | Notes |
 |----|------|--------|-------|
-| M1.1 | `ssi-chat-j` listening on **8096** | `done` | Maven local; **not** in root Compose yet |
+| M1.1 | `ssi-chat-j` listening on **8096** | `done` | Root Compose service `ssi-chat-j` |
 | M1.2 | `GET /health` | `done` | |
 | M1.3 | `POST /api/auth/login` (ZITADEL session) | `done` | Parity headers for golden |
 | M1.4 | `POST /api/chat` + Spring AI `RouterDecision` | `done` | No heuristic failover — Spring AI only |
@@ -197,7 +197,7 @@ No Python-only golden cases remain open for the Java success bar.
 |----|------|--------|-------|
 | D.1 | Full `questions.yaml` bank | `deferred` | |
 | D.2 | Payment skills parity | `done` | Soft bank green on `:8096` (4 forbidden + 4 phase1 No Go); Go mutate implemented for API parity (not in golden bank yet) |
-| D.3 | Replace Python chat | `deferred` | Explicitly **out of scope** for this experiment |
+| D.3 | Replace Python chat | `done` | Python `ssi-chat` + `cypher-builder-svc` retired; Java is the chat surface |
 | D.4 | Native Java `cypher_builder` port | `done` | In-process `com.sanjuthomas.policypilot.cypher` (alerts + SoD + timeline); no HTTP bridge |
 
 ---
@@ -221,3 +221,4 @@ No Python-only golden cases remain open for the Java success bar.
 | 2026-07-22 | Entity inventory/detail (status/creator/combo/list/versions) moved to `document_extraction` domain APIs; Neo4j reserved for alerts/SoD/who-approved |
 | 2026-07-23 | Dropped cypher-builder HTTP bridge for Java; in-process `GraphCypherPlanner` covers alerts + SoD + timeline |
 | 2026-07-23 | Six Neo4j SoD goldens added to prove bank (self/subordinate/duplicate/mutual/cross/timeline); mutual+cross demo-seeded in prove |
+| 2026-07-24 | Skill slots via `RouterDecision` (no free-text amount/date regex); UI parity (integrity + login roles); retire Python chat + cypher HTTP bridge from git/Compose; prove bank **98** |

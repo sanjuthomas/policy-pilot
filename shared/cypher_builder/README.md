@@ -1,13 +1,15 @@
 # cypher_builder
 
-Shared **Neo4j query planner** for PolicyPilot and the indexer Search Console. Maps natural-language questions to **read-only Cypher** without an LLM when the shape is known (counts, rankings, hierarchy, audit lookups).
+Shared **Neo4j query planner** used by the **ssi-indexer Search Console**. Maps natural-language questions to **read-only Cypher** without an LLM when the shape is known (counts, rankings, hierarchy, audit lookups).
+
+Policy Pilot chat (`ssi-chat-j`) plans Cypher **in-process** in Java (`com.sanjuthomas.policypilot.cypher`). It does **not** call this package or the retired `cypher-builder-svc` HTTP bridge.
 
 ## Consumers
 
 | Service | Usage |
 |---------|--------|
-| **ssi-chat** | Planned graph queries in `chat_application/cypher.py` before LLM fallback |
-| **ssi-indexer** | Search Console Cypher generation (`POST /api/intent/extract`) |
+| **ssi-indexer** | Search Console Cypher generation (`POST /api/intent/extract`, `/api/cypher/generate`) |
+| ~~ssi-chat~~ / ~~cypher-builder-svc~~ | Retired — do not reintroduce into Compose or CI |
 
 ## Graph edge names
 
@@ -22,7 +24,7 @@ Examples handled without LLM:
 
 ## Install
 
-Path dependency from `ssi-chat` and `ssi-indexer`:
+Path dependency from `ssi-indexer`:
 
 ```bash
 pip install -e shared/cypher_builder

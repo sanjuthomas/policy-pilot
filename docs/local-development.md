@@ -4,7 +4,7 @@ Run services outside Docker, browse logs, and find component READMEs.
 
 ## Local development
 
-Each service can run on the host against the Docker stack (MongoDB, Kafka, Neo4j, OPA, ZITADEL). Requires **Vertex AI** credentials for ssi-indexer and ssi-chat — see [GCP setup](gcp-setup.md).
+Each service can run on the host against the Docker stack (MongoDB, Kafka, Neo4j, OPA, ZITADEL). Requires **Vertex AI** credentials for **ssi-indexer** and **ssi-chat-j** — see [GCP setup](gcp-setup.md).
 
 ```bash
 # instruction-service API
@@ -15,9 +15,9 @@ uvicorn inst.main:app --reload --port 8000
 cd ssi-indexer && pip install -e .
 ssi-indexer           # :8090
 
-# Policy Pilot (ssi-chat)
-cd ssi-chat && pip install -e .
-ssi-chat              # :8092
+# Policy Pilot (ssi-chat-j) — needs a warm Compose mesh for deps
+cd ssi-chat-j
+mvn spring-boot:run   # :8096
 
 # Authorization service
 cd authorization-service && pip install -e .
@@ -32,7 +32,9 @@ cd ssi-demo-harness && pip install -e .
 ssi-demo-harness-ui   # :8091
 ```
 
-Install shared packages before editable service installs (matches CI):
+Or run chat from Compose: `docker compose up -d --build ssi-chat-j`.
+
+Install shared Python packages before editable service installs (matches CI):
 
 ```bash
 pip install -q \
@@ -43,6 +45,8 @@ pip install -q \
   ./shared/cypher_builder \
   ./shared/vertex_client
 ```
+
+(`shared/cypher_builder` is for the **indexer** Search Console planner — not for `ssi-chat-j`.)
 
 Each service reads configuration from environment variables — see its own README.
 
@@ -76,9 +80,9 @@ There is no application log file on disk; optional console mirroring uses `OTEL_
 | `payment-service` | Payment lifecycle — same authz pattern, payment UIs |
 | `ssi-indexer` | Four Kafka consumers → Neo4j graph + vector indexer + search console |
 | `kafka-connect` | MongoDB CDC → domain Kafka topics |
-| `ssi-chat` | **Policy Pilot** — conversational investigation UI |
-| `shared/cypher_builder` | Neo4j query planner — deterministic intents + Gemini plan parsing |
-| `shared/vertex_client` | Vertex AI embeddings + Gemini generation |
+| `ssi-chat-j` | **Policy Pilot** — conversational investigation UI (Java / Spring AI) |
+| `shared/cypher_builder` | Neo4j query planner for indexer Search Console |
+| `shared/vertex_client` | Vertex AI embeddings + Gemini generation (Python services) |
 | `authorization-service` | Stateless OPA gateway — evaluate + eligible-approvers |
 | `ssi-demo-harness` | ZITADEL-authenticated scenario harness |
 | `neo4j-graph-model` | Graph schema docs, constraints, example queries |
@@ -89,7 +93,7 @@ There is no application log file on disk; optional console mirroring uses `OTEL_
 
 | URL | Service |
 |-----|---------|
-| http://localhost:8092 | Policy Pilot (ssi-chat) |
+| http://localhost:8096 | Policy Pilot (`ssi-chat-j`) |
 | http://localhost:8000/ui/ | Instruction browser |
 | http://localhost:8093/ui/ | Payment browser |
 | http://localhost:8090 | SSI indexer search console |
@@ -104,11 +108,10 @@ There is no application log file on disk; optional console mirroring uses `OTEL_
 
 ## Retrieval quality evaluation
 
-The regression suite (`ssi-chat/regression/`) measures answer quality beyond keyword checks:
+Golden evals for chat live under [`ssi-chat-j/eval/`](../ssi-chat-j/eval/) (**98** HTTP black-box cases). Prove against a warm stack:
 
-- **Routing accuracy** — expected path (`neo4j_direct`, `full_rag`, `eligibility`) and synthesis mode
-- **Entity recall** — instruction/payment IDs grounded in sources or graph rows
-- **Source precision@5** — vector-mode cases include `vector` channels
-- **Groundedness / faithfulness** — token-overlap proxies against graph rows and context
+```bash
+./ssi-chat-j/scripts/prove-eligibility.sh
+```
 
-Run: `python -m regression.runner --seed --report regression-report.json`. Golden set: `--eval-golden`. See `ssi-chat/regression/README.md` and [Intent Determination](intent-determination.md).
+See [`ssi-chat-j/eval/README.md`](../ssi-chat-j/eval/README.md) and [Intent Determination](intent-determination.md).

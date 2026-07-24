@@ -15,7 +15,7 @@ flowchart LR
     Actor(["Front · Middle Office · Compliance"])
 
     subgraph Surfaces
-        PP["ssi-chat · Policy Pilot"]
+        PP["ssi-chat-j · Policy Pilot"]
         UI["Classic UIs<br/>instruction and payment HTML"]
     end
 
@@ -73,7 +73,7 @@ flowchart LR
     PP -->|skills / mutate · re-check OPA| IS
 ```
 
-Domain services enforce OPA policy and write versioned state **and** a security event to MongoDB in one transaction. Kafka Connect streams inserts; **ssi-indexer** builds a shared Neo4j graph and dense vector index. **ssi-chat** routes natural language through Route → Retrieve → Synthesize. Live policy and eligibility use the same **authorization-service → OPA** path as mutations (logged-in user JWT / ZITADEL session via OBO) — not a parallel unchecked tool layer.
+Domain services enforce OPA policy and write versioned state **and** a security event to MongoDB in one transaction. Kafka Connect streams inserts; **ssi-indexer** builds a shared Neo4j graph and dense vector index. **ssi-chat-j** (Java / Spring AI) routes natural language through Route → Retrieve → Synthesize. Live policy and eligibility use the same **authorization-service → OPA** path as mutations (logged-in user JWT / ZITADEL session via OBO) — not a parallel unchecked tool layer.
 
 | Topic | Summary |
 |-------|---------|
@@ -92,7 +92,7 @@ Domain services enforce OPA policy and write versioned state **and** a security 
 
 ## Intent determination
 
-**ssi-chat** decides what to do with a natural-language question before retrieval and synthesis. Gemini returns a strict `RouterDecision` (structured output) — not fuzzy text classification. **Skills** are fixed pipelines that reuse authorization-service → OPA, not free-form agent tool loops.
+**ssi-chat-j** decides what to do with a natural-language question before retrieval and synthesis. Spring AI / Gemini returns a strict `RouterDecision` (structured output) — not fuzzy text classification or regex phrase lists. Open-vocabulary slots (amounts, dates, status, type) come from the LLM; regex is only for stable tokens (ids, explicit clubs). **Skills** are fixed pipelines that reuse authorization-service → OPA, not free-form agent tool loops.
 
 | Layer | Mechanism | Purpose |
 |-------|-----------|---------|
@@ -166,7 +166,7 @@ flowchart TD
     S --> A
 ```
 
-Implementation: `RagService.ask()` → `RagPipelineOrchestrator` (`ssi-chat`). Skills: [create](create-payment-skill.md) · [submit](submit-payment-skill.md) · [approve](approve-payment-skill.md) · [cancel](cancel-payment-skill.md).
+Implementation: `ChatApiController` → path dispatcher (`ssi-chat-j`). Skills: [create](create-payment-skill.md) · [submit](submit-payment-skill.md) · [approve](approve-payment-skill.md) · [cancel](cancel-payment-skill.md).
 
 ---
 
@@ -179,7 +179,7 @@ Summary:
 1. Instruction / payment service validates identity, calls **authorization-service** with OBO, evaluates **OPA**, writes version + security event in **one Mongo transaction**.
 2. **Kafka Connect** publishes CDC to four topics.
 3. **ssi-indexer** consumes and writes Neo4j graph + multimodal vector documents (`owning_lob` densified for chat LOB scope).
-4. **ssi-chat** retrieves under subject LOB scope (graph / vector / hybrid) or runs a skill / live policy path.
+4. **ssi-chat-j** retrieves under subject LOB scope (graph / vector / hybrid) or runs a skill / live policy path.
 
 OBO call matrix: **[obo-call-paths.md](obo-call-paths.md)**.
 
@@ -219,14 +219,14 @@ python scripts/vertex_smoke_test.py   # optional but recommended
 ./scripts/clean-slate.sh
 
 open http://localhost:8091   # harness — policy scenarios
-open http://localhost:8092   # Policy Pilot
+open http://localhost:8096   # Policy Pilot (ssi-chat-j)
 ```
 
 `clean-slate.sh` wipes volumes, rebuilds, starts infra in order (ZITADEL PAT race), seeds demo users. Domain data stays empty unless `--with-demo-seed`.
 
 | URL | What |
 |-----|------|
-| http://localhost:8092 | Policy Pilot |
+| http://localhost:8096 | Policy Pilot (`ssi-chat-j`) |
 | http://localhost:8091 | Demo harness |
 | http://localhost:8090 | Indexer search console |
 | http://localhost:8000 | Instruction service |
@@ -252,7 +252,7 @@ Demo logins: **[domain-models.md](domain-models.md)**. More ops: **[local-develo
 ├── shared/                          # authz_client, cypher_builder, telemetry, …
 ├── kafka-connect/                   # Mongo CDC → Kafka
 ├── ssi-indexer/                     # Kafka → Neo4j graph + vector index
-├── ssi-chat/                        # Policy Pilot conversational surface
+├── ssi-chat-j/                      # Policy Pilot conversational surface (Java)
 ├── ssi-demo-harness/                # Scenario harness + seed scripts
 ├── neo4j-graph-model/               # Graph schema
 ├── opa-policy-seed/                 # Rego policies
@@ -267,8 +267,10 @@ Demo logins: **[domain-models.md](domain-models.md)**. More ops: **[local-develo
 | `authorization-service` | [README](../authorization-service/README.md) | 8094 |
 | `sequence-service` | [README](../sequence-service/README.md) | 8095 |
 | `ssi-indexer` | [README](../ssi-indexer/README.md) | 8090 |
-| `ssi-chat` | [README](../ssi-chat/README.md) | 8092 |
+| `ssi-chat-j` | [README](../ssi-chat-j/README.md) | 8096 |
 | `ssi-demo-harness` | [README](../ssi-demo-harness/README.md) | 8091 |
 | `neo4j-graph-model` | [README](../neo4j-graph-model/README.md) | — |
 | `opa-policy-seed` | [README](../opa-policy-seed/README.md) | — |
 | `kafka-connect` | [README](../kafka-connect/README.md) | 8083 |
+
+`ssi-chat/` (Python) and `cypher-builder-svc/` are local-only archives (gitignored). Do not re-add them to Compose or CI.
