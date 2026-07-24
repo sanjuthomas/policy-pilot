@@ -157,7 +157,7 @@ Implement only what golden cases require; mark each golden id when green.
 | `golden_payment_denials_count_today` | `done` | Thymeleaf count template |
 | `golden_alerts_list_today_entity_ids` | `done` | Thymeleaf list template |
 | `golden_events_top_denial_user` | `done` | Thymeleaf ranking template |
-| `golden_fo_fx_instruction_denials_scoped` | `done` | subject LOB scope |
+| `golden_fo_rates_instruction_denials_scoped` | `done` | subject LOB scope (DESK_RATES negative) |
 | `golden_fo_fx_payment_denials_scoped` | `done` | subject LOB scope |
 | `golden_fo_ficc_instruction_denials_positive` | `done` | subject LOB scope |
 | `golden_payment_status` | `done` | entity detail via cypher bridge |

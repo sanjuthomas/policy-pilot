@@ -726,7 +726,9 @@ cases:
   mode: instructions
   retrieval: document_extraction
   tags: [golden, show, id_lookup, instruction, negative, forbidden, fo, ssi-chat-j]
-  persona: fo-fx-101
+  # DESK_RATES FO desk. The seed only creates FICC/FX instructions, so
+  # approved_instruction_id is always cross-LOB for this persona → VIEW denied.
+  persona: fo-rates-101
   question: Can you show me the instruction {approved_instruction_id}?
   expect:
     requires_context: [approved_instruction_id]
@@ -747,7 +749,9 @@ cases:
   mode: payments
   retrieval: document_extraction
   tags: [golden, show, id_lookup, payment, negative, forbidden, fo, ssi-chat-j]
-  persona: fo-fx-101
+  # DESK_RATES FO desk. Payments are only created against FICC/FX instructions,
+  # so approved_payment_id is always cross-LOB for this persona → VIEW denied.
+  persona: fo-rates-101
   question: Can you show me the payment {approved_payment_id}?
   expect:
     requires_context: [approved_payment_id]
@@ -872,11 +876,13 @@ cases:
     min_answer_length: 10
     answer_contains_all: [pay-101]
 
-- id: golden_fo_fx_instruction_denials_scoped
+- id: golden_fo_rates_instruction_denials_scoped
   mode: events
   retrieval: deterministic
   tags: [golden, lob_scope, fo, negative, neo4j_direct, ssi-chat-j]
-  persona: fo-fx-101
+  # DESK_RATES FO desk. Seeded instruction denials only involve FICC/FX actors
+  # and instructions, so DESK_RATES scope sees none.
+  persona: fo-rates-101
   question: How many instruction policy denials happened this week?
   expect:
     require_routing: true
