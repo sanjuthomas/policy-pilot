@@ -8,9 +8,11 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.yaml.snakeyaml.Yaml;
 
 /**
@@ -46,6 +48,20 @@ public class ChatUsersDirectory {
     }
     rows.sort(Comparator.comparing(r -> String.valueOf(r.get("display_name"))));
     return rows;
+  }
+
+  /** Lookup one seed user by id (for login roles / audiences parity with Python). */
+  public Optional<DirectoryUser> findByUserId(String userId) {
+    if (!StringUtils.hasText(userId)) {
+      return Optional.empty();
+    }
+    String needle = userId.trim();
+    for (DirectoryUser user : listDirectoryUsers()) {
+      if (needle.equals(user.userId())) {
+        return Optional.of(user);
+      }
+    }
+    return Optional.empty();
   }
 
   /** All non-service seed users with groups / covering LOBs (for me-lane directory answers). */

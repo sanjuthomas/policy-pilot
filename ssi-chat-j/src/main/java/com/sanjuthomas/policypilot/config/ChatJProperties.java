@@ -9,6 +9,7 @@ public record ChatJProperties(
     String paymentServiceUrl,
     String instructionServiceUrl,
     String authorizationServiceUrl,
+    @DefaultValue("http://localhost:8090") String indexerUrl,
     String neo4jUri,
     String neo4jUser,
     String neo4jPassword,
