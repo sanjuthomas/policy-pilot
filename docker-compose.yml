@@ -638,32 +638,17 @@ services:
     networks:
       - security-event-net
 
-  # Optional HTTP bridge wrapping shared/cypher_builder (Python tooling / legacy).
-  # ssi-chat-j plans Cypher in-process and does not depend on this service.
-  cypher-builder-svc:
+  ssi-chat-j:
     build:
       context: .
-      dockerfile: cypher-builder-svc/Dockerfile
-    container_name: cypher-builder-svc
+      dockerfile: ssi-chat-j/Dockerfile
+    container_name: ssi-chat-j
     ports:
-      - "8097:8097"
+      - "8096:8096"
     environment:
       <<: *otel-environment
-      OTEL_SERVICE_NAME: cypher-builder-svc
-    restart: unless-stopped
-    networks:
-      - security-event-net
-
-  ssi-chat:
-    build:
-      context: .
-      dockerfile: ssi-chat/Dockerfile
-    container_name: ssi-chat
-    ports:
-      - "8092:8092"
-    environment:
-      <<: *otel-environment
-      OTEL_SERVICE_NAME: ssi-chat
+      OTEL_SERVICE_NAME: ssi-chat-j
+      SERVER_PORT: 8096
       GCP_PROJECT_ID: ${GCP_PROJECT_ID:-rag-demos-501323}
       GCP_REGION: ${GCP_REGION:-us-central1}
       VERTEX_EMBEDDING_MODEL: ${VERTEX_EMBEDDING_MODEL:-text-embedding-004}
@@ -685,11 +670,11 @@ services:
       OIDC_ISSUER_URL: http://localhost:8080
       OIDC_INTERNAL_URL: http://zitadel-proxy
       OIDC_AUDIENCE: policy-pilot
+      SERVICE_USER_ID: svc-chat
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - zitadel-bootstrap:/zitadel/bootstrap:ro
-      - ./ssi-chat/src/chat_application/static:/usr/local/lib/python3.12/site-packages/chat_application/static:ro
       - ${GCP_SA_KEY_PATH:-${HOME}/.config/gcloud/rag-demos-501323-vertex-client-key.json}:/run/secrets/gcp-sa.json:ro
     depends_on:
       neo4j:
@@ -699,6 +684,10 @@ services:
       payment-service:
         condition: service_started
       instruction-service:
+        condition: service_started
+      authorization-service:
+        condition: service_started
+      ssi-indexer:
         condition: service_started
       zitadel-api:
         condition: service_healthy

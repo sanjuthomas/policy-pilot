@@ -17,11 +17,9 @@ for svc in \
   instruction-service \
   authorization-service \
   sequence-service \
-  ssi-chat \
   ssi-indexer \
   ssi-demo-harness \
-  payment-service \
-  cypher-builder-svc
+  payment-service
 do
   ruff check "$svc/src/" --select E,F,W,I --ignore E501 --fix
 done
@@ -31,11 +29,9 @@ for svc in \
   instruction-service \
   authorization-service \
   sequence-service \
-  ssi-chat \
   ssi-indexer \
   ssi-demo-harness \
-  payment-service \
-  cypher-builder-svc
+  payment-service
 do
   echo "=== $svc ==="
   ruff check "$svc/src/" --select E,F,W,I --ignore E501
@@ -44,14 +40,13 @@ done
 
 Do **not** commit or push if any service still reports errors.
 
-### Test coverage (minimum 80%, except ssi-chat 70%)
+### Test coverage (minimum 80%)
 
 Every Python service **except** `ssi-demo-harness` must maintain line coverage on its application package. The harness is integration/demo tooling and is exempt.
 
 | Target | Gate |
 |--------|------|
-| Most application + `shared/*` packages | **≥ 80%** |
-| `ssi-chat` (`chat_application`) | **≥ 70%** — hermetic fixture `RouterDecision` contract; no Gemini in CI ([issue #13](https://github.com/sanjuthomas/policy-pilot/issues/13)). Do not pad coverage with heuristic-as-NLU tests. |
+| Application + `shared/*` packages below | **≥ 80%** |
 | `ssi-chat-j` (Java `com.sanjuthomas.policypilot`) | **≥ 80%** line coverage via JaCoCo — see [`ssi-chat-j/AGENTS.md`](ssi-chat-j/AGENTS.md) |
 | `ssi-demo-harness` | exempt |
 
@@ -64,8 +59,6 @@ Package `[tool.coverage.report] fail_under` must match the gate above so local `
 | `authorization-service` | `authz` |
 | `sequence-service` | `seq` |
 | `ssi-indexer` | `etl` |
-| `ssi-chat` | `chat_application` |
-| `cypher-builder-svc` | `cbs` |
 | `shared/telemetry` | `telemetry` |
 | `shared/platform_auth` | `platform_auth` |
 | `shared/sequence_client` | `sequence_client` |
@@ -89,8 +82,6 @@ for spec in \
   "authorization-service:authz:80" \
   "sequence-service:seq:80" \
   "ssi-indexer:etl:80" \
-  "ssi-chat:chat_application:70" \
-  "cypher-builder-svc:cbs:80" \
   "shared/telemetry:telemetry:80" \
   "shared/platform_auth:platform_auth:80" \
   "shared/sequence_client:sequence_client:80" \
@@ -106,9 +97,6 @@ do
   echo "=== $svc (≥${gate}% on $pkg) ==="
   (
     cd "$svc"
-    if [ "$svc" = "cypher-builder-svc" ]; then
-      pip install -q -e ../shared/telemetry -e ../shared/cypher_builder
-    fi
     pip install -q -e .
     pip install -q pytest pytest-cov
     pytest --cov="$pkg" --cov-report=term-missing --cov-fail-under="$gate"
@@ -118,12 +106,12 @@ done
 
 If a package has no `tests/` directory yet, create one and add tests for the code you touched — do not skip the coverage check.
 
-Optional chat regression suite (does not replace the 80% unit-coverage requirement). Harness seed from `questions.yaml` runs by default (`CHAT_REGRESSION_SEED=0` to skip):
+Java chat: `cd ssi-chat-j && mvn -B verify` (≥ 80% JaCoCo).
+
+Golden eval prove (optional; needs a local warm stack). The Python regression runner may still live under a **local-only** `ssi-chat/` tree (gitignored):
 
 ```bash
-cd ssi-chat
-pip install -e ".[regression]"
-RUN_CHAT_REGRESSION=1 pytest tests/test_chat_regression.py -v
+./ssi-chat-j/scripts/prove-eligibility.sh
 ```
 
 ### Lint all Python services (check only)
@@ -135,11 +123,9 @@ for svc in \
   instruction-service \
   authorization-service \
   sequence-service \
-  ssi-chat \
   ssi-indexer \
   ssi-demo-harness \
-  payment-service \
-  cypher-builder-svc
+  payment-service
 do
   echo "=== $svc ==="
   ruff check "$svc/src/" --select E,F,W,I --ignore E501
@@ -166,24 +152,20 @@ inside each service directory listed in the lint matrix:
 - `payment-service`
 - `authorization-service`
 - `sequence-service`
-- `ssi-chat`
 - `ssi-indexer`
 - `ssi-demo-harness`
-- `cypher-builder-svc`
 
-It also builds Docker images for those application services (including `payment-service`, `ssi-chat-j`, and `cypher-builder-svc`) and runs Rego unit tests under `opa-policy-seed/policies` via the official OPA image.
+It also builds Docker images for those application services (including `payment-service` and `ssi-chat-j`) and runs Rego unit tests under `opa-policy-seed/policies` via the official OPA image.
 
-For **`ssi-chat-j`** (Java A/B chat), the same workflow runs **Maven** `verify` (Java 21, JaCoCo **≥ 80%** line coverage) and a Docker image build. Details: [`ssi-chat-j/AGENTS.md`](ssi-chat-j/AGENTS.md).
+For **`ssi-chat-j`** (Java chat), the same workflow runs **Maven** `verify` (Java 21, JaCoCo **≥ 80%** line coverage) and a Docker image build. Details: [`ssi-chat-j/AGENTS.md`](ssi-chat-j/AGENTS.md).
 
-The same workflow runs **unit test coverage** (≥ 80% line coverage, **ssi-chat ≥ 70%**) for:
+The same workflow runs **unit test coverage** (≥ 80% line coverage) for:
 
 - `instruction-service` (`inst`)
 - `payment-service` (`ps`)
 - `authorization-service` (`authz`)
 - `sequence-service` (`seq`)
 - `ssi-indexer` (`etl`)
-- `ssi-chat` (`chat_application`, gate **70%**)
-- `cypher-builder-svc` (`cbs`)
 - `shared/telemetry` (`telemetry`)
 - `shared/platform_auth` (`platform_auth`)
 - `shared/sequence_client` (`sequence_client`)
@@ -230,24 +212,24 @@ When removing a symbol from code, **remove its import** in the same edit (`F401`
 
 1. Make code changes.
 2. Run the **required** lint loop (`--fix` then verify) on every touched Python service.
-3. Run the **required** coverage loop (gate per package: 80%, or 70% for `ssi-chat`) on every touched non-harness service; add tests when needed.
+3. Run the **required** coverage loop (gate **80%**) on every touched non-harness service; add tests when needed. For `ssi-chat-j`, run `mvn verify`.
 4. Fix any remaining errors manually — do not push with lint failures or sub-threshold coverage.
 5. Commit only when the user asks; if committing, ensure all touched Python services pass lint and all non-harness application services meet coverage.
 6. After push, confirm the GitHub Actions **Build** workflow succeeds (lint, coverage, and Docker build jobs).
 
 ## Project layout
 
-| Directory | Python package | Port |
-|-----------|----------------|------|
+| Directory | Package | Port |
+|-----------|---------|------|
 | `instruction-service` | `inst` | 8000 |
 | `payment-service` | `ps` | 8093 |
 | `authorization-service` | `authz` | 8094 |
 | `sequence-service` | `seq` | 8095 |
 | `ssi-indexer` | `etl` | 8090 |
-| `ssi-chat` | `chat_application` | 8092 |
 | `ssi-chat-j` | Java (`com.sanjuthomas.policypilot`) | 8096 |
-| `cypher-builder-svc` | `cbs` | 8097 |
 | `ssi-demo-harness` | `harness` | 8091 |
+
+`ssi-chat/` (Python) and `cypher-builder-svc/` are **local-only** (gitignored archives); do not re-add them to CI or Compose.
 
 See the root [README.md](README.md) for architecture, storage names, and demo URLs.
 
@@ -255,7 +237,7 @@ See the root [README.md](README.md) for architecture, storage names, and demo UR
 
 - Match existing code style in each service (imports, naming, FastAPI patterns).
 - Keep changes focused; avoid unrelated refactors.
-- Maintain gated test coverage on application packages (`inst`, `ps`, `authz`, `seq`, `etl`, `chat_application` at **70%**, others **80%**) and all `shared/*` packages listed above; `ssi-demo-harness` is exempt. For Java `ssi-chat-j`, maintain **≥ 80%** JaCoCo line coverage (`mvn verify` in `ssi-chat-j/`).
-- **ssi-chat intent thumb rule:** determine natural-language intent with Gemini structured output / LLM semantic routing (`RouterDecision.path`) — not regex or fuzzy classification. Map open-vocabulary filters (status, type, worded amounts) with **LLM slots**, not synonym/lemma tables. Regex is OK for stable tokens (ids, explicit clubs, literal enums) and LLM-failure fallback only. Details: [docs/intent-determination.md](docs/intent-determination.md) and `.cursor/rules/intent-semantic-routing.mdc`.
+- Maintain gated test coverage on application packages (`inst`, `ps`, `authz`, `seq`, `etl`, others **80%**) and all `shared/*` packages listed above; `ssi-demo-harness` is exempt. For Java `ssi-chat-j`, maintain **≥ 80%** JaCoCo line coverage (`mvn verify` in `ssi-chat-j/`).
+- **ssi-chat-j intent thumb rule:** determine natural-language intent with Spring AI structured `RouterDecision.path` — not regex or fuzzy classification. Map open-vocabulary filters with **LLM slots**, not synonym/lemma tables. Regex is OK for stable tokens (ids, explicit clubs, literal enums) and LLM-failure fallback only. Details: [docs/intent-determination.md](docs/intent-determination.md) and `.cursor/rules/ssi-chat-j-intent-routing.mdc`.
 - Do not commit secrets (`.env`, PAT files, credentials).
 - Only create git commits when the user explicitly asks.
