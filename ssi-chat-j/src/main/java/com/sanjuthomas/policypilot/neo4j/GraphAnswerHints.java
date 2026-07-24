@@ -1,6 +1,7 @@
 package com.sanjuthomas.policypilot.neo4j;
 
 import com.sanjuthomas.policypilot.pipeline.RouterDecision;
+import com.sanjuthomas.policypilot.time.GraphTimeWindow;
 import java.util.Locale;
 import org.springframework.util.StringUtils;
 
@@ -15,7 +16,7 @@ public record GraphAnswerHints(String timeWindow, String eventScope, String even
       return empty();
     }
     return new GraphAnswerHints(
-        normalizeWindow(decision.getGraphTimeWindow()),
+        GraphTimeWindow.normalize(decision.getGraphTimeWindow()),
         normalizeScope(decision.getGraphEventScope()),
         normalizeKind(decision.getGraphEventKind()));
   }
@@ -42,23 +43,11 @@ public record GraphAnswerHints(String timeWindow, String eventScope, String even
   }
 
   public String periodSuffix() {
-    if ("today".equals(timeWindow)) {
-      return " today";
-    }
-    if ("week".equals(timeWindow)) {
-      return " this week";
-    }
-    return "";
+    return GraphTimeWindow.periodSuffix(timeWindow);
   }
 
   public String periodWord() {
-    if ("today".equals(timeWindow)) {
-      return "today";
-    }
-    if ("week".equals(timeWindow)) {
-      return "this week";
-    }
-    return "all time";
+    return GraphTimeWindow.periodWord(timeWindow);
   }
 
   public String rankingDomain() {
@@ -73,19 +62,6 @@ public record GraphAnswerHints(String timeWindow, String eventScope, String even
 
   public boolean approvalDenialList() {
     return "approval_denial".equals(eventKind);
-  }
-
-  private static String normalizeWindow(String raw) {
-    if (!StringUtils.hasText(raw)) {
-      return null;
-    }
-    String key = raw.strip().toLowerCase(Locale.ROOT);
-    return switch (key) {
-      case "today" -> "today";
-      case "week", "this_week", "this-week" -> "week";
-      case "all", "all_time", "all-time" -> "all";
-      default -> null;
-    };
   }
 
   private static String normalizeScope(String raw) {

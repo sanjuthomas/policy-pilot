@@ -4,12 +4,16 @@ import com.sanjuthomas.policypilot.auth.Subject;
 import com.sanjuthomas.policypilot.eligibility.EligibilityClient;
 import com.sanjuthomas.policypilot.extraction.EntityApiQuestion.Facet;
 import com.sanjuthomas.policypilot.instruction.InstructionDetailAnswerFormatter;
+import com.sanjuthomas.policypilot.neo4j.GraphAnswerHints;
 import com.sanjuthomas.policypilot.pipeline.RouterDecision;
 import com.sanjuthomas.policypilot.routing.InstructionIdParser;
 import com.sanjuthomas.policypilot.routing.PaymentIdParser;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -41,7 +45,11 @@ public class DocumentExtractionService {
   public DocumentExtractionResult answer(String question, Subject subject, RouterDecision decision) {
     Facet facet = EntityApiQuestion.resolveFacet(question, decision);
     if (EntityApiQuestion.isInventoryFacet(facet)) {
-      return listInstructions(question, subject, decision, facet);
+      String target = resolveTarget(question, decision);
+      if ("payment".equals(target)) {
+        return inventoryPayments(question, subject, decision, facet);
+      }
+      return inventoryInstructions(question, subject, decision, facet);
     }
 
     String target = resolveTarget(question, decision);
@@ -57,7 +65,7 @@ public class DocumentExtractionService {
         "document.show_by_id");
   }
 
-  private DocumentExtractionResult listInstructions(
+  private DocumentExtractionResult inventoryInstructions(
       String question, Subject subject, RouterDecision decision, Facet facet) {
     Facet resolved = facet;
     String status = EntityApiQuestion.resolveEntityStatus(question, decision);
@@ -81,6 +89,9 @@ public class DocumentExtractionService {
             createdBy = EntityApiQuestion.extractUserId(question).orElse(null);
             yield "instruction.created_by_user";
           }
+          case COUNT -> "instruction.count";
+          case GROUP_BY_STATUS -> "instruction.group_by_status";
+          case GROUP_BY_LOB -> "instruction.group_by_lob";
           default -> "instruction.list_by_status";
         };
     if (resolved == Facet.CREATED_BY_USER && createdBy == null) {
@@ -88,22 +99,47 @@ public class DocumentExtractionService {
           "Please include a user id (for example mo-050) when asking which instructions a user created.",
           intentId);
     }
-    if (resolved == Facet.LIST_BY_STATUS && !StringUtils.hasText(status) && !StringUtils.hasText(type)) {
+    if (resolved == Facet.LIST_BY_STATUS
+        && !StringUtils.hasText(status)
+        && !StringUtils.hasText(type)) {
       return new DocumentExtractionResult(
           "Please name a status or type when listing instructions "
               + "(or ask again so status can be resolved).",
           intentId);
     }
+    // Group-by wants the full visible set; do not push a status/LOB filter.
+    boolean groupBy = resolved == Facet.GROUP_BY_STATUS || resolved == Facet.GROUP_BY_LOB;
+    String listStatus = groupBy ? null : status;
+    String listLob = groupBy ? null : EntityApiQuestion.lobFilter(question);
+    String timeWindow =
+        resolved == Facet.COUNT || groupBy ? GraphAnswerHints.from(decision).timeWindow() : null;
     try {
       List<Map<String, Object>> rows =
           eligibilityClient.listInstructions(
-              status,
+              listStatus,
               type,
               createdBy,
-              EntityApiQuestion.lobFilter(question),
-              200,
+              listLob,
+              500,
               subject.bearerToken(),
               subject.sessionId());
+      rows = InventoryCreatedAtFilter.apply(rows, timeWindow);
+      if (resolved == Facet.COUNT) {
+        return new DocumentExtractionResult(
+            entityApiAnswerFormatter.formatInventoryCount(rows.size(), "instructions"), intentId);
+      }
+      if (resolved == Facet.GROUP_BY_STATUS) {
+        return new DocumentExtractionResult(
+            entityApiAnswerFormatter.formatGroupByStatus(
+                groupByField(rows, "status"), "Instructions"),
+            intentId);
+      }
+      if (resolved == Facet.GROUP_BY_LOB) {
+        return new DocumentExtractionResult(
+            entityApiAnswerFormatter.formatGroupByLob(
+                groupByField(rows, "owning_lob"), "Instructions"),
+            intentId);
+      }
       return new DocumentExtractionResult(
           entityApiAnswerFormatter.formatInstructionInventory(rows), intentId);
     } catch (ResponseStatusException ex) {
@@ -113,6 +149,97 @@ public class DocumentExtractionService {
           "You are not authorized to list these instructions.",
           intentId);
     }
+  }
+
+  private DocumentExtractionResult inventoryPayments(
+      String question, Subject subject, RouterDecision decision, Facet facet) {
+    Facet resolved = facet;
+    String status = EntityApiQuestion.resolveEntityStatus(question, decision);
+    String intentId =
+        switch (resolved) {
+          case COUNT -> "payment.count";
+          case GROUP_BY_STATUS -> "payment.group_by_status";
+          case GROUP_BY_LOB -> "payment.group_by_lob";
+          default -> "payment.list_by_status";
+        };
+    if (resolved == Facet.LIST_BY_STATUS && !StringUtils.hasText(status)) {
+      return new DocumentExtractionResult(
+          "Please name a status when listing payments (or ask again so status can be resolved).",
+          intentId);
+    }
+    boolean groupBy = resolved == Facet.GROUP_BY_STATUS || resolved == Facet.GROUP_BY_LOB;
+    String listStatus = groupBy ? null : status;
+    String timeWindow =
+        resolved == Facet.COUNT || groupBy ? GraphAnswerHints.from(decision).timeWindow() : null;
+    try {
+      List<Map<String, Object>> rows =
+          eligibilityClient.listPayments(
+              listStatus, 500, subject.bearerToken(), subject.sessionId());
+      rows = InventoryCreatedAtFilter.apply(rows, timeWindow);
+      String lob = groupBy ? null : EntityApiQuestion.lobFilter(question);
+      if (StringUtils.hasText(lob)) {
+        rows = filterByLob(rows, lob);
+      }
+      if (resolved == Facet.COUNT) {
+        return new DocumentExtractionResult(
+            entityApiAnswerFormatter.formatInventoryCount(rows.size(), "payments"), intentId);
+      }
+      if (resolved == Facet.GROUP_BY_STATUS) {
+        return new DocumentExtractionResult(
+            entityApiAnswerFormatter.formatGroupByStatus(groupByField(rows, "status"), "Payments"),
+            intentId);
+      }
+      if (resolved == Facet.GROUP_BY_LOB) {
+        return new DocumentExtractionResult(
+            entityApiAnswerFormatter.formatGroupByLob(groupByField(rows, "owning_lob"), "Payments"),
+            intentId);
+      }
+      return new DocumentExtractionResult(
+          entityApiAnswerFormatter.formatPaymentInventory(rows), intentId);
+    } catch (ResponseStatusException ex) {
+      return mapHttpError(
+          ex,
+          "No matching payments were found.",
+          "You are not authorized to list these payments.",
+          intentId);
+    }
+  }
+
+  static Map<String, Long> groupByField(List<Map<String, Object>> rows, String field) {
+    Map<String, Long> counts = new TreeMap<>();
+    if (rows == null || !StringUtils.hasText(field)) {
+      return counts;
+    }
+    for (Map<String, Object> row : rows) {
+      if (row == null) {
+        continue;
+      }
+      Object value = row.get(field);
+      String key =
+          value == null || value.toString().isBlank()
+              ? "UNKNOWN"
+              : value.toString().strip().toUpperCase(Locale.ROOT);
+      counts.merge(key, 1L, Long::sum);
+    }
+    return counts;
+  }
+
+  static List<Map<String, Object>> filterByLob(List<Map<String, Object>> rows, String lob) {
+    if (rows == null || rows.isEmpty() || !StringUtils.hasText(lob)) {
+      return rows == null ? List.of() : rows;
+    }
+    String want = lob.strip().toUpperCase(Locale.ROOT);
+    List<Map<String, Object>> out = new ArrayList<>();
+    for (Map<String, Object> row : rows) {
+      if (row == null) {
+        continue;
+      }
+      Object owning = row.get("owning_lob");
+      if (owning != null && want.equalsIgnoreCase(owning.toString().strip())) {
+        out.add(row);
+      }
+    }
+    return out;
   }
 
   private DocumentExtractionResult answerInstruction(

@@ -1082,6 +1082,173 @@ cases:
     min_answer_length: 10
     answer_contains_any: [Found, instruction, Instruction ID, mo-050, No matching]
 
+- id: golden_instructions_pending_submitted
+  mode: instructions
+  retrieval: deterministic
+  tags: [golden, count, inventory, document_extraction, ssi-chat-j]
+  question: How many instructions are pending / submitted?
+  expect:
+    require_routing: true
+    routing_path: document_extraction
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: instruction.count
+    min_answer_length: 10
+    answer_has_number: true
+    answer_contains_any: [Found, matching instructions]
+
+- id: golden_instructions_standing_ficc
+  mode: instructions
+  retrieval: deterministic
+  tags: [golden, count, inventory, document_extraction, ssi-chat-j]
+  question: How many standing instructions for FICC?
+  expect:
+    require_routing: true
+    routing_path: document_extraction
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: instruction.count
+    min_answer_length: 10
+    answer_has_number: true
+    answer_contains_any: [Found, matching instructions]
+
+- id: golden_instructions_created_today
+  mode: instructions
+  retrieval: deterministic
+  tags: [golden, count, inventory, document_extraction, ssi-chat-j]
+  question: How many instructions were created today?
+  expect:
+    require_routing: true
+    routing_path: document_extraction
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: instruction.count
+    min_answer_length: 10
+    answer_has_number: true
+    answer_contains_any: [Found, matching instructions]
+
+- id: golden_instructions_group_by_status
+  mode: instructions
+  retrieval: deterministic
+  tags: [golden, group_by, inventory, document_extraction, ssi-chat-j]
+  question: Can you group instructions by status?
+  expect:
+    require_routing: true
+    routing_path: document_extraction
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: instruction.group_by_status
+    min_answer_length: 10
+    answer_has_number: true
+    answer_contains_any: [by status, APPROVED, SUBMITTED, No matching]
+
+- id: golden_payments_submitted_count
+  mode: payments
+  retrieval: deterministic
+  tags: [golden, count, inventory, document_extraction, ssi-chat-j]
+  question: How many payments are in SUBMITTED status?
+  expect:
+    require_routing: true
+    routing_path: document_extraction
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: payment.count
+    min_answer_length: 10
+    answer_has_number: true
+    answer_contains_any: [Found, matching payments]
+
+- id: golden_payments_created_week
+  mode: payments
+  retrieval: deterministic
+  tags: [golden, count, inventory, document_extraction, ssi-chat-j]
+  question: How many payments were created this week?
+  expect:
+    require_routing: true
+    routing_path: document_extraction
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: payment.count
+    min_answer_length: 10
+    answer_has_number: true
+    answer_contains_any: [Found, matching payments]
+
+- id: golden_instructions_created_month
+  mode: instructions
+  retrieval: deterministic
+  tags: [golden, count, inventory, document_extraction, ssi-chat-j]
+  question: How many instructions were created this month?
+  expect:
+    require_routing: true
+    routing_path: document_extraction
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: instruction.count
+    min_answer_length: 10
+    answer_has_number: true
+    answer_contains_any: [Found, matching instructions]
+
+- id: golden_payments_created_quarter
+  mode: payments
+  retrieval: deterministic
+  tags: [golden, count, inventory, document_extraction, ssi-chat-j]
+  question: How many payments were created this quarter?
+  expect:
+    require_routing: true
+    routing_path: document_extraction
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: payment.count
+    min_answer_length: 10
+    answer_has_number: true
+    answer_contains_any: [Found, matching payments]
+
+- id: golden_instructions_created_year
+  mode: instructions
+  retrieval: deterministic
+  tags: [golden, count, inventory, document_extraction, ssi-chat-j]
+  question: How many instructions were created this year?
+  expect:
+    require_routing: true
+    routing_path: document_extraction
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: instruction.count
+    min_answer_length: 10
+    answer_has_number: true
+    answer_contains_any: [Found, matching instructions]
+
+- id: golden_instructions_per_lob
+  mode: instructions
+  retrieval: deterministic
+  tags: [golden, group_by, inventory, document_extraction, ssi-chat-j]
+  question: How many instructions exist per LOB?
+  expect:
+    require_routing: true
+    routing_path: document_extraction
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: instruction.group_by_lob
+    min_answer_length: 10
+    answer_has_number: true
+    answer_contains_any: [by LOB, FICC, FX, RATES, No matching]
+
+- id: golden_events_count_month
+  mode: events
+  retrieval: graph
+  tags: [golden, counts, neo4j_direct, ssi-chat-j]
+  question: How many ALERT events happened this month?
+  expect:
+    require_routing: true
+    routing_path: neo4j_direct
+    cypher_class: deterministic
+    answer_synthesis: formatter
+    intent_id: planned_graph
+    answer_has_number: true
+    min_answer_length: 10
+    answer_contains_all:
+    - ALERT
+    - month
+
 - id: golden_instruction_versions
   mode: instructions
   retrieval: deterministic

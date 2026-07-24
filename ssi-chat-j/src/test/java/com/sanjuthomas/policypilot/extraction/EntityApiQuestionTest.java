@@ -77,6 +77,30 @@ class EntityApiQuestionTest {
   }
 
   @Test
+  void preservesCountAndGroupByLlmFacetSlots() {
+    RouterDecision count = new RouterDecision();
+    count.setExtractionFacet("count");
+    EntityApiQuestion.enrichDecision(count, "How many instructions are pending?");
+    assertEquals("count", count.getExtractionFacet());
+    assertEquals(Facet.COUNT, EntityApiQuestion.resolveFacet("How many?", count));
+    assertTrue(EntityApiQuestion.isInventoryFacet(Facet.COUNT));
+
+    RouterDecision group = new RouterDecision();
+    group.setExtractionFacet("group_by_status");
+    assertEquals(
+        Facet.GROUP_BY_STATUS,
+        EntityApiQuestion.resolveFacet("Group instructions by status", group));
+    assertTrue(EntityApiQuestion.isInventoryFacet(Facet.GROUP_BY_STATUS));
+
+    RouterDecision perLob = new RouterDecision();
+    perLob.setExtractionFacet("group_by_lob");
+    assertEquals(
+        Facet.GROUP_BY_LOB, EntityApiQuestion.resolveFacet("How many per LOB?", perLob));
+    assertTrue(EntityApiQuestion.isInventoryFacet(Facet.GROUP_BY_LOB));
+    assertEquals(Facet.GROUP_BY_LOB, EntityApiQuestion.facetFromSlot("per_lob"));
+  }
+
+  @Test
   void preservesLlmFacetSlots() {
     RouterDecision approver = new RouterDecision();
     approver.setExtractionFacet("approver");

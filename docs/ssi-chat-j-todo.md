@@ -64,7 +64,7 @@ Skip: `*.show_by_id` (intentional Java `document_extraction`).
 | `instruction.mutual_approval` | `done` | `golden_instructions_mutual_approval` (+ demo seed in prove) |
 | `instruction.cross_entity_reciprocal_approval` | `done` | `golden_cross_entity_reciprocal_approval` (+ demo seed in prove) |
 | `events.instruction_timeline_by_id` | `done` | `golden_events_instruction_timeline` |
-| Facet counts / group-by (planned_graph formatters) | `todo` | GOLDEN_EVAL P1/P2 |
+| Facet counts / group-by (document_extraction list APIs) | `done` | Soft: status/LOB group-by + day/week/month/quarter/year counts |
 
 ---
 

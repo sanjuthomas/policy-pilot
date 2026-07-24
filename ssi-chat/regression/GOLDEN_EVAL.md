@@ -127,23 +127,33 @@ Denial / alert count & list goldens (former P0) now live only in the **Case cata
 
 ### P1 — Instruction inventory (planned counts / who)
 
+Soft coverage on `ssi-chat-j` (`document_extraction` + domain list APIs; `answer_has_number`, not exact seed totals):
+`golden_instructions_pending_submitted`, `golden_instructions_standing_ficc`,
+`golden_instructions_created_today`, `golden_instructions_group_by_status`,
+`golden_instructions_created_month`, `golden_instructions_created_year`,
+`golden_instructions_per_lob`.
+Who-approved / creator+approver already covered via existing document_extraction goldens.
+
 | Proposed ID | Source / promote | Question (sketch) | Deterministic asserts to add | Notes |
 |-------------|------------------|-------------------|------------------------------|-------|
-| `golden_instructions_created_today` | `instructions_created_today` | How many instructions were created today? | Exact count from seed (`create-instructions` count + policy side effects — measure) | Wall-clock “today” OK after same-day seed |
-| `golden_instructions_standing_ficc` | `instructions_standing_ficc` | How many STANDING instructions are there for LOB FICC? | Exact FICC STANDING total | Synonym taxonomy already predefined |
-| `golden_instructions_pending_submitted` | `instructions_pending_approval` | How many instructions are in SUBMITTED? | Exact SUBMITTED total | |
-| `golden_instructions_per_lob` | `instructions_per_lob` | How many instructions exist per LOB? | Facet rows include known LOBs (FICC, …) with exact per-LOB counts | Formatter facet |
-| `golden_instructions_who_approved` | `instructions_who_approved` | Who approved instruction `{approved_instruction_id}`? | Entity recall + exact approver user id / name from seed personas | Partial overlap with status golden |
-| `golden_instructions_creator_and_approver` | `instructions_creator_and_approver` | Who created … and who approved …? | Both creator and approver ids present | |
-| `golden_instructions_group_by_status` | `instructions_group_by_status_facet` | Can you group instructions by status? | Every seeded status bucket present with exact counts | |
+| `golden_instructions_created_today` | `count` + `graphTimeWindow=day` | How many instructions were created today? | Exact count from seed (optional later) | Soft golden live |
+| `golden_instructions_standing_ficc` | `count` + STANDING + LOB | How many STANDING instructions are there for LOB FICC? | Exact FICC STANDING total (optional later) | Soft golden live |
+| `golden_instructions_pending_submitted` | `count` + SUBMITTED | How many instructions are in SUBMITTED? | Exact SUBMITTED total (optional later) | Soft golden live |
+| `golden_instructions_per_lob` | `group_by_lob` | How many instructions exist per LOB? | Soft LOB labels + digits | Soft golden live |
+| `golden_instructions_who_approved` | `instructions_who_approved` | Who approved instruction `{approved_instruction_id}`? | Entity recall + exact approver user id / name from seed personas | Covered via document_extraction |
+| `golden_instructions_creator_and_approver` | `instructions_creator_and_approver` | Who created … and who approved …? | Both creator and approver ids present | Covered via document_extraction |
+| `golden_instructions_group_by_status` | `group_by_status` | Can you group instructions by status? | Every seeded status bucket present with exact counts (optional later) | Soft golden live |
 
 ### P2 — Payment inventory (planned counts / who / facets)
 
+Soft coverage: `golden_payments_submitted_count`, `golden_payments_created_week`,
+`golden_payments_created_quarter`. Alert month: `golden_events_count_month`.
+
 | Proposed ID | Source / promote | Question (sketch) | Deterministic asserts to add | Notes |
 |-------------|------------------|-------------------|------------------------------|-------|
-| `golden_payments_approved_ficc_today` | `payments_approved_ficc_today` | How many payments were approved today for FICC? | Exact count | |
-| `golden_payments_submitted_count` | `payments_submitted_count` | How many payments are in SUBMITTED status? | Exact count | |
-| `golden_payments_created_week` | `payments_created_week` | How many payments were created this week? | Exact count | |
+| `golden_payments_approved_ficc_today` | `payments_approved_ficc_today` | How many payments were approved today for FICC? | Exact count | still open |
+| `golden_payments_submitted_count` | `count` + SUBMITTED | How many payments are in SUBMITTED status? | Exact count (optional later) | Soft golden live |
+| `golden_payments_created_week` | `count` + `graphTimeWindow=week` | How many payments were created this week? | Exact count (optional later) | Soft golden live |
 | `golden_payments_rejected_week` | `payments_rejected_week` | How many payments were rejected this week? | Exact **1** if seed `reject-payments: 1` stays fixed | |
 | `golden_payments_total_approved_ficc_today` | `payments_total_approved_ficc_today` | Total approved payment amount for FICC today? | Exact amount **only if** harness amounts are fixed; else skip or pin ±0 from seed script | Verify amount determinism first |
 | `golden_payments_who_approved` | `payments_who_approved` | Who approved payment `{approved_payment_id}`? | Entity recall + exact approver id | Related soft golden exists under events |

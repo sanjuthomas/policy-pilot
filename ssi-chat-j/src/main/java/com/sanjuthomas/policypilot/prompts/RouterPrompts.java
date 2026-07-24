@@ -96,7 +96,8 @@ public final class RouterPrompts {
         extractionTarget=payment|instruction
         ALWAYS set extractionFacet when path=document_extraction:
           show | status | creator | creator_and_approver | approver | list_by_status |
-          list_standing | list_single_use | created_by_user | versions
+          list_standing | list_single_use | created_by_user | versions |
+          count | group_by_status | group_by_lob
         When listing/filtering instructions, ALWAYS set domain enums (map paraphrases → enum;
         the client does NOT parse synonyms):
           entityStatus = SUBMITTED|APPROVED|REJECTED|SUSPENDED|EXPIRED|CANCELLED|DRAFT|USED
@@ -104,6 +105,12 @@ public final class RouterPrompts {
           instructionType = STANDING|SINGLE_USE
             (evergreen / recurring / open-ended → STANDING; one-time / single use → SINGLE_USE)
           Leave entityStatus / instructionType null when not implied.
+        For "how many … instructions/payments" use extractionFacet=count (not list_*).
+        For "group … by status" use extractionFacet=group_by_status.
+        For "how many … per LOB" / "group … by LOB" use extractionFacet=group_by_lob.
+        When the count/group question includes a time window, ALSO set graphTimeWindow=
+          day|week|month|quarter|year (same slot as neo4j_direct alerts; today→day).
+        For payment inventory counts/lists set extractionTarget=payment; otherwise instruction.
         Prefer document_extraction over eligibility when the user asks to show / get / display /
         look up / open a payment or instruction (or a bare sequence id with show/get language),
         not who can approve it. Sequence ids encode type: -P- → payment, -I- → instruction.
@@ -111,7 +118,9 @@ public final class RouterPrompts {
           status of payment/instruction <id>, who created <id>, who created + who approved <id>,
           past-tense who approved <id> / who approved payment <id> and why?,
           list approved|standing|single-use|paused instructions, instructions created by <user-id>,
-          list/show version history for <id>.
+          list/show version history for <id>,
+          how many instructions/payments (by status/type/LOB/day/week/month/quarter/year),
+          group instructions/payments by status.
         Examples:
           "Show me instruction 20260720-FICC-I-1"
             → document_extraction, extractionTarget=instruction, extractionFacet=show
@@ -146,11 +155,39 @@ public final class RouterPrompts {
             → document_extraction, extractionTarget=instruction, extractionFacet=versions
           "Show version history for payment 20260720-FICC-P-1"
             → document_extraction, extractionTarget=payment, extractionFacet=versions
+          "How many instructions are pending / submitted?"
+            → document_extraction, extractionTarget=instruction, extractionFacet=count,
+              entityStatus=SUBMITTED
+          "How many standing instructions for FICC?"
+            → document_extraction, extractionTarget=instruction, extractionFacet=count,
+              instructionType=STANDING
+          "How many instructions were created today?"
+            → document_extraction, extractionTarget=instruction, extractionFacet=count,
+              graphTimeWindow=day
+          "Can you group instructions by status?"
+            → document_extraction, extractionTarget=instruction, extractionFacet=group_by_status
+          "How many instructions exist per LOB?" / "Group instructions by LOB"
+            → document_extraction, extractionTarget=instruction, extractionFacet=group_by_lob
+          "How many payments are in SUBMITTED status?"
+            → document_extraction, extractionTarget=payment, extractionFacet=count,
+              entityStatus=SUBMITTED
+          "How many payments were created this week?"
+            → document_extraction, extractionTarget=payment, extractionFacet=count,
+              graphTimeWindow=week
+          "How many instructions were created this month?"
+            → document_extraction, extractionTarget=instruction, extractionFacet=count,
+              graphTimeWindow=month
+          "How many payments were created this quarter?"
+            → document_extraction, extractionTarget=payment, extractionFacet=count,
+              graphTimeWindow=quarter
+          "How many instructions were created this year / YTD?"
+            → document_extraction, extractionTarget=instruction, extractionFacet=count,
+              graphTimeWindow=year
       Prefer eligibility over neo4j_direct for live OPA approver/submitter questions.
       Prefer eligibility+SUBMIT over skill for "who can submit" (not "please submit").
       Neo4j direct (SecurityEvent aggregates / graph SoD — no mutation):
         path=neo4j_direct
-        Prefer for "how many ALERT / policy denial / security events … today/this week?",
+        Prefer for "how many ALERT / policy denial / security events … today/this week/month/…?",
         "list / report all ALERTS today", "list instruction denial events this week",
         "which user triggered the most policy denial alerts …",
         and graph SoD / compliance investigations:
@@ -160,33 +197,36 @@ public final class RouterPrompts {
           cross-entity reciprocal approval (instruction ↔ payment),
           duplicate settlement routes / CONFLICTS_WITH / same creditor account+currency,
           security event timeline for a named instruction id.
-        Do NOT use neo4j_direct for entity status/creator/approver/inventory/versions
+        Do NOT use neo4j_direct for entity status/creator/approver/inventory/versions/counts
         (use document_extraction).
         ALWAYS set graphIntent (planner does not phrase-match free text):
           alert_count | alert_list | alert_ranking |
           self_approval | mutual_approval | subordinate_approver |
           duplicate_routes | cross_entity_reciprocal_approval | instruction_timeline
         For alert/count/list/ranking answers, ALSO set display slots:
-          graphTimeWindow = today|week|all
+          graphTimeWindow = day|week|month|quarter|year|all (today→day)
           graphEventScope = payment|instruction (omit when not scoped)
           graphEventKind = alert|denial|approval_denial
             (denial for "policy denial" / "denied"; approval_denial only for approval-denial lists)
         Examples:
           "How many ALERT events happened today?"
-            → neo4j_direct, graphIntent=alert_count, graphTimeWindow=today, graphEventKind=alert
+            → neo4j_direct, graphIntent=alert_count, graphTimeWindow=day, graphEventKind=alert
           "How many instruction policy denials happened this week?"
             → neo4j_direct, graphIntent=alert_count, graphTimeWindow=week,
               graphEventScope=instruction, graphEventKind=denial
           "How many payment policy denial alerts happened today?"
-            → neo4j_direct, graphIntent=alert_count, graphTimeWindow=today,
+            → neo4j_direct, graphIntent=alert_count, graphTimeWindow=day,
               graphEventScope=payment, graphEventKind=denial
           "Can you list all instruction denial events for this week?"
             → neo4j_direct, graphIntent=alert_list, graphTimeWindow=week,
               graphEventScope=instruction, graphEventKind=denial
           "Can you report all ALERTS today?"
-            → neo4j_direct, graphIntent=alert_list, graphTimeWindow=today, graphEventKind=alert
+            → neo4j_direct, graphIntent=alert_list, graphTimeWindow=day, graphEventKind=alert
           "Which user triggered the most policy denial alerts this week?"
             → neo4j_direct, graphIntent=alert_ranking, graphTimeWindow=week, graphEventKind=denial
+          "How many ALERT events this month / quarter / year?"
+            → neo4j_direct, graphIntent=alert_count, graphTimeWindow=month|quarter|year,
+              graphEventKind=alert
           "Show instructions where creator and approver are the same person."
             → neo4j_direct, graphIntent=self_approval
           "Are there any instructions approved by someone who directly reports to the creator?"

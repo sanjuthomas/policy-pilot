@@ -179,6 +179,258 @@ class DocumentExtractionServiceTest {
     assertTrue(result.answer().contains("allowed"));
   }
 
+  @Test
+  void countsSubmittedInstructions() {
+    client.returning(
+        Map.of(
+            "instructions",
+            List.of(
+                Map.of(
+                    "instruction_id",
+                    "20260720-FICC-I-2",
+                    "status",
+                    "SUBMITTED",
+                    "owning_lob",
+                    "FICC",
+                    "created_at",
+                    "2026-07-23T12:00:00Z"),
+                Map.of(
+                    "instruction_id",
+                    "20260720-FICC-I-3",
+                    "status",
+                    "SUBMITTED",
+                    "owning_lob",
+                    "FX",
+                    "created_at",
+                    "2026-07-23T13:00:00Z"))));
+
+    RouterDecision decision = new RouterDecision();
+    decision.setExtractionTarget("instruction");
+    decision.setExtractionFacet("count");
+    decision.setEntityStatus("SUBMITTED");
+    DocumentExtractionResult result =
+        service.answer("How many instructions are pending / submitted?", subject(), decision);
+
+    assertEquals("instruction.count", result.intentId());
+    assertTrue(result.answer().contains("Found 2 matching instructions"));
+  }
+
+  @Test
+  void groupsInstructionsByStatus() {
+    client.returning(
+        Map.of(
+            "instructions",
+            List.of(
+                Map.of("instruction_id", "a", "status", "APPROVED"),
+                Map.of("instruction_id", "b", "status", "SUBMITTED"),
+                Map.of("instruction_id", "c", "status", "APPROVED"))));
+
+    RouterDecision decision = new RouterDecision();
+    decision.setExtractionTarget("instruction");
+    decision.setExtractionFacet("group_by_status");
+    DocumentExtractionResult result =
+        service.answer("Can you group instructions by status?", subject(), decision);
+
+    assertEquals("instruction.group_by_status", result.intentId());
+    assertTrue(result.answer().contains("by status"));
+    assertTrue(result.answer().contains("APPROVED: 2"));
+    assertTrue(result.answer().contains("SUBMITTED: 1"));
+  }
+
+  @Test
+  void groupsInstructionsByLob() {
+    client.returning(
+        Map.of(
+            "instructions",
+            List.of(
+                Map.of("instruction_id", "a", "owning_lob", "FICC"),
+                Map.of("instruction_id", "b", "owning_lob", "FX"),
+                Map.of("instruction_id", "c", "owning_lob", "FICC"))));
+
+    RouterDecision decision = new RouterDecision();
+    decision.setExtractionTarget("instruction");
+    decision.setExtractionFacet("group_by_lob");
+    DocumentExtractionResult result =
+        service.answer("How many instructions exist per LOB?", subject(), decision);
+
+    assertEquals("instruction.group_by_lob", result.intentId());
+    assertTrue(result.answer().contains("by LOB"));
+    assertTrue(result.answer().contains("FICC: 2"));
+    assertTrue(result.answer().contains("FX: 1"));
+  }
+
+  @Test
+  void countsSubmittedPayments() {
+    client.returning(
+        Map.of(
+            "payments",
+            List.of(
+                Map.of(
+                    "payment_id",
+                    "20260720-FICC-P-1",
+                    "status",
+                    "SUBMITTED",
+                    "owning_lob",
+                    "FICC",
+                    "created_at",
+                    "2026-07-22T10:00:00Z"))));
+
+    RouterDecision decision = new RouterDecision();
+    decision.setExtractionTarget("payment");
+    decision.setExtractionFacet("count");
+    decision.setEntityStatus("SUBMITTED");
+    DocumentExtractionResult result =
+        service.answer("How many payments are in SUBMITTED status?", subject(), decision);
+
+    assertEquals("payment.count", result.intentId());
+    assertTrue(result.answer().contains("Found 1 matching payments"));
+  }
+
+  @Test
+  void countsPaymentsCreatedThisWeekWithLobFilter() {
+    client.returning(
+        Map.of(
+            "payments",
+            List.of(
+                Map.of(
+                    "payment_id",
+                    "p-new",
+                    "status",
+                    "APPROVED",
+                    "owning_lob",
+                    "FICC",
+                    "created_at",
+                    java.time.Instant.now().toString()),
+                Map.of(
+                    "payment_id",
+                    "p-fx",
+                    "status",
+                    "APPROVED",
+                    "owning_lob",
+                    "FX",
+                    "created_at",
+                    java.time.Instant.now().toString()),
+                Map.of(
+                    "payment_id",
+                    "p-old",
+                    "status",
+                    "APPROVED",
+                    "owning_lob",
+                    "FICC",
+                    "created_at",
+                    "2020-01-01T00:00:00Z"))));
+
+    RouterDecision decision = new RouterDecision();
+    decision.setExtractionTarget("payment");
+    decision.setExtractionFacet("count");
+    decision.setGraphTimeWindow("week");
+    DocumentExtractionResult result =
+        service.answer("How many payments were created this week for FICC?", subject(), decision);
+
+    assertEquals("payment.count", result.intentId());
+    assertTrue(result.answer().contains("Found 1 matching payments"));
+  }
+
+  @Test
+  void groupsPaymentsByStatus() {
+    client.returning(
+        Map.of(
+            "payments",
+            List.of(
+                Map.of("payment_id", "a", "status", "SUBMITTED"),
+                Map.of("payment_id", "b", "status", "APPROVED"),
+                Map.of("payment_id", "c", "status", "SUBMITTED"))));
+
+    RouterDecision decision = new RouterDecision();
+    decision.setExtractionTarget("payment");
+    decision.setExtractionFacet("group_by_status");
+    DocumentExtractionResult result =
+        service.answer("Group payments by status", subject(), decision);
+
+    assertEquals("payment.group_by_status", result.intentId());
+    assertTrue(result.answer().contains("SUBMITTED: 2"));
+    assertTrue(result.answer().contains("APPROVED: 1"));
+  }
+
+  @Test
+  void listsPaymentsByStatus() {
+    client.returning(
+        Map.of(
+            "payments",
+            List.of(
+                Map.of(
+                    "payment_id",
+                    "20260720-FICC-P-8",
+                    "status",
+                    "SUBMITTED",
+                    "owning_lob",
+                    "FICC",
+                    "currency",
+                    "USD",
+                    "created_by",
+                    Map.of("user_id", "fo-100"),
+                    "approved_by",
+                    Map.of()))));
+
+    RouterDecision decision = new RouterDecision();
+    decision.setExtractionTarget("payment");
+    decision.setExtractionFacet("list_by_status");
+    decision.setEntityStatus("SUBMITTED");
+    DocumentExtractionResult result =
+        service.answer("List SUBMITTED payments", subject(), decision);
+
+    assertEquals("payment.list_by_status", result.intentId());
+    assertTrue(result.answer().contains("Found 1 payment"));
+    assertTrue(result.answer().contains("20260720-FICC-P-8"));
+  }
+
+  @Test
+  void countsInstructionsCreatedToday() {
+    client.returning(
+        Map.of(
+            "instructions",
+            List.of(
+                Map.of(
+                    "instruction_id",
+                    "i-new",
+                    "status",
+                    "APPROVED",
+                    "created_at",
+                    java.time.Instant.now().toString()),
+                Map.of(
+                    "instruction_id",
+                    "i-old",
+                    "status",
+                    "APPROVED",
+                    "created_at",
+                    "2020-01-01T00:00:00Z"))));
+
+    RouterDecision decision = new RouterDecision();
+    decision.setExtractionTarget("instruction");
+    decision.setExtractionFacet("count");
+    decision.setGraphTimeWindow("today");
+    DocumentExtractionResult result =
+        service.answer("How many instructions were created today?", subject(), decision);
+
+    assertEquals("instruction.count", result.intentId());
+    assertTrue(result.answer().contains("Found 1 matching instructions"));
+  }
+
+  @Test
+  void emptyInstructionCountFormatsZeroMessage() {
+    client.returning(Map.of("instructions", List.of()));
+
+    RouterDecision decision = new RouterDecision();
+    decision.setExtractionTarget("instruction");
+    decision.setExtractionFacet("count");
+    decision.setEntityStatus("REJECTED");
+    DocumentExtractionResult result =
+        service.answer("How many REJECTED instructions?", subject(), decision);
+
+    assertEquals("instruction.count", result.intentId());
+    assertTrue(result.answer().contains("Found 0 matching instructions"));
+  }
+
   private static Subject subject() {
     return new Subject(
         "comp-001",

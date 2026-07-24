@@ -79,8 +79,16 @@ public final class RouteClamps {
   }
 
   private static void ensureInventoryTarget(RouterDecision decision) {
-    if (EntityApiQuestion.isInventoryFacet(
+    if (!EntityApiQuestion.isInventoryFacet(
         EntityApiQuestion.facetFromSlot(decision.getExtractionFacet()))) {
+      return;
+    }
+    String target =
+        decision.getExtractionTarget() == null
+            ? ""
+            : decision.getExtractionTarget().strip().toLowerCase(Locale.ROOT);
+    // Keep an explicit payment inventory target (counts / group-by); default to instruction.
+    if (!"payment".equals(target)) {
       decision.setExtractionTarget("instruction");
     }
   }
