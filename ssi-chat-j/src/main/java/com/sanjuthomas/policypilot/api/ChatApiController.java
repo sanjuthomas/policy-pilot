@@ -6,7 +6,9 @@ import com.sanjuthomas.policypilot.api.ApiModels.ChatResponse;
 import com.sanjuthomas.policypilot.api.ApiModels.LoginRequest;
 import com.sanjuthomas.policypilot.api.ApiModels.LoginResponse;
 import com.sanjuthomas.policypilot.api.ApiModels.SkillConfirmRequest;
+import com.sanjuthomas.policypilot.auth.AudienceLabels;
 import com.sanjuthomas.policypilot.auth.ChatUsersDirectory;
+import com.sanjuthomas.policypilot.auth.DirectoryUser;
 import com.sanjuthomas.policypilot.auth.SessionCredentials;
 import com.sanjuthomas.policypilot.auth.Subject;
 import com.sanjuthomas.policypilot.auth.SubjectResolver;
@@ -24,7 +26,10 @@ import com.sanjuthomas.policypilot.skill.PaymentSkillService;
 import com.sanjuthomas.policypilot.skill.SkillRunResult;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,6 +42,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 public class ChatApiController {
 
+  private static final Logger log = LoggerFactory.getLogger(ChatApiController.class);
   private static final Set<String> FEEDBACK_RATINGS = Set.of("up", "down");
 
   private final ZitadelAuthClient zitadelAuthClient;
@@ -109,8 +115,19 @@ public class ChatApiController {
     try {
       String loginName = zitadelAuthClient.loginNameForUser(request.user_id().trim());
       SessionCredentials session = zitadelAuthClient.login(loginName, request.password());
+      List<String> roles = List.of();
+      List<String> audiences = List.of();
+      try {
+        Optional<DirectoryUser> user = chatUsersDirectory.findByUserId(session.userId());
+        if (user.isPresent()) {
+          roles = List.copyOf(user.get().roles());
+          audiences = AudienceLabels.forRoles(roles);
+        }
+      } catch (Exception ex) {
+        log.warn("could not resolve audiences for {}", session.userId(), ex);
+      }
       return new LoginResponse(
-          session.userId(), session.sessionId(), session.sessionToken(), List.of(), List.of());
+          session.userId(), session.sessionId(), session.sessionToken(), roles, audiences);
     } catch (Exception ex) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "login failed: " + ex.getMessage(), ex);
     }

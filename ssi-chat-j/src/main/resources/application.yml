@@ -29,6 +29,7 @@ chatj:
   payment-service-url: ${PAYMENT_SERVICE_URL:http://localhost:8093}
   instruction-service-url: ${INSTRUCTION_SERVICE_URL:http://localhost:8000}
   authorization-service-url: ${AUTHORIZATION_SERVICE_URL:http://localhost:8094}
+  indexer-url: ${INDEXER_URL:http://localhost:8090}
   neo4j-uri: ${NEO4J_URI:bolt://localhost:7687}
   neo4j-user: ${NEO4J_USER:svc_chat}
   neo4j-password: ${NEO4J_PASSWORD:Password1!}

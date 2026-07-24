@@ -138,6 +138,22 @@ class ChatApiControllerTest {
     assertEquals("alice", response.user_id());
     assertEquals("sess", response.session_id());
     assertEquals("tok", response.session_token());
+    assertEquals(List.of(), response.roles());
+    assertEquals(List.of(), response.audiences());
+  }
+
+  @Test
+  void loginResolvesRolesAndAudiencesFromSeed() {
+    zitadelAuthClient.onLogin(
+        (login, password) -> new SessionCredentials("sess", "tok", "pay-205"));
+
+    var response = controller.login(new LoginRequest("pay-205", "secret"));
+
+    assertEquals("pay-205", response.user_id());
+    assertTrue(response.roles().contains("PAYMENT_CREATOR"));
+    assertTrue(response.roles().contains("FUNDING_APPROVER"));
+    assertTrue(response.audiences().contains("payment_creator"));
+    assertTrue(response.audiences().contains("funding_approver"));
   }
 
   @Test

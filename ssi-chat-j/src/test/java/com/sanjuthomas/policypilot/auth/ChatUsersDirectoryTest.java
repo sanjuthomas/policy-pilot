@@ -26,6 +26,15 @@ class ChatUsersDirectoryTest {
     assertTrue(first.containsKey("audiences"));
     assertTrue(first.containsKey("roles"));
   }
+
+  @Test
+  void findByUserIdReturnsSeedRoles() {
+    ChatUsersDirectory directory = new ChatUsersDirectory(TestFixtures.properties());
+    assertTrue(directory.findByUserId("pay-205").isPresent());
+    assertTrue(directory.findByUserId("pay-205").get().roles().contains("PAYMENT_CREATOR"));
+    assertTrue(directory.findByUserId("missing-user").isEmpty());
+    assertTrue(directory.findByUserId("").isEmpty());
+  }
 }
 
 class AudienceLabelsTest {

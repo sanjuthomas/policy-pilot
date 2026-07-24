@@ -7,7 +7,8 @@ Not wired into the root `docker-compose.yml` yet — run locally with Maven agai
 ## Current surface
 
 - `GET /health`
-- `POST /api/auth/login` (ZITADEL session)
+- `POST /api/auth/login` (ZITADEL session; roles/audiences from seed directory)
+- `GET /api/index-integrity` (proxies ssi-indexer for the shared integrity banner)
 - Shared PolicyPilot static UI (build-time copy of assets)
 - `POST /api/chat` eligibility lanes:
   - payment APPROVE → payment-service `eligible-approvers`
@@ -40,6 +41,7 @@ cd ssi-chat-j
 # export OTEL_EXPORTER_OTLP_PROTOCOL=grpc
 # export OTEL_SDK_DISABLED=true   # local only — still records in-process meters
 # export NEO4J_URI=bolt://localhost:7687
+# export INDEXER_URL=http://localhost:8090   # integrity banner proxy (default)
 mvn -q spring-boot:run
 curl -s http://localhost:8096/health
 ```
