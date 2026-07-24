@@ -3,7 +3,7 @@ package com.sanjuthomas.policypilot.skill;
 import com.sanjuthomas.policypilot.auth.ChatCapabilities;
 import com.sanjuthomas.policypilot.auth.Subject;
 import com.sanjuthomas.policypilot.pipeline.RouterDecision;
-import com.sanjuthomas.policypilot.skill.SkillParamParser.CreateParams;
+import com.sanjuthomas.policypilot.skill.SkillSlots.CreateParams;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -59,16 +59,34 @@ public class PaymentSkillService {
     }
 
     return switch (skill) {
-      case "submit_payment" -> dispatchPaymentId(skill, message, subject, submitSkill::phase1,
-          "I understood you want to submit a payment for approval, but I need a payment id "
-              + "(e.g. `20260715-FICC-P-9`).");
-      case "approve_payment" -> dispatchPaymentId(skill, message, subject, approveSkill::phase1,
-          "I understood you want to approve a payment, but I need a payment id "
-              + "(e.g. `20260715-FICC-P-9`).");
-      case "cancel_payment" -> dispatchPaymentId(skill, message, subject, cancelSkill::phase1,
-          "I understood you want to cancel a payment, but I need a payment id "
-              + "(e.g. `20260715-FICC-P-9`).");
-      default -> dispatchCreate(message, subject);
+      case "submit_payment" ->
+          dispatchPaymentId(
+              skill,
+              decision,
+              message,
+              subject,
+              submitSkill::phase1,
+              "I understood you want to submit a payment for approval, but I need a payment id "
+                  + "(e.g. `20260715-FICC-P-9`).");
+      case "approve_payment" ->
+          dispatchPaymentId(
+              skill,
+              decision,
+              message,
+              subject,
+              approveSkill::phase1,
+              "I understood you want to approve a payment, but I need a payment id "
+                  + "(e.g. `20260715-FICC-P-9`).");
+      case "cancel_payment" ->
+          dispatchPaymentId(
+              skill,
+              decision,
+              message,
+              subject,
+              cancelSkill::phase1,
+              "I understood you want to cancel a payment, but I need a payment id "
+                  + "(e.g. `20260715-FICC-P-9`).");
+      default -> dispatchCreate(decision, message, subject);
     };
   }
 
@@ -81,8 +99,9 @@ public class PaymentSkillService {
     };
   }
 
-  private SkillRunResult dispatchCreate(String message, Subject subject) {
-    Optional<CreateParams> params = SkillParamParser.parseCreate(message);
+  private SkillRunResult dispatchCreate(
+      RouterDecision decision, String message, Subject subject) {
+    Optional<CreateParams> params = SkillSlots.resolveCreate(decision, message);
     if (params.isEmpty()) {
       return SkillRunResult.terminal(
           "I understood you want to create a payment, but I need an instruction id, amount, and "
@@ -99,8 +118,13 @@ public class PaymentSkillService {
   }
 
   private SkillRunResult dispatchPaymentId(
-      String skill, String message, Subject subject, PaymentIdPhase1 runner, String incompleteMessage) {
-    Optional<String> paymentId = SkillParamParser.parsePaymentId(message);
+      String skill,
+      RouterDecision decision,
+      String message,
+      Subject subject,
+      PaymentIdPhase1 runner,
+      String incompleteMessage) {
+    Optional<String> paymentId = SkillSlots.resolvePaymentId(decision, message);
     if (paymentId.isEmpty()) {
       return SkillRunResult.terminal(
           incompleteMessage,

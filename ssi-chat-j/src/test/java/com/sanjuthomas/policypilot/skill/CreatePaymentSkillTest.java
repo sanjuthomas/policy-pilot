@@ -10,7 +10,7 @@ import static org.mockito.Mockito.when;
 import com.sanjuthomas.policypilot.auth.Subject;
 import com.sanjuthomas.policypilot.eligibility.EligibilityClient;
 import com.sanjuthomas.policypilot.skill.AuthzPaymentEvaluateClient.PolicyDecision;
-import com.sanjuthomas.policypilot.skill.SkillParamParser.CreateParams;
+import com.sanjuthomas.policypilot.skill.SkillSlots.CreateParams;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;

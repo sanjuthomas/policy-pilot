@@ -30,6 +30,20 @@ class PaymentSkillServiceTest {
     return decision;
   }
 
+  private static RouterDecision createWithSlots() {
+    RouterDecision decision = skill("create_payment");
+    decision.setSkillInstructionId("20260720-FICC-I-1");
+    decision.setSkillAmount(1_000_000d);
+    decision.setSkillValueDate("tomorrow");
+    return decision;
+  }
+
+  private static RouterDecision paymentSkillWithId(String skill, String paymentId) {
+    RouterDecision decision = skill(skill);
+    decision.setSkillPaymentId(paymentId);
+    return decision;
+  }
+
   private static Subject subject(String userId, List<String> roles, List<String> groups) {
     return new Subject(
         userId, "Given", "Family", "Analyst", "FICC", roles, groups, "sup-1", List.of(), "tok", "sess");
@@ -64,7 +78,7 @@ class PaymentSkillServiceTest {
     SkillRunResult result =
         service()
             .phase1(
-                skill("create_payment"),
+                createWithSlots(),
                 "create a payment for instruction 20260720-FICC-I-1 amount 1m value date tomorrow",
                 "payments",
                 fundingApprover());
@@ -79,7 +93,7 @@ class PaymentSkillServiceTest {
     SkillRunResult result =
         service()
             .phase1(
-                skill("submit_payment"),
+                paymentSkillWithId("submit_payment", "20260720-FICC-P-9"),
                 "please submit payment 20260720-FICC-P-9 for approval",
                 "payments",
                 fundingApprover());
@@ -93,7 +107,7 @@ class PaymentSkillServiceTest {
     SkillRunResult result =
         service()
             .phase1(
-                skill("approve_payment"),
+                paymentSkillWithId("approve_payment", "20260720-FICC-P-9"),
                 "please approve payment 20260720-FICC-P-9",
                 "payments",
                 paymentCreator());
@@ -108,7 +122,7 @@ class PaymentSkillServiceTest {
     SkillRunResult result =
         service()
             .phase1(
-                skill("cancel_payment"),
+                paymentSkillWithId("cancel_payment", "20260720-FICC-P-9"),
                 "please cancel payment 20260720-FICC-P-9",
                 "payments",
                 paymentCreator());

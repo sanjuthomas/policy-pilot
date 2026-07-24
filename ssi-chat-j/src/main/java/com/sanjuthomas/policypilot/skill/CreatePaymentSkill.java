@@ -7,7 +7,7 @@ import com.sanjuthomas.policypilot.skill.AuthzPaymentEvaluateClient.AuthzEvaluat
 import com.sanjuthomas.policypilot.skill.AuthzPaymentEvaluateClient.PolicyDecision;
 import com.sanjuthomas.policypilot.skill.PaymentMutationClient.PaymentClientException;
 import com.sanjuthomas.policypilot.skill.PaymentMutationClient.PaymentDeniedException;
-import com.sanjuthomas.policypilot.skill.SkillParamParser.CreateParams;
+import com.sanjuthomas.policypilot.skill.SkillSlots.CreateParams;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;

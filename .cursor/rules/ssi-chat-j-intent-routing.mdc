@@ -16,7 +16,7 @@ Same bar as Python `ssi-chat` (`intent-semantic-routing.mdc`): people phrase the
 - Grow `prompts/RouterPrompts.ROUTER_SYSTEM` and the `RouterDecision` schema when adding a lane — not `if (message.contains(...))` classifiers.
 - Keep **deterministic execution** after the route (authz/payment HTTP, club math from OPA catalog, Thymeleaf formatters).
 - **Path is law:** `ChatPathDispatcher` dispatches on `path` only; handlers must not silently override another path.
-- Map **open-vocabulary** filters with LLM slots — e.g. `entityStatus` / `instructionType` / `extractionFacet` for `document_extraction`, `directoryAmount` / `directoryAmountStrict` for `policy_directory`, and `graphIntent` / `graphTimeWindow` / `graphEventScope` / `graphEventKind` for `neo4j_direct`. Do **not** add synonym/lemma/typo tables (`paused`→`SUSPENDED`, …).
+- Map **open-vocabulary** filters with LLM slots — e.g. `entityStatus` / `instructionType` / `extractionFacet` for `document_extraction`, `directoryAmount` / `directoryAmountStrict` for `policy_directory`, `graphIntent` / `graphTimeWindow` / `graphEventScope` / `graphEventKind` for `neo4j_direct`, and `skillAmount` / `skillValueDate` / `skillInstructionId` / `skillPaymentId` for `skill`. Do **not** add synonym/lemma/typo tables (`paused`→`SUSPENDED`, …) or free-text amount/date regex for skills.
 - Use regex only for **stable tokens** after path is known (payment/instruction ids, explicit
   `UP_TO_*_CLUB`, literal enum strings / LOB codes already in the question) — never as primary NLU.
 
