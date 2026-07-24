@@ -6,6 +6,7 @@ import com.sanjuthomas.policypilot.cypher.GraphPlanModels.ValidateResult;
 import com.sanjuthomas.policypilot.neo4j.GraphAnswerHints;
 import com.sanjuthomas.policypilot.pipeline.RouterDecision;
 import com.sanjuthomas.policypilot.routing.InstructionIdParser;
+import com.sanjuthomas.policypilot.time.GraphTimeWindow;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -135,13 +136,7 @@ public class GraphCypherPlanner {
   }
 
   static String timeFilter(String window) {
-    if ("today".equals(window)) {
-      return "AND date(datetime(e.timestamp)) = date()";
-    }
-    if ("week".equals(window)) {
-      return "AND date(datetime(e.timestamp)) >= date() - duration('P7D')";
-    }
-    return "";
+    return GraphTimeWindow.cypherTimestampFilter(window);
   }
 
   static String domain(String eventScope) {

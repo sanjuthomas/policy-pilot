@@ -57,7 +57,13 @@ public final class EntityApiQuestion {
     LIST_BY_STATUS,
     LIST_STANDING,
     LIST_SINGLE_USE,
-    CREATED_BY_USER
+    CREATED_BY_USER,
+    /** Aggregate count of matching inventory rows (optional status/type/LOB/time filters). */
+    COUNT,
+    /** Group inventory rows by lifecycle status with per-bucket counts. */
+    GROUP_BY_STATUS,
+    /** Group inventory rows by owning LOB with per-bucket counts. */
+    GROUP_BY_LOB
   }
 
   public static Optional<String> extractUserId(String question) {
@@ -75,7 +81,10 @@ public final class EntityApiQuestion {
     return facet == Facet.LIST_BY_STATUS
         || facet == Facet.LIST_STANDING
         || facet == Facet.LIST_SINGLE_USE
-        || facet == Facet.CREATED_BY_USER;
+        || facet == Facet.CREATED_BY_USER
+        || facet == Facet.COUNT
+        || facet == Facet.GROUP_BY_STATUS
+        || facet == Facet.GROUP_BY_LOB;
   }
 
   /**
@@ -211,6 +220,9 @@ public final class EntityApiQuestion {
       case "list_standing", "standing" -> Facet.LIST_STANDING;
       case "list_single_use", "single_use" -> Facet.LIST_SINGLE_USE;
       case "created_by_user" -> Facet.CREATED_BY_USER;
+      case "count" -> Facet.COUNT;
+      case "group_by_status", "groupby_status" -> Facet.GROUP_BY_STATUS;
+      case "group_by_lob", "groupby_lob", "per_lob" -> Facet.GROUP_BY_LOB;
       default -> null;
     };
   }
@@ -308,6 +320,9 @@ public final class EntityApiQuestion {
       case LIST_STANDING -> "list_standing";
       case LIST_SINGLE_USE -> "list_single_use";
       case CREATED_BY_USER -> "created_by_user";
+      case COUNT -> "count";
+      case GROUP_BY_STATUS -> "group_by_status";
+      case GROUP_BY_LOB -> "group_by_lob";
     };
   }
 

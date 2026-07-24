@@ -50,7 +50,8 @@ public class RouterDecision {
    */
   @JsonPropertyDescription(
       "document_extraction only: show|status|creator|creator_and_approver|approver|"
-          + "list_by_status|list_standing|list_single_use|created_by_user|versions")
+          + "list_by_status|list_standing|list_single_use|created_by_user|versions|"
+          + "count|group_by_status|group_by_lob")
   private String extractionFacet;
 
   /**
@@ -138,10 +139,13 @@ public class RouterDecision {
   private String graphIntent;
 
   /**
-   * When path is neo4j_direct for alert/denial aggregates: time window for answer wording.
-   * Map paraphrases here — the formatter does not parse "today"/"this week" from free text.
+   * Time window for alert/denial aggregates ({@code neo4j_direct}) and inventory counts
+   * ({@code document_extraction} + {@code extractionFacet=count}). Map paraphrases here — the
+   * formatter does not parse "today"/"this week" from free text.
    */
-  @JsonPropertyDescription("neo4j_direct alert/count/list/ranking: today|week|all")
+  @JsonPropertyDescription(
+      "neo4j_direct alert aggregates and document_extraction count: "
+          + "day|week|month|quarter|year|all (today→day)")
   private String graphTimeWindow;
 
   /**

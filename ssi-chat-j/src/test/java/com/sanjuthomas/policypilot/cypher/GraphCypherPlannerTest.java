@@ -30,6 +30,34 @@ class GraphCypherPlannerTest {
   }
 
   @Test
+  void plansAlertCountMonthQuarterYearFromSlots() {
+    PlanResponse month =
+        planner.plan(
+            "How many ALERT events this month?",
+            "events",
+            null,
+            decision("alert_count", "month", null, "alert"));
+    assertTrue(month.matched());
+    assertTrue(month.planned().get(0).cypher().contains("truncate('month'"));
+
+    PlanResponse quarter =
+        planner.plan(
+            "How many ALERT events this quarter?",
+            "events",
+            null,
+            decision("alert_count", "quarter", null, "alert"));
+    assertTrue(quarter.planned().get(0).cypher().contains("truncate('quarter'"));
+
+    PlanResponse year =
+        planner.plan(
+            "How many ALERT events this year?",
+            "events",
+            null,
+            decision("alert_count", "year", null, "alert"));
+    assertTrue(year.planned().get(0).cypher().contains("truncate('year'"));
+  }
+
+  @Test
   void plansInstructionDenialCountWithLobScope() {
     PlanResponse plan =
         planner.plan(

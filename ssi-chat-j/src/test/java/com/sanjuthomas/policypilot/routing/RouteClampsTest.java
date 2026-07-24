@@ -222,4 +222,20 @@ class RouteClampsTest {
     assertEquals("created_by_user", clamped.getExtractionFacet());
     assertEquals("instruction", clamped.getExtractionTarget());
   }
+
+  @Test
+  void keepsPaymentTargetForInventoryCount() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("document_extraction");
+    decision.setExtractionTarget("payment");
+    decision.setExtractionFacet("count");
+    decision.setEntityStatus("SUBMITTED");
+
+    RouterDecision clamped =
+        RouteClamps.apply(decision, "How many payments are in SUBMITTED status?");
+
+    assertEquals("document_extraction", clamped.getPath());
+    assertEquals("payment", clamped.getExtractionTarget());
+    assertEquals("count", clamped.getExtractionFacet());
+  }
 }

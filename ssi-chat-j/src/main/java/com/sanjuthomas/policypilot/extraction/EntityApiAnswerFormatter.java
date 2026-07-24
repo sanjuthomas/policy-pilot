@@ -79,6 +79,71 @@ public class EntityApiAnswerFormatter {
     return answerRenderer.render(INVENTORY, toInventoryView(rows));
   }
 
+  /** Aggregate inventory count (instructions or payments). */
+  public String formatInventoryCount(int count, String noun) {
+    String label = StringUtils.hasText(noun) ? noun.strip() : "rows";
+    int n = Math.max(0, count);
+    return "Found " + n + " matching " + label + ".";
+  }
+
+  /** Status histogram for inventory group-by answers. */
+  public String formatGroupByStatus(Map<String, Long> counts, String titleNoun) {
+    return formatGroupBy(counts, titleNoun, "status");
+  }
+
+  /** LOB histogram for inventory group-by answers. */
+  public String formatGroupByLob(Map<String, Long> counts, String titleNoun) {
+    return formatGroupBy(counts, titleNoun, "LOB");
+  }
+
+  public String formatGroupBy(Map<String, Long> counts, String titleNoun, String dimension) {
+    String title = StringUtils.hasText(titleNoun) ? titleNoun.strip() : "Rows";
+    String dim = StringUtils.hasText(dimension) ? dimension.strip() : "bucket";
+    if (counts == null || counts.isEmpty()) {
+      return "No matching " + title.toLowerCase(Locale.ROOT) + " were found.";
+    }
+    StringBuilder sb = new StringBuilder();
+    sb.append(title).append(" by ").append(dim).append(":\n");
+    for (Map.Entry<String, Long> entry : counts.entrySet()) {
+      sb.append("- ")
+          .append(entry.getKey())
+          .append(": ")
+          .append(entry.getValue())
+          .append('\n');
+    }
+    return sb.toString().strip();
+  }
+
+  /** Soft payment inventory table (domain list API). */
+  public String formatPaymentInventory(List<Map<String, Object>> rows) {
+    if (rows == null || rows.isEmpty()) {
+      return "No matching payments were found.";
+    }
+    StringBuilder sb = new StringBuilder();
+    sb.append("Found ").append(rows.size()).append(" payment(s).\n\n");
+    sb.append("| Payment ID | Status | LOB | Currency | Creator | Approver |\n");
+    sb.append("|---|---|---|---|---|---|\n");
+    for (Map<String, Object> row : rows) {
+      if (row == null) {
+        continue;
+      }
+      sb.append("| ")
+          .append(display(row.get("payment_id")))
+          .append(" | ")
+          .append(display(row.get("status")))
+          .append(" | ")
+          .append(display(row.get("owning_lob")))
+          .append(" | ")
+          .append(display(row.get("currency")))
+          .append(" | ")
+          .append(display(EntityUserDisplay.creator(row.get("created_by"))))
+          .append(" | ")
+          .append(displayApprover(row.get("approved_by")))
+          .append(" |\n");
+    }
+    return sb.toString().strip();
+  }
+
   public String formatInstructionVersions(String instructionId, List<Map<String, Object>> rows) {
     return answerRenderer.render(
         INSTRUCTION_VERSIONS, toVersionsView(instructionId, rows, false));
