@@ -51,7 +51,9 @@ class UpdatePaymentsRequest(BaseModel):
 
 
 class SkillFixtureSetupRequest(BaseModel):
-    need: Literal["instruction", "draft", "submitted"] = "instruction"
+    need: Literal[
+        "instruction", "draft", "submitted", "suspended", "used_single_use"
+    ] = "instruction"
 
 
 class SkillFixtureTeardownRequest(BaseModel):

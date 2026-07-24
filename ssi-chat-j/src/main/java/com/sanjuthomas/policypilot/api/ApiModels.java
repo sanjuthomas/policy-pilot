@@ -31,6 +31,8 @@ public final class ApiModels {
     }
   }
 
+  public record SkillConfirmRequest(String pending_id, String decision) {}
+
   public record ChatFeedbackRequest(
       String rating,
       String mode,

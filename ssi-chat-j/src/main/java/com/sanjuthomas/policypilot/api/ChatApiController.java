@@ -5,6 +5,7 @@ import com.sanjuthomas.policypilot.api.ApiModels.ChatRequest;
 import com.sanjuthomas.policypilot.api.ApiModels.ChatResponse;
 import com.sanjuthomas.policypilot.api.ApiModels.LoginRequest;
 import com.sanjuthomas.policypilot.api.ApiModels.LoginResponse;
+import com.sanjuthomas.policypilot.api.ApiModels.SkillConfirmRequest;
 import com.sanjuthomas.policypilot.auth.ChatUsersDirectory;
 import com.sanjuthomas.policypilot.auth.SessionCredentials;
 import com.sanjuthomas.policypilot.auth.Subject;
@@ -16,8 +17,11 @@ import com.sanjuthomas.policypilot.config.ChatJProperties;
 import com.sanjuthomas.policypilot.observability.ChatFeedbackContext;
 import com.sanjuthomas.policypilot.observability.FeedbackDistributionTracker;
 import com.sanjuthomas.policypilot.observability.FeedbackMetrics;
+import com.sanjuthomas.policypilot.observability.ChatAnswerFinalizer;
 import com.sanjuthomas.policypilot.observability.RoutingDistributionTracker;
 import com.sanjuthomas.policypilot.service.ChatService;
+import com.sanjuthomas.policypilot.skill.PaymentSkillService;
+import com.sanjuthomas.policypilot.skill.SkillRunResult;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -44,6 +48,8 @@ public class ChatApiController {
   private final FeedbackMetrics feedbackMetrics;
   private final RoutingDistributionTracker routingDistributionTracker;
   private final FeedbackDistributionTracker feedbackDistributionTracker;
+  private final PaymentSkillService paymentSkillService;
+  private final ChatAnswerFinalizer answerFinalizer;
 
   public ChatApiController(
       ZitadelAuthClient zitadelAuthClient,
@@ -54,7 +60,9 @@ public class ChatApiController {
       ChatUsersDirectory chatUsersDirectory,
       FeedbackMetrics feedbackMetrics,
       RoutingDistributionTracker routingDistributionTracker,
-      FeedbackDistributionTracker feedbackDistributionTracker) {
+      FeedbackDistributionTracker feedbackDistributionTracker,
+      PaymentSkillService paymentSkillService,
+      ChatAnswerFinalizer answerFinalizer) {
     this.zitadelAuthClient = zitadelAuthClient;
     this.patProvider = patProvider;
     this.subjectResolver = subjectResolver;
@@ -64,6 +72,8 @@ public class ChatApiController {
     this.feedbackMetrics = feedbackMetrics;
     this.routingDistributionTracker = routingDistributionTracker;
     this.feedbackDistributionTracker = feedbackDistributionTracker;
+    this.paymentSkillService = paymentSkillService;
+    this.answerFinalizer = answerFinalizer;
   }
 
   @GetMapping("/health")
@@ -116,6 +126,64 @@ public class ChatApiController {
     }
     Subject subject = requireChatSubject(authorization, sessionId);
     return chatService.ask(request, subject);
+  }
+
+  @PostMapping("/api/chat/skills/create-payment/confirm")
+  public ChatResponse confirmCreatePayment(
+      @RequestBody SkillConfirmRequest request,
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
+    return confirmSkill("create_payment", request, authorization, sessionId);
+  }
+
+  @PostMapping("/api/chat/skills/submit-payment/confirm")
+  public ChatResponse confirmSubmitPayment(
+      @RequestBody SkillConfirmRequest request,
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
+    return confirmSkill("submit_payment", request, authorization, sessionId);
+  }
+
+  @PostMapping("/api/chat/skills/approve-payment/confirm")
+  public ChatResponse confirmApprovePayment(
+      @RequestBody SkillConfirmRequest request,
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
+    return confirmSkill("approve_payment", request, authorization, sessionId);
+  }
+
+  @PostMapping("/api/chat/skills/cancel-payment/confirm")
+  public ChatResponse confirmCancelPayment(
+      @RequestBody SkillConfirmRequest request,
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
+    return confirmSkill("cancel_payment", request, authorization, sessionId);
+  }
+
+  private ChatResponse confirmSkill(
+      String skill, SkillConfirmRequest request, String authorization, String sessionId) {
+    if (request == null || !StringUtils.hasText(request.pending_id())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "pending_id required");
+    }
+    Subject subject = requireChatSubject(authorization, sessionId);
+    SkillRunResult result =
+        paymentSkillService.confirm(skill, request.pending_id(), request.decision(), subject);
+    return answerFinalizer.of(
+        "confirm " + skill,
+        "payments",
+        result.answer(),
+        "skill",
+        "formatter",
+        null,
+        0.0,
+        0.0,
+        result.intentId(),
+        null,
+        List.of(),
+        "none",
+        List.of(),
+        result.activities(),
+        null);
   }
 
   @PostMapping("/api/chat/feedback")

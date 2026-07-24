@@ -38,7 +38,8 @@ Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `
 | **P3.5** — vector security summary | `done` | `golden_vector_security_summary` green on `:8096` |
 | **person_permissions** | `done` | Authz directory summary; `golden_person_permissions_kowalski` in prove bank |
 | **neo4j_direct remaining port** | `done` | SoD goldens in prove bank; facet families still backlog |
-| **Next after neo4j_direct** | `todo` | Payment skills / GOLDEN_EVAL facet families |
+| **Payment mutation skills** | `in-progress` | `path=skill` create/submit/approve/cancel — phase1 + Go/No Go confirm + Go mutate; `golden_skill_*` soft No Go + forbidden goldens |
+| **Next after skills** | `todo` | GOLDEN_EVAL facet families |
 
 **Bank snapshot:** Java prove bank **71** · Python-only **0**. Soft bank not used for Java roadmap.
 
@@ -195,7 +196,7 @@ No Python-only golden cases remain open for the Java success bar.
 | ID | Item | Status | Notes |
 |----|------|--------|-------|
 | D.1 | Full `questions.yaml` bank | `deferred` | |
-| D.2 | Payment skills parity | `deferred` | |
+| D.2 | Payment skills parity | `done` | Soft bank green on `:8096` (4 forbidden + 4 phase1 No Go); Go mutate implemented for API parity (not in golden bank yet) |
 | D.3 | Replace Python chat | `deferred` | Explicitly **out of scope** for this experiment |
 | D.4 | Native Java `cypher_builder` port | `done` | In-process `com.sanjuthomas.policypilot.cypher` (alerts + SoD + timeline); no HTTP bridge |
 

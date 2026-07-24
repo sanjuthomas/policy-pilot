@@ -14,12 +14,23 @@ import com.sanjuthomas.policypilot.auth.FakeZitadelAuthClient;
 import com.sanjuthomas.policypilot.auth.SessionCredentials;
 import com.sanjuthomas.policypilot.auth.Subject;
 import com.sanjuthomas.policypilot.api.ApiModels.ChatFeedbackRequest;
+import com.sanjuthomas.policypilot.api.ApiModels.SkillConfirmRequest;
 import com.sanjuthomas.policypilot.config.AppConfig.ZitadelPatProvider;
 import com.sanjuthomas.policypilot.config.ChatJProperties;
+import com.sanjuthomas.policypilot.eligibility.FakeEligibilityClient;
+import com.sanjuthomas.policypilot.observability.ChatAnswerFinalizer;
 import com.sanjuthomas.policypilot.observability.FeedbackDistributionTracker;
 import com.sanjuthomas.policypilot.observability.FeedbackMetrics;
 import com.sanjuthomas.policypilot.observability.RoutingDistributionTracker;
+import com.sanjuthomas.policypilot.observability.RoutingMetrics;
+import com.sanjuthomas.policypilot.observability.SkillMetrics;
 import com.sanjuthomas.policypilot.service.FakeChatService;
+import com.sanjuthomas.policypilot.skill.ApprovePaymentSkill;
+import com.sanjuthomas.policypilot.skill.CancelPaymentSkill;
+import com.sanjuthomas.policypilot.skill.CreatePaymentSkill;
+import com.sanjuthomas.policypilot.skill.PaymentSkillService;
+import com.sanjuthomas.policypilot.skill.PendingSkillStore;
+import com.sanjuthomas.policypilot.skill.SubmitPaymentSkill;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +50,22 @@ class ChatApiControllerTest {
   private FeedbackDistributionTracker feedbackDistributionTracker;
   private RoutingDistributionTracker routingDistributionTracker;
   private ChatApiController controller;
+
+  private static PaymentSkillService paymentSkillService() {
+    PendingSkillStore store = new PendingSkillStore();
+    FakeEligibilityClient eligibilityClient = new FakeEligibilityClient();
+    return new PaymentSkillService(
+        new CreatePaymentSkill(eligibilityClient, null, null, store),
+        new SubmitPaymentSkill(eligibilityClient, null, null, store),
+        new ApprovePaymentSkill(eligibilityClient, null, null, store),
+        new CancelPaymentSkill(eligibilityClient, null, null, store));
+  }
+
+  private static ChatAnswerFinalizer answerFinalizer() {
+    SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    return new ChatAnswerFinalizer(
+        new RoutingMetrics(registry, new RoutingDistributionTracker()), new SkillMetrics(registry));
+  }
 
   @BeforeEach
   void setUp() {
@@ -62,7 +89,9 @@ class ChatApiControllerTest {
             chatUsersDirectory,
             feedbackMetrics,
             routingDistributionTracker,
-            feedbackDistributionTracker);
+            feedbackDistributionTracker,
+            paymentSkillService(),
+            answerFinalizer());
   }
 
   @Test
@@ -82,7 +111,9 @@ class ChatApiControllerTest {
             chatUsersDirectory,
             new FeedbackMetrics(new SimpleMeterRegistry(), feedbackDistributionTracker),
             routingDistributionTracker,
-            feedbackDistributionTracker);
+            feedbackDistributionTracker,
+            paymentSkillService(),
+            answerFinalizer());
     ResponseStatusException ex =
         assertThrows(
             ResponseStatusException.class,
@@ -193,6 +224,42 @@ class ChatApiControllerTest {
             "sess");
 
     assertEquals("answer", response.answer());
+  }
+
+  @Test
+  void confirmCreatePaymentRequiresPendingId() {
+    ResponseStatusException ex =
+        assertThrows(
+            ResponseStatusException.class,
+            () ->
+                controller.confirmCreatePayment(
+                    new SkillConfirmRequest("", "go"), "Bearer tok", "sess"));
+    assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+  }
+
+  @Test
+  void confirmCreatePaymentUnknownPendingReturnsExpiredAnswer() {
+    subjectResolver.returning(
+        new Subject(
+            "pay-101",
+            "Emily",
+            "Rodriguez",
+            "Analyst",
+            "FICC",
+            List.of("PAYMENT_CREATOR"),
+            List.of("MIDDLE_OFFICE"),
+            "pay-300",
+            List.of(),
+            "tok",
+            "sess"));
+
+    ChatResponse response =
+        controller.confirmCreatePayment(
+            new SkillConfirmRequest("does-not-exist", "no_go"), "Bearer tok", "sess");
+
+    assertEquals("skill", response.routing().path());
+    assertEquals("skill.create_payment.pending_missing", response.routing().intent_id());
+    assertTrue(response.answer().toLowerCase().contains("expired"));
   }
 
   @Test

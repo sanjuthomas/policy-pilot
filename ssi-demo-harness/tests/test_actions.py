@@ -209,6 +209,47 @@ def test_setup_skill_fixture_draft() -> None:
     ps.submit_payment.assert_not_called()
 
 
+def test_setup_skill_fixture_suspended() -> None:
+    settings = Settings(zitadel_service_pat="pat")
+    admin = SessionCredentials(session_id="s", session_token="t")
+
+    instr_created = MagicMock(status_code=201)
+    instr_created.json.return_value = {"instruction_id": "instr-1"}
+    ok_200 = MagicMock(status_code=200)
+
+    seed_file = MagicMock(defaults={"password": "Password1!"})
+    instruction_service = MagicMock()
+    instruction_service.create_instruction.return_value = instr_created
+    instruction_service.submit_instruction.return_value = ok_200
+    instruction_service.approve_instruction.return_value = ok_200
+    instruction_service.suspend_instruction.return_value = ok_200
+    creator = _seed_user(user_id="mo-100", title="Analyst", roles=["INSTRUCTION_CREATOR"])
+
+    with patch(
+        "harness.actions._clients",
+        return_value=(seed_file, MagicMock(), instruction_service),
+    ), patch(
+        "harness.actions._valid_instruction_seed_pairs",
+        return_value=[("mo-100", "FICC")],
+    ), patch(
+        "harness.actions.user_by_id", return_value=creator
+    ), patch(
+        "harness.actions._eligible_instruction_approvers", return_value=["ficc-300"]
+    ), patch(
+        "harness.actions._session_for_user",
+        return_value=SessionCredentials(session_id="u", session_token="t"),
+    ), patch(
+        "harness.actions.build_instruction_payload", return_value={"x": 1}
+    ), patch(
+        "harness.actions._ficc_instruction_suspender", return_value="ficc-400"
+    ):
+        result = setup_skill_fixture(settings, admin, need="suspended")
+
+    assert result.ok is True
+    assert result.context["suspended_instruction_id"] == "instr-1"
+    instruction_service.suspend_instruction.assert_called_once()
+
+
 def test_teardown_skill_fixture_cancels_and_suspends() -> None:
     settings = Settings(zitadel_service_pat="pat")
     admin = SessionCredentials(session_id="s", session_token="t")

@@ -36,6 +36,7 @@ Prefer hermetic unit tests (mocks for ZITADEL, payment-service, Spring AI `ChatC
 |------|------|
 | `src/main/java/com/sanjuthomas/policypilot/` | Application code |
 | `src/main/java/.../cypher/` | In-process neo4j_direct Cypher planner — plan from `RouterDecision.graphIntent` (+ time/scope/kind); stable tokens for instruction ids / LOB codes only |
+| `src/main/java/.../skill/` | Payment mutation skills (`path=skill`) — create/submit/approve/cancel with phase1 preflight + Go/No Go confirm + Go mutate (OPA dry-run/recheck + payment-service OBO). Confirm endpoints: `POST /api/chat/skills/{create,submit,approve,cancel}-payment/confirm` |
 | `src/main/resources/templates/answers/` | Thymeleaf TEXT answer templates |
 | `src/test/java/` | Unit tests |
 | `scripts/prove-m1.sh` | Optional live golden against `:8096` |
@@ -67,6 +68,7 @@ Cursor rule: [`.cursor/rules/ssi-chat-j-intent-routing.mdc`](../.cursor/rules/ss
 
 - **Route** = producing `RouterDecision`; **path** = dispatch key (path is law). No silent slot defaults on the model.
 - Router system prompt lives in `prompts/RouterPrompts.ROUTER_SYSTEM` (grow that string as paths are added).
+- **Payment skills** (`path=skill`, `skill=create_payment|submit_payment|approve_payment|cancel_payment`) — LLM picks the skill; `SkillParamParser` extracts only stable tokens (payment/instruction ids, amount, value date). Mode gate (`payments`/`all`) + role fence before dispatch; soft No Go + role-gated forbidden covered by `golden_skill_*` in the prove bank.
 - Answer prose in Thymeleaf templates under `templates/answers/`; Java maps API data → view models.
 - Shared display helpers (e.g. `MoneyFormat`, `PolicyBasisFormat`) are Spring beans exposed to answer templates via `AnswerRenderer` context variables — keep view models as state only.
 - Keep changes focused; do not replace Python `ssi-chat`.

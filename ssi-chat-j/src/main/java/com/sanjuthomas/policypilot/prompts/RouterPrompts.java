@@ -9,6 +9,30 @@ public final class RouterPrompts {
       """
       You are the Policy Pilot chat intent router.
       Return ONLY a RouterDecision JSON object.
+      Skill (user asks YOU to perform a payment mutation — Payments mode):
+        path=skill, set skill=
+          create_payment  — draft a payment for an instruction
+            ("please create / can you create a payment for instruction X …"),
+          submit_payment  — submit an existing DRAFT payment for funding approval
+            ("please submit payment Y for approval"),
+          approve_payment — funding-approve an existing SUBMITTED payment
+            ("please approve payment Y" / "approve payment Y"),
+          cancel_payment  — cancel an existing DRAFT or SUBMITTED payment
+            ("please cancel payment Y" / "cancel payment Y").
+        Use skill only when the user asks the assistant to DO the action.
+        Prefer me over skill for capability questions ("can I create/submit/approve/cancel a
+        payment?" → me, can_act_on_entity). Prefer eligibility+SUBMIT over skill for
+        "who can submit … for approval?" (not "please submit").
+        Examples:
+          "Can you create a payment for instruction ID 20260720-FICC-I-1? Value date tomorrow;
+           amount: 1 million USD." → skill, skill=create_payment
+          "Please submit payment 20260720-FICC-P-9 for approval."
+            → skill, skill=submit_payment
+          "Please approve payment 20260720-FICC-P-9." / "Approve payment 20260720-FICC-P-9."
+            → skill, skill=approve_payment
+          "Please cancel payment 20260720-FICC-P-9." / "Cancel payment 20260720-FICC-P-9."
+            → skill, skill=cancel_payment
+          "Can I create a payment?" → me, can_act_on_entity, meAction=CREATE, meEntityType=payment
       Eligibility (live OPA for a specific payment or instruction id):
         path=eligibility, eligibilityTarget=payment|instruction,
         eligibilityAction=APPROVE (default approvers) or SUBMIT (desk submitters:

@@ -1500,3 +1500,397 @@ cases:
     - No security events were found for that instruction in the graph
     - Timestamp
     - Event ID
+
+# ── Payments mode: soft payment-mutation skills (create/submit/approve/cancel) ─
+# phase1 + No Go confirm (fixtures required) and role-gated forbidden goldens.
+
+- id: golden_skill_create_payment_phase1_nogo
+  mode: payments
+  retrieval: skill
+  persona: pay-101
+  tags: [golden, skill, create_payment, ssi-chat-j]
+  question: >
+    Can you create a payment for instruction ID {ficc_standing_instruction_id}?
+    Value date tomorrow; amount: 1 million USD.
+  confirm:
+    decision: no_go
+    intent_id: skill.create_payment.cancelled
+    answer_contains_any:
+    - cancelled
+    - No Go
+  expect:
+    requires_context:
+    - ficc_standing_instruction_id
+    require_skill_confirmation: true
+    skill_name: create_payment
+    intent_id: skill.create_payment.awaiting_confirmation
+    min_answer_length: 20
+    answer_contains_all:
+    - Preflight
+    - Go
+    - No Go
+    require_routing: true
+    routing_path: skill
+    answer_synthesis: formatter
+    cypher_class: none
+- id: golden_skill_submit_payment_phase1_nogo
+  mode: payments
+  retrieval: skill
+  persona: fo-ficc-101
+  tags: [golden, skill, submit_payment, ssi-chat-j]
+  question: Please submit payment {draft_payment_id} for approval.
+  confirm:
+    decision: no_go
+    intent_id: skill.submit_payment.cancelled
+    answer_contains_any:
+    - cancelled
+    - No Go
+  expect:
+    requires_context:
+    - draft_payment_id
+    require_skill_confirmation: true
+    skill_name: submit_payment
+    intent_id: skill.submit_payment.awaiting_confirmation
+    min_answer_length: 20
+    answer_contains_all:
+    - Preflight
+    - Go
+    - No Go
+    require_routing: true
+    routing_path: skill
+    answer_synthesis: formatter
+    cypher_class: none
+- id: golden_skill_approve_payment_phase1_nogo
+  mode: payments
+  retrieval: skill
+  persona: pay-400
+  tags: [golden, skill, approve_payment, ssi-chat-j]
+  question: Please approve payment {submitted_payment_id}.
+  confirm:
+    decision: no_go
+    intent_id: skill.approve_payment.cancelled
+    answer_contains_any:
+    - cancelled
+    - No Go
+  expect:
+    requires_context:
+    - submitted_payment_id
+    require_skill_confirmation: true
+    skill_name: approve_payment
+    intent_id: skill.approve_payment.awaiting_confirmation
+    min_answer_length: 20
+    answer_contains_all:
+    - Preflight
+    - Go
+    - No Go
+    require_routing: true
+    routing_path: skill
+    answer_synthesis: formatter
+    cypher_class: none
+- id: golden_skill_cancel_payment_phase1_nogo
+  mode: payments
+  retrieval: skill
+  persona: pay-101
+  tags: [golden, skill, cancel_payment, ssi-chat-j]
+  question: Please cancel payment {draft_payment_id}.
+  confirm:
+    decision: no_go
+    intent_id: skill.cancel_payment.no_go
+    answer_contains_any:
+    - No Go
+    - Nothing was changed
+  expect:
+    requires_context:
+    - draft_payment_id
+    require_skill_confirmation: true
+    skill_name: cancel_payment
+    intent_id: skill.cancel_payment.awaiting_confirmation
+    min_answer_length: 20
+    answer_contains_all:
+    - Preflight
+    - Go
+    - No Go
+    require_routing: true
+    routing_path: skill
+    answer_synthesis: formatter
+    cypher_class: none
+- id: golden_skill_create_payment_forbidden
+  mode: payments
+  retrieval: skill
+  persona: pay-400
+  tags: [golden, skill, create_payment, negative, forbidden, ssi-chat-j]
+  question: >
+    Can you create a payment for instruction ID {ficc_standing_instruction_id}?
+    Value date tomorrow; amount: 1 million USD.
+  expect:
+    requires_context:
+    - ficc_standing_instruction_id
+    forbid_skill_confirmation: true
+    intent_id: skill.create_payment.forbidden
+    min_answer_length: 20
+    answer_contains_all:
+    - cannot run the create-payment skill
+    - needs `PAYMENT_CREATOR`
+    - No payment was created
+    require_routing: true
+    routing_path: skill
+    answer_synthesis: formatter
+    cypher_class: none
+- id: golden_skill_submit_payment_forbidden
+  mode: payments
+  retrieval: skill
+  persona: pay-400
+  tags: [golden, skill, submit_payment, negative, forbidden, ssi-chat-j]
+  question: Please submit payment {draft_payment_id} for approval.
+  expect:
+    requires_context:
+    - draft_payment_id
+    forbid_skill_confirmation: true
+    intent_id: skill.submit_payment.forbidden
+    min_answer_length: 20
+    answer_contains_all:
+    - cannot run the submit-payment skill
+    - needs `PAYMENT_CREATOR`
+    - No payment was submitted
+    require_routing: true
+    routing_path: skill
+    answer_synthesis: formatter
+    cypher_class: none
+- id: golden_skill_approve_payment_forbidden
+  mode: payments
+  retrieval: skill
+  persona: fo-ficc-101
+  tags: [golden, skill, approve_payment, negative, forbidden, ssi-chat-j]
+  question: Please approve payment {submitted_payment_id}.
+  expect:
+    requires_context:
+    - submitted_payment_id
+    forbid_skill_confirmation: true
+    intent_id: skill.approve_payment.forbidden
+    min_answer_length: 20
+    answer_contains_all:
+    - cannot run the approve-payment skill
+    - needs `FUNDING_APPROVER`
+    - No payment was approved
+    require_routing: true
+    routing_path: skill
+    answer_synthesis: formatter
+    cypher_class: none
+- id: golden_skill_cancel_payment_forbidden
+  mode: payments
+  retrieval: skill
+  persona: fo-ficc-101
+  tags: [golden, skill, cancel_payment, negative, forbidden, ssi-chat-j]
+  question: Please cancel payment {draft_payment_id}.
+  expect:
+    requires_context:
+    - draft_payment_id
+    forbid_skill_confirmation: true
+    intent_id: skill.cancel_payment.forbidden
+    min_answer_length: 20
+    answer_contains_all:
+    - cannot run the cancel-payment skill
+    - needs `PAYMENT_CREATOR` and `MIDDLE_OFFICE`
+    - No payment was cancelled
+    require_routing: true
+    routing_path: skill
+    answer_synthesis: formatter
+    cypher_class: none
+
+# ── Create-payment negative preflight (policy / entitlement / slots) ─────────
+# Note: OPA CREATE allows DRAFT|SUBMITTED|APPROVED instructions. "Not usable"
+# negatives use SUSPENDED / USED (not merely "not standing approved").
+
+- id: golden_skill_create_payment_instruction_missing
+  mode: payments
+  retrieval: skill
+  persona: pay-101
+  tags: [golden, skill, create_payment, negative, missing, ssi-chat-j]
+  question: >
+    Can you create a payment for instruction ID 20990101-FICC-I-99999?
+    Value date tomorrow; amount: 1 million USD.
+  expect:
+    forbid_skill_confirmation: true
+    intent_id: skill.create_payment.instruction_missing
+    min_answer_length: 20
+    answer_contains_all:
+    - was not found
+    - No payment was created
+    require_routing: true
+    routing_path: skill
+    answer_synthesis: formatter
+    cypher_class: none
+
+- id: golden_skill_create_payment_lob_forbidden
+  mode: payments
+  retrieval: skill
+  persona: pay-203
+  tags: [golden, skill, create_payment, negative, lob, covering, ssi-chat-j]
+  # pay-203 covers FX only — cannot VIEW a FICC instruction.
+  question: >
+    Can you create a payment for instruction ID {ficc_standing_instruction_id}?
+    Value date tomorrow; amount: 1 million USD.
+  expect:
+    requires_context:
+    - ficc_standing_instruction_id
+    forbid_skill_confirmation: true
+    intent_id: skill.create_payment.instruction_forbidden
+    min_answer_length: 20
+    answer_contains_all:
+    - not authorized
+    - No payment was created
+    require_routing: true
+    routing_path: skill
+    answer_synthesis: formatter
+    cypher_class: none
+
+- id: golden_skill_create_payment_amount_over_club
+  mode: payments
+  retrieval: skill
+  persona: pay-101
+  tags: [golden, skill, create_payment, negative, amount, club, ssi-chat-j]
+  # pay-101 is UP_TO_100_MILLION_CLUB — 500M exceeds subject club ceiling.
+  question: >
+    Can you create a payment for instruction ID {ficc_standing_instruction_id}?
+    Value date tomorrow; amount: 500 million USD.
+  expect:
+    requires_context:
+    - ficc_standing_instruction_id
+    forbid_skill_confirmation: true
+    intent_id: skill.create_payment.denied
+    min_answer_length: 20
+    answer_contains_all:
+    - may not create
+    - No payment was created
+    - ALERT_AMOUNT_EXCEEDS_SUBJECT_LIMIT
+    require_routing: true
+    routing_path: skill
+    answer_synthesis: formatter
+    cypher_class: none
+
+- id: golden_skill_create_payment_amount_over_absolute
+  mode: payments
+  retrieval: skill
+  persona: pay-300
+  tags: [golden, skill, create_payment, negative, amount, absolute, ssi-chat-j]
+  # Absolute 100B ceiling — even UP_TO_100_BILLION_CLUB cannot create 101B.
+  question: >
+    Can you create a payment for instruction ID {ficc_standing_instruction_id}?
+    Value date tomorrow; amount: 101 billion USD.
+  expect:
+    requires_context:
+    - ficc_standing_instruction_id
+    forbid_skill_confirmation: true
+    intent_id: skill.create_payment.denied
+    min_answer_length: 20
+    answer_contains_all:
+    - may not create
+    - No payment was created
+    - ALERT_AMOUNT_EXCEEDS_100B_LIMIT
+    require_routing: true
+    routing_path: skill
+    answer_synthesis: formatter
+    cypher_class: none
+
+- id: golden_skill_create_payment_suspended_instruction
+  mode: payments
+  retrieval: skill
+  persona: pay-101
+  tags: [golden, skill, create_payment, negative, suspended, ssi-chat-j]
+  question: >
+    Can you create a payment for instruction ID {suspended_instruction_id}?
+    Value date tomorrow; amount: 1 million USD.
+  expect:
+    requires_context:
+    - suspended_instruction_id
+    forbid_skill_confirmation: true
+    intent_id: skill.create_payment.denied
+    min_answer_length: 20
+    answer_contains_all:
+    - may not create
+    - No payment was created
+    - ALERT_UNAPPROVED_INSTRUCTION
+    require_routing: true
+    routing_path: skill
+    answer_synthesis: formatter
+    cypher_class: none
+
+- id: golden_skill_create_payment_used_single_use
+  mode: payments
+  retrieval: skill
+  persona: pay-101
+  tags: [golden, skill, create_payment, negative, used, single_use, ssi-chat-j]
+  question: >
+    Can you create a payment for instruction ID {used_instruction_id}?
+    Value date tomorrow; amount: 1 million USD.
+  expect:
+    requires_context:
+    - used_instruction_id
+    forbid_skill_confirmation: true
+    intent_id: skill.create_payment.denied
+    min_answer_length: 20
+    answer_contains_all:
+    - may not create
+    - No payment was created
+    - ALERT_UNAPPROVED_INSTRUCTION
+    require_routing: true
+    routing_path: skill
+    answer_synthesis: formatter
+    cypher_class: none
+
+- id: golden_skill_create_payment_incomplete
+  mode: payments
+  retrieval: skill
+  persona: pay-101
+  tags: [golden, skill, create_payment, negative, incomplete, ssi-chat-j]
+  question: Can you create a payment for instruction ID 20260720-FICC-I-1?
+  expect:
+    forbid_skill_confirmation: true
+    intent_id: skill.create_payment.incomplete
+    min_answer_length: 20
+    answer_contains_any:
+    - amount
+    - value date
+    require_routing: true
+    routing_path: skill
+    answer_synthesis: formatter
+    cypher_class: none
+
+- id: golden_skill_submit_payment_wrong_status
+  mode: payments
+  retrieval: skill
+  persona: fo-ficc-101
+  tags: [golden, skill, submit_payment, negative, wrong_status, ssi-chat-j]
+  question: Please submit payment {submitted_payment_id} for approval.
+  expect:
+    requires_context:
+    - submitted_payment_id
+    forbid_skill_confirmation: true
+    intent_id: skill.submit_payment.wrong_status
+    min_answer_length: 20
+    answer_contains_all:
+    - Only **DRAFT**
+    require_routing: true
+    routing_path: skill
+    answer_synthesis: formatter
+    cypher_class: none
+
+- id: golden_skill_approve_payment_wrong_status
+  mode: payments
+  retrieval: skill
+  persona: pay-400
+  tags: [golden, skill, approve_payment, negative, wrong_status, ssi-chat-j]
+  question: Please approve payment {draft_payment_id}.
+  expect:
+    requires_context:
+    - draft_payment_id
+    forbid_skill_confirmation: true
+    intent_id: skill.approve_payment.wrong_status
+    min_answer_length: 20
+    answer_contains_any:
+    - SUBMITTED
+    - Only
+    require_routing: true
+    routing_path: skill
+    answer_synthesis: formatter
+    cypher_class: none
