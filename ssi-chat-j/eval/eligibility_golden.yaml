@@ -726,12 +726,12 @@ cases:
   mode: instructions
   retrieval: document_extraction
   tags: [golden, show, id_lookup, instruction, negative, forbidden, fo, ssi-chat-j]
-  # DESK_RATES FO desk. The seed only creates FICC/FX instructions, so
-  # approved_instruction_id is always cross-LOB for this persona → VIEW denied.
-  persona: fo-rates-101
-  question: Can you show me the instruction {approved_instruction_id}?
+  # FX desk against a guaranteed FICC id (seed always provides ficc_standing_*).
+  # Do not use approved_instruction_id — that can be FX or DESK_RATES and then VIEW is allowed.
+  persona: fo-fx-101
+  question: Can you show me the instruction {ficc_standing_instruction_id}?
   expect:
-    requires_context: [approved_instruction_id]
+    requires_context: [ficc_standing_instruction_id]
     require_routing: true
     routing_path: document_extraction
     cypher_class: none
@@ -749,7 +749,7 @@ cases:
   mode: payments
   retrieval: document_extraction
   tags: [golden, show, id_lookup, payment, negative, forbidden, fo, ssi-chat-j]
-  # DESK_RATES FO desk. Payments are only created against FICC/FX instructions,
+  # DESK_RATES FO desk. Demo payments are created on FICC/FX instructions only,
   # so approved_payment_id is always cross-LOB for this persona → VIEW denied.
   persona: fo-rates-101
   question: Can you show me the payment {approved_payment_id}?
@@ -876,13 +876,14 @@ cases:
     min_answer_length: 10
     answer_contains_all: [pay-101]
 
-- id: golden_fo_rates_instruction_denials_scoped
+- id: golden_fo_fx_instruction_denials_scoped
   mode: events
   retrieval: deterministic
   tags: [golden, lob_scope, fo, negative, neo4j_direct, ssi-chat-j]
-  # DESK_RATES FO desk. Seeded instruction denials only involve FICC/FX actors
-  # and instructions, so DESK_RATES scope sees none.
-  persona: fo-rates-101
+  # FX desk. Seeded instruction ALERTs densify to the *instruction* owning_lob
+  # (FICC / DESK_RATES), so FX scope is empty. DESK_RATES is NOT empty — do not
+  # use fo-rates-101 here.
+  persona: fo-fx-101
   question: How many instruction policy denials happened this week?
   expect:
     require_routing: true
