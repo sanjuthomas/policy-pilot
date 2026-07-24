@@ -204,7 +204,7 @@ main() {
     instruction-service \
     payment-service \
     authorization-service \
-    ssi-chat \
+    ssi-chat-j \
     ssi-demo-harness \
     kafka-connect kafka-connect-init \
     ssi-indexer
@@ -215,7 +215,7 @@ main() {
   wait_for_url "http://localhost:8093/health"   # payment
   wait_for_url "http://localhost:8094/health"   # authz
   wait_for_url "http://localhost:8091/health"   # harness
-  wait_for_url "http://localhost:8092/health"   # chat
+  wait_for_url "http://localhost:8096/health"   # chat (ssi-chat-j)
   wait_for_url "http://localhost:8090/health"   # indexer
 
   verify_empty_stores
@@ -236,7 +236,7 @@ main() {
 
 === Clean slate ready ===
   Harness:       ${HARNESS_URL}
-  Policy Pilot:  http://localhost:8092
+  Policy Pilot:  http://localhost:8096
   Instructions:  http://localhost:8000/ui/
   Payments:      http://localhost:8093/ui/
   Indexer:       http://localhost:8090
