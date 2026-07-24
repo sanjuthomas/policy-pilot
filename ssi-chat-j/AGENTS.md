@@ -68,7 +68,7 @@ Cursor rule: [`.cursor/rules/ssi-chat-j-intent-routing.mdc`](../.cursor/rules/ss
 
 - **Route** = producing `RouterDecision`; **path** = dispatch key (path is law). No silent slot defaults on the model.
 - Router system prompt lives in `prompts/RouterPrompts.ROUTER_SYSTEM` (grow that string as paths are added).
-- **Payment skills** (`path=skill`, `skill=create_payment|submit_payment|approve_payment|cancel_payment`) — LLM picks the skill; `SkillParamParser` extracts only stable tokens (payment/instruction ids, amount, value date). Mode gate (`payments`/`all`) + role fence before dispatch; soft No Go + role-gated forbidden covered by `golden_skill_*` in the prove bank.
+- **Payment skills** (`path=skill`, `skill=create_payment|submit_payment|approve_payment|cancel_payment`) — LLM picks the skill **and** skill slots (`skillInstructionId` / `skillPaymentId` / `skillAmount` / `skillValueDate`). Amount and value date are never scraped from free text; sequence ids may fall back to `InstructionIdParser` / `PaymentIdParser` stable-token extractors only. Mode gate (`payments`/`all`) + role fence before dispatch; soft No Go + role-gated forbidden covered by `golden_skill_*` in the prove bank.
 - Answer prose in Thymeleaf templates under `templates/answers/`; Java maps API data → view models.
 - Shared display helpers (e.g. `MoneyFormat`, `PolicyBasisFormat`) are Spring beans exposed to answer templates via `AnswerRenderer` context variables — keep view models as state only.
 - Keep changes focused; do not replace Python `ssi-chat`.

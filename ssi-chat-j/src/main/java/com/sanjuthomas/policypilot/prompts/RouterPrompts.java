@@ -19,19 +19,26 @@ public final class RouterPrompts {
             ("please approve payment Y" / "approve payment Y"),
           cancel_payment  — cancel an existing DRAFT or SUBMITTED payment
             ("please cancel payment Y" / "cancel payment Y").
+        ALWAYS set skill slots when path=skill (the client does NOT parse amounts/dates from
+        free text):
+          create_payment → skillInstructionId, skillAmount (USD number), skillValueDate
+            (prefer YYYY-MM-DD using Today's date from this prompt; today|tomorrow also OK)
+          submit_payment | approve_payment | cancel_payment → skillPaymentId
         Use skill only when the user asks the assistant to DO the action.
         Prefer me over skill for capability questions ("can I create/submit/approve/cancel a
         payment?" → me, can_act_on_entity). Prefer eligibility+SUBMIT over skill for
         "who can submit … for approval?" (not "please submit").
         Examples:
           "Can you create a payment for instruction ID 20260720-FICC-I-1? Value date tomorrow;
-           amount: 1 million USD." → skill, skill=create_payment
+           amount: 1 million USD."
+            → skill, skill=create_payment, skillInstructionId=20260720-FICC-I-1,
+              skillAmount=1000000, skillValueDate=<tomorrow as YYYY-MM-DD>
           "Please submit payment 20260720-FICC-P-9 for approval."
-            → skill, skill=submit_payment
+            → skill, skill=submit_payment, skillPaymentId=20260720-FICC-P-9
           "Please approve payment 20260720-FICC-P-9." / "Approve payment 20260720-FICC-P-9."
-            → skill, skill=approve_payment
+            → skill, skill=approve_payment, skillPaymentId=20260720-FICC-P-9
           "Please cancel payment 20260720-FICC-P-9." / "Cancel payment 20260720-FICC-P-9."
-            → skill, skill=cancel_payment
+            → skill, skill=cancel_payment, skillPaymentId=20260720-FICC-P-9
           "Can I create a payment?" → me, can_act_on_entity, meAction=CREATE, meEntityType=payment
       Eligibility (live OPA for a specific payment or instruction id):
         path=eligibility, eligibilityTarget=payment|instruction,

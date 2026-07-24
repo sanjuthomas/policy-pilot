@@ -38,6 +38,38 @@ public class RouterDecision {
       "skill only: create_payment|submit_payment|approve_payment|cancel_payment")
   private String skill;
 
+  /**
+   * When path is skill and skill=create_payment: sequence instruction id to draft against.
+   * Map paraphrases here — the client does not scrape free text for open-vocabulary slots.
+   */
+  @JsonPropertyDescription(
+      "skill create_payment only: instruction sequence id (YYYYMMDD-LOB-I-n)")
+  private String skillInstructionId;
+
+  /**
+   * When path is skill and skill is submit/approve/cancel: sequence payment id.
+   */
+  @JsonPropertyDescription(
+      "skill submit|approve|cancel only: payment sequence id (YYYYMMDD-LOB-P-n)")
+  private String skillPaymentId;
+
+  /**
+   * When path is skill and skill=create_payment: USD amount as a number (e.g. 1e6 for \"1 million\").
+   * Semantic amount extraction — do not leave null when the question implies a money size.
+   */
+  @JsonPropertyDescription(
+      "skill create_payment only: USD amount as a number (1e6 for 1 million / $1M)")
+  private Double skillAmount;
+
+  /**
+   * When path is skill and skill=create_payment: settlement / value date. Prefer ISO {@code
+   * YYYY-MM-DD}; {@code today} / {@code tomorrow} are also accepted and resolved relative to the
+   * date given in the router system prompt.
+   */
+  @JsonPropertyDescription(
+      "skill create_payment only: value date as YYYY-MM-DD (or today|tomorrow)")
+  private String skillValueDate;
+
   @JsonPropertyDescription("Entity kind when path is eligibility.")
   private String eligibilityTarget;
 

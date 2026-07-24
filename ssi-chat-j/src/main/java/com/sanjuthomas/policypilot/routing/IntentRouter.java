@@ -2,6 +2,8 @@ package com.sanjuthomas.policypilot.routing;
 
 import com.sanjuthomas.policypilot.pipeline.RouterDecision;
 import com.sanjuthomas.policypilot.prompts.RouterPrompts;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -20,10 +22,11 @@ public class IntentRouter {
 
   public RouterDecision route(String question) {
     try {
+      String today = LocalDate.now(ZoneOffset.UTC).toString();
       RouterDecision decision =
           chatClient
               .prompt()
-              .system(RouterPrompts.ROUTER_SYSTEM)
+              .system(RouterPrompts.ROUTER_SYSTEM + "\nToday's date (UTC): " + today + ".")
               .user(question == null ? "" : question)
               .call()
               .entity(RouterDecision.class);
