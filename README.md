@@ -98,7 +98,7 @@ Architecture review (adversarial): **[docs/architecture-review-2026-07-18.md](do
 
 ```bash
 ./scripts/clean-slate.sh
-open http://localhost:8092
+open http://localhost:8096
 ```
 
 Prerequisites and GCP Vertex setup: **[How it works — Quick start](docs/how-it-works.md#quick-start)**.
@@ -114,8 +114,8 @@ Prerequisites and GCP Vertex setup: **[How it works — Quick start](docs/how-it
 | **[How it works](docs/how-it-works.md)** | Integration picture, data flow, intent pipelines, graph model, ETL, quick start |
 | **[OPA policy controls](docs/opa-controls.md)** | Four-eyes, reporting-line inversion, LOB boundaries, amount clubs |
 | **[SoD: Mutual Approval](docs/sod-mutual-approval.md)** | Showcase — instruction mutual SoD vs payment FO-submit path |
-| **[ssi-chat-j plan](docs/ssi-chat-j-plan.md)** | Java/Spring AI A/B experiment (Maven); cypher_builder HTTP bridge |
-| **[ssi-chat-j todo](docs/ssi-chat-j-todo.md)** | Living done / in-progress / todo tracker (golden eval success bar) |
+| **[ssi-chat-j plan](docs/ssi-chat-j-plan.md)** | Historical A/B plan (cutover complete — chat is Java-only) |
+| **[ssi-chat-j todo](docs/ssi-chat-j-todo.md)** | Living tracker; golden bank under `ssi-chat-j/eval/` |
 | **[Authorization audit trail](docs/authorization-audit-trail.md)** | Who / when / why on past approvals; live eligibility |
 | **[OBO call paths](docs/obo-call-paths.md)** | Service JWT + on-behalf-of matrix across chat and domain APIs |
 | **[Architecture review](docs/architecture-review-2026-07-18.md)** | Adversarial review (score and residual risks) |
@@ -155,16 +155,14 @@ Prerequisites and GCP Vertex setup: **[How it works — Quick start](docs/how-it
 
 | Directory | README | Port |
 |-----------|--------|------|
-| Policy Pilot chat | [ssi-chat](ssi-chat/README.md) | 8092 |
+| Policy Pilot chat (Java) | [ssi-chat-j](ssi-chat-j/README.md) | 8096 |
 | Demo harness | [ssi-demo-harness](ssi-demo-harness/README.md) | 8091 |
 | Indexer | [ssi-indexer](ssi-indexer/README.md) | 8090 |
 | Instruction service | [instruction-service](instruction-service/README.md) | 8000 |
 | Payment service | [payment-service](payment-service/README.md) | 8093 |
 | Authorization service | [authorization-service](authorization-service/README.md) | 8094 |
 | Sequence service | [sequence-service](sequence-service/README.md) | 8095 |
-| Java chat A/B | [ssi-chat-j](ssi-chat-j/README.md) | 8096 |
-| Cypher builder HTTP bridge | [cypher-builder-svc](cypher-builder-svc/README.md) | 8097 |
 | Kafka Connect | [kafka-connect](kafka-connect/README.md) | 8083 |
-| Cypher builder | [shared/cypher_builder](shared/cypher_builder/README.md) | — |
+| Cypher builder (indexer Search Console) | [shared/cypher_builder](shared/cypher_builder/README.md) | — |
 | Authz client | [shared/authz_client](shared/authz_client/README.md) | — |
 | ZITADEL directory | [shared/zitadel_directory](shared/zitadel_directory/README.md) | — |

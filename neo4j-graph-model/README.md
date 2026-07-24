@@ -215,7 +215,7 @@ Application services use dedicated least-privilege accounts (Neo4j Enterprise RB
 
 | User | Used by | Privileges (summary) |
 |------|---------|----------------------|
-| `svc_chat` | ssi-chat | Read (`MATCH`), show indexes/constraints, **`EXECUTE PROCEDURE db.index.vector.queryNodes` only** (no `*` / no BOOSTED / no `FUNCTION *`) |
+| `svc_chat` | ssi-chat-j | Read (`MATCH`), show indexes/constraints, **`EXECUTE PROCEDURE db.index.vector.queryNodes` only** (no `*` / no BOOSTED / no `FUNCTION *`) |
 | `svc_indexer` | ssi-indexer | Read/write, create labels/types/properties, index + constraint management, procedures |
 | `svc_harness` | demo seed scripts | Read/write + create labels/types/properties (no schema management) |
 
@@ -337,7 +337,7 @@ LIMIT 50;
 When the graph model changes, wipe Neo4j and replay Kafka (Mongo data stays):
 
 ```bash
-docker compose -p security-event-rag-demo stop ssi-indexer ssi-chat
+docker compose -p security-event-rag-demo stop ssi-indexer ssi-chat-j
 
 docker exec neo4j cypher-shell -u neo4j -p devpassword \
   "MATCH (n) DETACH DELETE n"
@@ -346,7 +346,7 @@ docker exec -i neo4j cypher-shell -u neo4j -p devpassword < neo4j-graph-model/sc
 
 # Reset all four indexer consumer groups to earliest (see ssi-indexer/README.md)
 
-docker compose -p security-event-rag-demo up -d --force-recreate ssi-indexer ssi-chat
+docker compose -p security-event-rag-demo up -d --force-recreate ssi-indexer ssi-chat-j
 ```
 
 Re-run `./ssi-demo-harness/seed-demo-data.sh --seed-only` if you need fresh ALERT demo events (replay alone does not recreate harness policy-denial seeds).

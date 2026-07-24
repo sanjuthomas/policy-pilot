@@ -197,26 +197,6 @@
         <artifactId>maven-resources-plugin</artifactId>
         <executions>
           <execution>
-            <id>copy-python-static</id>
-            <phase>generate-resources</phase>
-            <goals>
-              <goal>copy-resources</goal>
-            </goals>
-            <configuration>
-              <outputDirectory>${project.build.directory}/classes/static</outputDirectory>
-              <resources>
-                <resource>
-                  <directory>${project.basedir}/../ssi-chat/src/chat_application/static</directory>
-                  <filtering>false</filtering>
-                  <includes>
-                    <include>**/*</include>
-                  </includes>
-                </resource>
-              </resources>
-              <overwrite>true</overwrite>
-            </configuration>
-          </execution>
-          <execution>
             <id>copy-zitadel-users-seed</id>
             <phase>generate-resources</phase>
             <goals>

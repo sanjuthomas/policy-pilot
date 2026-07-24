@@ -157,7 +157,7 @@ A **knowledge graph** makes those relationships first-class:
 | Instructions sharing the same creditor account? | No link between documents | `MATCH (v1)-[:CONFLICTS_WITH]->(v2)` |
 | All users in FICC profit center? | Keyword search on `lob=FICC` | `MATCH (u)-[:BELONGS_TO]->(p:ProfitCenter {lob: 'FICC'})` |
 
-The chat pipeline uses **planned Cypher** from `shared/cypher_builder` for known question shapes, and **Vertex Gemini** graph plan extraction when no planner rule matches. Graph rows are injected into LLM context alongside vector hits when the router selects hybrid or graph strategy.
+**ssi-chat-j** uses an **in-process Java Cypher planner** (`com.sanjuthomas.policypilot.cypher`) for known question shapes. The indexer Search Console still uses **`shared/cypher_builder`** (Python). Graph rows are injected into LLM context alongside vector hits when the router selects hybrid or graph / vector strategy.
 
 [How it works](how-it-works.md#neo4j-graph-model) summarizes writer roles; see [neo4j-graph-model/README.md](../neo4j-graph-model/README.md) for diagrams, property catalog, and example Cypher.
 
@@ -165,14 +165,14 @@ The chat pipeline uses **planned Cypher** from `shared/cypher_builder` for known
 
 ## Why Vertex AI?
 
-**What Vertex provides:** Google Cloud Vertex AI hosts the **embedding** and **generative** models. Both **ssi-indexer** and **Policy Pilot** call Vertex through `shared/vertex_client/`.
+**What Vertex provides:** Google Cloud Vertex AI hosts the **embedding** and **generative** models. **ssi-indexer** uses `shared/vertex_client/`; **ssi-chat-j** uses Spring AI against the same Vertex models.
 
 | Role | Model | Used by |
 |------|-------|---------|
 | Document + query embeddings | `text-embedding-004` (768-dim) | ssi-indexer (write), Policy Pilot (query) |
-| Semantic routing | `gemini-2.5-flash` | Policy Pilot (`RouterDecision` JSON) |
+| Semantic routing | `gemini-2.5-flash` | Policy Pilot (`RouterDecision` JSON + slots) |
 | Answer synthesis + authorization WHY rewrite | `gemini-2.5-flash` | Policy Pilot |
-| Graph query plan extraction (fallback) | `gemini-2.5-flash` | Policy Pilot → `cypher_builder` |
+| Graph query plan extraction (indexer console) | `gemini-2.5-flash` | ssi-indexer → `cypher_builder` |
 
 **Why Vertex for all ML:**
 
@@ -186,14 +186,14 @@ The chat pipeline uses **planned Cypher** from `shared/cypher_builder` for known
 
 ---
 
-## Graph queries — `shared/cypher_builder`
+## Graph queries — chat vs indexer
 
-Neo4j graph retrieval uses a **two-tier** approach:
+| Surface | Planner |
+|---------|---------|
+| **ssi-chat-j** | In-process Java (`GraphCypherPlanner` / path `neo4j_direct`) — no HTTP bridge |
+| **ssi-indexer Search Console** | `shared/cypher_builder` — planned Cypher; optional Gemini `GraphQueryPlan` extraction |
 
-1. **Planned Cypher** — rule-based intent matching in `shared/cypher_builder` for counts, rankings, hierarchy traversals, approval lookups, and other high-confidence question shapes. No LLM call.
-2. **Gemini graph plan extraction** — when no planner rule matches, Policy Pilot asks Gemini for a structured `GraphQueryPlan` (intent + parameters), which `cypher_builder` turns into validated read-only Cypher.
-
-The indexer Search Console `POST /api/cypher/generate` endpoint uses the same planner (deterministic matches only).
+The retired `cypher-builder-svc` HTTP sidecar is not part of the stack.
 
 ---
 
@@ -214,17 +214,16 @@ The indexer Search Console `POST /api/cypher/generate` endpoint uses the same pl
 | Model | `gemini-2.5-flash` (configurable via `VERTEX_GEMINI_MODEL`) |
 | Used for | Routing, answer synthesis, authorization WHY summarization |
 
-Retrieved context is passed to Gemini; the model does **not** emit raw Cypher directly — graph fallback uses structured plan extraction via `cypher_builder`.
+Retrieved context is passed to Gemini; the model does **not** emit raw Cypher directly from chat.
 
-### Per-question LLM calls (Policy Pilot)
+### Per-question LLM calls (Policy Pilot / `ssi-chat-j`)
 
 | Step | Provider | When |
 |------|----------|------|
-| Semantic routing | Vertex `gemini-2.5-flash` | Every question |
+| Semantic routing (+ slots) | Vertex `gemini-2.5-flash` via Spring AI | Every question |
 | Query embedding | Vertex `text-embedding-004` | Vector / hybrid strategy |
-| Graph plan extraction | Vertex `gemini-2.5-flash` | Graph fallback when no planner rule matches |
 | Answer synthesis | Vertex `gemini-2.5-flash` | Open-ended questions |
 | Authorization WHY rewrite | Vertex `gemini-2.5-flash` | Approval audit questions only |
-| Planned Cypher | `cypher_builder` (no LLM) | Counts, rankings, hierarchy, known audit shapes |
+| Planned Cypher | Java in-process planner (no LLM) | Counts, rankings, SoD, known audit shapes |
 
 WHO and WHEN in approval audit answers remain deterministic from indexed data.

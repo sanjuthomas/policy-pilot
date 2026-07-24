@@ -13,7 +13,7 @@ Missing `X-On-Behalf-Of` → **403**.
 
 | Service account | Used by |
 |-----------------|---------|
-| `svc-chat` | ssi-chat and ssi-demo-harness → domain / authz |
+| `svc-chat` | ssi-chat-j and ssi-demo-harness → domain / authz |
 | `svc-payment` | payment-service → instruction / authz |
 | `svc-instruction` | instruction-service → authz |
 
@@ -41,13 +41,13 @@ Same OBO pattern for submit / approve / cancel.
 
 | Hop | From | To | Authorization | X-On-Behalf-Of |
 |-----|------|-----|---------------|----------------|
-| 0 | Browser | ssi-chat | user JWT | — |
-| 1a | ssi-chat | instruction-service | svc-chat | user JWT |
-| 1b | ssi-chat | authorization-service | svc-chat | user JWT |
-| 2 | ssi-chat | payment-service | svc-chat | user JWT |
+| 0 | Browser | ssi-chat-j | user JWT | — |
+| 1a | ssi-chat-j | instruction-service | svc-chat | user JWT |
+| 1b | ssi-chat-j | authorization-service | svc-chat | user JWT |
+| 2 | ssi-chat-j | payment-service | svc-chat | user JWT |
 | 2→ | payment-service | instruction-service | svc-payment | user JWT (forwarded) |
 | 2→ | payment-service | authorization-service | svc-payment | user JWT (forwarded) |
-| 3 | ssi-chat | authorization-service | svc-chat | user JWT |
+| 3 | ssi-chat-j | authorization-service | svc-chat | user JWT |
 
 **Hop meaning**
 
@@ -62,7 +62,7 @@ Same OBO pattern for submit / approve / cancel.
 ```mermaid
 sequenceDiagram
   participant U as Browser (user JWT)
-  participant C as ssi-chat (svc-chat)
+  participant C as ssi-chat-j (svc-chat)
   participant I as instruction-service
   participant P as payment-service
   participant A as authorization-service

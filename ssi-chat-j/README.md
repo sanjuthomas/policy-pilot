@@ -1,15 +1,15 @@
 # ssi-chat-j
 
-Java / Spring Boot + Spring AI **A/B** chat experiment. Python `ssi-chat` stays on **8092**; this service listens on **8096**.
+Java / Spring Boot + Spring AI **PolicyPilot chat** — the product chat surface. Listens on **8096** (Compose service `ssi-chat-j`).
 
-Not wired into the root `docker-compose.yml` yet — run locally with Maven against a warm stack.
+The former Python `ssi-chat` UI and `cypher-builder-svc` HTTP bridge are retired (local-only archives). Chat plans Neo4j Cypher **in-process** (`com.sanjuthomas.policypilot.cypher`). `shared/cypher_builder` remains for the **indexer** Search Console only.
 
 ## Current surface
 
 - `GET /health`
 - `POST /api/auth/login` (ZITADEL session; roles/audiences from seed directory)
 - `GET /api/index-integrity` (proxies ssi-indexer for the shared integrity banner)
-- Shared PolicyPilot static UI (build-time copy of assets)
+- PolicyPilot static UI under `src/main/resources/static/`
 - `POST /api/chat` eligibility lanes:
   - payment APPROVE → payment-service `eligible-approvers`
   - payment SUBMIT → authz `eligible-submitters`
@@ -22,17 +22,26 @@ Not wired into the root `docker-compose.yml` yet — run locally with Maven agai
 - `POST /api/chat` policy summary (normative OPA):
   - authz `policy-summary?domain=&action=`
 - `POST /api/chat` me-centric lane (`path=me` → recorded as `eligibility` + `me.*` intents)
-- `POST /api/chat` neo4j_direct (in-process Cypher planner + Neo4j as `svc_chat`):
-  - alert/denial counts, alert lists, top-denial ranking (Thymeleaf templates)
-  - SoD / compliance graph questions (self-approval, mutual, subordinate, duplicates, cross-entity, timeline)
-  - subject LOB scope for FO/MO (parity with Python issue #63)
-- Observability (Micrometer → OTLP, same chat SLI names as Python; **no Prometheus scrape**):
+- `POST /api/chat` neo4j_direct (in-process Cypher planner + Neo4j as `svc_chat`)
+- `POST /api/chat` payment skills (`path=skill`) — create / submit / approve / cancel
+- Observability (Micrometer → OTLP; **no Prometheus scrape**):
   - `POST /api/chat/feedback`
   - `GET /api/routing-stats`, `GET /api/feedback-stats`
 
+## Intent routing
+
+Natural-language intent uses Spring AI structured `RouterDecision` (path + LLM slots). Open-vocabulary filters (status, type, amounts, skill dates) are **slots**, not synonym tables or free-text amount/date regex. Regex is OK for stable tokens (sequence ids, explicit clubs) after path is known. Details: [`docs/intent-determination.md`](../docs/intent-determination.md), [`AGENTS.md`](AGENTS.md).
+
+## Run (Compose)
+
+```bash
+docker compose up -d --build ssi-chat-j
+curl -s http://localhost:8096/health
+```
+
 ## Run (Maven)
 
-With the usual Compose stack up (Python chat, payment, instruction, authz, ZITADEL, Neo4j, …):
+With the usual Compose stack up (payment, instruction, authz, ZITADEL, Neo4j, indexer, …):
 
 ```bash
 cd ssi-chat-j
@@ -48,18 +57,14 @@ curl -s http://localhost:8096/health
 
 Coverage: `mvn verify` (≥ 80% JaCoCo). See [`AGENTS.md`](AGENTS.md).
 
-Metrics leave via **OTLP** (`micrometer-registry-otlp` + Micrometer Tracing → OTel). Actuator exposes **health only** — Prometheus registry / `/actuator/prometheus` is intentionally not wired. Series names match Python chat SLIs (`chat.answer.count`, `chat.feedback.count`, `http.server.request.duration`, …) under `service.name=ssi-chat-j`.
+## Golden eval (HTTP black-box)
 
-## Eligibility golden eval (HTTP black-box)
-
-Cases live under [`eval/`](eval/) (owned by this module — not loaded at Java runtime).
-
-Warm stack with harness entity context (`submitted_payment_id`, `draft_payment_id`, `pending_instruction_id`) and Java chat on `:8096`:
+**98** cases in [`eval/eligibility_golden.yaml`](eval/eligibility_golden.yaml). Prove against a warm stack:
 
 ```bash
 ./ssi-chat-j/scripts/prove-eligibility.sh
 ```
 
-That runs the three goldens via the temporary Python regression CLI (`--golden` points at `eval/eligibility_golden.yaml`).
+Family breakdown: [`eval/README.md`](eval/README.md).
 
-Plan / todo: [`docs/ssi-chat-j-plan.md`](../docs/ssi-chat-j-plan.md), [`docs/ssi-chat-j-todo.md`](../docs/ssi-chat-j-todo.md).
+Historical plan / todo: [`docs/ssi-chat-j-plan.md`](../docs/ssi-chat-j-plan.md), [`docs/ssi-chat-j-todo.md`](../docs/ssi-chat-j-todo.md).

@@ -2,7 +2,7 @@
 
 Run Policy Pilot and the indexer locally with Vertex embeddings and Gemini generation.
 
-**ssi-indexer** and **ssi-chat** call Vertex for embeddings (`text-embedding-004`), Gemini routing/synthesis, and structured graph plan extraction. The rest of the stack (MongoDB, Kafka, Neo4j, OPA, ZITADEL) runs entirely in Docker and does not require GCP.
+**ssi-indexer** and **ssi-chat-j** call Vertex for embeddings (`text-embedding-004`) and Gemini (routing/synthesis; indexer also uses graph-plan extraction). The rest of the stack (MongoDB, Kafka, Neo4j, OPA, ZITADEL) runs entirely in Docker and does not require GCP.
 
 ## Prerequisites
 
@@ -78,8 +78,8 @@ GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/YOUR_PROJECT_ID-vertex-client-k
 
 | Variable | Used by | Notes |
 |----------|---------|-------|
-| `GCP_PROJECT_ID` | ssi-indexer, ssi-chat, smoke test | Must match the project where Vertex AI is enabled |
-| `GCP_REGION` | ssi-indexer, ssi-chat | Default `us-central1` |
+| `GCP_PROJECT_ID` | ssi-indexer, ssi-chat-j, smoke test | Must match the project where Vertex AI is enabled |
+| `GCP_REGION` | ssi-indexer, ssi-chat-j | Default `us-central1` |
 | `GCP_SA_KEY_PATH` | Docker Compose | Host path mounted read-only at `/run/secrets/gcp-sa.json` |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Local Python runs, smoke test | Same JSON file |
 
@@ -108,4 +108,4 @@ Common failures:
 
 Once the smoke test passes, follow [Quick start](how-it-works.md#quick-start): clean slate (or compose up), seed ZITADEL users, run scenarios in the harness, then open Policy Pilot.
 
-For regression or smoke tests without Vertex (e.g. CI without GCP secrets), set `API_SMOKE_SKIP_VERTEX=1` — see `ssi-chat/regression/README.md`.
+Unit/CI for chat does not call Vertex (Spring AI is mocked in tests). Live golden prove against a warm stack needs Vertex credentials for routing/synthesis.

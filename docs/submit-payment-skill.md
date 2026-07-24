@@ -6,7 +6,7 @@ Middle-office creators draft payments; a **front-office desk analyst** whose `su
 
 | | |
 |--|--|
-| **Package** | [`ssi-chat/src/chat_application/skills/`](../ssi-chat/src/chat_application/skills/) (`submit_payment.py`) |
+| **Package** | [`ssi-chat-j/.../skill/`](../ssi-chat-j/src/main/java/com/sanjuthomas/policypilot/skill/) (`SubmitPaymentSkill`) |
 | **Demo users** | `fo-ficc-101`, `fo-fx-101`, `fo-rates-101` (desk submitters) |
 | **Chat mode** | **Payments** |
 | **Router** | `path=skill`, `skill=submit_payment` |

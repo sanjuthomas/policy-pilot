@@ -6,11 +6,11 @@ import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * Serves the shared PolicyPilot chat UI copied from Python {@code ssi-chat} at build time.
+ * Serves the PolicyPilot chat UI from {@code classpath:/static/} ({@code
+ * src/main/resources/static}).
  *
- * <p>Assets live on {@code classpath:/static/} (app.js, styles.css, …). The HTML references
- * {@code /static/...}, so we expose that prefix explicitly. {@code /} forwards to the same
- * {@code index.html} FastAPI serves on 8092.
+ * <p>The HTML references {@code /static/...}, so we expose that prefix explicitly. {@code /}
+ * forwards to {@code index.html}.
  */
 @Configuration
 public class UiWebConfig implements WebMvcConfigurer {

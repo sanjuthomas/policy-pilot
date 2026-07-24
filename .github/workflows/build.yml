@@ -19,10 +19,8 @@ jobs:
           - payment-service
           - authorization-service
           - sequence-service
-          - ssi-chat
           - ssi-indexer
           - ssi-demo-harness
-          - cypher-builder-svc
 
     steps:
       - uses: actions/checkout@v4
@@ -38,7 +36,7 @@ jobs:
         working-directory: ${{ matrix.service }}
         run: ruff check src/ --select E,F,W,I --ignore E501
 
-  # ── Unit test coverage (≥80% except ssi-chat 70%; excludes test harness) ──
+  # ── Unit test coverage (≥80%; excludes test harness) ──
   test-coverage:
     name: Coverage — ${{ matrix.service }}
     runs-on: ubuntu-latest
@@ -64,15 +62,6 @@ jobs:
             fail_under: 80
           - service: ssi-indexer
             package: etl
-            extra: dev
-            fail_under: 80
-          - service: ssi-chat
-            package: chat_application
-            extra: regression
-            # Fixture RouterDecision contract; no Gemini in CI (issue #13).
-            fail_under: 70
-          - service: cypher-builder-svc
-            package: cbs
             extra: dev
             fail_under: 80
           - service: shared/telemetry
@@ -129,7 +118,7 @@ jobs:
           pip install --quiet -e ".[${{ matrix.extra }}]"
           pytest --cov=${{ matrix.package }} --cov-report=term-missing --cov-fail-under=${{ matrix.fail_under }}
 
-  # ── Java / Maven (ssi-chat-j A/B experiment) ───────────────────────────────
+  # ── Java / Maven (ssi-chat-j) ──────────────────────────────────────────────
   maven-ssi-chat-j:
     name: Maven — ssi-chat-j
     runs-on: ubuntu-latest
@@ -166,9 +155,6 @@ jobs:
           - service: sequence-service
             context: .
             dockerfile: sequence-service/Dockerfile
-          - service: ssi-chat
-            context: .
-            dockerfile: ssi-chat/Dockerfile
           - service: ssi-chat-j
             context: .
             dockerfile: ssi-chat-j/Dockerfile
@@ -178,9 +164,6 @@ jobs:
           - service: ssi-demo-harness
             context: .
             dockerfile: ssi-demo-harness/Dockerfile
-          - service: cypher-builder-svc
-            context: .
-            dockerfile: cypher-builder-svc/Dockerfile
 
     steps:
       - uses: actions/checkout@v4

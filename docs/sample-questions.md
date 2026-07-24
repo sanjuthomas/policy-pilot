@@ -15,7 +15,7 @@ Curated natural-language questions for demoing Policy Pilot. Prefer these over i
 
 **Chat modes:** **Policies** for `tools` questions (sign in as `comp-001` / `Password1!`). **Payments** for create-payment **`skill`** (`pay-101` / `pay-205`), submit-payment **`skill`** (`fo-ficc-101` / `fo-fx-101` / `fo-rates-101`), approve-payment **`skill`** (`pay-201` / `pay-400`), and cancel-payment **`skill`** (`pay-101` / `pay-205`). **Events** for vector audit questions. **Instructions** / **Payments** for domain graph questions.
 
-Demo personas and seed users: **[Domain models and demo users](domain-models.md)**. Automated regression bank: **[ssi-chat/regression/questions.yaml](../ssi-chat/regression/questions.yaml)**.
+Demo personas and seed users: **[Domain models and demo users](domain-models.md)**. Automated golden bank: **[ssi-chat-j/eval/eligibility_golden.yaml](../ssi-chat-j/eval/eligibility_golden.yaml)** (**98** cases).
 
 ---
 

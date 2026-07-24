@@ -26,7 +26,9 @@ gcp-vertex-setup.local.md
 *.log
 data/
 
-# Local regression artifacts
+# Local regression artifacts (kept when Python chat tree is local-only)
+ssi-chat/
+cypher-builder-svc/
 ssi-chat/regression-report.json
 
 # Node (if added later)

@@ -4,7 +4,7 @@ Policy Pilot mutation skill: cancel an existing **DRAFT** or **SUBMITTED** payme
 
 | | |
 |--|--|
-| **Package** | [`ssi-chat/src/chat_application/skills/`](../ssi-chat/src/chat_application/skills/) (`cancel_payment.py`) |
+| **Package** | [`ssi-chat-j/.../skill/`](../ssi-chat-j/src/main/java/com/sanjuthomas/policypilot/skill/) (`CancelPaymentSkill`) |
 | **Demo users** | `pay-101`, `pay-205` (`PAYMENT_CREATOR` + `MIDDLE_OFFICE`) |
 | **Chat mode** | **Payments** |
 | **Router** | `path=skill`, `skill=cancel_payment` |
