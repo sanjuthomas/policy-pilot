@@ -229,6 +229,24 @@ class ObservabilityTest {
   }
 
   @Test
+  void genAiAndPhaseMetricsRecord() {
+    GenAiMetrics genAi = new GenAiMetrics(registry, "gemini-2.5-flash");
+    ChatPhaseMetrics phases = new ChatPhaseMetrics(registry);
+    genAi.recordSuccess("chat", 1200.0);
+    phases.recordRouter("skill", 1100.0);
+    phases.recordLane("skill", 80.0);
+
+    assertEquals(
+        1.0,
+        registry.find("gen_ai.client.operation.count").counters().stream()
+            .mapToDouble(c -> c.count())
+            .sum(),
+        0.001);
+    assertNotNull(registry.find("chat.router.duration").summary());
+    assertNotNull(registry.find("chat.lane.duration").summary());
+  }
+
+  @Test
   void otelEnvPostProcessorHonorsDisabled() {
     // Smoke: processor constructs without throwing when env unset.
     new OtelEnvironmentPostProcessor();

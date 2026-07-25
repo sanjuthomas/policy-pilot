@@ -216,6 +216,31 @@ class DocumentExtractionServiceTest {
   }
 
   @Test
+  void countsUnfilteredInstructionsViaSummaryApi() {
+    client.returning(
+        Map.of(
+            "instruction_summary",
+            Map.of(
+                "total",
+                63,
+                "by_type_status",
+                List.of(
+                    Map.of("instruction_type", "STANDING", "status", "DRAFT", "count", 10),
+                    Map.of("instruction_type", "SINGLE_USE", "status", "APPROVED", "count", 15)))));
+
+    RouterDecision decision = new RouterDecision();
+    decision.setExtractionTarget("instruction");
+    decision.setExtractionFacet("count");
+    DocumentExtractionResult result =
+        service.answer("How many instructions are there in the system?", subject(), decision);
+
+    assertEquals("instruction.summary", result.intentId());
+    assertTrue(result.answer().contains("There are **63** instructions in the system."));
+    assertTrue(result.answer().contains("STANDING"));
+    assertTrue(result.answer().contains("SINGLE_USE"));
+  }
+
+  @Test
   void groupsInstructionsByStatus() {
     client.returning(
         Map.of(

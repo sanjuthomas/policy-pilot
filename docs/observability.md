@@ -81,11 +81,11 @@ Grafana folder **Policy Pilot** (anonymous viewer enabled):
 | [SLO Catalog](http://localhost:3000/d/policy-pilot-slo-catalog) | `policy-pilot-slo-catalog` | All defined SLOs: fleet budget/burn overview + per-SLO objective, remaining budget, burn, and SLI error ratios |
 | [SLO Overview](http://localhost:3000/d/policy-pilot-slo-overview) | `policy-pilot-slo-overview` | Compact Sloth SLI error ratio, burn rate, 30-day budget remaining |
 | [HTTP SLIs](http://localhost:3000/d/policy-pilot-http-slis) | `policy-pilot-http-slis` | Per-service request rate, success ratio, p95 latency, 5xx |
-| [Domain SLIs](http://localhost:3000/d/policy-pilot-domain) | `policy-pilot-domain` | Chat route mix + latency, **requested vs executed path** (honored / override rate + pairs), feedback non-downvote rate, OPA decisions/deny rate/latency, skill funnel, indexer throughput + DLQ |
+| [Domain SLIs](http://localhost:3000/d/policy-pilot-domain) | `policy-pilot-domain` | Chat route mix + latency, **requested vs executed path**, feedback, OPA, **Mongo op latency**, **Vertex / router-vs-lane**, skill funnel, indexer throughput + DLQ |
 
 ## SLOs
 
-Seven OpenSLO documents are seeded (`observability/slo-catalog/seed-slos.sql`) and auto-provisioned. All use a **30-day rolling** window with **Occurrences** budgeting.
+Ten OpenSLO documents are seeded (`observability/slo-catalog/seed-slos.sql`) and auto-provisioned. All use a **30-day rolling** window with **Occurrences** budgeting.
 
 | SLO | Service | Target | Good / total (PromQL idea) |
 |-----|---------|--------|----------------------------|
@@ -96,6 +96,9 @@ Seven OpenSLO documents are seeded (`observability/slo-catalog/seed-slos.sql`) a
 | `skill-execution-success-30d` | ssi-chat-j | 99% | `chat_skill_outcome_count{status!="error"}` / all |
 | `platform-http-success-30d` | policy-pilot | 99.9% | non-5xx / all requests, every service |
 | `pipeline-consumer-success-30d` | ssi-indexer | 99.9% | `etl_consumer_processed` / (processed + (`etl_consumer_failed` or 0)) |
+| `mongo-query-latency-25ms-30d` | policy-pilot | 99% | `db_client_operation_duration` `le="25"` / total |
+| `gen-ai-chat-latency-5s-30d` | ssi-chat-j | 95% | `gen_ai_client_operation_duration{operation=chat}` `le="5000"` / total |
+| `gen-ai-operation-success-30d` | policy-pilot | 99.5% | `gen_ai_client_operation_count{status=success}` / all |
 
 Provisioned Sloth rules land in the `prometheus-sloth-rules` volume mounted at `/etc/prometheus/rules-sloth`. Useful recorded series:
 
@@ -124,13 +127,17 @@ Users tend to stay silent when an answer is acceptable and vote when something i
 
 ## Custom SLI metrics
 
-Most SLIs are derived from the shared HTTP histogram (`http.server.request.duration` in `shared/telemetry`) and existing chat/indexer counters. Two domain metrics were added:
+Most SLIs are derived from the shared HTTP histogram (`http.server.request.duration` in `shared/telemetry`) and existing chat/indexer counters. Domain metrics:
 
 - **`authz.evaluate.count` / `authz.evaluate.duration`** — emitted from `OpaClient._evaluate` (`authorization-service/src/authz/metrics.py`) with an `authz.decision` (`allow`/`deny`) and `authz.package` attribute. Powers the deny-rate panel and the evaluate-latency SLO.
+- **`db.client.operation.duration` / `db.client.operation.count`** — PyMongo `CommandListener` wired via `telemetry.mongo.mongo_event_listeners()` on Motor clients (instruction / payment / sequence / indexer DLQ). Attributes: `db.system`, `db.operation`, `db.collection`. Powers the Mongo ≤25ms SLO.
+- **`gen_ai.client.operation.duration` / `gen_ai.client.operation.count`** — Python Vertex client (`shared/telemetry/gen_ai.py`) and Java IntentRouter (`GenAiMetrics`). Attributes: `gen_ai.system`, `gen_ai.request.model`, `gen_ai.operation.name`, status on the counter.
+- **`chat.router.duration` / `chat.lane.duration`** — ssi-chat-j split of IntentRouter vs path-lane time (`ChatPhaseMetrics`), so elevated `chat.answer.retrieval.duration` is attributable.
 - **`chat.skill.outcome.count`** — emitted for every `path=skill` response in `ssi-chat-j` (Micrometer). Intent ids like `skill.<name>.<outcome>` feed `chat.skill` / `chat.skill.outcome` / `chat.skill.status` (`error` only for `*_error` outcomes). Powers the skill funnel and the skill-success SLO.
 - **`chat.feedback.count`** — thumbs-up/down feedback counter tagged by `chat.feedback_rating`. Downvotes burn the non-downvote SLO; upvotes and no-votes are good outcomes. No-vote is approximated in Prometheus as `chat_answer_count - chat_feedback_count`.
 - **`chat.routing.path_decision.count`** — every completed answer tagged with requested vs executed path (and override when clamps rewrite). Powers the **Routing — requested vs executed** panels on [Domain SLIs](http://localhost:3000/d/policy-pilot-domain).
 
+> New OpenSLO rows use `ON CONFLICT DO NOTHING`. A running catalog volume may need `docker compose up -d --force-recreate slo-catalog` (or a fresh Postgres volume) before Sloth picks up Mongo / gen_ai SLOs.
 ## Kafka lag (follow-up)
 
 `ssi-indexer` already computes consumer lag and exposes it at `/api/index-integrity` (`kafka_lag_total`, per-consumer breakdown) for the integrity banner. Promoting that to an OTel observable gauge (e.g. `etl.consumer.lag`) would let Prometheus/Grafana chart lag directly and back a freshness SLO; today the pipeline SLO uses the processed-vs-failed ratio instead.

@@ -56,6 +56,30 @@ class EntityApiAnswerFormatterInventoryTest {
   }
 
   @Test
+  void formatsInstructionTypeStatusSummaryMatrix() {
+    String empty = formatter.formatInstructionTypeStatusSummary(Map.of());
+    assertTrue(empty.contains("No matching instructions"));
+
+    String text =
+        formatter.formatInstructionTypeStatusSummary(
+            Map.of(
+                "total",
+                63,
+                "by_type_status",
+                List.of(
+                    Map.of("instruction_type", "SINGLE_USE", "status", "APPROVED", "count", 15),
+                    Map.of("instruction_type", "SINGLE_USE", "status", "DRAFT", "count", 10),
+                    Map.of("instruction_type", "STANDING", "status", "APPROVED", "count", 10),
+                    Map.of("instruction_type", "STANDING", "status", "DRAFT", "count", 10),
+                    Map.of("instruction_type", "STANDING", "status", "SUSPENDED", "count", 14))));
+    assertTrue(text.contains("There are **63** instructions in the system."));
+    assertTrue(text.contains("| type |"));
+    assertTrue(text.contains("SINGLE_USE"));
+    assertTrue(text.contains("STANDING"));
+    assertTrue(text.contains("**TOTAL**"));
+  }
+
+  @Test
   void formatsPaymentInventoryTable() {
     String empty = formatter.formatPaymentInventory(List.of());
     assertTrue(empty.contains("No matching payments"));

@@ -37,6 +37,8 @@ import com.sanjuthomas.policypilot.me.WhoElseCanActService;
 import com.sanjuthomas.policypilot.neo4j.Neo4jDirectAnswerFormatter;
 import com.sanjuthomas.policypilot.neo4j.Neo4jDirectService;
 import com.sanjuthomas.policypilot.observability.ChatAnswerFinalizer;
+import com.sanjuthomas.policypilot.observability.ChatPhaseMetrics;
+import com.sanjuthomas.policypilot.observability.GenAiMetrics;
 import com.sanjuthomas.policypilot.observability.RoutingDistributionTracker;
 import com.sanjuthomas.policypilot.observability.RoutingMetrics;
 import com.sanjuthomas.policypilot.observability.SkillMetrics;
@@ -91,7 +93,10 @@ class ChatServiceTest {
     when(requestSpec.system(anyString())).thenReturn(requestSpec);
     when(requestSpec.user(anyString())).thenReturn(requestSpec);
     when(requestSpec.call()).thenReturn(callResponseSpec);
-    intentRouter = new IntentRouter(chatClientBuilder);
+    SimpleMeterRegistry routerRegistry = new SimpleMeterRegistry();
+    intentRouter =
+        new IntentRouter(
+            chatClientBuilder, new GenAiMetrics(routerRegistry, "gemini-2.5-flash"));
     AnswerRenderer renderer =
         new AnswerRenderer(
             new AnswerTemplateConfig().answerTemplateEngine(),
@@ -170,7 +175,8 @@ class ChatServiceTest {
                     new PolicyBasisFormat())),
             fullRagLaneService,
             paymentSkillService(eligibilityClient)),
-        finalizer);
+        finalizer,
+        new ChatPhaseMetrics(registry));
   }
 
   private static Subject subject() {
@@ -632,7 +638,8 @@ class ChatServiceTest {
                 neo4j,
                 fullRagLaneService,
                 paymentSkillService(new FakeEligibilityClient())),
-            finalizer);
+            finalizer,
+            new ChatPhaseMetrics(registry));
 
     ChatResponse response =
         chatService.ask(

@@ -9,6 +9,7 @@ from motor.motor_asyncio import (
 )
 from pymongo import ReadPreference
 from pymongo.errors import OperationFailure
+from telemetry import mongo_event_listeners
 
 from ps.config import settings
 
@@ -30,7 +31,10 @@ _LEGACY_SECURITY_EVENT_INDEXES = (
 
 async def connect() -> None:
     global _client
-    _client = AsyncIOMotorClient(settings.mongodb_uri)
+    _client = AsyncIOMotorClient(
+        settings.mongodb_uri,
+        event_listeners=mongo_event_listeners(),
+    )
     await _client.admin.command("ping")
     collection = get_db()[settings.mongodb_collection]
     for index_name in _LEGACY_PAYMENT_INDEXES:

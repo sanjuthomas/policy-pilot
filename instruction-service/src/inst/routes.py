@@ -11,6 +11,7 @@ from inst.models.api import (
     CreateInstructionRequest,
     InstructionEligibleApproversResponse,
     InstructionResponse,
+    InstructionSummaryResponse,
     RejectInstructionRequest,
     ReleaseUseInstructionRequest,
     Subject,
@@ -101,6 +102,33 @@ async def list_instructions(
             instruction_type=instruction_type,
             created_by_user_id=created_by_user_id,
             limit=limit,
+            bearer_token=ctx.user_token,
+            session_id=ctx.user_session_id,
+        )
+    finally:
+        reset_evaluate_token_context(token)
+
+
+@router.get("/summary", response_model=InstructionSummaryResponse)
+async def summarize_instructions(
+    owning_lob: str | None = Query(default=None),
+    subject: Subject = Depends(get_subject),
+    service: InstructionService = Depends(get_service),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    x_on_behalf_of: str | None = Header(default=None, alias="X-On-Behalf-Of"),
+    x_on_behalf_of_session_id: str | None = Header(
+        default=None, alias="X-On-Behalf-Of-Session-Id"
+    ),
+) -> InstructionSummaryResponse:
+    """Current-version counts by instruction type × status (excludes history)."""
+    token, ctx = _bind_tokens(
+        authorization, x_session_id, x_on_behalf_of, x_on_behalf_of_session_id
+    )
+    try:
+        return await service.summarize(
+            subject,
+            owning_lob=owning_lob,
             bearer_token=ctx.user_token,
             session_id=ctx.user_session_id,
         )

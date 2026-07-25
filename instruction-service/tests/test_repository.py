@@ -203,6 +203,58 @@ async def test_list_current(
 
 
 @pytest.mark.asyncio
+async def test_summarize_current_aggregates_type_and_status(
+    repo: InstructionRepository,
+    mock_collection: MagicMock,
+) -> None:
+    async def _async_iter():
+        yield {
+            "_id": {"instruction_type": "STANDING", "status": "APPROVED"},
+            "count": 10,
+        }
+        yield {
+            "_id": {"instruction_type": "SINGLE_USE", "status": "DRAFT"},
+            "count": 5,
+        }
+
+    mock_collection.aggregate.return_value = _async_iter()
+    summary = await repo.summarize_current()
+    assert summary["total"] == 15
+    assert summary["by_type_status"] == [
+        {"instruction_type": "STANDING", "status": "APPROVED", "count": 10},
+        {"instruction_type": "SINGLE_USE", "status": "DRAFT", "count": 5},
+    ]
+    assert summary["by_type"] == [
+        {"key": "SINGLE_USE", "count": 5},
+        {"key": "STANDING", "count": 10},
+    ]
+    assert summary["by_status"] == [
+        {"key": "APPROVED", "count": 10},
+        {"key": "DRAFT", "count": 5},
+    ]
+    pipeline = mock_collection.aggregate.call_args.args[0]
+    assert pipeline[0] == {"$match": {"out": INSTRUCTION_CURRENT_OUT}}
+
+
+@pytest.mark.asyncio
+async def test_summarize_current_filters_owning_lob(
+    repo: InstructionRepository,
+    mock_collection: MagicMock,
+) -> None:
+    async def _async_iter():
+        if False:
+            yield {}
+
+    mock_collection.aggregate.return_value = _async_iter()
+    summary = await repo.summarize_current(owning_lob="FICC")
+    assert summary["total"] == 0
+    pipeline = mock_collection.aggregate.call_args.args[0]
+    assert pipeline[0] == {
+        "$match": {"out": INSTRUCTION_CURRENT_OUT, "owning_lob": "FICC"}
+    }
+
+
+@pytest.mark.asyncio
 async def test_list_versions(
     repo: InstructionRepository,
     mock_collection: MagicMock,

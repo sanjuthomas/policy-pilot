@@ -241,6 +241,24 @@ public class EligibilityClient {
   }
 
   /**
+   * Current-version instruction inventory summary (type × status), excluding historical versions.
+   */
+  public Map<String, Object> summarizeInstructions(
+      String owningLob, String userBearerToken, String userSessionId) {
+    StringBuilder url =
+        new StringBuilder(
+            trimSlash(properties.instructionServiceUrl()) + "/api/v1/instructions/summary");
+    if (StringUtils.hasText(owningLob)) {
+      url.append("?owning_lob=")
+          .append(UriUtils.encodeQueryParam(owningLob.strip(), StandardCharsets.UTF_8));
+    }
+    return getJson(
+        url.toString(),
+        oboHeaders(userBearerToken, userSessionId),
+        "instruction service error: ");
+  }
+
+  /**
    * List instructions visible to the OBO subject, optionally filtered by status / type / creator.
    */
   public List<Map<String, Object>> listInstructions(

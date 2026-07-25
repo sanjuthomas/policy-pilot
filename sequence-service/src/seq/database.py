@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from telemetry import mongo_event_listeners
 
 from seq.config import settings
 
@@ -13,7 +14,10 @@ _client: AsyncIOMotorClient | None = None
 
 async def connect() -> None:
     global _client
-    _client = AsyncIOMotorClient(settings.mongodb_uri)
+    _client = AsyncIOMotorClient(
+        settings.mongodb_uri,
+        event_listeners=mongo_event_listeners(),
+    )
     logger.info(
         "MongoDB connected uri=%s db=%s collection=%s",
         settings.mongodb_uri,

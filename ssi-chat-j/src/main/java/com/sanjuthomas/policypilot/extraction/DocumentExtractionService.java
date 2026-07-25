@@ -113,7 +113,21 @@ public class DocumentExtractionService {
     String listLob = groupBy ? null : EntityApiQuestion.lobFilter(question);
     String timeWindow =
         resolved == Facet.COUNT || groupBy ? GraphAnswerHints.from(decision).timeWindow() : null;
+    boolean unfilteredCount =
+        resolved == Facet.COUNT
+            && !StringUtils.hasText(listStatus)
+            && !StringUtils.hasText(type)
+            && !StringUtils.hasText(createdBy)
+            && !StringUtils.hasText(timeWindow);
     try {
+      if (unfilteredCount) {
+        Map<String, Object> summary =
+            eligibilityClient.summarizeInstructions(
+                listLob, subject.bearerToken(), subject.sessionId());
+        return new DocumentExtractionResult(
+            entityApiAnswerFormatter.formatInstructionTypeStatusSummary(summary),
+            "instruction.summary");
+      }
       List<Map<String, Object>> rows =
           eligibilityClient.listInstructions(
               listStatus,

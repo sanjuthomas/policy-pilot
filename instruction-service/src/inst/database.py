@@ -8,6 +8,7 @@ from motor.motor_asyncio import (
 )
 from pymongo import ReadPreference
 from pymongo.errors import OperationFailure
+from telemetry import mongo_event_listeners
 
 from inst.config import settings
 
@@ -23,7 +24,10 @@ _LEGACY_INSTRUCTION_INDEXES = (
 def get_client() -> AsyncIOMotorClient:
     global _client
     if _client is None:
-        _client = AsyncIOMotorClient(settings.mongodb_uri)
+        _client = AsyncIOMotorClient(
+            settings.mongodb_uri,
+            event_listeners=mongo_event_listeners(),
+        )
     return _client
 
 
