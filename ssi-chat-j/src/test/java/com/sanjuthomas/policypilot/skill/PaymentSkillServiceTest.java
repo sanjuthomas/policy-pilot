@@ -18,9 +18,9 @@ class PaymentSkillServiceTest {
     FakeEligibilityClient client = new FakeEligibilityClient();
     return new PaymentSkillService(
         new CreatePaymentSkill(client, null, null, null, store),
-        new SubmitPaymentSkill(client, null, null, store),
-        new ApprovePaymentSkill(client, null, null, store),
-        new CancelPaymentSkill(client, null, null, store));
+        new SubmitPaymentSkill(client, null, null, null, store),
+        new ApprovePaymentSkill(client, null, null, null, store),
+        new CancelPaymentSkill(client, null, null, null, store));
   }
 
   private static RouterDecision skill(String skill) {

@@ -47,6 +47,13 @@ async function loadEvents() {
   statusEl.textContent = `${body.count} security events`;
 }
 
+function paymentId(item) {
+  const request = item.request || {};
+  const result = item.result || {};
+  // Denies often only carry payment_id on request (no mutation result).
+  return result.payment_id || request.payment_id || "";
+}
+
 async function loadAudit() {
   statusEl.textContent = "Loading audit records…";
   const response = await AuditorAuth.apiFetch("/api/audit-executions");
@@ -55,7 +62,6 @@ async function loadAudit() {
   auditBody.innerHTML = (body.executions || []).map((item) => {
     const actor = item.actor || {};
     const request = item.request || {};
-    const result = item.result || {};
     const governance = item.governance || {};
     const eventId = governance.security_event_id;
     let evidence = "—";
@@ -72,7 +78,7 @@ async function loadAudit() {
       <td>${text(item.status)}</td>
       <td class="mono">${text(actor.user_id)}</td>
       <td class="mono">${text(request.instruction_id)}</td>
-      <td class="mono">${text(result.payment_id)}</td>
+      <td class="mono">${text(paymentId(item))}</td>
       <td>${evidence}</td>
     </tr>`;
   }).join("");

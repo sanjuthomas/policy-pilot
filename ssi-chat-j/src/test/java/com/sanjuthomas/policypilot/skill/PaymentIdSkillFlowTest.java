@@ -3,8 +3,11 @@ package com.sanjuthomas.policypilot.skill;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.sanjuthomas.policypilot.auth.Subject;
@@ -25,6 +28,7 @@ class PaymentIdSkillFlowTest {
   @Mock EligibilityClient eligibilityClient;
   @Mock AuthzPaymentEvaluateClient authzClient;
   @Mock PaymentMutationClient paymentClient;
+  @Mock AuditExecutionClient auditClient;
 
   private PendingSkillStore store;
 
@@ -71,8 +75,13 @@ class PaymentIdSkillFlowTest {
         .thenReturn(payment(paymentStatus));
     when(eligibilityClient.getInstruction(eq("20260720-FICC-I-1"), anyString(), anyString()))
         .thenReturn(instruction());
-    when(authzClient.evaluate(eq(action), any(), anyString(), anyString(), any()))
-        .thenReturn(new PolicyDecision(allowed, List.of("basis"), allowed ? List.of() : List.of("nope")));
+    when(authzClient.evaluateExchange(eq(action), any(), anyString(), anyString(), any()))
+        .thenReturn(
+            new AuthzPaymentEvaluateClient.EvaluateExchange(
+                new PolicyDecision(
+                    allowed, List.of("basis"), allowed ? List.of() : List.of("nope")),
+                Map.of("action", action),
+                Map.of("allowed", allowed)));
   }
 
   @BeforeEach
@@ -82,14 +91,22 @@ class PaymentIdSkillFlowTest {
 
   @Test
   void submitPhase1AndConfirmGo() {
-    SubmitPaymentSkill skill = new SubmitPaymentSkill(eligibilityClient, authzClient, paymentClient, store);
+    SubmitPaymentSkill skill =
+        new SubmitPaymentSkill(eligibilityClient, authzClient, paymentClient, null, store);
     stubLoad("DRAFT", "SUBMIT", true);
 
     SkillRunResult phase1 = skill.phase1(PAYMENT_ID, creator());
     assertEquals("skill.submit_payment.awaiting_confirmation", phase1.intentId());
     assertTrue(phase1.answer().contains("No Go"));
 
-    when(paymentClient.submitPayment(eq(PAYMENT_ID), anyString(), anyString()))
+    when(authzClient.evaluateExchange(eq("SUBMIT"), any(), anyString(), anyString(), any()))
+        .thenReturn(
+            new AuthzPaymentEvaluateClient.EvaluateExchange(
+                new PolicyDecision(true, List.of("basis"), List.of()),
+                Map.of("action", "SUBMIT"),
+                Map.of("allowed", true)));
+    when(paymentClient.submitPayment(
+            eq(PAYMENT_ID), anyString(), anyString(), nullable(String.class)))
         .thenReturn(Map.of("payment_id", PAYMENT_ID, "status", "SUBMITTED"));
     SkillRunResult confirm = skill.confirm(phase1.pendingId(), "go", creator());
     assertEquals("skill.submit_payment.submitted", confirm.intentId());
@@ -98,7 +115,8 @@ class PaymentIdSkillFlowTest {
 
   @Test
   void submitWrongStatusStops() {
-    SubmitPaymentSkill skill = new SubmitPaymentSkill(eligibilityClient, authzClient, paymentClient, store);
+    SubmitPaymentSkill skill =
+        new SubmitPaymentSkill(eligibilityClient, authzClient, paymentClient, null, store);
     when(eligibilityClient.getPayment(eq(PAYMENT_ID), anyString(), anyString()))
         .thenReturn(payment("APPROVED"));
 
@@ -108,13 +126,21 @@ class PaymentIdSkillFlowTest {
 
   @Test
   void approvePhase1AndConfirmGo() {
-    ApprovePaymentSkill skill = new ApprovePaymentSkill(eligibilityClient, authzClient, paymentClient, store);
+    ApprovePaymentSkill skill =
+        new ApprovePaymentSkill(eligibilityClient, authzClient, paymentClient, null, store);
     stubLoad("SUBMITTED", "APPROVE", true);
 
     SkillRunResult phase1 = skill.phase1(PAYMENT_ID, approver());
     assertEquals("skill.approve_payment.awaiting_confirmation", phase1.intentId());
 
-    when(paymentClient.approvePayment(eq(PAYMENT_ID), anyString(), anyString()))
+    when(authzClient.evaluateExchange(eq("APPROVE"), any(), anyString(), anyString(), any()))
+        .thenReturn(
+            new AuthzPaymentEvaluateClient.EvaluateExchange(
+                new PolicyDecision(true, List.of("basis"), List.of()),
+                Map.of("action", "APPROVE"),
+                Map.of("allowed", true)));
+    when(paymentClient.approvePayment(
+            eq(PAYMENT_ID), anyString(), anyString(), nullable(String.class)))
         .thenReturn(Map.of("payment_id", PAYMENT_ID, "status", "APPROVED"));
     SkillRunResult confirm = skill.confirm(phase1.pendingId(), "go", approver());
     assertEquals("skill.approve_payment.approved", confirm.intentId());
@@ -123,13 +149,21 @@ class PaymentIdSkillFlowTest {
 
   @Test
   void cancelPhase1AndConfirmGo() {
-    CancelPaymentSkill skill = new CancelPaymentSkill(eligibilityClient, authzClient, paymentClient, store);
+    CancelPaymentSkill skill =
+        new CancelPaymentSkill(eligibilityClient, authzClient, paymentClient, null, store);
     stubLoad("DRAFT", "CANCEL", true);
 
     SkillRunResult phase1 = skill.phase1(PAYMENT_ID, creator());
     assertEquals("skill.cancel_payment.awaiting_confirmation", phase1.intentId());
 
-    when(paymentClient.cancelPayment(eq(PAYMENT_ID), anyString(), anyString()))
+    when(authzClient.evaluateExchange(eq("CANCEL"), any(), anyString(), anyString(), any()))
+        .thenReturn(
+            new AuthzPaymentEvaluateClient.EvaluateExchange(
+                new PolicyDecision(true, List.of("basis"), List.of()),
+                Map.of("action", "CANCEL"),
+                Map.of("allowed", true)));
+    when(paymentClient.cancelPayment(
+            eq(PAYMENT_ID), anyString(), anyString(), nullable(String.class)))
         .thenReturn(Map.of("payment_id", PAYMENT_ID, "status", "CANCELLED"));
     SkillRunResult confirm = skill.confirm(phase1.pendingId(), "go", creator());
     assertEquals("skill.cancel_payment.cancelled", confirm.intentId());
@@ -138,10 +172,90 @@ class PaymentIdSkillFlowTest {
 
   @Test
   void submitDeniedByPolicy() {
-    SubmitPaymentSkill skill = new SubmitPaymentSkill(eligibilityClient, authzClient, paymentClient, store);
+    SubmitPaymentSkill skill =
+        new SubmitPaymentSkill(eligibilityClient, authzClient, paymentClient, null, store);
     stubLoad("DRAFT", "SUBMIT", false);
 
     SkillRunResult result = skill.phase1(PAYMENT_ID, creator());
     assertEquals("skill.submit_payment.denied", result.intentId());
+  }
+
+  @Test
+  void submitPhase1CreatesAuditExecutionAndConfirmPatches() {
+    when(auditClient.create(anyMap(), any())).thenReturn("aud-submit-9");
+    SubmitPaymentSkill skill =
+        new SubmitPaymentSkill(eligibilityClient, authzClient, paymentClient, auditClient, store);
+    stubLoad("DRAFT", "SUBMIT", true);
+
+    SkillRunResult phase1 = skill.phase1(PAYMENT_ID, creator());
+    assertEquals("skill.submit_payment.awaiting_confirmation", phase1.intentId());
+    verify(auditClient).create(anyMap(), any());
+
+    when(authzClient.evaluateExchange(eq("SUBMIT"), any(), anyString(), anyString(), any()))
+        .thenReturn(
+            new AuthzPaymentEvaluateClient.EvaluateExchange(
+                new PolicyDecision(true, List.of("basis"), List.of()),
+                Map.of("action", "SUBMIT"),
+                Map.of("allowed", true)));
+    when(paymentClient.submitPayment(eq(PAYMENT_ID), anyString(), anyString(), eq("aud-submit-9")))
+        .thenReturn(Map.of("payment_id", PAYMENT_ID, "status", "SUBMITTED"));
+
+    SkillRunResult confirm = skill.confirm(phase1.pendingId(), "go", creator());
+    assertEquals("skill.submit_payment.submitted", confirm.intentId());
+    verify(auditClient).patch(eq("aud-submit-9"), anyMap(), any());
+  }
+
+  @Test
+  void submitNoGoPatchesAuditCancelled() {
+    when(auditClient.create(anyMap(), any())).thenReturn("aud-cancel-go");
+    SubmitPaymentSkill skill =
+        new SubmitPaymentSkill(eligibilityClient, authzClient, paymentClient, auditClient, store);
+    stubLoad("DRAFT", "SUBMIT", true);
+
+    SkillRunResult phase1 = skill.phase1(PAYMENT_ID, creator());
+    SkillRunResult confirm = skill.confirm(phase1.pendingId(), "no_go", creator());
+    assertEquals("skill.submit_payment.cancelled", confirm.intentId());
+    verify(auditClient).patch(eq("aud-cancel-go"), anyMap(), any());
+  }
+
+  @Test
+  void submitForbiddenPersistsTerminalAudit() {
+    Subject noCreator =
+        new Subject(
+            "pay-999",
+            "No",
+            "Creator",
+            "Analyst",
+            "FICC",
+            List.of("FUNDING_APPROVER"),
+            List.of("MIDDLE_OFFICE"),
+            "sup-1",
+            List.of(),
+            "tok",
+            "sess");
+    SubmitPaymentSkill skill =
+        new SubmitPaymentSkill(eligibilityClient, authzClient, paymentClient, auditClient, store);
+
+    SkillRunResult result = skill.phase1(PAYMENT_ID, noCreator);
+    assertEquals("skill.submit_payment.forbidden", result.intentId());
+    verify(auditClient).create(anyMap(), any());
+  }
+
+  @Test
+  void capabilityForMapsPaymentSkills() {
+    assertEquals("SUBMIT_PAYMENT", PaymentIdSkillFlow.capabilityFor("submit_payment"));
+    assertEquals("APPROVE_PAYMENT", PaymentIdSkillFlow.capabilityFor("approve_payment"));
+    assertEquals("CANCEL_PAYMENT", PaymentIdSkillFlow.capabilityFor("cancel_payment"));
+    assertEquals("CREATE_PAYMENT", PaymentIdSkillFlow.capabilityFor("create_payment"));
+  }
+
+  @Test
+  void resultWithPaymentIdCopiesFromRequestWhenMissing() {
+    Map<String, Object> out =
+        PaymentIdSkillFlow.resultWithPaymentId(
+            Map.of("payment_id", PAYMENT_ID),
+            Map.of("message", "APPROVE denied", "violations", List.of("SELF_APPROVAL")));
+    assertEquals(PAYMENT_ID, out.get("payment_id"));
+    assertEquals("APPROVE denied", out.get("message"));
   }
 }

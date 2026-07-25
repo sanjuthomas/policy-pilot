@@ -56,9 +56,9 @@ class ChatApiControllerTest {
     FakeEligibilityClient eligibilityClient = new FakeEligibilityClient();
     return new PaymentSkillService(
         new CreatePaymentSkill(eligibilityClient, null, null, null, store),
-        new SubmitPaymentSkill(eligibilityClient, null, null, store),
-        new ApprovePaymentSkill(eligibilityClient, null, null, store),
-        new CancelPaymentSkill(eligibilityClient, null, null, store));
+        new SubmitPaymentSkill(eligibilityClient, null, null, null, store),
+        new ApprovePaymentSkill(eligibilityClient, null, null, null, store),
+        new CancelPaymentSkill(eligibilityClient, null, null, null, store));
   }
 
   private static ChatAnswerFinalizer answerFinalizer() {

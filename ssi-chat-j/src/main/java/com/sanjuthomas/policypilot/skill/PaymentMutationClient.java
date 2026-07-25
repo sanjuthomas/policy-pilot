@@ -87,20 +87,35 @@ public class PaymentMutationClient {
 
   public Map<String, Object> submitPayment(
       String paymentId, String userBearerToken, String userSessionId) {
+    return submitPayment(paymentId, userBearerToken, userSessionId, null);
+  }
+
+  public Map<String, Object> submitPayment(
+      String paymentId, String userBearerToken, String userSessionId, String auditExecutionId) {
     String url = trimSlash(properties.paymentServiceUrl()) + "/api/v1/payments/" + paymentId + "/submit";
-    return post(url, null, userBearerToken, userSessionId, "SUBMIT", null);
+    return post(url, null, userBearerToken, userSessionId, "SUBMIT", auditExecutionId);
   }
 
   public Map<String, Object> approvePayment(
       String paymentId, String userBearerToken, String userSessionId) {
+    return approvePayment(paymentId, userBearerToken, userSessionId, null);
+  }
+
+  public Map<String, Object> approvePayment(
+      String paymentId, String userBearerToken, String userSessionId, String auditExecutionId) {
     String url = trimSlash(properties.paymentServiceUrl()) + "/api/v1/payments/" + paymentId + "/approve";
-    return post(url, null, userBearerToken, userSessionId, "APPROVE", null);
+    return post(url, null, userBearerToken, userSessionId, "APPROVE", auditExecutionId);
   }
 
   public Map<String, Object> cancelPayment(
       String paymentId, String userBearerToken, String userSessionId) {
+    return cancelPayment(paymentId, userBearerToken, userSessionId, null);
+  }
+
+  public Map<String, Object> cancelPayment(
+      String paymentId, String userBearerToken, String userSessionId, String auditExecutionId) {
     String url = trimSlash(properties.paymentServiceUrl()) + "/api/v1/payments/" + paymentId + "/cancel";
-    return post(url, Map.of(), userBearerToken, userSessionId, "CANCEL", null);
+    return post(url, Map.of(), userBearerToken, userSessionId, "CANCEL", auditExecutionId);
   }
 
   private Map<String, Object> post(

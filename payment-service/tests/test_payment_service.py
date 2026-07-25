@@ -410,6 +410,86 @@ async def test_submit_success(
 
 
 @pytest.mark.asyncio
+async def test_submit_links_audit_execution(
+    service: PaymentService,
+    subject: Subject,
+    payment: Payment,
+    standing_instruction: dict,
+) -> None:
+    service.repo.get_current.return_value = _versioned(payment)
+    service.instruction_service.get_instruction.return_value = standing_instruction
+    service.authz.evaluate_payment_exchange.return_value = _exchange(_allow_decision())
+
+    with _patched_txn():
+        await service.submit(
+            payment.payment_id,
+            subject,
+            audit_execution_id="aud-submit-1",
+        )
+
+    service.audit_repo.link_security_event.assert_awaited_once_with(
+        "aud-submit-1",
+        security_event_id="20260701-CORP-P-1-SE-1",
+        payment_id=payment.payment_id,
+        actor_user_id=subject.user_id,
+    )
+
+
+@pytest.mark.asyncio
+async def test_approve_links_audit_execution(
+    service: PaymentService,
+    approver_subject: Subject,
+    submitted_payment: Payment,
+    standing_instruction: dict,
+) -> None:
+    service.repo.get_current.return_value = _versioned(submitted_payment)
+    service.instruction_service.get_instruction.return_value = standing_instruction
+    service.authz.evaluate_payment_exchange.return_value = _exchange(
+        _allow_decision(basis=["approver authorized"])
+    )
+
+    with _patched_txn():
+        await service.approve(
+            submitted_payment.payment_id,
+            approver_subject,
+            audit_execution_id="aud-approve-1",
+        )
+
+    service.audit_repo.link_security_event.assert_awaited_once_with(
+        "aud-approve-1",
+        security_event_id="20260701-CORP-P-1-SE-1",
+        payment_id=submitted_payment.payment_id,
+        actor_user_id=approver_subject.user_id,
+    )
+
+
+@pytest.mark.asyncio
+async def test_cancel_links_audit_execution(
+    service: PaymentService,
+    subject: Subject,
+    payment: Payment,
+    standing_instruction: dict,
+) -> None:
+    service.repo.get_current.return_value = _versioned(payment)
+    service.instruction_service.get_instruction.return_value = standing_instruction
+    service.authz.evaluate_payment_exchange.return_value = _exchange(_allow_decision())
+
+    with _patched_txn():
+        await service.cancel(
+            payment.payment_id,
+            subject,
+            audit_execution_id="aud-cancel-1",
+        )
+
+    service.audit_repo.link_security_event.assert_awaited_once_with(
+        "aud-cancel-1",
+        security_event_id="20260701-CORP-P-1-SE-1",
+        payment_id=payment.payment_id,
+        actor_user_id=subject.user_id,
+    )
+
+
+@pytest.mark.asyncio
 async def test_submit_wrong_status(
     service: PaymentService,
     subject: Subject,

@@ -20,16 +20,19 @@ public class ApprovePaymentSkill {
   private final EligibilityClient eligibilityClient;
   private final AuthzPaymentEvaluateClient authzClient;
   private final PaymentMutationClient paymentClient;
+  private final AuditExecutionClient auditClient;
   private final PendingSkillStore store;
 
   public ApprovePaymentSkill(
       EligibilityClient eligibilityClient,
       AuthzPaymentEvaluateClient authzClient,
       PaymentMutationClient paymentClient,
+      AuditExecutionClient auditClient,
       PendingSkillStore store) {
     this.eligibilityClient = eligibilityClient;
     this.authzClient = authzClient;
     this.paymentClient = paymentClient;
+    this.auditClient = auditClient;
     this.store = store;
   }
 
@@ -38,6 +41,13 @@ public class ApprovePaymentSkill {
     ChatCapabilities caps = ChatCapabilities.forSubject(subject);
     if (!caps.canApprovePayment()) {
       activities.add("Checked role — `" + subject.userId() + "` does not hold `FUNDING_APPROVER`.");
+      PaymentIdSkillFlow.persistForbiddenAudit(
+          auditClient,
+          SKILL,
+          "APPROVE",
+          subject,
+          "skill.approve_payment.forbidden",
+          "Role gate denied — missing FUNDING_APPROVER.");
       return SkillRunResult.terminal(
           "**No Go from preflight** — `"
               + subject.userId()
@@ -55,6 +65,7 @@ public class ApprovePaymentSkill {
         activities,
         eligibilityClient,
         authzClient,
+        auditClient,
         store,
         PaymentIdSkillFlow.statusEquals("SUBMITTED"),
         "Only **SUBMITTED** payments can be funding-approved.",
@@ -71,14 +82,16 @@ public class ApprovePaymentSkill {
         decision,
         subject,
         authzClient,
+        auditClient,
         store,
         "**No Go** — cancelled. Nothing was approved.",
         "skill.approve_payment.cancelled",
         "Nothing was approved.",
         new PaymentIdSkillFlow.Mutation() {
           @Override
-          public Map<String, Object> mutate(String paymentId, Subject s) {
-            return paymentClient.approvePayment(paymentId, s.bearerToken(), s.sessionId());
+          public Map<String, Object> mutate(String paymentId, Subject s, String auditExecutionId) {
+            return paymentClient.approvePayment(
+                paymentId, s.bearerToken(), s.sessionId(), auditExecutionId);
           }
 
           @Override

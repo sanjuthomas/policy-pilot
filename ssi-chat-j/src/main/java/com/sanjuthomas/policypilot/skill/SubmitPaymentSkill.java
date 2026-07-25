@@ -3,10 +3,6 @@ package com.sanjuthomas.policypilot.skill;
 import com.sanjuthomas.policypilot.auth.ChatCapabilities;
 import com.sanjuthomas.policypilot.auth.Subject;
 import com.sanjuthomas.policypilot.eligibility.EligibilityClient;
-import com.sanjuthomas.policypilot.skill.AuthzPaymentEvaluateClient.AuthzEvaluateException;
-import com.sanjuthomas.policypilot.skill.AuthzPaymentEvaluateClient.PolicyDecision;
-import com.sanjuthomas.policypilot.skill.PaymentMutationClient.PaymentClientException;
-import com.sanjuthomas.policypilot.skill.PaymentMutationClient.PaymentDeniedException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -24,16 +20,19 @@ public class SubmitPaymentSkill {
   private final EligibilityClient eligibilityClient;
   private final AuthzPaymentEvaluateClient authzClient;
   private final PaymentMutationClient paymentClient;
+  private final AuditExecutionClient auditClient;
   private final PendingSkillStore store;
 
   public SubmitPaymentSkill(
       EligibilityClient eligibilityClient,
       AuthzPaymentEvaluateClient authzClient,
       PaymentMutationClient paymentClient,
+      AuditExecutionClient auditClient,
       PendingSkillStore store) {
     this.eligibilityClient = eligibilityClient;
     this.authzClient = authzClient;
     this.paymentClient = paymentClient;
+    this.auditClient = auditClient;
     this.store = store;
   }
 
@@ -42,6 +41,13 @@ public class SubmitPaymentSkill {
     ChatCapabilities caps = ChatCapabilities.forSubject(subject);
     if (!caps.canCreatePayment()) {
       activities.add("Checked role — `" + subject.userId() + "` does not hold `PAYMENT_CREATOR`.");
+      PaymentIdSkillFlow.persistForbiddenAudit(
+          auditClient,
+          SKILL,
+          "SUBMIT",
+          subject,
+          "skill.submit_payment.forbidden",
+          "Role gate denied — missing PAYMENT_CREATOR.");
       return SkillRunResult.terminal(
           "**No Go from preflight** — `"
               + subject.userId()
@@ -59,6 +65,7 @@ public class SubmitPaymentSkill {
         activities,
         eligibilityClient,
         authzClient,
+        auditClient,
         store,
         PaymentIdSkillFlow.statusEquals("DRAFT"),
         "Only **DRAFT** payments can be submitted for approval.",
@@ -75,14 +82,16 @@ public class SubmitPaymentSkill {
         decision,
         subject,
         authzClient,
+        auditClient,
         store,
         "**No Go** — cancelled. Nothing was submitted.",
         "skill.submit_payment.cancelled",
         "Nothing was submitted.",
         new PaymentIdSkillFlow.Mutation() {
           @Override
-          public Map<String, Object> mutate(String paymentId, Subject s) {
-            return paymentClient.submitPayment(paymentId, s.bearerToken(), s.sessionId());
+          public Map<String, Object> mutate(String paymentId, Subject s, String auditExecutionId) {
+            return paymentClient.submitPayment(
+                paymentId, s.bearerToken(), s.sessionId(), auditExecutionId);
           }
 
           @Override

@@ -23,16 +23,19 @@ public class CancelPaymentSkill {
   private final EligibilityClient eligibilityClient;
   private final AuthzPaymentEvaluateClient authzClient;
   private final PaymentMutationClient paymentClient;
+  private final AuditExecutionClient auditClient;
   private final PendingSkillStore store;
 
   public CancelPaymentSkill(
       EligibilityClient eligibilityClient,
       AuthzPaymentEvaluateClient authzClient,
       PaymentMutationClient paymentClient,
+      AuditExecutionClient auditClient,
       PendingSkillStore store) {
     this.eligibilityClient = eligibilityClient;
     this.authzClient = authzClient;
     this.paymentClient = paymentClient;
+    this.auditClient = auditClient;
     this.store = store;
   }
 
@@ -44,6 +47,13 @@ public class CancelPaymentSkill {
           "Checked role/group — `"
               + subject.userId()
               + "` cannot cancel payments (needs `PAYMENT_CREATOR` + `MIDDLE_OFFICE`).");
+      PaymentIdSkillFlow.persistForbiddenAudit(
+          auditClient,
+          SKILL,
+          "CANCEL",
+          subject,
+          "skill.cancel_payment.forbidden",
+          "Role/group gate denied — needs PAYMENT_CREATOR + MIDDLE_OFFICE.");
       return SkillRunResult.terminal(
           "**No Go from preflight** — `"
               + subject.userId()
@@ -61,6 +71,7 @@ public class CancelPaymentSkill {
         activities,
         eligibilityClient,
         authzClient,
+        auditClient,
         store,
         PaymentIdSkillFlow.statusIn("DRAFT", "SUBMITTED"),
         "Only **DRAFT** or **SUBMITTED** payments can be cancelled.",
@@ -77,14 +88,16 @@ public class CancelPaymentSkill {
         decision,
         subject,
         authzClient,
+        auditClient,
         store,
         "**No Go** — cancelled. Nothing was changed on the payment.",
         "skill.cancel_payment.no_go",
         "Nothing was cancelled.",
         new PaymentIdSkillFlow.Mutation() {
           @Override
-          public Map<String, Object> mutate(String paymentId, Subject s) {
-            return paymentClient.cancelPayment(paymentId, s.bearerToken(), s.sessionId());
+          public Map<String, Object> mutate(String paymentId, Subject s, String auditExecutionId) {
+            return paymentClient.cancelPayment(
+                paymentId, s.bearerToken(), s.sessionId(), auditExecutionId);
           }
 
           @Override
