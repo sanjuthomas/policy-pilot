@@ -12,7 +12,7 @@ Middle office analysts create instructions **on behalf of** P&L profit centers (
 |-----|-------------|
 | http://localhost:8000/docs | OpenAPI |
 | http://localhost:8000/ui/ | Instruction browser |
-| http://localhost:8000/ui/security-events/ | Security event monitor (Mongo-backed) |
+| http://localhost:8097/ | Technology auditor console (security events + audit) |
 | http://localhost:8000/api/v1/instructions | REST API |
 
 ## Authentication

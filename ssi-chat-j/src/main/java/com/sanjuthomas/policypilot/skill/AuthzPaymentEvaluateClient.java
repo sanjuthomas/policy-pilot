@@ -43,6 +43,15 @@ public class AuthzPaymentEvaluateClient {
     }
   }
 
+  /** Full evaluate exchange for audit evidence (request + response bodies). */
+  public record EvaluateExchange(
+      PolicyDecision decision, Map<String, Object> request, Map<String, Object> response) {
+    public EvaluateExchange {
+      request = request == null ? Map.of() : Map.copyOf(request);
+      response = response == null ? Map.of() : Map.copyOf(response);
+    }
+  }
+
   private final RestTemplate restTemplate;
   private final ChatJProperties properties;
   private final ServiceIdentity serviceIdentity;
@@ -55,6 +64,16 @@ public class AuthzPaymentEvaluateClient {
   }
 
   public PolicyDecision evaluate(
+      String action,
+      Map<String, Object> payment,
+      String instructionStatus,
+      String instructionEndDate,
+      Subject subject) {
+    return evaluateExchange(action, payment, instructionStatus, instructionEndDate, subject)
+        .decision();
+  }
+
+  public EvaluateExchange evaluateExchange(
       String action,
       Map<String, Object> payment,
       String instructionStatus,
@@ -84,10 +103,12 @@ public class AuthzPaymentEvaluateClient {
               new HttpEntity<>(body, headers),
               new ParameterizedTypeReference<>() {});
       Map<String, Object> payload = response.getBody() == null ? Map.of() : response.getBody();
-      return new PolicyDecision(
-          asBoolean(payload.get("allowed")),
-          asStringList(payload.get("allow_basis")),
-          asStringList(payload.get("violations")));
+      PolicyDecision decision =
+          new PolicyDecision(
+              asBoolean(payload.get("allowed")),
+              asStringList(payload.get("allow_basis")),
+              asStringList(payload.get("violations")));
+      return new EvaluateExchange(decision, body, payload);
     } catch (RestClientException ex) {
       throw new AuthzEvaluateException(
           "authorization-service rejected evaluate: " + ex.getMessage(), ex);

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.when;
 
 import com.sanjuthomas.policypilot.auth.Subject;
@@ -51,15 +52,19 @@ class CreatePaymentSkillTest {
   @BeforeEach
   void setUp() {
     store = new PendingSkillStore();
-    skill = new CreatePaymentSkill(eligibilityClient, authzClient, paymentClient, store);
+    skill = new CreatePaymentSkill(eligibilityClient, authzClient, paymentClient, null, store);
   }
 
   @Test
   void phase1AwaitsConfirmationWhenAllowed() {
     when(eligibilityClient.getInstruction(eq("20260720-FICC-I-1"), anyString(), anyString()))
         .thenReturn(instruction());
-    when(authzClient.evaluate(eq("CREATE"), any(), anyString(), anyString(), any()))
-        .thenReturn(new PolicyDecision(true, List.of("role PAYMENT_CREATOR"), List.of()));
+    when(authzClient.evaluateExchange(eq("CREATE"), any(), anyString(), anyString(), any()))
+        .thenReturn(
+            new AuthzPaymentEvaluateClient.EvaluateExchange(
+                new PolicyDecision(true, List.of("role PAYMENT_CREATOR"), List.of()),
+                Map.of("action", "CREATE"),
+                Map.of("allowed", true)));
 
     SkillRunResult result =
         skill.phase1(new CreateParams("20260720-FICC-I-1", 1_000_000d, "2026-07-21"), creator());
@@ -98,8 +103,12 @@ class CreatePaymentSkillTest {
   void phase1DeniedWhenPolicyRejects() {
     when(eligibilityClient.getInstruction(anyString(), anyString(), anyString()))
         .thenReturn(instruction());
-    when(authzClient.evaluate(eq("CREATE"), any(), anyString(), anyString(), any()))
-        .thenReturn(new PolicyDecision(false, List.of(), List.of("four-eyes")));
+    when(authzClient.evaluateExchange(eq("CREATE"), any(), anyString(), anyString(), any()))
+        .thenReturn(
+            new AuthzPaymentEvaluateClient.EvaluateExchange(
+                new PolicyDecision(false, List.of(), List.of("four-eyes")),
+                Map.of("action", "CREATE"),
+                Map.of("allowed", false)));
 
     SkillRunResult result =
         skill.phase1(new CreateParams("20260720-FICC-I-1", 1_000_000d, "2026-07-21"), creator());
@@ -111,12 +120,22 @@ class CreatePaymentSkillTest {
   void confirmGoCreatesDraftPayment() {
     when(eligibilityClient.getInstruction(anyString(), anyString(), anyString()))
         .thenReturn(instruction());
-    when(authzClient.evaluate(eq("CREATE"), any(), anyString(), anyString(), any()))
-        .thenReturn(new PolicyDecision(true, List.of("role PAYMENT_CREATOR"), List.of()));
+    when(authzClient.evaluateExchange(eq("CREATE"), any(), anyString(), anyString(), any()))
+        .thenReturn(
+            new AuthzPaymentEvaluateClient.EvaluateExchange(
+                new PolicyDecision(true, List.of("role PAYMENT_CREATOR"), List.of()),
+                Map.of("action", "CREATE"),
+                Map.of("allowed", true)));
     SkillRunResult phase1 =
         skill.phase1(new CreateParams("20260720-FICC-I-1", 1_000_000d, "2026-07-21"), creator());
 
-    when(paymentClient.createPayment(anyString(), any(Double.class), anyString(), anyString(), anyString()))
+    when(paymentClient.createPayment(
+            anyString(),
+            any(Double.class),
+            anyString(),
+            anyString(),
+            anyString(),
+            nullable(String.class)))
         .thenReturn(Map.of("payment_id", "20260720-FICC-P-9", "status", "DRAFT"));
 
     SkillRunResult result = skill.confirm(phase1.pendingId(), "go", creator());
@@ -129,9 +148,17 @@ class CreatePaymentSkillTest {
   void confirmGoStopsWhenRecheckDenies() {
     when(eligibilityClient.getInstruction(anyString(), anyString(), anyString()))
         .thenReturn(instruction());
-    when(authzClient.evaluate(eq("CREATE"), any(), anyString(), anyString(), any()))
-        .thenReturn(new PolicyDecision(true, List.of("basis"), List.of()))
-        .thenReturn(new PolicyDecision(false, List.of(), List.of("revoked")));
+    when(authzClient.evaluateExchange(eq("CREATE"), any(), anyString(), anyString(), any()))
+        .thenReturn(
+            new AuthzPaymentEvaluateClient.EvaluateExchange(
+                new PolicyDecision(true, List.of("basis"), List.of()),
+                Map.of("action", "CREATE"),
+                Map.of("allowed", true)))
+        .thenReturn(
+            new AuthzPaymentEvaluateClient.EvaluateExchange(
+                new PolicyDecision(false, List.of(), List.of("revoked")),
+                Map.of("action", "CREATE"),
+                Map.of("allowed", false)));
     SkillRunResult phase1 =
         skill.phase1(new CreateParams("20260720-FICC-I-1", 1_000_000d, "2026-07-21"), creator());
 

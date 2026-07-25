@@ -19,7 +19,8 @@ for svc in \
   sequence-service \
   ssi-indexer \
   ssi-demo-harness \
-  payment-service
+  payment-service \
+  audit-service
 do
   ruff check "$svc/src/" --select E,F,W,I --ignore E501 --fix
 done
@@ -31,7 +32,8 @@ for svc in \
   sequence-service \
   ssi-indexer \
   ssi-demo-harness \
-  payment-service
+  payment-service \
+  audit-service
 do
   echo "=== $svc ==="
   ruff check "$svc/src/" --select E,F,W,I --ignore E501
@@ -56,6 +58,7 @@ Package `[tool.coverage.report] fail_under` must match the gate above so local `
 |--------|----------------------------|
 | `instruction-service` | `inst` |
 | `payment-service` | `ps` |
+| `audit-service` | `audit_console` |
 | `authorization-service` | `authz` |
 | `sequence-service` | `seq` |
 | `ssi-indexer` | `etl` |
@@ -79,6 +82,7 @@ pip install pytest pytest-cov
 for spec in \
   "instruction-service:inst:80" \
   "payment-service:ps:80" \
+  "audit-service:audit_console:80" \
   "authorization-service:authz:80" \
   "sequence-service:seq:80" \
   "ssi-indexer:etl:80" \
@@ -125,7 +129,8 @@ for svc in \
   sequence-service \
   ssi-indexer \
   ssi-demo-harness \
-  payment-service
+  payment-service \
+  audit-service
 do
   echo "=== $svc ==="
   ruff check "$svc/src/" --select E,F,W,I --ignore E501
@@ -150,6 +155,7 @@ inside each service directory listed in the lint matrix:
 
 - `instruction-service`
 - `payment-service`
+- `audit-service`
 - `authorization-service`
 - `sequence-service`
 - `ssi-indexer`
@@ -163,6 +169,7 @@ The same workflow runs **unit test coverage** (≥ 80% line coverage) for:
 
 - `instruction-service` (`inst`)
 - `payment-service` (`ps`)
+- `audit-service` (`audit_console`)
 - `authorization-service` (`authz`)
 - `sequence-service` (`seq`)
 - `ssi-indexer` (`etl`)
@@ -223,6 +230,7 @@ When removing a symbol from code, **remove its import** in the same edit (`F401`
 |-----------|---------|------|
 | `instruction-service` | `inst` | 8000 |
 | `payment-service` | `ps` | 8093 |
+| `audit-service` | `audit_console` | 8097 |
 | `authorization-service` | `authz` | 8094 |
 | `sequence-service` | `seq` | 8095 |
 | `ssi-indexer` | `etl` | 8090 |

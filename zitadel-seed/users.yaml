@@ -7,6 +7,7 @@
 #   UP_TO_1_BILLION_CLUB   — may create/approve payments up to $1 B
 #   UP_TO_100_BILLION_CLUB — may create/approve payments up to $100 B
 #   ADMIN                 — platform operator; required for secured admin UIs
+#   TECH_AUDITORS         — read-only access to centralized security/audit evidence
 # covering_lobs — LOBs a MIDDLE_OFFICE user is assigned to cover (payment
 # create/approve and instruction VIEW/USE). Desk/FO users use `lob` instead
 # and must not rely on covering_lobs.
@@ -415,6 +416,37 @@ users:
       - INSTRUCTION_VIEWER
     groups:
       - ADMIN
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # TECH AUDIT — centralized read-only security-event and governed-activity UI
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - user_id: audit-001
+    given_name: Taylor
+    family_name: Brooks
+    title: Technology Auditor
+    roles:
+      - TECH_AUDITOR
+    groups:
+      - TECH_AUDITORS
+
+  - user_id: audit-002
+    given_name: Riley
+    family_name: Quinn
+    title: Technology Auditor
+    roles:
+      - TECH_AUDITOR
+    groups:
+      - TECH_AUDITORS
+
+  - user_id: audit-003
+    given_name: Casey
+    family_name: Nguyen
+    title: Senior Technology Auditor
+    roles:
+      - TECH_AUDITOR
+    groups:
+      - TECH_AUDITORS
 
   # ═══════════════════════════════════════════════════════════════════════════
   # COMPLIANCE — policy inquiry users for chat eligibility questions

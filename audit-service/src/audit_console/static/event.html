@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Security Event Evidence</title>
+    <link rel="stylesheet" href="/static/styles.css?v=1" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark"></span><div><h1>Security Event Evidence</h1><p id="subtitle" class="subtitle mono">Loading…</p></div></div>
+      <div class="auth">
+        <span id="auth-status" class="muted"></span>
+        <input id="auth-user" value="audit-001" aria-label="User ID" />
+        <input id="auth-password" type="password" placeholder="Password" aria-label="Password" />
+        <button id="auth-login">Sign in</button><button id="auth-logout" class="hidden">Sign out</button>
+        <a href="/">← Console</a>
+      </div>
+    </header>
+    <main class="detail">
+      <div id="summary"></div>
+      <section class="card"><div class="card-header"><h2>Full Mongo security-event record</h2></div><pre id="json"></pre></section>
+    </main>
+    <script src="/static/auth.js?v=2"></script>
+    <script src="/static/format.js?v=1"></script>
+    <script src="/static/event.js?v=2"></script>
+  </body>
+</html>

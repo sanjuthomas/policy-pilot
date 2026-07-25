@@ -36,14 +36,19 @@ def _headers() -> dict[str, str]:
 
 
 def test_create_payment_success(api_client: TestClient, versioned_payment) -> None:
-    api_client.mock_service.create.return_value = versioned_payment
+    api_client.mock_service.create.return_value = (
+        versioned_payment,
+        "20260701-CORP-P-1-SE-1",
+    )
     response = api_client.post(
         "/api/v1/payments",
         json={"instruction_id": "instr-001", "value_date": "2026-07-01", "amount": 100.0},
         headers=_headers(),
     )
     assert response.status_code == 201
-    assert response.json()["payment_id"] == versioned_payment.payment.payment_id
+    body = response.json()
+    assert body["payment_id"] == versioned_payment.payment.payment_id
+    assert body["security_event_id"] == "20260701-CORP-P-1-SE-1"
 
 
 def test_create_payment_not_found(api_client: TestClient) -> None:

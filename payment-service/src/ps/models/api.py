@@ -97,6 +97,7 @@ class PaymentResponse(BaseModel):
     rejected_at: str | None = None
     cancelled_at: str | None = None
     lifecycle_events: list[LifecycleEvent] = Field(default_factory=list)
+    security_event_id: str | None = None
 
 
 class EligibleApproverResponse(BaseModel):

@@ -567,6 +567,45 @@ services:
     networks:
       - security-event-net
 
+  audit-service:
+    build:
+      context: .
+      dockerfile: audit-service/Dockerfile
+    container_name: audit-service
+    ports:
+      - "8097:8097"
+    environment:
+      <<: *otel-environment
+      OTEL_SERVICE_NAME: audit-service
+      MONGODB_URI: mongodb://mongodb:27017/?replicaSet=rs0
+      SECURITY_EVENTS_DATABASE: security_events
+      INSTRUCTION_EVENTS_COLLECTION: instruction_service
+      PAYMENT_EVENTS_COLLECTION: payment_service
+      AUDIT_DATABASE: ssi_cash_activities
+      AUDIT_COLLECTION: audit_executions
+      OIDC_ISSUER_URL: http://localhost:8080
+      OIDC_INTERNAL_URL: http://zitadel-proxy
+      ZITADEL_INTERNAL_URL: http://zitadel-proxy
+      ZITADEL_SERVICE_PAT_FILE: /zitadel/bootstrap/login-client.pat
+      REQUIRED_GROUP: TECH_AUDITORS
+    volumes:
+      - zitadel-bootstrap:/zitadel/bootstrap:ro
+      - ./audit-service/src/audit_console/static:/usr/local/lib/python3.12/site-packages/audit_console/static:ro
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+      zitadel-api:
+        condition: service_healthy
+      zitadel-login:
+        condition: service_healthy
+    deploy:
+      <<: *txn-deploy
+    restart: unless-stopped
+    networks:
+      - security-event-net
+
   ssi-demo-harness:
     build:
       context: .

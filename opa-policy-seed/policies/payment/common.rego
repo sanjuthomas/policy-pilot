@@ -64,6 +64,63 @@ instruction_not_expired if {
 # Payment helpers
 # ---------------------------------------------------------------------------
 
+# Human-readable USD for allow_basis — avoid %v scientific notation (e.g. 1e+06).
+# Matches ssi-chat-j PolicyBasisFormat compact style where practical.
+amount_label := label if {
+	amount := to_number(input.payment.amount)
+	amount >= 1000000000
+	billions := amount / 1000000000
+	billions == floor(billions)
+	label := sprintf("$%v billion", [billions])
+}
+
+amount_label := label if {
+	amount := to_number(input.payment.amount)
+	amount >= 1000000000
+	billions := amount / 1000000000
+	billions != floor(billions)
+	label := sprintf("$%.1f billion", [billions])
+}
+
+amount_label := label if {
+	amount := to_number(input.payment.amount)
+	amount >= 1000000
+	amount < 1000000000
+	millions := amount / 1000000
+	millions == floor(millions)
+	label := sprintf("$%v million", [millions])
+}
+
+amount_label := label if {
+	amount := to_number(input.payment.amount)
+	amount >= 1000000
+	amount < 1000000000
+	millions := amount / 1000000
+	millions != floor(millions)
+	label := sprintf("$%.1f million", [millions])
+}
+
+amount_label := label if {
+	amount := to_number(input.payment.amount)
+	amount >= 1000
+	amount < 1000000
+	label := sprintf("$%.0f", [amount])
+}
+
+amount_label := label if {
+	amount := to_number(input.payment.amount)
+	amount < 1000
+	amount == floor(amount)
+	label := sprintf("$%v", [amount])
+}
+
+amount_label := label if {
+	amount := to_number(input.payment.amount)
+	amount < 1000
+	amount != floor(amount)
+	label := sprintf("$%.2f", [amount])
+}
+
 # Segregation of duties: the person who created the payment cannot also be
 # its approver.
 payment_creator_is_not_approver if {

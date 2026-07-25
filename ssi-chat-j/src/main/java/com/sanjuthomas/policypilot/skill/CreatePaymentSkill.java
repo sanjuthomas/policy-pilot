@@ -4,10 +4,12 @@ import com.sanjuthomas.policypilot.auth.ChatCapabilities;
 import com.sanjuthomas.policypilot.auth.Subject;
 import com.sanjuthomas.policypilot.eligibility.EligibilityClient;
 import com.sanjuthomas.policypilot.skill.AuthzPaymentEvaluateClient.AuthzEvaluateException;
+import com.sanjuthomas.policypilot.skill.AuthzPaymentEvaluateClient.EvaluateExchange;
 import com.sanjuthomas.policypilot.skill.AuthzPaymentEvaluateClient.PolicyDecision;
 import com.sanjuthomas.policypilot.skill.PaymentMutationClient.PaymentClientException;
 import com.sanjuthomas.policypilot.skill.PaymentMutationClient.PaymentDeniedException;
 import com.sanjuthomas.policypilot.skill.SkillSlots.CreateParams;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,24 +30,52 @@ public class CreatePaymentSkill {
   private final EligibilityClient eligibilityClient;
   private final AuthzPaymentEvaluateClient authzClient;
   private final PaymentMutationClient paymentClient;
+  private final AuditExecutionClient auditClient;
   private final PendingSkillStore store;
 
   public CreatePaymentSkill(
       EligibilityClient eligibilityClient,
       AuthzPaymentEvaluateClient authzClient,
       PaymentMutationClient paymentClient,
+      AuditExecutionClient auditClient,
       PendingSkillStore store) {
     this.eligibilityClient = eligibilityClient;
     this.authzClient = authzClient;
     this.paymentClient = paymentClient;
+    this.auditClient = auditClient;
     this.store = store;
   }
 
   public SkillRunResult phase1(CreateParams params, Subject subject) {
+    long started = System.currentTimeMillis();
     List<String> activities = new ArrayList<>();
+    List<Map<String, Object>> timeline = new ArrayList<>();
+    timeline.add(
+        AuditExecutionClient.timelineStep(
+            "identity",
+            "Subject `" + subject.userId() + "` established for create-payment skill.",
+            null,
+            nowIso()));
+
     ChatCapabilities caps = ChatCapabilities.forSubject(subject);
     if (!caps.canCreatePayment()) {
       activities.add("Checked role — `" + subject.userId() + "` does not hold `PAYMENT_CREATOR`.");
+      timeline.add(
+          AuditExecutionClient.timelineStep(
+              "capability",
+              "Role gate denied — missing PAYMENT_CREATOR.",
+              "deny",
+              nowIso()));
+      persistTerminalAudit(
+          subject,
+          params,
+          "DENIED",
+          "deny",
+          "skill.create_payment.forbidden",
+          timeline,
+          Map.of("total", System.currentTimeMillis() - started),
+          null,
+          Map.of("message", "missing PAYMENT_CREATOR"));
       return SkillRunResult.terminal(
           "**No Go from preflight** — `"
               + subject.userId()
@@ -72,14 +102,38 @@ public class CreatePaymentSkill {
             + "**, value date **"
             + params.valueDate()
             + "**.");
+    timeline.add(
+        AuditExecutionClient.timelineStep(
+            "request",
+            "Parsed create-payment slots for instruction `" + params.instructionId() + "`.",
+            null,
+            nowIso()));
 
     Map<String, Object> instruction;
+    long instructionStarted = System.currentTimeMillis();
     try {
       instruction =
           eligibilityClient.getInstruction(
               params.instructionId(), subject.bearerToken(), subject.sessionId());
     } catch (ResponseStatusException ex) {
       if (ex.getStatusCode() == HttpStatus.NOT_FOUND) {
+        timeline.add(
+            AuditExecutionClient.timelineStep(
+                "instruction", "Instruction not found.", "deny", nowIso()));
+        persistTerminalAudit(
+            subject,
+            params,
+            "FAILED",
+            "error",
+            "skill.create_payment.instruction_missing",
+            timeline,
+            Map.of(
+                "instruction_get",
+                System.currentTimeMillis() - instructionStarted,
+                "total",
+                System.currentTimeMillis() - started),
+            null,
+            Map.of("message", "instruction not found"));
         return SkillRunResult.terminal(
             "**Stopped** — instruction `"
                 + params.instructionId()
@@ -89,6 +143,23 @@ public class CreatePaymentSkill {
             SKILL);
       }
       if (ex.getStatusCode() == HttpStatus.FORBIDDEN) {
+        timeline.add(
+            AuditExecutionClient.timelineStep(
+                "instruction", "Instruction VIEW denied.", "deny", nowIso()));
+        persistTerminalAudit(
+            subject,
+            params,
+            "DENIED",
+            "deny",
+            "skill.create_payment.instruction_forbidden",
+            timeline,
+            Map.of(
+                "instruction_get",
+                System.currentTimeMillis() - instructionStarted,
+                "total",
+                System.currentTimeMillis() - started),
+            null,
+            Map.of("message", "instruction forbidden"));
         return SkillRunResult.terminal(
             "**Stopped** — you are not authorized to access instruction `"
                 + params.instructionId()
@@ -105,6 +176,7 @@ public class CreatePaymentSkill {
           "skill.create_payment.instruction_error",
           SKILL);
     }
+    long instructionMs = System.currentTimeMillis() - instructionStarted;
 
     String owningLob = SkillFormat.firstNonBlank(SkillFormat.str(instruction.get("owning_lob")), "—");
     String currency = SkillFormat.str(instruction.get("currency"));
@@ -121,22 +193,72 @@ public class CreatePaymentSkill {
             + "**, currency **"
             + currency
             + "**.");
+    timeline.add(
+        AuditExecutionClient.timelineStep(
+            "instruction",
+            "Loaded instruction `" + params.instructionId() + "` (" + status + ").",
+            null,
+            nowIso()));
 
     Map<String, Object> payload =
         syntheticPayload(params, instruction, subject, status, endDate, owningLob, instructionVersion, currency);
-    PolicyDecision decision;
+    EvaluateExchange exchange;
+    long evaluateStarted = System.currentTimeMillis();
     try {
-      decision = authzClient.evaluate("CREATE", payload, status, endDate, subject);
+      exchange = authzClient.evaluateExchange("CREATE", payload, status, endDate, subject);
     } catch (AuthzEvaluateException ex) {
+      timeline.add(
+          AuditExecutionClient.timelineStep(
+              "preflight_opa", "CREATE evaluate failed: " + ex.getMessage(), "error", nowIso()));
+      persistTerminalAudit(
+          subject,
+          params,
+          "FAILED",
+          "error",
+          "skill.create_payment.evaluate_error",
+          timeline,
+          Map.of(
+              "instruction_get",
+              instructionMs,
+              "preflight_evaluate",
+              System.currentTimeMillis() - evaluateStarted,
+              "total",
+              System.currentTimeMillis() - started),
+          null,
+          Map.of("message", ex.getMessage()));
       return SkillRunResult.terminal(
           "**Stopped** — could not evaluate CREATE permission (" + ex.getMessage() + ").",
           activities,
           "skill.create_payment.evaluate_error",
           SKILL);
     }
+    long evaluateMs = System.currentTimeMillis() - evaluateStarted;
+    PolicyDecision decision = exchange.decision();
 
     if (!decision.allowed()) {
       activities.add("**Denied** — " + SkillFormat.violations(decision.violations()));
+      timeline.add(
+          AuditExecutionClient.timelineStep(
+              "preflight_opa",
+              "CREATE denied: " + SkillFormat.violations(decision.violations()),
+              "deny",
+              nowIso()));
+      persistTerminalAudit(
+          subject,
+          params,
+          "DENIED",
+          "deny",
+          "skill.create_payment.denied",
+          timeline,
+          Map.of(
+              "instruction_get",
+              instructionMs,
+              "preflight_evaluate",
+              evaluateMs,
+              "total",
+              System.currentTimeMillis() - started),
+          AuditExecutionClient.policyExchange(exchange.request(), exchange.response()),
+          Map.of("message", "CREATE denied", "violations", decision.violations()));
       return SkillRunResult.terminal(
           "**No** — `"
               + subject.userId()
@@ -155,9 +277,30 @@ public class CreatePaymentSkill {
             + SkillFormat.displayName(subject)
             + ") may create this draft. Basis: "
             + SkillFormat.basis(decision.allowBasis(), "CREATE allowed"));
+    timeline.add(
+        AuditExecutionClient.timelineStep(
+            "preflight_opa",
+            "CREATE allowed. Basis: " + SkillFormat.basis(decision.allowBasis(), "CREATE allowed"),
+            "allow",
+            nowIso()));
 
     ConfirmationCard card =
         SkillFormat.cardFromInstruction(instruction, params.amount(), params.valueDate(), null, null);
+    String auditExecutionId =
+        persistAwaitingAudit(
+            subject,
+            params,
+            currency,
+            timeline,
+            Map.of(
+                "instruction_get",
+                instructionMs,
+                "preflight_evaluate",
+                evaluateMs,
+                "total",
+                System.currentTimeMillis() - started),
+            AuditExecutionClient.policyExchange(exchange.request(), exchange.response()));
+
     PendingSkill pending =
         new PendingSkill(
             store.newPendingId(),
@@ -177,7 +320,8 @@ public class CreatePaymentSkill {
             null,
             null,
             card,
-            store.defaultExpiresAt());
+            store.defaultExpiresAt(),
+            auditExecutionId);
     store.put(pending);
 
     return SkillRunResult.awaiting(
@@ -191,6 +335,7 @@ public class CreatePaymentSkill {
   }
 
   public SkillRunResult confirm(String pendingId, String decision, Subject subject) {
+    long started = System.currentTimeMillis();
     PendingSkill pending = store.get(pendingId);
     if (pending == null || !SKILL.equals(pending.skill())) {
       return SkillRunResult.terminal(
@@ -209,6 +354,20 @@ public class CreatePaymentSkill {
     }
     if ("no_go".equals(decision)) {
       store.pop(pendingId);
+      patchAudit(
+          pending.auditExecutionId(),
+          subject,
+          Map.of(
+              "status",
+              "CANCELLED",
+              "outcome",
+              "cancelled",
+              "result",
+              Map.of("message", "user selected No Go"),
+              "timeline",
+              List.of(
+                  AuditExecutionClient.timelineStep(
+                      "confirmation", "User selected No Go.", "cancelled", nowIso()))));
       return SkillRunResult.terminal(
           "**No Go** — cancelled. No payment was created.",
           List.of("User selected No Go — pending create discarded."),
@@ -256,14 +415,35 @@ public class CreatePaymentSkill {
     payload.put("instruction_owning_lob", pending.owningLob());
     payload.put("created_by", createdBy(subject));
     try {
-      PolicyDecision recheck =
-          authzClient.evaluate(
+      EvaluateExchange recheck =
+          authzClient.evaluateExchange(
               "CREATE", payload, pending.instructionStatus(), pending.instructionEndDate(), subject);
-      if (!recheck.allowed()) {
-        activities.add("Re-check denied CREATE: " + SkillFormat.violations(recheck.violations()));
+      if (!recheck.decision().allowed()) {
+        activities.add(
+            "Re-check denied CREATE: " + SkillFormat.violations(recheck.decision().violations()));
+        patchAudit(
+            pending.auditExecutionId(),
+            subject,
+            Map.of(
+                "status",
+                "DENIED",
+                "outcome",
+                "deny",
+                "governance",
+                Map.of(
+                    "policy_exchange",
+                    AuditExecutionClient.policyExchange(recheck.request(), recheck.response())),
+                "result",
+                Map.of(
+                    "message",
+                    "recheck denied",
+                    "violations",
+                    recheck.decision().violations()),
+                "timings_ms",
+                Map.of("total", System.currentTimeMillis() - started)));
         return SkillRunResult.terminal(
             "**Stopped before create** — policy no longer allows CREATE ("
-                + SkillFormat.violations(recheck.violations())
+                + SkillFormat.violations(recheck.decision().violations())
                 + "). No payment was created.",
             activities,
             "skill.create_payment.recheck_denied",
@@ -282,6 +462,7 @@ public class CreatePaymentSkill {
     }
 
     Map<String, Object> payment;
+    long createStarted = System.currentTimeMillis();
     try {
       payment =
           paymentClient.createPayment(
@@ -289,9 +470,26 @@ public class CreatePaymentSkill {
               pending.amount(),
               pending.valueDate(),
               subject.bearerToken(),
-              subject.sessionId());
+              subject.sessionId(),
+              pending.auditExecutionId());
     } catch (PaymentDeniedException ex) {
       activities.add("CREATE denied by payment-service: " + ex.detail());
+      patchAudit(
+          pending.auditExecutionId(),
+          subject,
+          Map.of(
+              "status",
+              "DENIED",
+              "outcome",
+              "deny",
+              "result",
+              Map.of("message", ex.detail()),
+              "timings_ms",
+              Map.of(
+                  "create",
+                  System.currentTimeMillis() - createStarted,
+                  "total",
+                  System.currentTimeMillis() - started)));
       return SkillRunResult.terminal(
           "**Create denied** — " + ex.detail() + "\n\nNo payment was persisted.",
           activities,
@@ -299,6 +497,22 @@ public class CreatePaymentSkill {
           SKILL);
     } catch (PaymentClientException ex) {
       activities.add("CREATE failed: " + ex.getMessage());
+      patchAudit(
+          pending.auditExecutionId(),
+          subject,
+          Map.of(
+              "status",
+              "FAILED",
+              "outcome",
+              "error",
+              "result",
+              Map.of("message", ex.getMessage()),
+              "timings_ms",
+              Map.of(
+                  "create",
+                  System.currentTimeMillis() - createStarted,
+                  "total",
+                  System.currentTimeMillis() - started)));
       return SkillRunResult.terminal(
           "**Create failed** — " + ex.getMessage(),
           activities,
@@ -307,11 +521,108 @@ public class CreatePaymentSkill {
     }
 
     activities.add("Created draft payment `" + SkillFormat.str(payment.get("payment_id")) + "`.");
+    // Linking to security_event_id happens in payment-service via X-Audit-Execution-Id.
+    patchAudit(
+        pending.auditExecutionId(),
+        subject,
+        Map.of(
+            "status",
+            "COMPLETED",
+            "outcome",
+            "allow",
+            "result",
+            Map.of(
+                "payment_id",
+                SkillFormat.str(payment.get("payment_id")),
+                "security_event_id",
+                SkillFormat.str(payment.get("security_event_id"))),
+            "timings_ms",
+            Map.of(
+                "create",
+                System.currentTimeMillis() - createStarted,
+                "total",
+                System.currentTimeMillis() - started),
+            "timeline",
+            List.of(
+                AuditExecutionClient.timelineStep(
+                    "create",
+                    "Draft payment `" + SkillFormat.str(payment.get("payment_id")) + "` created.",
+                    "allow",
+                    nowIso()))));
     return SkillRunResult.terminal(
         SkillFormat.createdReport(payment, pending.card()),
         activities,
         "skill.create_payment.created",
         SKILL);
+  }
+
+  private String persistAwaitingAudit(
+      Subject subject,
+      CreateParams params,
+      String currency,
+      List<Map<String, Object>> timeline,
+      Map<String, Object> timingsMs,
+      Map<String, Object> policyExchange) {
+    if (auditClient == null) {
+      return null;
+    }
+    Map<String, Object> body = baseAuditBody(params, currency, "AWAITING_CONFIRMATION", "allow");
+    body.put("interpretation", Map.of("intent_id", "skill.create_payment.awaiting_confirmation"));
+    body.put("timeline", timeline);
+    body.put("timings_ms", timingsMs);
+    body.put("governance", Map.of("policy_exchange", policyExchange));
+    body.put("result", Map.of("message", "awaiting Go / No Go"));
+    return auditClient.create(body, subject);
+  }
+
+  private void persistTerminalAudit(
+      Subject subject,
+      CreateParams params,
+      String status,
+      String outcome,
+      String intentId,
+      List<Map<String, Object>> timeline,
+      Map<String, Object> timingsMs,
+      Map<String, Object> policyExchange,
+      Map<String, Object> result) {
+    if (auditClient == null) {
+      return;
+    }
+    Map<String, Object> body = baseAuditBody(params, null, status, outcome);
+    body.put("interpretation", Map.of("intent_id", intentId));
+    body.put("timeline", timeline);
+    body.put("timings_ms", timingsMs);
+    body.put("result", result == null ? Map.of() : result);
+    if (policyExchange != null) {
+      body.put("governance", Map.of("policy_exchange", policyExchange));
+    }
+    auditClient.create(body, subject);
+  }
+
+  private void patchAudit(String executionId, Subject subject, Map<String, Object> patch) {
+    if (auditClient == null || executionId == null || executionId.isBlank()) {
+      return;
+    }
+    auditClient.patch(executionId, patch, subject);
+  }
+
+  private static Map<String, Object> baseAuditBody(
+      CreateParams params, String currency, String status, String outcome) {
+    Map<String, Object> request = new LinkedHashMap<>();
+    request.put("instruction_id", params.instructionId());
+    request.put("amount", params.amount());
+    request.put("value_date", params.valueDate());
+    if (currency != null) {
+      request.put("currency", currency);
+    }
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("capability", "CREATE_PAYMENT");
+    body.put("skill", SKILL);
+    body.put("channel", "chat");
+    body.put("status", status);
+    body.put("outcome", outcome);
+    body.put("request", request);
+    return body;
   }
 
   private static Map<String, Object> syntheticPayload(
@@ -343,6 +654,10 @@ public class CreatePaymentSkill {
     createdBy.put("user_id", subject.userId());
     createdBy.put("supervisor_id", subject.supervisorId());
     return createdBy;
+  }
+
+  private static String nowIso() {
+    return Instant.now().toString();
   }
 
   private static boolean isBlank(String value) {

@@ -10,6 +10,7 @@ from platform_auth import is_platform_admin
 from sequence_client import SequenceClient
 from sequence_client.errors import SequenceClientError
 
+from ps.audit_repository import AuditExecutionRepository
 from ps.authorization import (
     build_authorization_block,
     details_with_authorization,
@@ -229,6 +230,7 @@ class PaymentService:
     def __init__(self, sequence_client: SequenceClient | None = None) -> None:
         self.repo = PaymentRepository()
         self.event_repo = SecurityEventRepository()
+        self.audit_repo = AuditExecutionRepository()
         self.authz = AuthzClient(settings.authorization_service_url)
         self.instruction_service = InstructionServiceClient()
         self.sequence = sequence_client or SequenceClient(settings.sequence_service_url)
@@ -262,7 +264,7 @@ class PaymentService:
         await service_identity.ensure_logged_in()
         if not service_identity.token:
             raise PermissionError("service identity token required for policy evaluation")
-        return await self.authz.evaluate_payment(
+        return await self.authz.evaluate_payment_exchange(
             action=action.value,
             payment=payment.to_opa_payment(
                 instruction_end_date=instruction_end_date,
@@ -288,7 +290,7 @@ class PaymentService:
         bearer_token: str | None = None,
         session_id: str | None = None,
     ) -> dict:
-        decision = await self._evaluate_policy(
+        exchange = await self._evaluate_policy(
             action,
             subject,
             payment,
@@ -297,6 +299,7 @@ class PaymentService:
             bearer_token=bearer_token,
             session_id=session_id,
         )
+        decision = exchange.decision
         authorization = build_authorization_block(
             decision,
             subject,
@@ -306,6 +309,8 @@ class PaymentService:
                 instruction_status=instruction_status,
                 instruction_end_date=instruction_end_date,
             ),
+            evaluate_request=exchange.request,
+            evaluate_response=exchange.response,
         )
         if not decision.allowed:
             if self._should_record_security_event(subject):
@@ -327,8 +332,9 @@ class PaymentService:
         *,
         details: dict | None = None,
         initial: bool = False,
-    ) -> VersionedPayment:
+    ) -> tuple[VersionedPayment, str | None]:
         """Persist payment version and matching security event atomically."""
+        event_id: str | None = None
         async with mongo_transaction() as session:
             if initial:
                 saved = await self.repo.insert_initial(payment, session=session)
@@ -349,7 +355,7 @@ class PaymentService:
                     session=session,
                 )
 
-        return saved
+        return saved, event_id
 
     async def _persist_new_version(
         self,
@@ -376,12 +382,13 @@ class PaymentService:
             )
             details = details_with_authorization(details, authorization)
         self._record_event(payment, action, subject, details)
-        return await self._save_payment_with_security_event(
+        saved, _ = await self._save_payment_with_security_event(
             payment,
             action,
             subject,
             details=details,
         )
+        return saved
 
     def _record_event(
         self,
@@ -411,7 +418,8 @@ class PaymentService:
         subject: Subject,
         bearer_token: str | None = None,
         session_id: str | None = None,
-    ) -> VersionedPayment:
+        audit_execution_id: str | None = None,
+    ) -> tuple[VersionedPayment, str | None]:
         try:
             instruction = await self.instruction_service.get_instruction(
                 instruction_id, bearer_token=bearer_token, session_id=session_id
@@ -464,7 +472,7 @@ class PaymentService:
 
         details = details_with_authorization(None, authorization)
         self._record_event(payment, PaymentAction.CREATE, subject, details)
-        saved = await self._save_payment_with_security_event(
+        saved, event_id = await self._save_payment_with_security_event(
             payment,
             PaymentAction.CREATE,
             subject,
@@ -472,11 +480,19 @@ class PaymentService:
             initial=True,
         )
 
+        if audit_execution_id and event_id:
+            await self.audit_repo.link_security_event(
+                audit_execution_id,
+                security_event_id=event_id,
+                payment_id=saved.payment.payment_id,
+                actor_user_id=subject.user_id,
+            )
+
         logger.info(
             "payment created (DRAFT) payment_id=%s instruction_id=%s amount=%s currency=%s",
             payment.payment_id, instruction_id, amount, payment.currency,
         )
-        return saved
+        return saved, event_id
 
     # ── Update ────────────────────────────────────────────────────────────────
 
@@ -928,7 +944,7 @@ class PaymentService:
             details={"reason": reason},
         )
 
-        saved = await self._save_payment_with_security_event(
+        saved, _ = await self._save_payment_with_security_event(
             payment,
             PaymentAction.CANCEL,
             subject,

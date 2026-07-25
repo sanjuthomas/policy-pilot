@@ -54,6 +54,15 @@ async def connect() -> None:
     await collection.create_index("instruction_id")
     await collection.create_index("in")
 
+    audit_executions = get_db()[settings.audit_executions_collection]
+    await audit_executions.create_index("created_at")
+    await audit_executions.create_index("capability")
+    await audit_executions.create_index("status")
+    await audit_executions.create_index("outcome")
+    await audit_executions.create_index("actor.user_id")
+    await audit_executions.create_index("governance.security_event_id")
+    await audit_executions.create_index("result.payment_id")
+
     security_events = get_security_events_db()[settings.security_events_collection]
     for index_name in _LEGACY_SECURITY_EVENT_INDEXES:
         try:

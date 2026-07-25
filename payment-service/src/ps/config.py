@@ -37,9 +37,9 @@ class Settings(BaseSettings):
     # Callers that must send X-On-Behalf-Of (service-to-service).
     inbound_service_user_ids: str = "svc-chat,svc-payment,svc-instruction"
 
-    ui_initial_security_event_limit: int = 200
     security_event_excluded_user_ids: str = ""
     security_event_view_excluded_user_ids: str = "admin-001"
+    audit_executions_collection: str = "audit_executions"
 
     @property
     def compliance_role_set(self) -> set[str]:

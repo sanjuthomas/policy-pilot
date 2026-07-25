@@ -12,8 +12,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from ps.authorization import PolicyDecision
+from authz_client import EvaluateExchange, PolicyDecision
 from ps.instruction_client import InstructionNotFoundError, InstructionStateError
 from ps.models.api import CancelPaymentRequest, Subject
 from ps.models.enums import PaymentStatus
@@ -28,6 +27,20 @@ def _allow_decision() -> PolicyDecision:
         allow_basis=["policy ok"],
         violations=[],
         is_alert=False,
+    )
+
+
+def _allow_exchange() -> EvaluateExchange:
+    decision = _allow_decision()
+    return EvaluateExchange(
+        decision=decision,
+        request={"action": "CREATE"},
+        response={
+            "allowed": True,
+            "allow_basis": list(decision.allow_basis),
+            "violations": [],
+            "is_alert": False,
+        },
     )
 
 
@@ -232,7 +245,8 @@ def _build_scenario_service(instruction: InstructionState) -> PaymentService:
     )
     service.event_repo.insert_document = AsyncMock(return_value={})
     service.authz = AsyncMock()
-    service.authz.evaluate_payment = AsyncMock(return_value=_allow_decision())
+    service.authz.evaluate_payment_exchange = AsyncMock(return_value=_allow_exchange())
+    service.audit_repo = AsyncMock()
 
     async def get_instruction(instruction_id: str, **_) -> dict:
         if instruction_id != instruction.instruction_id:
@@ -275,13 +289,13 @@ async def _create_two_draft_payments(
     instruction_id: str,
 ) -> tuple[str, str]:
     with _patched_txn():
-        first = await service.create(
+        first, _ = await service.create(
             instruction_id=instruction_id,
             value_date="2026-07-05",
             amount=1_000_000.0,
             subject=creator,
         )
-        second = await service.create(
+        second, _ = await service.create(
             instruction_id=instruction_id,
             value_date="2026-07-05",
             amount=2_000_000.0,

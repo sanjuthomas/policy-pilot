@@ -11,15 +11,11 @@ from telemetry import (
 )
 
 from ps import __version__
+from ps.audit_routes import router as audit_router
 from ps.auth_routes import router as auth_router
 from ps.config import settings
 from ps.database import close, connect
 from ps.routes import router
-from ps.security_ui_routes import (
-    SECURITY_EVENTS_STATIC_DIR,
-    security_event_ui_store,
-)
-from ps.security_ui_routes import router as security_ui_router
 from ps.service_identity import service_identity
 from ps.ui_routes import STATIC_DIR
 from ps.ui_routes import router as ui_router
@@ -31,8 +27,7 @@ logger = get_logger(__name__)
 async def lifespan(app: FastAPI):
     await connect()
     await service_identity.login()
-    await security_event_ui_store.connect()
-    logger.info("payment browser and security event monitor ready")
+    logger.info("payment browser ready")
     yield
     await close()
     shutdown_telemetry()
@@ -50,14 +45,9 @@ instrument_app(app)
 
 app.include_router(auth_router)
 app.include_router(router, prefix=settings.api_prefix)
+app.include_router(audit_router, prefix=settings.api_prefix)
 app.include_router(ui_router)
-app.include_router(security_ui_router)
 app.mount("/ui/static", StaticFiles(directory=STATIC_DIR), name="ui-static")
-app.mount(
-    "/ui/security-events/static",
-    StaticFiles(directory=SECURITY_EVENTS_STATIC_DIR),
-    name="security-events-static",
-)
 
 
 @app.get("/health")

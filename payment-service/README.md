@@ -10,7 +10,7 @@ Middle-office users create payments on behalf of trading desks. Front-office des
 |-----|-------------|
 | http://localhost:8093/docs | OpenAPI |
 | http://localhost:8093/ui/ | Payment browser |
-| http://localhost:8093/ui/security-events/ | Security event monitor (Mongo-backed) |
+| http://localhost:8097/ | Technology auditor console (security events + audit) |
 | http://localhost:8093/api/v1/payments | REST API |
 
 ## Authentication

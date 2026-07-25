@@ -156,6 +156,7 @@ Prerequisites and GCP Vertex setup: **[How it works — Quick start](docs/how-it
 | Directory | README | Port |
 |-----------|--------|------|
 | Policy Pilot chat (Java) | [ssi-chat-j](ssi-chat-j/README.md) | 8096 |
+| Technology auditor console | [audit-service](audit-service/README.md) | 8097 |
 | Demo harness | [ssi-demo-harness](ssi-demo-harness/README.md) | 8091 |
 | Indexer | [ssi-indexer](ssi-indexer/README.md) | 8090 |
 | Instruction service | [instruction-service](instruction-service/README.md) | 8000 |
