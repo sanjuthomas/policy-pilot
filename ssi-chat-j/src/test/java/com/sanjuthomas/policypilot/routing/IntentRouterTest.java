@@ -7,7 +7,9 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
+import com.sanjuthomas.policypilot.observability.GenAiMetrics;
 import com.sanjuthomas.policypilot.pipeline.RouterDecision;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,6 +26,7 @@ class IntentRouterTest {
   @Mock ChatClient.CallResponseSpec callResponseSpec;
 
   private IntentRouter intentRouter;
+  private SimpleMeterRegistry registry;
 
   @BeforeEach
   void setUp() {
@@ -32,7 +35,9 @@ class IntentRouterTest {
     when(requestSpec.system(anyString())).thenReturn(requestSpec);
     when(requestSpec.user(anyString())).thenReturn(requestSpec);
     when(requestSpec.call()).thenReturn(callResponseSpec);
-    intentRouter = new IntentRouter(chatClientBuilder);
+    registry = new SimpleMeterRegistry();
+    intentRouter =
+        new IntentRouter(chatClientBuilder, new GenAiMetrics(registry, "gemini-2.5-flash"));
   }
 
   @Test
@@ -47,6 +52,12 @@ class IntentRouterTest {
 
     assertEquals("eligibility", result.getPath());
     assertEquals("payment", result.getEligibilityTarget());
+    assertEquals(
+        1.0,
+        registry.find("gen_ai.client.operation.count").counters().stream()
+            .mapToDouble(c -> c.count())
+            .sum(),
+        0.001);
   }
 
   @Test

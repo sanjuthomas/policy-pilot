@@ -1,5 +1,6 @@
 from telemetry.config import TelemetrySettings
 from telemetry.metrics import get_meter, record_counter, record_histogram
+from telemetry.mongo import mongo_event_listeners
 from telemetry.setup import (
     configure_telemetry,
     get_logger,
@@ -13,6 +14,7 @@ __all__ = [
     "get_logger",
     "get_meter",
     "instrument_app",
+    "mongo_event_listeners",
     "record_counter",
     "record_histogram",
     "shutdown_telemetry",

@@ -16,7 +16,10 @@ from inst.database import mongo_transaction
 from inst.models.api import (
     CancelInstructionRequest,
     CreateInstructionRequest,
+    InstructionBucketCount,
     InstructionResponse,
+    InstructionSummaryResponse,
+    InstructionTypeStatusCount,
     RejectInstructionRequest,
     ReleaseUseInstructionRequest,
     Subject,
@@ -43,6 +46,12 @@ from inst.storage import VersionedInstruction
 
 class InvalidStateTransitionError(Exception):
     pass
+
+
+# Subjects that may see system-wide current-version inventory without per-doc VIEW.
+_SUMMARY_UNSCOPED_ROLES = frozenset(
+    {"PLATFORM_ADMIN", "COMPLIANCE_OFFICER", "COMPLIANCE_ANALYST"}
+)
 
 
 def _parse_datetime(value: str) -> datetime:
@@ -617,6 +626,75 @@ class InstructionService:
                 )
             visible.append(_to_response(record))
         return visible
+
+    async def summarize(
+        self,
+        subject: Subject,
+        *,
+        owning_lob: str | None = None,
+        bearer_token: str | None = None,
+        session_id: str | None = None,
+    ) -> InstructionSummaryResponse:
+        """Current-version type×status inventory (excludes historical ``out`` rows)."""
+        roles = set(subject.roles or [])
+        if roles & _SUMMARY_UNSCOPED_ROLES:
+            raw = await self.repository.summarize_current(owning_lob=owning_lob)
+            return InstructionSummaryResponse.model_validate(raw)
+
+        records = await self.repository.list_current(
+            owning_lob=owning_lob,
+            limit=10_000,
+        )
+        by_type_status: dict[tuple[str, str], int] = {}
+        for record in records:
+            if record.instruction.status == InstructionStatus.CANCELLED:
+                continue
+            try:
+                await self._authorize(
+                    LifecycleAction.VIEW,
+                    subject,
+                    record.instruction,
+                    bearer_token=bearer_token,
+                    session_id=session_id,
+                    record_security_event=False,
+                )
+            except PermissionError:
+                continue
+            key = (
+                record.instruction.instruction_type.value,
+                record.instruction.status.value,
+            )
+            by_type_status[key] = by_type_status.get(key, 0) + 1
+
+        cells = [
+            InstructionTypeStatusCount(
+                instruction_type=instruction_type,
+                status=status,
+                count=count,
+            )
+            for (instruction_type, status), count in sorted(by_type_status.items())
+        ]
+        by_type: dict[str, int] = {}
+        by_status: dict[str, int] = {}
+        total = 0
+        for cell in cells:
+            total += cell.count
+            by_type[cell.instruction_type] = (
+                by_type.get(cell.instruction_type, 0) + cell.count
+            )
+            by_status[cell.status] = by_status.get(cell.status, 0) + cell.count
+        return InstructionSummaryResponse(
+            total=total,
+            by_type_status=cells,
+            by_type=[
+                InstructionBucketCount(key=name, count=by_type[name])
+                for name in sorted(by_type)
+            ],
+            by_status=[
+                InstructionBucketCount(key=name, count=by_status[name])
+                for name in sorted(by_status)
+            ],
+        )
 
     async def eligible_approvers(
         self,

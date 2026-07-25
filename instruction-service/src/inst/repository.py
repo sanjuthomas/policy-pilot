@@ -153,6 +153,63 @@ class InstructionRepository:
         cursor = self.collection.find(query).sort("in", -1).limit(limit)
         return [document_to_versioned_instruction(doc) async for doc in cursor]
 
+    async def summarize_current(
+        self,
+        *,
+        owning_lob: str | None = None,
+    ) -> dict[str, Any]:
+        """Aggregate current versions by ``instruction_type`` × ``status``.
+
+        Only documents with ``out == INSTRUCTION_CURRENT_OUT`` are counted so
+        historical versions are excluded.
+        """
+        match: dict[str, Any] = {"out": INSTRUCTION_CURRENT_OUT}
+        if owning_lob:
+            match["owning_lob"] = owning_lob
+        pipeline: list[dict[str, Any]] = [
+            {"$match": match},
+            {
+                "$group": {
+                    "_id": {
+                        "instruction_type": "$payload.instruction_type",
+                        "status": "$status",
+                    },
+                    "count": {"$sum": 1},
+                }
+            },
+            {"$sort": {"_id.instruction_type": 1, "_id.status": 1}},
+        ]
+        rows = [doc async for doc in self.collection.aggregate(pipeline)]
+        by_type_status: list[dict[str, Any]] = []
+        by_type: dict[str, int] = {}
+        by_status: dict[str, int] = {}
+        total = 0
+        for row in rows:
+            key = row.get("_id") or {}
+            instruction_type = str(key.get("instruction_type") or "UNKNOWN")
+            status = str(key.get("status") or "UNKNOWN")
+            count = int(row.get("count") or 0)
+            total += count
+            by_type_status.append(
+                {
+                    "instruction_type": instruction_type,
+                    "status": status,
+                    "count": count,
+                }
+            )
+            by_type[instruction_type] = by_type.get(instruction_type, 0) + count
+            by_status[status] = by_status.get(status, 0) + count
+        return {
+            "total": total,
+            "by_type_status": by_type_status,
+            "by_type": [
+                {"key": name, "count": by_type[name]} for name in sorted(by_type)
+            ],
+            "by_status": [
+                {"key": name, "count": by_status[name]} for name in sorted(by_status)
+            ],
+        }
+
     async def list_versions(self, instruction_id: str) -> list[VersionedInstruction]:
         cursor = self.collection.find(self._instruction_id_filter(instruction_id)).sort(
             "version_number", 1

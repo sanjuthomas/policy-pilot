@@ -154,6 +154,21 @@ public class FakeEligibilityClient extends EligibilityClient {
   }
 
   @Override
+  public Map<String, Object> summarizeInstructions(
+      String owningLob, String userBearerToken, String userSessionId) {
+    if (error != null) {
+      throw error;
+    }
+    Object summary = response.get("instruction_summary");
+    if (summary instanceof Map<?, ?> map) {
+      @SuppressWarnings("unchecked")
+      Map<String, Object> cast = (Map<String, Object>) map;
+      return cast;
+    }
+    return Map.of();
+  }
+
+  @Override
   public java.util.List<Map<String, Object>> listInstructions(
       String status,
       String instructionType,

@@ -5,7 +5,7 @@ x-otel-environment: &otel-environment
   OTEL_DEPLOYMENT_ENVIRONMENT: development
   OTEL_METRIC_EXPORT_INTERVAL: "15000"
 
-# Instruction / payment / sequence / authz / indexer / chat — 1 CPU + 1 GiB each.
+# Instruction / payment / sequence / authz / indexer / chat / OPA — 1 CPU + 1 GiB each.
 x-txn-deploy: &txn-deploy
   resources:
     limits:
@@ -278,6 +278,8 @@ services:
       - /policies
     volumes:
       - ./opa-policy-seed/policies:/policies:ro
+    deploy:
+      <<: *txn-deploy
     restart: unless-stopped
     networks:
       - security-event-net

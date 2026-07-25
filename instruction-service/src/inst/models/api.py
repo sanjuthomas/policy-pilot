@@ -194,6 +194,26 @@ class InstructionResponse(BaseModel):
     used_by: str | None = None
 
 
+class InstructionTypeStatusCount(BaseModel):
+    instruction_type: str
+    status: str
+    count: int
+
+
+class InstructionBucketCount(BaseModel):
+    key: str
+    count: int
+
+
+class InstructionSummaryResponse(BaseModel):
+    """Current-version inventory totals (``out`` = infinity sentinel only)."""
+
+    total: int
+    by_type_status: list[InstructionTypeStatusCount]
+    by_type: list[InstructionBucketCount]
+    by_status: list[InstructionBucketCount]
+
+
 class EligibleApproverResponse(BaseModel):
     user_id: str
     display_name: str

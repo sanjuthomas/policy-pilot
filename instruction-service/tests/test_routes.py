@@ -156,6 +156,44 @@ def test_list_instructions(api_client: TestClient, mock_service: MagicMock) -> N
     assert kwargs["created_by_user_id"] == "mo-050"
 
 
+def test_summarize_instructions(api_client: TestClient, mock_service: MagicMock) -> None:
+    from inst.models.api import (
+        InstructionBucketCount,
+        InstructionSummaryResponse,
+        InstructionTypeStatusCount,
+    )
+
+    mock_service.summarize.return_value = InstructionSummaryResponse(
+        total=3,
+        by_type_status=[
+            InstructionTypeStatusCount(
+                instruction_type="STANDING", status="APPROVED", count=2
+            ),
+            InstructionTypeStatusCount(
+                instruction_type="SINGLE_USE", status="DRAFT", count=1
+            ),
+        ],
+        by_type=[
+            InstructionBucketCount(key="SINGLE_USE", count=1),
+            InstructionBucketCount(key="STANDING", count=2),
+        ],
+        by_status=[
+            InstructionBucketCount(key="APPROVED", count=2),
+            InstructionBucketCount(key="DRAFT", count=1),
+        ],
+    )
+    response = api_client.get(
+        "/api/v1/instructions/summary",
+        params={"owning_lob": "FICC"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 3
+    assert body["by_type_status"][0]["instruction_type"] == "STANDING"
+    mock_service.summarize.assert_awaited_once()
+    assert mock_service.summarize.await_args.kwargs["owning_lob"] == "FICC"
+
+
 def test_get_instruction_not_found(api_client: TestClient, mock_service: MagicMock) -> None:
     from inst.repository import InstructionNotFoundError
 

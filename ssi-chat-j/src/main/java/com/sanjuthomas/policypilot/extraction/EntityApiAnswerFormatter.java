@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TreeMap;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -84,6 +85,105 @@ public class EntityApiAnswerFormatter {
     String label = StringUtils.hasText(noun) ? noun.strip() : "rows";
     int n = Math.max(0, count);
     return "Found " + n + " matching " + label + ".";
+  }
+
+  /**
+   * Type × status matrix from {@code GET /api/v1/instructions/summary}.
+   *
+   * <p>Example shape:
+   *
+   * <pre>
+   * There are **63** instructions in the system.
+   *
+   * | type | APPROVED | DRAFT | ... | TOTAL |
+   * | SINGLE_USE | 15 | 10 | ... | 27 |
+   * </pre>
+   */
+  public String formatInstructionTypeStatusSummary(Map<String, Object> summary) {
+    if (summary == null || summary.isEmpty()) {
+      return "No matching instructions were found.";
+    }
+    int total = toInt(summary.get("total"));
+    Object rawCells = summary.get("by_type_status");
+    if (!(rawCells instanceof List<?> cells) || cells.isEmpty()) {
+      return total <= 0
+          ? "No matching instructions were found."
+          : "There are **" + total + "** instructions in the system.";
+    }
+
+    List<String> statuses = new ArrayList<>();
+    List<String> types = new ArrayList<>();
+    Map<String, Integer> cellCounts = new TreeMap<>();
+    for (Object cellObj : cells) {
+      if (!(cellObj instanceof Map<?, ?> cell)) {
+        continue;
+      }
+      String type = displayOrNull(cell.get("instruction_type"));
+      String status = displayOrNull(cell.get("status"));
+      if (!StringUtils.hasText(type) || !StringUtils.hasText(status)) {
+        continue;
+      }
+      if (!types.contains(type)) {
+        types.add(type);
+      }
+      if (!statuses.contains(status)) {
+        statuses.add(status);
+      }
+      cellCounts.put(type + "|" + status, toInt(cell.get("count")));
+    }
+    types.sort(String::compareTo);
+    statuses.sort(String::compareTo);
+    if (types.isEmpty() || statuses.isEmpty()) {
+      return total <= 0
+          ? "No matching instructions were found."
+          : "There are **" + total + "** instructions in the system.";
+    }
+
+    StringBuilder sb = new StringBuilder();
+    sb.append("There are **").append(total).append("** instructions in the system.\n\n");
+    sb.append("| type |");
+    for (String status : statuses) {
+      sb.append(' ').append(status).append(" |");
+    }
+    sb.append(" TOTAL |\n");
+    sb.append("|---|");
+    for (int i = 0; i < statuses.size(); i++) {
+      sb.append("---:|");
+    }
+    sb.append("---:|\n");
+
+    Map<String, Integer> statusTotals = new TreeMap<>();
+    for (String type : types) {
+      int rowTotal = 0;
+      sb.append("| ").append(type).append(" |");
+      for (String status : statuses) {
+        int n = cellCounts.getOrDefault(type + "|" + status, 0);
+        rowTotal += n;
+        statusTotals.put(status, statusTotals.getOrDefault(status, 0) + n);
+        sb.append(' ').append(n).append(" |");
+      }
+      sb.append(" **").append(rowTotal).append("** |\n");
+    }
+    sb.append("| **TOTAL** |");
+    for (String status : statuses) {
+      sb.append(" **").append(statusTotals.getOrDefault(status, 0)).append("** |");
+    }
+    sb.append(" **").append(total).append("** |");
+    return sb.toString().strip();
+  }
+
+  private static int toInt(Object value) {
+    if (value instanceof Number number) {
+      return number.intValue();
+    }
+    if (value == null) {
+      return 0;
+    }
+    try {
+      return Integer.parseInt(String.valueOf(value).strip());
+    } catch (NumberFormatException ex) {
+      return 0;
+    }
   }
 
   /** Status histogram for inventory group-by answers. */

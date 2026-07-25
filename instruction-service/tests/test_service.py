@@ -640,6 +640,66 @@ async def test_list_returns_visible_instructions(
 
 
 @pytest.mark.asyncio
+async def test_summarize_uses_mongo_aggregate_for_admin(
+    service: InstructionService,
+    mock_repo: MagicMock,
+    sample_subject: Subject,
+) -> None:
+    admin = sample_subject.model_copy(
+        update={"user_id": "admin-001", "roles": ["PLATFORM_ADMIN"]}
+    )
+    mock_repo.summarize_current = AsyncMock(
+        return_value={
+            "total": 2,
+            "by_type_status": [
+                {
+                    "instruction_type": "STANDING",
+                    "status": "APPROVED",
+                    "count": 2,
+                }
+            ],
+            "by_type": [{"key": "STANDING", "count": 2}],
+            "by_status": [{"key": "APPROVED", "count": 2}],
+        }
+    )
+    summary = await service.summarize(admin, owning_lob="FICC")
+    assert summary.total == 2
+    mock_repo.summarize_current.assert_awaited_once_with(owning_lob="FICC")
+    mock_repo.list_current.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_summarize_authz_filters_for_non_admin(
+    service: InstructionService,
+    mock_repo: MagicMock,
+    mock_authz: AsyncMock,
+    sample_subject: Subject,
+    sample_instruction: CashSettlementInstruction,
+) -> None:
+    allowed = sample_instruction
+    denied = sample_instruction.model_copy(
+        update={
+            "instruction_id": "instr-denied",
+            "instruction_type": InstructionType.STANDING,
+            "status": InstructionStatus.APPROVED,
+        }
+    )
+    mock_repo.list_current = AsyncMock(
+        return_value=[_versioned(allowed), _versioned(denied)]
+    )
+    mock_authz.evaluate_instruction = AsyncMock(
+        side_effect=[_allowed_decision(), _denied_decision()]
+    )
+    mock_repo.get_current = AsyncMock(return_value=_versioned(denied))
+
+    summary = await service.summarize(sample_subject)
+    assert summary.total == 1
+    assert summary.by_type_status[0].instruction_type == allowed.instruction_type.value
+    assert summary.by_type_status[0].status == allowed.status.value
+    mock_repo.summarize_current.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_list_versions(
     service: InstructionService,
     mock_repo: MagicMock,

@@ -10,6 +10,7 @@ from motor.motor_asyncio import (
     AsyncIOMotorDatabase,
 )
 from pymongo import ASCENDING, ReturnDocument
+from telemetry import mongo_event_listeners
 
 from etl.config import settings
 from etl.dlq.models import DlqStatus, FailureClass, PipelineKind
@@ -34,7 +35,10 @@ class DlqStore:
     async def connect(self) -> None:
         if not self.enabled:
             return
-        self._client = AsyncIOMotorClient(settings.dlq_mongodb_uri)
+        self._client = AsyncIOMotorClient(
+            settings.dlq_mongodb_uri,
+            event_listeners=mongo_event_listeners(),
+        )
         self._db = self._client[settings.dlq_mongodb_database]
         self._col = self._db[settings.dlq_mongodb_collection]
         await self._col.create_index(

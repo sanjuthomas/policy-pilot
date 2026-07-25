@@ -6,6 +6,7 @@ import com.sanjuthomas.policypilot.api.ApiModels.SourceHit;
 import com.sanjuthomas.policypilot.auth.Subject;
 import com.sanjuthomas.policypilot.gemini.GeminiErrors;
 import com.sanjuthomas.policypilot.observability.ChatAnswerFinalizer;
+import com.sanjuthomas.policypilot.observability.ChatPhaseMetrics;
 import com.sanjuthomas.policypilot.pipeline.LaneAnswer;
 import com.sanjuthomas.policypilot.pipeline.RouterDecision;
 import com.sanjuthomas.policypilot.routing.IntentRouter;
@@ -35,14 +36,17 @@ public class ChatService {
   private final IntentRouter intentRouter;
   private final ChatPathDispatcher pathDispatcher;
   private final ChatAnswerFinalizer answerFinalizer;
+  private final ChatPhaseMetrics phaseMetrics;
 
   public ChatService(
       IntentRouter intentRouter,
       ChatPathDispatcher pathDispatcher,
-      ChatAnswerFinalizer answerFinalizer) {
+      ChatAnswerFinalizer answerFinalizer,
+      ChatPhaseMetrics phaseMetrics) {
     this.intentRouter = intentRouter;
     this.pathDispatcher = pathDispatcher;
     this.answerFinalizer = answerFinalizer;
+    this.phaseMetrics = phaseMetrics;
   }
 
   public ChatResponse ask(ChatRequest request, Subject subject) {
@@ -56,10 +60,16 @@ public class ChatService {
       if (requestedPath != null && !requestedPath.isBlank()) {
         pathHint = requestedPath;
       }
+      phaseMetrics.recordRouter(pathHint, routeMs);
 
       long retrievalStartNs = System.nanoTime();
       LaneAnswer lane = pathDispatcher.dispatch(decision, request, subject);
       double laneMs = (System.nanoTime() - retrievalStartNs) / 1_000_000.0;
+      String executedPath =
+          lane != null && lane.recordedPath() != null && !lane.recordedPath().isBlank()
+              ? lane.recordedPath()
+              : pathHint;
+      phaseMetrics.recordLane(executedPath, laneMs);
 
       // Me lane records path=eligibility for OpenSLO parity; do not treat router "me" as requested.
       // Vector lane records path=full_rag; treat router vector as matching executed path.

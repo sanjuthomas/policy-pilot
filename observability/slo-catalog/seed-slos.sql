@@ -329,3 +329,141 @@ INSERT INTO service_level_objectives (
   }'::jsonb,
   'seed', TIMESTAMPTZ '2026-07-16T00:00:00Z'
 ) ON CONFLICT (logical_key, version) DO NOTHING;
+
+-- ── SLI: MongoDB query latency ≤ 25ms ────────────────────────────────────────
+INSERT INTO service_level_objectives (
+  logical_key, version, stale, api_version, kind, name, content, created_by, created_at
+) VALUES (
+  'openslo/v1/SLI/mongo-query-latency-25ms',
+  1, false, 'openslo/v1', 'SLI', 'mongo-query-latency-25ms',
+  '{
+    "apiVersion": "openslo/v1",
+    "kind": "SLI",
+    "metadata": { "name": "mongo-query-latency-25ms", "displayName": "MongoDB operations under 25ms" },
+    "spec": {
+      "description": "Ratio of MongoDB wire commands completed within 25ms (db.client.operation.duration).",
+      "ratioMetric": {
+        "good": { "metricSource": { "metricSourceRef": "prometheus", "spec": {
+          "query": "sum(increase(db_client_operation_duration_bucket{le=\"25\"}[5m]))"
+        } } },
+        "total": { "metricSource": { "metricSourceRef": "prometheus", "spec": {
+          "query": "sum(increase(db_client_operation_duration_count[5m]))"
+        } } }
+      }
+    }
+  }'::jsonb,
+  'seed', TIMESTAMPTZ '2026-07-25T00:00:00Z'
+) ON CONFLICT (logical_key, version) DO NOTHING;
+
+INSERT INTO service_level_objectives (
+  logical_key, version, stale, api_version, kind, name, content, created_by, created_at
+) VALUES (
+  'openslo/v1/SLO/mongo-query-latency-25ms-30d',
+  1, false, 'openslo/v1', 'SLO', 'mongo-query-latency-25ms-30d',
+  '{
+    "apiVersion": "openslo/v1",
+    "kind": "SLO",
+    "metadata": { "name": "mongo-query-latency-25ms-30d", "displayName": "MongoDB ≤25ms (30-day rolling)" },
+    "spec": {
+      "service": "policy-pilot",
+      "description": "99% of MongoDB operations complete within 25ms over a 30-day rolling window.",
+      "indicatorRef": "mongo-query-latency-25ms",
+      "timeWindow": [{ "duration": "30d", "isRolling": true }],
+      "budgetingMethod": "Occurrences",
+      "objectives": [{ "displayName": "Latency target", "target": 0.99 }]
+    }
+  }'::jsonb,
+  'seed', TIMESTAMPTZ '2026-07-25T00:00:00Z'
+) ON CONFLICT (logical_key, version) DO NOTHING;
+
+-- ── SLI: Vertex / Gemini chat operation latency ≤ 5s ─────────────────────────
+INSERT INTO service_level_objectives (
+  logical_key, version, stale, api_version, kind, name, content, created_by, created_at
+) VALUES (
+  'openslo/v1/SLI/gen-ai-chat-latency-5s',
+  1, false, 'openslo/v1', 'SLI', 'gen-ai-chat-latency-5s',
+  '{
+    "apiVersion": "openslo/v1",
+    "kind": "SLI",
+    "metadata": { "name": "gen-ai-chat-latency-5s", "displayName": "Vertex chat operations under 5s" },
+    "spec": {
+      "description": "Ratio of gen_ai chat operations (router / synthesis) completed within 5s.",
+      "ratioMetric": {
+        "good": { "metricSource": { "metricSourceRef": "prometheus", "spec": {
+          "query": "sum(increase(gen_ai_client_operation_duration_bucket{gen_ai_operation_name=\"chat\",le=\"5000\"}[5m]))"
+        } } },
+        "total": { "metricSource": { "metricSourceRef": "prometheus", "spec": {
+          "query": "sum(increase(gen_ai_client_operation_duration_count{gen_ai_operation_name=\"chat\"}[5m]))"
+        } } }
+      }
+    }
+  }'::jsonb,
+  'seed', TIMESTAMPTZ '2026-07-25T00:00:00Z'
+) ON CONFLICT (logical_key, version) DO NOTHING;
+
+INSERT INTO service_level_objectives (
+  logical_key, version, stale, api_version, kind, name, content, created_by, created_at
+) VALUES (
+  'openslo/v1/SLO/gen-ai-chat-latency-5s-30d',
+  1, false, 'openslo/v1', 'SLO', 'gen-ai-chat-latency-5s-30d',
+  '{
+    "apiVersion": "openslo/v1",
+    "kind": "SLO",
+    "metadata": { "name": "gen-ai-chat-latency-5s-30d", "displayName": "Vertex chat ≤5s (30-day rolling)" },
+    "spec": {
+      "service": "ssi-chat-j",
+      "description": "95% of Vertex chat operations complete within 5s over a 30-day rolling window.",
+      "indicatorRef": "gen-ai-chat-latency-5s",
+      "timeWindow": [{ "duration": "30d", "isRolling": true }],
+      "budgetingMethod": "Occurrences",
+      "objectives": [{ "displayName": "Latency target", "target": 0.95 }]
+    }
+  }'::jsonb,
+  'seed', TIMESTAMPTZ '2026-07-25T00:00:00Z'
+) ON CONFLICT (logical_key, version) DO NOTHING;
+
+-- ── SLI: Vertex / Gemini operation success ───────────────────────────────────
+INSERT INTO service_level_objectives (
+  logical_key, version, stale, api_version, kind, name, content, created_by, created_at
+) VALUES (
+  'openslo/v1/SLI/gen-ai-operation-success',
+  1, false, 'openslo/v1', 'SLI', 'gen-ai-operation-success',
+  '{
+    "apiVersion": "openslo/v1",
+    "kind": "SLI",
+    "metadata": { "name": "gen-ai-operation-success", "displayName": "Vertex operation success" },
+    "spec": {
+      "description": "Ratio of gen_ai client operations that completed without error.",
+      "ratioMetric": {
+        "good": { "metricSource": { "metricSourceRef": "prometheus", "spec": {
+          "query": "sum(increase(gen_ai_client_operation_count{gen_ai_response_status=\"success\"}[5m]))"
+        } } },
+        "total": { "metricSource": { "metricSourceRef": "prometheus", "spec": {
+          "query": "sum(increase(gen_ai_client_operation_count[5m]))"
+        } } }
+      }
+    }
+  }'::jsonb,
+  'seed', TIMESTAMPTZ '2026-07-25T00:00:00Z'
+) ON CONFLICT (logical_key, version) DO NOTHING;
+
+INSERT INTO service_level_objectives (
+  logical_key, version, stale, api_version, kind, name, content, created_by, created_at
+) VALUES (
+  'openslo/v1/SLO/gen-ai-operation-success-30d',
+  1, false, 'openslo/v1', 'SLO', 'gen-ai-operation-success-30d',
+  '{
+    "apiVersion": "openslo/v1",
+    "kind": "SLO",
+    "metadata": { "name": "gen-ai-operation-success-30d", "displayName": "Vertex operation success (30-day rolling)" },
+    "spec": {
+      "service": "policy-pilot",
+      "description": "99.5% of Vertex / Gemini operations succeed over a 30-day rolling window.",
+      "indicatorRef": "gen-ai-operation-success",
+      "timeWindow": [{ "duration": "30d", "isRolling": true }],
+      "budgetingMethod": "Occurrences",
+      "objectives": [{ "displayName": "Success target", "target": 0.995 }]
+    }
+  }'::jsonb,
+  'seed', TIMESTAMPTZ '2026-07-25T00:00:00Z'
+) ON CONFLICT (logical_key, version) DO NOTHING;
