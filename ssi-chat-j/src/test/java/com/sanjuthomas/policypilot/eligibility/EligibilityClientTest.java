@@ -90,6 +90,20 @@ class EligibilityClientTest {
   }
 
   @Test
+  void summarizePaymentsReturnsBody() {
+    server
+        .expect(requestTo("http://payment:8093/api/v1/payments/summary?owning_lob=FICC"))
+        .andExpect(method(HttpMethod.GET))
+        .andRespond(
+            withSuccess(
+                "{\"total\":21,\"by_type_status\":[{\"instruction_type\":\"STANDING\",\"status\":\"DRAFT\",\"count\":8}]}",
+                MediaType.APPLICATION_JSON));
+
+    assertEquals(21, client.summarizePayments("FICC", "user-tok", "user-sess").get("total"));
+    server.verify();
+  }
+
+  @Test
   void getPaymentReturnsBody() {
     server
         .expect(requestTo("http://payment:8093/api/v1/payments/PAY-1"))

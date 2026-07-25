@@ -133,6 +133,7 @@ class PaymentRepository:
         *,
         instruction_id: str | None = None,
         status: str | None = None,
+        owning_lob: str | None = None,
         limit: int = 100,
         include_cancelled: bool = False,
     ) -> list[VersionedPayment]:
@@ -141,6 +142,8 @@ class PaymentRepository:
             query["instruction_id"] = instruction_id
         if status:
             query["status"] = status
+        if owning_lob:
+            query["owning_lob"] = owning_lob
 
         cursor = self._col.find(query).sort("in", -1).limit(limit)
         records = [document_to_versioned_payment(doc) async for doc in cursor]
@@ -151,6 +154,66 @@ class PaymentRepository:
             for record in records
             if record.payment.status != PaymentStatus.CANCELLED
         ]
+
+    async def summarize_current(
+        self,
+        *,
+        owning_lob: str | None = None,
+    ) -> dict[str, Any]:
+        """Aggregate current versions by ``instruction_type`` × ``status``.
+
+        Excludes historical versions and ``CANCELLED`` payments (same default as
+        ``list_current``).
+        """
+        match: dict[str, Any] = {
+            "out": PAYMENT_CURRENT_OUT,
+            "status": {"$ne": PaymentStatus.CANCELLED.value},
+        }
+        if owning_lob:
+            match["owning_lob"] = owning_lob
+        pipeline: list[dict[str, Any]] = [
+            {"$match": match},
+            {
+                "$group": {
+                    "_id": {
+                        "instruction_type": "$payload.instruction_type",
+                        "status": "$status",
+                    },
+                    "count": {"$sum": 1},
+                }
+            },
+            {"$sort": {"_id.instruction_type": 1, "_id.status": 1}},
+        ]
+        rows = [doc async for doc in self._col.aggregate(pipeline)]
+        by_type_status: list[dict[str, Any]] = []
+        by_type: dict[str, int] = {}
+        by_status: dict[str, int] = {}
+        total = 0
+        for row in rows:
+            key = row.get("_id") or {}
+            instruction_type = str(key.get("instruction_type") or "UNKNOWN")
+            status = str(key.get("status") or "UNKNOWN")
+            count = int(row.get("count") or 0)
+            total += count
+            by_type_status.append(
+                {
+                    "instruction_type": instruction_type,
+                    "status": status,
+                    "count": count,
+                }
+            )
+            by_type[instruction_type] = by_type.get(instruction_type, 0) + count
+            by_status[status] = by_status.get(status, 0) + count
+        return {
+            "total": total,
+            "by_type_status": by_type_status,
+            "by_type": [
+                {"key": name, "count": by_type[name]} for name in sorted(by_type)
+            ],
+            "by_status": [
+                {"key": name, "count": by_status[name]} for name in sorted(by_status)
+            ],
+        }
 
     async def list_versions(self, payment_id: str) -> list[VersionedPayment]:
         cursor = self._col.find(self._payment_id_filter(payment_id)).sort(

@@ -191,6 +191,57 @@ async def test_list_current_excludes_cancelled(
     assert records[0].payment.status == PaymentStatus.DRAFT
 
 
+@pytest.mark.asyncio
+async def test_summarize_current_aggregates_type_and_status(
+    patched_db: MagicMock,
+) -> None:
+    async def _async_iter():
+        yield {
+            "_id": {"instruction_type": "STANDING", "status": "APPROVED"},
+            "count": 10,
+        }
+        yield {
+            "_id": {"instruction_type": "SINGLE_USE", "status": "DRAFT"},
+            "count": 5,
+        }
+
+    patched_db.aggregate.return_value = _async_iter()
+    repo = PaymentRepository()
+    summary = await repo.summarize_current()
+    assert summary["total"] == 15
+    assert summary["by_type_status"] == [
+        {"instruction_type": "STANDING", "status": "APPROVED", "count": 10},
+        {"instruction_type": "SINGLE_USE", "status": "DRAFT", "count": 5},
+    ]
+    pipeline = patched_db.aggregate.call_args.args[0]
+    assert pipeline[0] == {
+        "$match": {
+            "out": PAYMENT_CURRENT_OUT,
+            "status": {"$ne": "CANCELLED"},
+        }
+    }
+
+
+@pytest.mark.asyncio
+async def test_summarize_current_filters_owning_lob(patched_db: MagicMock) -> None:
+    async def _async_iter():
+        if False:
+            yield {}
+
+    patched_db.aggregate.return_value = _async_iter()
+    repo = PaymentRepository()
+    summary = await repo.summarize_current(owning_lob="FICC")
+    assert summary["total"] == 0
+    pipeline = patched_db.aggregate.call_args.args[0]
+    assert pipeline[0] == {
+        "$match": {
+            "out": PAYMENT_CURRENT_OUT,
+            "status": {"$ne": "CANCELLED"},
+            "owning_lob": "FICC",
+        }
+    }
+
+
 @pytest.fixture
 def event_collection() -> AsyncMock:
     col = AsyncMock()

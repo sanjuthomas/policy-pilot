@@ -259,6 +259,24 @@ public class EligibilityClient {
   }
 
   /**
+   * Current-version payment inventory summary (linked instruction type × status), excluding
+   * cancelled payments.
+   */
+  public Map<String, Object> summarizePayments(
+      String owningLob, String userBearerToken, String userSessionId) {
+    StringBuilder url =
+        new StringBuilder(trimSlash(properties.paymentServiceUrl()) + "/api/v1/payments/summary");
+    if (StringUtils.hasText(owningLob)) {
+      url.append("?owning_lob=")
+          .append(UriUtils.encodeQueryParam(owningLob.strip(), StandardCharsets.UTF_8));
+    }
+    return getJson(
+        url.toString(),
+        oboHeaders(userBearerToken, userSessionId),
+        "payment service error: ");
+  }
+
+  /**
    * List instructions visible to the OBO subject, optionally filtered by status / type / creator.
    */
   public List<Map<String, Object>> listInstructions(

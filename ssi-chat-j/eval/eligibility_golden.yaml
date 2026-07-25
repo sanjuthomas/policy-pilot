@@ -1,5 +1,5 @@
 # Ownership: ssi-chat-j golden set (HTTP black-box against :8096).
-# Source of truth for Policy Pilot chat prove (98 cases). Prove via:
+# Source of truth for Policy Pilot chat prove (99 cases). Prove via:
 #   ./ssi-chat-j/scripts/prove-eligibility.sh
 #
 # Seed plan matches the shared harness shape so truncate+reload keeps entity
@@ -1148,6 +1148,21 @@ cases:
     min_answer_length: 10
     answer_has_number: true
     answer_contains_any: [by status, APPROVED, SUBMITTED, No matching]
+
+- id: golden_payments_system_summary
+  mode: payments
+  retrieval: deterministic
+  tags: [golden, count, inventory, document_extraction, ssi-chat-j]
+  question: How many payments do we have in the system?
+  expect:
+    require_routing: true
+    routing_path: document_extraction
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: payment.summary
+    min_answer_length: 20
+    answer_has_number: true
+    answer_contains_any: ["payments in the system", "No matching payments"]
 
 - id: golden_payments_submitted_count
   mode: payments

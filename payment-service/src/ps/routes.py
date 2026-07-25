@@ -9,6 +9,7 @@ from ps.models.api import (
     CreatePaymentRequest,
     PaymentEligibleApproversResponse,
     PaymentResponse,
+    PaymentSummaryResponse,
     RejectPaymentRequest,
     Subject,
     UpdatePaymentRequest,
@@ -138,6 +139,16 @@ async def list_payments(
         limit=limit,
     )
     return [_to_response(record) for record in records]
+
+
+@router.get("/summary", response_model=PaymentSummaryResponse)
+async def summarize_payments(
+    owning_lob: str | None = Query(default=None),
+    subject: Subject = Depends(get_subject),
+    service: PaymentService = Depends(get_service),
+) -> PaymentSummaryResponse:
+    """Current-version counts by instruction type × status (excludes cancelled)."""
+    return await service.summarize(subject, owning_lob=owning_lob)
 
 
 @router.put("/{payment_id}", response_model=PaymentResponse)

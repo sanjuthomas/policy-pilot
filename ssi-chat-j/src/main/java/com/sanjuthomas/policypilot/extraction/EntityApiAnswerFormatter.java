@@ -100,15 +100,27 @@ public class EntityApiAnswerFormatter {
    * </pre>
    */
   public String formatInstructionTypeStatusSummary(Map<String, Object> summary) {
+    return formatTypeStatusSummary(summary, "instructions");
+  }
+
+  /**
+   * Type × status matrix from {@code GET /api/v1/payments/summary} (linked instruction type ×
+   * payment status).
+   */
+  public String formatPaymentTypeStatusSummary(Map<String, Object> summary) {
+    return formatTypeStatusSummary(summary, "payments");
+  }
+
+  String formatTypeStatusSummary(Map<String, Object> summary, String noun) {
+    String label = StringUtils.hasText(noun) ? noun.strip() : "rows";
+    String empty = "No matching " + label + " were found.";
     if (summary == null || summary.isEmpty()) {
-      return "No matching instructions were found.";
+      return empty;
     }
     int total = toInt(summary.get("total"));
     Object rawCells = summary.get("by_type_status");
     if (!(rawCells instanceof List<?> cells) || cells.isEmpty()) {
-      return total <= 0
-          ? "No matching instructions were found."
-          : "There are **" + total + "** instructions in the system.";
+      return total <= 0 ? empty : "There are **" + total + "** " + label + " in the system.";
     }
 
     List<String> statuses = new ArrayList<>();
@@ -134,13 +146,11 @@ public class EntityApiAnswerFormatter {
     types.sort(String::compareTo);
     statuses.sort(String::compareTo);
     if (types.isEmpty() || statuses.isEmpty()) {
-      return total <= 0
-          ? "No matching instructions were found."
-          : "There are **" + total + "** instructions in the system.";
+      return total <= 0 ? empty : "There are **" + total + "** " + label + " in the system.";
     }
 
     StringBuilder sb = new StringBuilder();
-    sb.append("There are **").append(total).append("** instructions in the system.\n\n");
+    sb.append("There are **").append(total).append("** ").append(label).append(" in the system.\n\n");
     sb.append("| type |");
     for (String status : statuses) {
       sb.append(' ').append(status).append(" |");

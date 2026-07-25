@@ -764,6 +764,58 @@ async def test_list_filters_to_viewable_payments(
 
 
 @pytest.mark.asyncio
+async def test_summarize_uses_mongo_aggregate_for_admin(
+    service: PaymentService,
+    payment: Payment,
+    subject: Subject,
+) -> None:
+    admin = subject.model_copy(
+        update={"user_id": "admin-001", "roles": ["PLATFORM_ADMIN"]}
+    )
+    service.repo.summarize_current = AsyncMock(
+        return_value={
+            "total": 2,
+            "by_type_status": [
+                {
+                    "instruction_type": "STANDING",
+                    "status": "APPROVED",
+                    "count": 2,
+                }
+            ],
+            "by_type": [{"key": "STANDING", "count": 2}],
+            "by_status": [{"key": "APPROVED", "count": 2}],
+        }
+    )
+    summary = await service.summarize(admin, owning_lob="FICC")
+    assert summary.total == 2
+    service.repo.summarize_current.assert_awaited_once_with(owning_lob="FICC")
+    service.repo.list_current.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_summarize_filters_to_viewable_for_non_admin(
+    service: PaymentService,
+    payment: Payment,
+    subject: Subject,
+) -> None:
+    hidden = payment.model_copy(deep=True)
+    hidden.payment_id = "pay-hidden"
+    hidden.owning_lob = "FX"
+    hidden.instruction_type = "SINGLE_USE"
+    hidden.status = PaymentStatus.SUBMITTED
+    hidden.created_by = hidden.created_by.model_copy(update={"user_id": "someone-else"})
+    service.repo.list_current = AsyncMock(
+        return_value=[_versioned(payment), _versioned(hidden)]
+    )
+
+    summary = await service.summarize(subject)
+    assert summary.total == 1
+    assert summary.by_type_status[0].instruction_type == payment.instruction_type
+    assert summary.by_type_status[0].status == payment.status.value
+    service.repo.summarize_current.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_get_not_found(service: PaymentService, subject: Subject) -> None:
     service.repo.get_current.side_effect = PaymentNotFoundError("pay-missing")
     with pytest.raises(LookupError, match="pay-missing"):
