@@ -75,7 +75,7 @@ If you land here wondering “why not LangGraph / AutoGen?” — those optimize
 
 ## Reference domain (proof, not the whole product)
 
-The working vertical is **cash SSI**: instructions and payments, front office / middle office / funding / compliance personas, live eligibility, scripted create → submit → approve → cancel capabilities, and conversation over graph + audit events.
+The working vertical is **cash SSI**: instructions and payments, front office / middle office / funding / compliance / technology-auditor personas, live eligibility, scripted create → submit → approve → cancel capabilities, conversation over graph + audit events, and a dedicated [Technology Auditor Console](audit-service/README.md) for source Mongo evidence.
 
 The pattern generalizes: any high-stakes capability that must obey **intent → decide → execute → evidence**. SSI is the worked example that makes the claim falsifiable.
 
@@ -103,6 +103,32 @@ open http://localhost:8096
 
 Prerequisites and GCP Vertex setup: **[How it works — Quick start](docs/how-it-works.md#quick-start)**.
 
+### Inspect governed evidence
+
+Open **http://localhost:8097** and sign in with a technology-auditor demo user:
+
+| User id | Name | Access |
+|---------|------|--------|
+| `audit-001` | Taylor Brooks | `TECH_AUDITOR` / `TECH_AUDITORS` |
+| `audit-002` | Riley Quinn | `TECH_AUDITOR` / `TECH_AUDITORS` |
+| `audit-003` | Casey Nguyen | `TECH_AUDITOR` / `TECH_AUDITORS` |
+
+All demo users use `Password1!`. The `TECH_AUDITORS` group grants read-only access
+to the standalone [Technology Auditor Console](audit-service/README.md); it grants
+no instruction or payment mutation permission.
+
+The console combines:
+
+- instruction and payment security events from their source Mongo collections;
+- governed Create Payment audit executions (request, interpretation, route/skill,
+  timeline, timings, outcome, and result);
+- a link from each completed execution to the original payment security event;
+- on-demand display of the authoritative OPA evaluate request and response.
+
+OPA evidence is linked, not duplicated: the security event remains the policy
+audit record, while the execution record supplies the surrounding AI/capability
+context.
+
 ---
 
 ## Go deeper
@@ -121,6 +147,7 @@ Prerequisites and GCP Vertex setup: **[How it works — Quick start](docs/how-it
 | **[Architecture review](docs/architecture-review-2026-07-18.md)** | Adversarial review (score and residual risks) |
 | **[Sample questions](docs/sample-questions.md)** | Demo prompts by path (`graph`, `tools`, `skill`, `vector`) |
 | **[Domain models and demo users](docs/domain-models.md)** | Instruction / payment models and persona logins |
+| **[Technology Auditor Console](audit-service/README.md)** | Central security events, governed activity records, OPA evidence, and auditor access |
 
 ### Architecture and data plane
 

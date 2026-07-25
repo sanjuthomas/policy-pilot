@@ -23,6 +23,11 @@ Domain services (instruction-service, payment-service) call authz for lifecycle 
 
 **Not callers:** ssi-indexer (Kafka consumer only; projects graph from streamed events), demo harness, Kafka Connect, sequence-service.
 
+Technology auditors (`TECH_AUDITOR` / `TECH_AUDITORS`) are also not lifecycle
+API callers. Their group grants read-only access to the
+[Technology Auditor Console](../audit-service/README.md), which reads existing
+evidence from MongoDB; it does not grant OPA mutation permissions.
+
 Policy denials evaluated here surface as `ALERT` security events in Mongo and, after Kafka Connect + ssi-indexer, as `SecurityEvent` nodes linked via `FOR` → version in Neo4j. See [neo4j-graph-model/README.md](../neo4j-graph-model/README.md).
 
 ## Service API (programmatic)

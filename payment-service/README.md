@@ -86,6 +86,33 @@ Payments use the same **versioned append-only** pattern as instruction-service.
 |-------|----------|
 | MongoDB | `ssi_cash_activities.payments` |
 
+## Governed Create Payment audit executions
+
+The Java chat Create Payment skill records the AI/capability context separately
+from the OPA security event:
+
+| Evidence | Stored content |
+|----------|----------------|
+| Audit execution | Request, actor, interpreted intent, skill/channel, timeline, timings, outcome, result |
+| Payment security event | Authoritative OPA decision, evaluate request/response, subject and resource context |
+
+Chat creates and patches `ssi_cash_activities.audit_executions` through:
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/api/v1/audit-executions` | Start an execution before confirmation |
+| PATCH | `/api/v1/audit-executions/{execution_id}` | Record confirmation, policy recheck, cancellation, failure, or result |
+
+On confirmed payment creation, chat sends `X-Audit-Execution-Id`. Payment-service
+creates the payment and security event transactionally, then links the execution
+to the new event in `governance.security_event_id`. Once linked, the provisional
+`governance.policy_exchange` is removed so there is one authoritative OPA record.
+
+All-record reads are deliberately absent from payment-service. Members of
+`TECH_AUDITORS` use the standalone
+[Technology Auditor Console](../audit-service/README.md), which reads the audit
+collection and follows the security-event link.
+
 ## Security events (SIEM)
 
 Every authorized action or policy denial emits an **append-only** document to MongoDB `security_events.payment_service`.
@@ -103,7 +130,11 @@ Security event documents:
 - **API/UI** — `event_id` is exposed from `_id` for clients
 - **`payment_snapshot`** — full payment state at event time for downstream indexing
 
-Authorized actions store `details.authorization` (`allow_basis`, `summary`, subject snapshot) and set `event.reason` to the summary. Same pattern as instruction-service.
+Authorized actions store `details.authorization` (`allow_basis`, `summary`,
+subject snapshot, resource context, and the raw OPA `evaluate_request` /
+`evaluate_response`) and set `event.reason` to the summary. The auditor console
+loads this complete event on demand instead of copying OPA evidence into the
+governed activity record.
 
 **Excluded actors:**
 

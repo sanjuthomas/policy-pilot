@@ -112,9 +112,9 @@ Skip: `*.show_by_id` (intentional Java `document_extraction`).
 
 | ID | Item | Status | Notes |
 |----|------|--------|-------|
-| P2.1 | Create `cypher-builder-svc` (FastAPI) wrapping `shared/cypher_builder` | `done` | Port **8097** |
+| P2.1 | Create `cypher-builder-svc` (FastAPI) wrapping `shared/cypher_builder` | `done` | Historical bridge port was **8097** (retired; **8097 is now `audit-service`**) |
 | P2.2 | `POST /v1/plan` + `POST /v1/validate` + `/health` | `done` | |
-| P2.3 | Compose wire-up (port **8097**) | `done` | Root compose service |
+| P2.3 | Compose wire-up (port **8097**) | `done` | Historical; bridge removed from Compose |
 | P2.4 | Java `CypherBuilderClient` (RestTemplate) | `done` | |
 | P2.5 | Neo4j read execution as `svc_chat` | `done` | neo4j-java-driver |
 | P2.6 | One end-to-end neo4j_direct golden case via bridge | `done` | `golden_events_count_today` |

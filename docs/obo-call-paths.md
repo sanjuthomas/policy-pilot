@@ -141,3 +141,4 @@ OPA subject = OBO user + `delegated_by=svc-payment` (and service roles).
 | `/api/auth/login` | none (issues admin/user session) |
 | Static `/ui` | none |
 | `/api/ui/*` | platform-admin JWT in `Authorization` only (not OBO) |
+| `audit-service` (`:8097`) APIs | **Not OBO.** Session login + Bearer session token + `X-Session-Id`; gated by exact group `TECH_AUDITORS`. Read-only Mongo evidence console — see [audit-service/README.md](../audit-service/README.md). |

@@ -220,6 +220,7 @@ python scripts/vertex_smoke_test.py   # optional but recommended
 
 open http://localhost:8091   # harness — policy scenarios
 open http://localhost:8096   # Policy Pilot (ssi-chat-j)
+open http://localhost:8097   # Technology Auditor Console
 ```
 
 `clean-slate.sh` wipes volumes, rebuilds, starts infra in order (ZITADEL PAT race), seeds demo users. Domain data stays empty unless `--with-demo-seed`.
@@ -227,6 +228,7 @@ open http://localhost:8096   # Policy Pilot (ssi-chat-j)
 | URL | What |
 |-----|------|
 | http://localhost:8096 | Policy Pilot (`ssi-chat-j`) |
+| http://localhost:8097 | Technology Auditor Console (`TECH_AUDITORS`) |
 | http://localhost:8091 | Demo harness |
 | http://localhost:8090 | Indexer search console |
 | http://localhost:8000 | Instruction service |
@@ -235,7 +237,7 @@ open http://localhost:8096   # Policy Pilot (ssi-chat-j)
 | http://localhost:8095 | Sequence service |
 | http://localhost:7474/browser/ | Neo4j Browser (`neo4j` / `devpassword`) |
 
-Demo logins: **[domain-models.md](domain-models.md)**. More ops: **[local-development.md](local-development.md)**.
+Demo logins: **[domain-models.md](domain-models.md)** (includes `audit-001` … `audit-003`). More ops: **[local-development.md](local-development.md)**.
 
 ---
 
@@ -268,6 +270,7 @@ Demo logins: **[domain-models.md](domain-models.md)**. More ops: **[local-develo
 | `sequence-service` | [README](../sequence-service/README.md) | 8095 |
 | `ssi-indexer` | [README](../ssi-indexer/README.md) | 8090 |
 | `ssi-chat-j` | [README](../ssi-chat-j/README.md) | 8096 |
+| `audit-service` | [README](../audit-service/README.md) | 8097 |
 | `ssi-demo-harness` | [README](../ssi-demo-harness/README.md) | 8091 |
 | `neo4j-graph-model` | [README](../neo4j-graph-model/README.md) | — |
 | `opa-policy-seed` | [README](../opa-policy-seed/README.md) | — |

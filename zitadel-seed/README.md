@@ -22,6 +22,23 @@ Default password: **`Password1!`** (see `defaults.password` in `users.yaml`).
 
 Login names: `{user_id}@ssi.local` (e.g. `mo-100@ssi.local`).
 
+### Technology auditors
+
+Technology auditors are a separate read-only persona, not platform administrators
+or compliance users:
+
+| User id | Name | Title | Role | Group |
+|---------|------|-------|------|-------|
+| `audit-001` | Taylor Brooks | Technology Auditor | `TECH_AUDITOR` | `TECH_AUDITORS` |
+| `audit-002` | Riley Quinn | Technology Auditor | `TECH_AUDITOR` | `TECH_AUDITORS` |
+| `audit-003` | Casey Nguyen | Senior Technology Auditor | `TECH_AUDITOR` | `TECH_AUDITORS` |
+
+The [Technology Auditor Console](../audit-service/README.md) checks exact
+`TECH_AUDITORS` membership on every evidence API. `TECH_AUDITOR` describes the
+persona but does not grant instruction/payment lifecycle actions. Do not add
+auditors to `ADMIN`, `MIDDLE_OFFICE`, or amount-limit groups merely to open the
+console.
+
 ### Payment amount-limit clubs
 
 | Group | Max payment (USD) |
@@ -37,6 +54,9 @@ PAT=$(docker exec zitadel-login cat /zitadel/bootstrap/login-client.pat | tr -d 
 cd zitadel-seed
 ZITADEL_PAT="$PAT" python3 seed.py
 ```
+
+The seed is idempotent by login name: existing users are updated with current
+profile and metadata, while missing users are created.
 
 Options:
 

@@ -16,6 +16,12 @@ RUN_DLQ_INTEGRATION=1 pytest tests/integration/test_dlq_neo4j_outage.py -v
 
 http://localhost:8090
 
+The Search Console queries the Neo4j projection. For source-of-truth Mongo
+security events, governed Create Payment audit records, and linked OPA request /
+response evidence, use the
+[Technology Auditor Console](../audit-service/README.md) at
+http://localhost:8097 (`TECH_AUDITORS` only).
+
 ## ML stack
 
 | Role | Provider | Model |

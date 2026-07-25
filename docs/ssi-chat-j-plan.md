@@ -18,7 +18,7 @@ This document records the original A/B experiment decisions. Do not treat the A/
 | Cypher | HTTP sidecar over `shared/cypher_builder` | **Superseded** by in-process `com.sanjuthomas.policypilot.cypher` |
 | UI | Thymeleaf + copy statics from Python | **Vendored** under `ssi-chat-j/.../static/` |
 | Success bar | Golden eval green on `:8096` | Bank now **98** cases under `ssi-chat-j/eval/` |
-| Ports | Java 8096 · Python 8092 · bridge 8097 | **8096 only** for chat |
+| Ports | Java 8096 · Python 8092 · bridge 8097 | **8096 only** for chat; retired bridge port **8097** is now **`audit-service`** (Technology Auditor Console), not a cypher sidecar |
 
 ---
 

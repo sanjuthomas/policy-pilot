@@ -142,6 +142,11 @@ Key OPA rules include: creator cannot approve own instruction; approver must not
 
 Events use ECS-style fields (`event`, `actor`, `resource`, `source`).
 
+The instruction service no longer hosts a security-event monitor. Members of
+`TECH_AUDITORS` browse instruction and payment events together in the standalone
+[Technology Auditor Console](../audit-service/README.md) on port 8097. Event
+generation and storage remain in instruction-service; only the read UI moved.
+
 ### Authorization audit block
 
 On every policy decision the service stores `details.authorization`:

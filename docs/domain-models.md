@@ -53,8 +53,16 @@ All passwords are `Password1!`. Login names follow `{user_id}@ssi.local`.
 | `pay-201` | Sophie Laurent | VP — funding approver | FICC, FX |
 | `comp-001` / `comp-002` | Compliance analysts | Policy Pilot + live eligible-approvers | — |
 | `admin-001` | Platform Administrator | Secured UIs + Policy Pilot | — |
+| `audit-001` | Taylor Brooks | Technology auditor (`TECH_AUDITOR` / `TECH_AUDITORS`) | — |
+| `audit-002` | Riley Quinn | Technology auditor (`TECH_AUDITOR` / `TECH_AUDITORS`) | — |
+| `audit-003` | Casey Nguyen | Senior technology auditor (`TECH_AUDITOR` / `TECH_AUDITORS`) | — |
 
-Service accounts: `svc-instruction`, `svc-payment` (OBO to authorization-service).
+Service accounts: `svc-instruction`, `svc-payment`, `svc-chat` (OBO to authorization-service).
+
+Technology auditors are read-only. Exact membership in group `TECH_AUDITORS` gates the
+[Technology Auditor Console](../audit-service/README.md) at http://localhost:8097.
+Role `TECH_AUDITOR` describes the persona and does not grant instruction/payment
+lifecycle actions.
 
 Full roster, payment amount clubs, and metadata keys: `zitadel-seed/users.yaml` and [zitadel-seed/README.md](../zitadel-seed/README.md). That YAML is **seed-only**; runtime directory and eligibility use ZITADEL.
 

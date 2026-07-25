@@ -28,6 +28,24 @@ The former Python `ssi-chat` UI and `cypher-builder-svc` HTTP bridge are retired
   - `POST /api/chat/feedback`
   - `GET /api/routing-stats`, `GET /api/feedback-stats`
 
+## Governed activity evidence
+
+Create Payment records a governed activity execution before presenting the Go /
+No Go confirmation:
+
+1. Chat persists the request, actor, interpretation, skill, timeline, timings, and
+   provisional OPA evaluate exchange through payment-service.
+2. Confirmation and authoritative policy recheck update the same execution.
+3. On Go, chat passes `X-Audit-Execution-Id` to payment-service.
+4. Payment-service links the completed execution to the authoritative payment
+   security event.
+
+`AuditExecutionClient` remains a write-only integration for this evidence flow.
+Chat does not host an audit viewer or read BFF. Its UI links to the standalone
+[Technology Auditor Console](../audit-service/README.md) at
+**http://localhost:8097**, where `TECH_AUDITORS` members inspect all records and
+follow linked OPA evidence.
+
 ## Intent routing
 
 Natural-language intent uses Spring AI structured `RouterDecision` (path + LLM slots). Open-vocabulary filters (status, type, amounts, skill dates) are **slots**, not synonym tables or free-text amount/date regex. Regex is OK for stable tokens (sequence ids, explicit clubs) after path is known. Details: [`docs/intent-determination.md`](../docs/intent-determination.md), [`AGENTS.md`](AGENTS.md).

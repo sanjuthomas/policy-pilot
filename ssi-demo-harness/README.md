@@ -30,6 +30,15 @@ Harness actions and `seed_extra_alerts` call `GET /api/v1/instructions?limit=500
 
 http://localhost:8091
 
+Generated instruction/payment security events are inspected in the
+[Technology Auditor Console](../audit-service/README.md) at
+http://localhost:8097. Sign in as `audit-001`, `audit-002`, or `audit-003`
+(`Password1!`); all belong to `TECH_AUDITORS`.
+
+The harness creates domain traffic and security events. Governed Create Payment
+audit executions are produced by the Java chat skill, not by bulk harness payment
+creation.
+
 ## Actions (UI)
 
 Each action has a count field and a run button:

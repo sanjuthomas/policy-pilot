@@ -94,6 +94,7 @@ There is no application log file on disk; optional console mirroring uses `OTEL_
 | URL | Service |
 |-----|---------|
 | http://localhost:8096 | Policy Pilot (`ssi-chat-j`) |
+| http://localhost:8097 | Technology Auditor Console (`TECH_AUDITORS`) |
 | http://localhost:8000/ui/ | Instruction browser |
 | http://localhost:8093/ui/ | Payment browser |
 | http://localhost:8090 | SSI indexer search console |
