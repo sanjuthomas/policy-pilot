@@ -192,26 +192,20 @@ async def test_list_current_excludes_cancelled(
 
 
 @pytest.mark.asyncio
-async def test_summarize_current_aggregates_type_and_status(
+async def test_summarize_current_aggregates_by_status(
     patched_db: MagicMock,
 ) -> None:
     async def _async_iter():
-        yield {
-            "_id": {"instruction_type": "STANDING", "status": "APPROVED"},
-            "count": 10,
-        }
-        yield {
-            "_id": {"instruction_type": "SINGLE_USE", "status": "DRAFT"},
-            "count": 5,
-        }
+        yield {"_id": "APPROVED", "count": 10}
+        yield {"_id": "DRAFT", "count": 5}
 
     patched_db.aggregate.return_value = _async_iter()
     repo = PaymentRepository()
     summary = await repo.summarize_current()
     assert summary["total"] == 15
-    assert summary["by_type_status"] == [
-        {"instruction_type": "STANDING", "status": "APPROVED", "count": 10},
-        {"instruction_type": "SINGLE_USE", "status": "DRAFT", "count": 5},
+    assert summary["by_status"] == [
+        {"key": "APPROVED", "count": 10},
+        {"key": "DRAFT", "count": 5},
     ]
     pipeline = patched_db.aggregate.call_args.args[0]
     assert pipeline[0] == {
@@ -220,6 +214,7 @@ async def test_summarize_current_aggregates_type_and_status(
             "status": {"$ne": "CANCELLED"},
         }
     }
+    assert pipeline[1] == {"$group": {"_id": "$status", "count": {"$sum": 1}}}
 
 
 @pytest.mark.asyncio

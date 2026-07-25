@@ -28,7 +28,6 @@ from ps.models.api import (
     LifecycleEvent,
     PaymentBucketCount,
     PaymentSummaryResponse,
-    PaymentTypeStatusCount,
     RejectPaymentRequest,
     Subject,
     UserReference,
@@ -894,7 +893,7 @@ class PaymentService:
         *,
         owning_lob: str | None = None,
     ) -> PaymentSummaryResponse:
-        """Current-version instruction_type×status inventory (excludes cancelled)."""
+        """Current-version status inventory (excludes cancelled)."""
         if is_platform_admin(subject) or _is_compliance(subject):
             raw = await self.repo.summarize_current(owning_lob=owning_lob)
             return PaymentSummaryResponse.model_validate(raw)
@@ -903,44 +902,20 @@ class PaymentService:
             owning_lob=owning_lob,
             limit=10_000,
         )
-        by_type_status: dict[tuple[str, str], int] = {}
+        by_status: dict[str, int] = {}
         for record in records:
             if not _can_view_payment(subject, record.payment):
                 continue
-            key = (
-                record.payment.instruction_type or "UNKNOWN",
-                record.payment.status.value,
-            )
-            by_type_status[key] = by_type_status.get(key, 0) + 1
+            status = record.payment.status.value
+            by_status[status] = by_status.get(status, 0) + 1
 
-        cells = [
-            PaymentTypeStatusCount(
-                instruction_type=instruction_type,
-                status=status,
-                count=count,
-            )
-            for (instruction_type, status), count in sorted(by_type_status.items())
+        buckets = [
+            PaymentBucketCount(key=name, count=by_status[name])
+            for name in sorted(by_status)
         ]
-        by_type: dict[str, int] = {}
-        by_status: dict[str, int] = {}
-        total = 0
-        for cell in cells:
-            total += cell.count
-            by_type[cell.instruction_type] = (
-                by_type.get(cell.instruction_type, 0) + cell.count
-            )
-            by_status[cell.status] = by_status.get(cell.status, 0) + cell.count
         return PaymentSummaryResponse(
-            total=total,
-            by_type_status=cells,
-            by_type=[
-                PaymentBucketCount(key=name, count=by_type[name])
-                for name in sorted(by_type)
-            ],
-            by_status=[
-                PaymentBucketCount(key=name, count=by_status[name])
-                for name in sorted(by_status)
-            ],
+            total=sum(bucket.count for bucket in buckets),
+            by_status=buckets,
         )
 
     async def eligible_approvers(

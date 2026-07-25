@@ -775,14 +775,6 @@ async def test_summarize_uses_mongo_aggregate_for_admin(
     service.repo.summarize_current = AsyncMock(
         return_value={
             "total": 2,
-            "by_type_status": [
-                {
-                    "instruction_type": "STANDING",
-                    "status": "APPROVED",
-                    "count": 2,
-                }
-            ],
-            "by_type": [{"key": "STANDING", "count": 2}],
             "by_status": [{"key": "APPROVED", "count": 2}],
         }
     )
@@ -801,7 +793,6 @@ async def test_summarize_filters_to_viewable_for_non_admin(
     hidden = payment.model_copy(deep=True)
     hidden.payment_id = "pay-hidden"
     hidden.owning_lob = "FX"
-    hidden.instruction_type = "SINGLE_USE"
     hidden.status = PaymentStatus.SUBMITTED
     hidden.created_by = hidden.created_by.model_copy(update={"user_id": "someone-else"})
     service.repo.list_current = AsyncMock(
@@ -810,8 +801,8 @@ async def test_summarize_filters_to_viewable_for_non_admin(
 
     summary = await service.summarize(subject)
     assert summary.total == 1
-    assert summary.by_type_status[0].instruction_type == payment.instruction_type
-    assert summary.by_type_status[0].status == payment.status.value
+    assert summary.by_status[0].key == payment.status.value
+    assert summary.by_status[0].count == 1
     service.repo.summarize_current.assert_not_called()
 
 

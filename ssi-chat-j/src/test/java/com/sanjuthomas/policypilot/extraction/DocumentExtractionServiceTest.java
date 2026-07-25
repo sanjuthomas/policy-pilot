@@ -319,10 +319,10 @@ class DocumentExtractionServiceTest {
             Map.of(
                 "total",
                 21,
-                "by_type_status",
+                "by_status",
                 List.of(
-                    Map.of("instruction_type", "STANDING", "status", "DRAFT", "count", 8),
-                    Map.of("instruction_type", "SINGLE_USE", "status", "APPROVED", "count", 13)))));
+                    Map.of("key", "DRAFT", "count", 8),
+                    Map.of("key", "APPROVED", "count", 13)))));
 
     RouterDecision decision = new RouterDecision();
     decision.setExtractionTarget("payment");
@@ -332,8 +332,9 @@ class DocumentExtractionServiceTest {
 
     assertEquals("payment.summary", result.intentId());
     assertTrue(result.answer().contains("There are **21** payments in the system."));
-    assertTrue(result.answer().contains("STANDING"));
-    assertTrue(result.answer().contains("SINGLE_USE"));
+    assertTrue(result.answer().contains("| status | count |"));
+    assertTrue(result.answer().contains("APPROVED"));
+    assertTrue(result.answer().contains("DRAFT"));
   }
 
   @Test

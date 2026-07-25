@@ -162,26 +162,10 @@ def test_list_payments(api_client: TestClient, versioned_payment) -> None:
 
 
 def test_summarize_payments(api_client: TestClient) -> None:
-    from ps.models.api import (
-        PaymentBucketCount,
-        PaymentSummaryResponse,
-        PaymentTypeStatusCount,
-    )
+    from ps.models.api import PaymentBucketCount, PaymentSummaryResponse
 
     api_client.mock_service.summarize.return_value = PaymentSummaryResponse(
         total=3,
-        by_type_status=[
-            PaymentTypeStatusCount(
-                instruction_type="STANDING", status="APPROVED", count=2
-            ),
-            PaymentTypeStatusCount(
-                instruction_type="SINGLE_USE", status="DRAFT", count=1
-            ),
-        ],
-        by_type=[
-            PaymentBucketCount(key="SINGLE_USE", count=1),
-            PaymentBucketCount(key="STANDING", count=2),
-        ],
         by_status=[
             PaymentBucketCount(key="APPROVED", count=2),
             PaymentBucketCount(key="DRAFT", count=1),
@@ -195,7 +179,7 @@ def test_summarize_payments(api_client: TestClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["total"] == 3
-    assert body["by_type_status"][0]["instruction_type"] == "STANDING"
+    assert body["by_status"][0]["key"] == "APPROVED"
     api_client.mock_service.summarize.assert_awaited_once()
 
 

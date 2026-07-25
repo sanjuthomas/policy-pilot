@@ -196,7 +196,7 @@ public class DocumentExtractionService {
             eligibilityClient.summarizePayments(
                 listLob, subject.bearerToken(), subject.sessionId());
         return new DocumentExtractionResult(
-            entityApiAnswerFormatter.formatPaymentTypeStatusSummary(summary), "payment.summary");
+            entityApiAnswerFormatter.formatPaymentStatusSummary(summary), "payment.summary");
       }
       List<Map<String, Object>> rows =
           eligibilityClient.listPayments(

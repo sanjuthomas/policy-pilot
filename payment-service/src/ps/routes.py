@@ -147,7 +147,7 @@ async def summarize_payments(
     subject: Subject = Depends(get_subject),
     service: PaymentService = Depends(get_service),
 ) -> PaymentSummaryResponse:
-    """Current-version counts by instruction type × status (excludes cancelled)."""
+    """Current-version counts by status (excludes cancelled)."""
     return await service.summarize(subject, owning_lob=owning_lob)
 
 

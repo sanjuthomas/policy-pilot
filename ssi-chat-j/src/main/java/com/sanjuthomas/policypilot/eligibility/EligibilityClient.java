@@ -258,10 +258,7 @@ public class EligibilityClient {
         "instruction service error: ");
   }
 
-  /**
-   * Current-version payment inventory summary (linked instruction type × status), excluding
-   * cancelled payments.
-   */
+  /** Current-version payment inventory summary by status, excluding cancelled payments. */
   public Map<String, Object> summarizePayments(
       String owningLob, String userBearerToken, String userSessionId) {
     StringBuilder url =

@@ -96,7 +96,7 @@ class EligibilityClientTest {
         .andExpect(method(HttpMethod.GET))
         .andRespond(
             withSuccess(
-                "{\"total\":21,\"by_type_status\":[{\"instruction_type\":\"STANDING\",\"status\":\"DRAFT\",\"count\":8}]}",
+                "{\"total\":21,\"by_status\":[{\"key\":\"DRAFT\",\"count\":8}]}",
                 MediaType.APPLICATION_JSON));
 
     assertEquals(21, client.summarizePayments("FICC", "user-tok", "user-sess").get("total"));
