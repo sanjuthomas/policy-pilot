@@ -152,7 +152,7 @@ Create Payment also persists a governed **audit execution** so technology audito
 | Phase 2 No Go / cancel | Terminal cancelled statuses | Still policy_exchange (no security event) |
 | Phase 2 Go create | Linked `COMPLETED` / `allow` | Authoritative OPA on the payment security event; `policy_exchange` unset |
 
-Writers are **ssi-chat-j → payment-service** (`POST`/`PATCH /api/v1/audit-executions`, create header `X-Audit-Execution-Id`). Readers are **audit-service** (`TECH_AUDITORS`) via `/audit/{execution_id}` and `/api/audit-executions/{id}/opa`. See [payment-service/README.md](../payment-service/README.md#governed-create-payment-audit-executions) and [audit-service/README.md](../audit-service/README.md).
+Writers are **ssi-chat-j → payment-service** (`POST`/`PATCH /api/v1/audit-executions`, mutation header `X-Audit-Execution-Id`). The same pattern applies to submit / approve / cancel via `PaymentIdSkillFlow`. Readers are **audit-service** (`TECH_AUDITORS`) via `/audit/{execution_id}` and `/api/audit-executions/{id}/opa`. See [payment-service/README.md](../payment-service/README.md#governed-payment-skill-audit-executions) and [audit-service/README.md](../audit-service/README.md).
 
 ---
 

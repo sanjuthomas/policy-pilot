@@ -22,7 +22,7 @@ async function load() {
         ${field("Status", execution.status)}${field("Actor", actor.user_id)}
         ${field("Roles", (actor.roles || []).join(", "))}${field("Instruction", request.instruction_id)}
         ${field("Amount", request.amount)}${field("Value date", request.value_date)}
-        ${field("Payment", result.payment_id)}${field("Security event", governance.security_event_id)}
+        ${field("Payment", result.payment_id || request.payment_id)}${field("Security event", governance.security_event_id)}
       </dl>
     </section>
     <section class="card"><div class="card-header"><h2>Timeline</h2></div><ol class="timeline">${timeline || "<li>No steps recorded</li>"}</ol></section>`;

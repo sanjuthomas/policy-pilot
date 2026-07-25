@@ -371,7 +371,7 @@ class PaymentService:
         bearer_token: str | None = None,
         session_id: str | None = None,
         skip_authorize: bool = False,
-    ) -> VersionedPayment:
+    ) -> tuple[VersionedPayment, str | None]:
         if not skip_authorize:
             authorization = await self._authorize(
                 action,
@@ -384,13 +384,27 @@ class PaymentService:
             )
             details = details_with_authorization(details, authorization)
         self._record_event(payment, action, subject, details)
-        saved, _ = await self._save_payment_with_security_event(
+        return await self._save_payment_with_security_event(
             payment,
             action,
             subject,
             details=details,
         )
-        return saved
+
+    async def _link_audit_execution(
+        self,
+        audit_execution_id: str | None,
+        event_id: str | None,
+        payment_id: str,
+        subject: Subject,
+    ) -> None:
+        if audit_execution_id and event_id:
+            await self.audit_repo.link_security_event(
+                audit_execution_id,
+                security_event_id=event_id,
+                payment_id=payment_id,
+                actor_user_id=subject.user_id,
+            )
 
     def _record_event(
         self,
@@ -543,7 +557,7 @@ class PaymentService:
         payment.instruction_version = instruction_version
         payment.updated_at = datetime.now(timezone.utc)
 
-        saved = await self._persist_new_version(
+        saved, _ = await self._persist_new_version(
             payment,
             PaymentAction.UPDATE,
             subject,
@@ -569,6 +583,7 @@ class PaymentService:
         subject: Subject,
         bearer_token: str | None = None,
         session_id: str | None = None,
+        audit_execution_id: str | None = None,
     ) -> VersionedPayment:
         current = await self._get_current_or_404(payment_id)
         payment = current.payment.model_copy(deep=True)
@@ -655,7 +670,7 @@ class PaymentService:
         payment.updated_at = now
 
         details = details_with_authorization(None, authorization)
-        saved = await self._persist_new_version(
+        saved, event_id = await self._persist_new_version(
             payment,
             PaymentAction.SUBMIT,
             subject,
@@ -665,6 +680,9 @@ class PaymentService:
             bearer_token=bearer_token,
             session_id=session_id,
             skip_authorize=True,
+        )
+        await self._link_audit_execution(
+            audit_execution_id, event_id, saved.payment.payment_id, subject
         )
 
         logger.info("payment submitted payment_id=%s by=%s", payment_id, subject.user_id)
@@ -678,6 +696,7 @@ class PaymentService:
         subject: Subject,
         bearer_token: str | None = None,
         session_id: str | None = None,
+        audit_execution_id: str | None = None,
     ) -> VersionedPayment:
         current = await self._get_current_or_404(payment_id)
         payment = current.payment.model_copy(deep=True)
@@ -694,11 +713,21 @@ class PaymentService:
             cancellation_reason = (
                 f"backing instruction {payment.instruction_id} could not be found at approval time"
             )
-            return await self._cancel(payment, subject, cancellation_reason)
+            return await self._cancel(
+                payment,
+                subject,
+                cancellation_reason,
+                audit_execution_id=audit_execution_id,
+            )
 
         invalid_reason = _check_instruction_validity_for_approval(payment, instruction)
         if invalid_reason:
-            return await self._cancel(payment, subject, invalid_reason)
+            return await self._cancel(
+                payment,
+                subject,
+                invalid_reason,
+                audit_execution_id=audit_execution_id,
+            )
 
         instruction_end_date = instruction.get("end_date") or ""
         instruction_status = instruction.get("status", "")
@@ -709,7 +738,7 @@ class PaymentService:
         payment.approved_at = now
         payment.updated_at = now
 
-        saved = await self._persist_new_version(
+        saved, event_id = await self._persist_new_version(
             payment,
             PaymentAction.APPROVE,
             subject,
@@ -717,6 +746,9 @@ class PaymentService:
             instruction_status=instruction_status,
             bearer_token=bearer_token,
             session_id=session_id,
+        )
+        await self._link_audit_execution(
+            audit_execution_id, event_id, saved.payment.payment_id, subject
         )
 
         logger.info("payment approved payment_id=%s by=%s", payment_id, subject.user_id)
@@ -731,6 +763,7 @@ class PaymentService:
         request: RejectPaymentRequest,
         bearer_token: str | None = None,
         session_id: str | None = None,
+        audit_execution_id: str | None = None,
     ) -> VersionedPayment:
         current = await self._get_current_or_404(payment_id)
         payment = current.payment.model_copy(deep=True)
@@ -756,7 +789,7 @@ class PaymentService:
         payment.rejected_at = now
         payment.updated_at = now
 
-        saved = await self._persist_new_version(
+        saved, event_id = await self._persist_new_version(
             payment,
             PaymentAction.REJECT,
             subject,
@@ -765,6 +798,9 @@ class PaymentService:
             instruction_status=instruction_status,
             bearer_token=bearer_token,
             session_id=session_id,
+        )
+        await self._link_audit_execution(
+            audit_execution_id, event_id, saved.payment.payment_id, subject
         )
 
         await self._try_release_single_use_instruction(
@@ -784,6 +820,7 @@ class PaymentService:
         *,
         bearer_token: str | None = None,
         session_id: str | None = None,
+        audit_execution_id: str | None = None,
     ) -> VersionedPayment:
         current = await self._get_current_or_404(payment_id)
         payment = current.payment.model_copy(deep=True)
@@ -832,7 +869,7 @@ class PaymentService:
             authorization,
         )
 
-        saved = await self._persist_new_version(
+        saved, event_id = await self._persist_new_version(
             payment,
             PaymentAction.CANCEL,
             subject,
@@ -842,6 +879,9 @@ class PaymentService:
             bearer_token=bearer_token,
             session_id=session_id,
             skip_authorize=True,
+        )
+        await self._link_audit_execution(
+            audit_execution_id, event_id, saved.payment.payment_id, subject
         )
 
         await self._try_release_single_use_instruction(
@@ -962,7 +1002,14 @@ class PaymentService:
 
     # ── Internal helpers ──────────────────────────────────────────────────────
 
-    async def _cancel(self, payment: Payment, subject: Subject, reason: str) -> VersionedPayment:
+    async def _cancel(
+        self,
+        payment: Payment,
+        subject: Subject,
+        reason: str,
+        *,
+        audit_execution_id: str | None = None,
+    ) -> VersionedPayment:
         """Move a payment to CANCELLED and record a security event with the approver's identity."""
         now = datetime.now(timezone.utc)
         payment.status = PaymentStatus.CANCELLED
@@ -977,11 +1024,14 @@ class PaymentService:
             details={"reason": reason},
         )
 
-        saved, _ = await self._save_payment_with_security_event(
+        saved, event_id = await self._save_payment_with_security_event(
             payment,
             PaymentAction.CANCEL,
             subject,
             details={"reason": reason},
+        )
+        await self._link_audit_execution(
+            audit_execution_id, event_id, saved.payment.payment_id, subject
         )
 
         await self._try_release_single_use_instruction(saved.payment)

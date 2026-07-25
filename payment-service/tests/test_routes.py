@@ -234,9 +234,18 @@ def test_submit_payment(api_client: TestClient, versioned_payment) -> None:
     api_client.mock_service.submit.return_value = submitted
     response = api_client.post(
         f"/api/v1/payments/{versioned_payment.payment.payment_id}/submit",
-        headers={**_headers(), "Authorization": "Bearer user-token"},
+        headers={
+            **_headers(),
+            "Authorization": "Bearer user-token",
+            "X-Audit-Execution-Id": "aud-submit-1",
+        },
     )
     assert response.status_code == 200
+    api_client.mock_service.submit.assert_awaited_once()
+    assert (
+        api_client.mock_service.submit.await_args.kwargs["audit_execution_id"]
+        == "aud-submit-1"
+    )
 
 
 def test_approve_payment(api_client: TestClient, versioned_payment) -> None:

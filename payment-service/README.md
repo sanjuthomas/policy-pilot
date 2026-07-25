@@ -86,10 +86,10 @@ Payments use the same **versioned append-only** pattern as instruction-service.
 |-------|----------|
 | MongoDB | `ssi_cash_activities.payments` |
 
-## Governed Create Payment audit executions
+## Governed payment skill audit executions
 
-The Java chat Create Payment skill records the AI/capability context separately
-from the OPA security event:
+Java chat payment skills (create / submit / approve / cancel) record AI/capability
+context separately from the OPA security event:
 
 | Evidence | Stored content |
 |----------|----------------|
@@ -103,8 +103,9 @@ Chat creates and patches `ssi_cash_activities.audit_executions` through:
 | POST | `/api/v1/audit-executions` | Start an execution before confirmation |
 | PATCH | `/api/v1/audit-executions/{execution_id}` | Record confirmation, policy recheck, cancellation, failure, or result |
 
-On confirmed payment creation, chat sends `X-Audit-Execution-Id`. Payment-service
-creates the payment and security event transactionally, then links the execution
+On confirmed Go, chat sends `X-Audit-Execution-Id` on the mutation
+(`POST /payments`, `/submit`, `/approve`, or `/cancel`). Payment-service writes
+the payment version and security event transactionally, then links the execution
 to the new event in `governance.security_event_id`. Once linked, the provisional
 `governance.policy_exchange` is removed so there is one authoritative OPA record.
 

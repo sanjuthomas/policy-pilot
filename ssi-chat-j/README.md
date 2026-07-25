@@ -30,13 +30,13 @@ The former Python `ssi-chat` UI and `cypher-builder-svc` HTTP bridge are retired
 
 ## Governed activity evidence
 
-Create Payment records a governed activity execution before presenting the Go /
-No Go confirmation:
+Payment skills (create / submit / approve / cancel) record a governed activity
+execution before presenting the Go / No Go confirmation:
 
 1. Chat persists the request, actor, interpretation, skill, timeline, timings, and
    provisional OPA evaluate exchange through payment-service.
 2. Confirmation and authoritative policy recheck update the same execution.
-3. On Go, chat passes `X-Audit-Execution-Id` to payment-service.
+3. On Go, chat passes `X-Audit-Execution-Id` on the mutation call.
 4. Payment-service links the completed execution to the authoritative payment
    security event.
 

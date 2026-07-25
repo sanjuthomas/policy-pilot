@@ -230,6 +230,7 @@ async def submit_payment(
     x_on_behalf_of_session_id: str | None = Header(
         default=None, alias="X-On-Behalf-Of-Session-Id"
     ),
+    x_audit_execution_id: str | None = Header(default=None, alias="X-Audit-Execution-Id"),
 ) -> PaymentResponse:
     user_token, user_session_id = _user_tokens(
         authorization, x_session_id, x_on_behalf_of, x_on_behalf_of_session_id
@@ -240,6 +241,7 @@ async def submit_payment(
         subject,
         bearer_token=user_token,
         session_id=user_session_id,
+        audit_execution_id=x_audit_execution_id,
     )
 
 
@@ -254,6 +256,7 @@ async def approve_payment(
     x_on_behalf_of_session_id: str | None = Header(
         default=None, alias="X-On-Behalf-Of-Session-Id"
     ),
+    x_audit_execution_id: str | None = Header(default=None, alias="X-Audit-Execution-Id"),
 ) -> PaymentResponse:
     user_token, user_session_id = _user_tokens(
         authorization, x_session_id, x_on_behalf_of, x_on_behalf_of_session_id
@@ -264,6 +267,7 @@ async def approve_payment(
         subject,
         bearer_token=user_token,
         session_id=user_session_id,
+        audit_execution_id=x_audit_execution_id,
     )
 
 
@@ -279,6 +283,7 @@ async def reject_payment(
     x_on_behalf_of_session_id: str | None = Header(
         default=None, alias="X-On-Behalf-Of-Session-Id"
     ),
+    x_audit_execution_id: str | None = Header(default=None, alias="X-Audit-Execution-Id"),
 ) -> PaymentResponse:
     user_token, user_session_id = _user_tokens(
         authorization, x_session_id, x_on_behalf_of, x_on_behalf_of_session_id
@@ -290,6 +295,7 @@ async def reject_payment(
         request,
         bearer_token=user_token,
         session_id=user_session_id,
+        audit_execution_id=x_audit_execution_id,
     )
 
 
@@ -305,6 +311,7 @@ async def cancel_payment(
     x_on_behalf_of_session_id: str | None = Header(
         default=None, alias="X-On-Behalf-Of-Session-Id"
     ),
+    x_audit_execution_id: str | None = Header(default=None, alias="X-Audit-Execution-Id"),
 ) -> PaymentResponse:
     user_token, user_session_id = _user_tokens(
         authorization, x_session_id, x_on_behalf_of, x_on_behalf_of_session_id
@@ -316,6 +323,7 @@ async def cancel_payment(
         request,
         bearer_token=user_token,
         session_id=user_session_id,
+        audit_execution_id=x_audit_execution_id,
     )
 
 
@@ -361,6 +369,7 @@ async def _lifecycle_action(
     *args,
     bearer_token: str | None = None,
     session_id: str | None = None,
+    audit_execution_id: str | None = None,
 ):
     try:
         record = await handler(
@@ -369,6 +378,7 @@ async def _lifecycle_action(
             *args,
             bearer_token=bearer_token,
             session_id=session_id,
+            audit_execution_id=audit_execution_id,
         )
         return _to_response(record)
     except LookupError as exc:
