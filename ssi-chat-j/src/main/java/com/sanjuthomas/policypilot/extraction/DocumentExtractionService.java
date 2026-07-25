@@ -185,14 +185,25 @@ public class DocumentExtractionService {
     String listStatus = groupBy ? null : status;
     String timeWindow =
         resolved == Facet.COUNT || groupBy ? GraphAnswerHints.from(decision).timeWindow() : null;
+    String listLob = groupBy ? null : EntityApiQuestion.lobFilter(question);
+    boolean unfilteredCount =
+        resolved == Facet.COUNT
+            && !StringUtils.hasText(listStatus)
+            && !StringUtils.hasText(timeWindow);
     try {
+      if (unfilteredCount) {
+        Map<String, Object> summary =
+            eligibilityClient.summarizePayments(
+                listLob, subject.bearerToken(), subject.sessionId());
+        return new DocumentExtractionResult(
+            entityApiAnswerFormatter.formatPaymentStatusSummary(summary), "payment.summary");
+      }
       List<Map<String, Object>> rows =
           eligibilityClient.listPayments(
               listStatus, 500, subject.bearerToken(), subject.sessionId());
       rows = InventoryCreatedAtFilter.apply(rows, timeWindow);
-      String lob = groupBy ? null : EntityApiQuestion.lobFilter(question);
-      if (StringUtils.hasText(lob)) {
-        rows = filterByLob(rows, lob);
+      if (StringUtils.hasText(listLob)) {
+        rows = filterByLob(rows, listLob);
       }
       if (resolved == Facet.COUNT) {
         return new DocumentExtractionResult(

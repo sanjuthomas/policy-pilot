@@ -100,15 +100,78 @@ public class EntityApiAnswerFormatter {
    * </pre>
    */
   public String formatInstructionTypeStatusSummary(Map<String, Object> summary) {
+    return formatTypeStatusSummary(summary, "instructions");
+  }
+
+  /**
+   * Status breakdown from {@code GET /api/v1/payments/summary}.
+   *
+   * <p>Example shape:
+   *
+   * <pre>
+   * There are **21** payments in the system.
+   *
+   * | status | count |
+   * | APPROVED | 13 |
+   * | DRAFT | 8 |
+   * </pre>
+   */
+  public String formatPaymentStatusSummary(Map<String, Object> summary) {
+    String empty = "No matching payments were found.";
     if (summary == null || summary.isEmpty()) {
-      return "No matching instructions were found.";
+      return empty;
+    }
+    int total = toInt(summary.get("total"));
+    Object rawBuckets = summary.get("by_status");
+    if (!(rawBuckets instanceof List<?> buckets) || buckets.isEmpty()) {
+      return total <= 0 ? empty : "There are **" + total + "** payments in the system.";
+    }
+
+    List<Map.Entry<String, Integer>> rows = new ArrayList<>();
+    int summed = 0;
+    for (Object bucketObj : buckets) {
+      if (!(bucketObj instanceof Map<?, ?> bucket)) {
+        continue;
+      }
+      String status = displayOrNull(bucket.get("key"));
+      if (!StringUtils.hasText(status)) {
+        status = displayOrNull(bucket.get("status"));
+      }
+      if (!StringUtils.hasText(status)) {
+        continue;
+      }
+      int count = toInt(bucket.get("count"));
+      summed += count;
+      rows.add(Map.entry(status, count));
+    }
+    rows.sort(Map.Entry.comparingByKey());
+    if (rows.isEmpty()) {
+      return total <= 0 ? empty : "There are **" + total + "** payments in the system.";
+    }
+    if (total <= 0) {
+      total = summed;
+    }
+
+    StringBuilder sb = new StringBuilder();
+    sb.append("There are **").append(total).append("** payments in the system.\n\n");
+    sb.append("| status | count |\n");
+    sb.append("|---|---:|\n");
+    for (Map.Entry<String, Integer> row : rows) {
+      sb.append("| ").append(row.getKey()).append(" | ").append(row.getValue()).append(" |\n");
+    }
+    return sb.toString().strip();
+  }
+
+  String formatTypeStatusSummary(Map<String, Object> summary, String noun) {
+    String label = StringUtils.hasText(noun) ? noun.strip() : "rows";
+    String empty = "No matching " + label + " were found.";
+    if (summary == null || summary.isEmpty()) {
+      return empty;
     }
     int total = toInt(summary.get("total"));
     Object rawCells = summary.get("by_type_status");
     if (!(rawCells instanceof List<?> cells) || cells.isEmpty()) {
-      return total <= 0
-          ? "No matching instructions were found."
-          : "There are **" + total + "** instructions in the system.";
+      return total <= 0 ? empty : "There are **" + total + "** " + label + " in the system.";
     }
 
     List<String> statuses = new ArrayList<>();
@@ -134,13 +197,11 @@ public class EntityApiAnswerFormatter {
     types.sort(String::compareTo);
     statuses.sort(String::compareTo);
     if (types.isEmpty() || statuses.isEmpty()) {
-      return total <= 0
-          ? "No matching instructions were found."
-          : "There are **" + total + "** instructions in the system.";
+      return total <= 0 ? empty : "There are **" + total + "** " + label + " in the system.";
     }
 
     StringBuilder sb = new StringBuilder();
-    sb.append("There are **").append(total).append("** instructions in the system.\n\n");
+    sb.append("There are **").append(total).append("** ").append(label).append(" in the system.\n\n");
     sb.append("| type |");
     for (String status : statuses) {
       sb.append(' ').append(status).append(" |");

@@ -133,6 +133,7 @@ class PaymentRepository:
         *,
         instruction_id: str | None = None,
         status: str | None = None,
+        owning_lob: str | None = None,
         limit: int = 100,
         include_cancelled: bool = False,
     ) -> list[VersionedPayment]:
@@ -141,6 +142,8 @@ class PaymentRepository:
             query["instruction_id"] = instruction_id
         if status:
             query["status"] = status
+        if owning_lob:
+            query["owning_lob"] = owning_lob
 
         cursor = self._col.find(query).sort("in", -1).limit(limit)
         records = [document_to_versioned_payment(doc) async for doc in cursor]
@@ -151,6 +154,40 @@ class PaymentRepository:
             for record in records
             if record.payment.status != PaymentStatus.CANCELLED
         ]
+
+    async def summarize_current(
+        self,
+        *,
+        owning_lob: str | None = None,
+    ) -> dict[str, Any]:
+        """Aggregate current versions by ``status``.
+
+        Excludes historical versions and ``CANCELLED`` payments (same default as
+        ``list_current``).
+        """
+        match: dict[str, Any] = {
+            "out": PAYMENT_CURRENT_OUT,
+            "status": {"$ne": PaymentStatus.CANCELLED.value},
+        }
+        if owning_lob:
+            match["owning_lob"] = owning_lob
+        pipeline: list[dict[str, Any]] = [
+            {"$match": match},
+            {"$group": {"_id": "$status", "count": {"$sum": 1}}},
+            {"$sort": {"_id": 1}},
+        ]
+        rows = [doc async for doc in self._col.aggregate(pipeline)]
+        by_status: list[dict[str, Any]] = []
+        total = 0
+        for row in rows:
+            status = str(row.get("_id") or "UNKNOWN")
+            count = int(row.get("count") or 0)
+            total += count
+            by_status.append({"key": status, "count": count})
+        return {
+            "total": total,
+            "by_status": by_status,
+        }
 
     async def list_versions(self, payment_id: str) -> list[VersionedPayment]:
         cursor = self._col.find(self._payment_id_filter(payment_id)).sort(

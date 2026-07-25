@@ -161,6 +161,28 @@ def test_list_payments(api_client: TestClient, versioned_payment) -> None:
     assert len(response.json()) == 1
 
 
+def test_summarize_payments(api_client: TestClient) -> None:
+    from ps.models.api import PaymentBucketCount, PaymentSummaryResponse
+
+    api_client.mock_service.summarize.return_value = PaymentSummaryResponse(
+        total=3,
+        by_status=[
+            PaymentBucketCount(key="APPROVED", count=2),
+            PaymentBucketCount(key="DRAFT", count=1),
+        ],
+    )
+    response = api_client.get(
+        "/api/v1/payments/summary",
+        params={"owning_lob": "FICC"},
+        headers=_headers(),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 3
+    assert body["by_status"][0]["key"] == "APPROVED"
+    api_client.mock_service.summarize.assert_awaited_once()
+
+
 def test_get_payment_forbidden(api_client: TestClient, versioned_payment) -> None:
     api_client.mock_service.get.side_effect = PermissionError("denied")
     response = api_client.get(

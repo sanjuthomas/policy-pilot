@@ -26,6 +26,8 @@ from ps.instruction_client import (
 from ps.models.api import (
     CancelPaymentRequest,
     LifecycleEvent,
+    PaymentBucketCount,
+    PaymentSummaryResponse,
     RejectPaymentRequest,
     Subject,
     UserReference,
@@ -884,6 +886,37 @@ class PaymentService:
             if _can_view_payment(subject, record.payment):
                 visible.append(record)
         return visible
+
+    async def summarize(
+        self,
+        subject: Subject,
+        *,
+        owning_lob: str | None = None,
+    ) -> PaymentSummaryResponse:
+        """Current-version status inventory (excludes cancelled)."""
+        if is_platform_admin(subject) or _is_compliance(subject):
+            raw = await self.repo.summarize_current(owning_lob=owning_lob)
+            return PaymentSummaryResponse.model_validate(raw)
+
+        records = await self.repo.list_current(
+            owning_lob=owning_lob,
+            limit=10_000,
+        )
+        by_status: dict[str, int] = {}
+        for record in records:
+            if not _can_view_payment(subject, record.payment):
+                continue
+            status = record.payment.status.value
+            by_status[status] = by_status.get(status, 0) + 1
+
+        buckets = [
+            PaymentBucketCount(key=name, count=by_status[name])
+            for name in sorted(by_status)
+        ]
+        return PaymentSummaryResponse(
+            total=sum(bucket.count for bucket in buckets),
+            by_status=buckets,
+        )
 
     async def eligible_approvers(
         self,

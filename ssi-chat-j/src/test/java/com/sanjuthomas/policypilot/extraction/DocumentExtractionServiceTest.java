@@ -312,6 +312,32 @@ class DocumentExtractionServiceTest {
   }
 
   @Test
+  void countsUnfilteredPaymentsViaSummaryApi() {
+    client.returning(
+        Map.of(
+            "payment_summary",
+            Map.of(
+                "total",
+                21,
+                "by_status",
+                List.of(
+                    Map.of("key", "DRAFT", "count", 8),
+                    Map.of("key", "APPROVED", "count", 13)))));
+
+    RouterDecision decision = new RouterDecision();
+    decision.setExtractionTarget("payment");
+    decision.setExtractionFacet("count");
+    DocumentExtractionResult result =
+        service.answer("How many payments do we have in the system?", subject(), decision);
+
+    assertEquals("payment.summary", result.intentId());
+    assertTrue(result.answer().contains("There are **21** payments in the system."));
+    assertTrue(result.answer().contains("| status | count |"));
+    assertTrue(result.answer().contains("APPROVED"));
+    assertTrue(result.answer().contains("DRAFT"));
+  }
+
+  @Test
   void countsPaymentsCreatedThisWeekWithLobFilter() {
     client.returning(
         Map.of(

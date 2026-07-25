@@ -1,5 +1,6 @@
 package com.sanjuthomas.policypilot.extraction;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sanjuthomas.policypilot.formatting.AnswerRenderer;
@@ -77,6 +78,28 @@ class EntityApiAnswerFormatterInventoryTest {
     assertTrue(text.contains("SINGLE_USE"));
     assertTrue(text.contains("STANDING"));
     assertTrue(text.contains("**TOTAL**"));
+  }
+
+  @Test
+  void formatsPaymentStatusSummaryByStatus() {
+    String empty = formatter.formatPaymentStatusSummary(Map.of());
+    assertTrue(empty.contains("No matching payments"));
+
+    String text =
+        formatter.formatPaymentStatusSummary(
+            Map.of(
+                "total",
+                21,
+                "by_status",
+                List.of(
+                    Map.of("key", "DRAFT", "count", 8),
+                    Map.of("key", "APPROVED", "count", 13))));
+    assertTrue(text.contains("There are **21** payments in the system."));
+    assertTrue(text.contains("| status | count |"));
+    assertTrue(text.contains("APPROVED"));
+    assertTrue(text.contains("DRAFT"));
+    assertFalse(text.contains("| type |"));
+    assertFalse(text.contains("STANDING"));
   }
 
   @Test

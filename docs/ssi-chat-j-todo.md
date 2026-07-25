@@ -2,7 +2,7 @@
 
 Status tracker for **Policy Pilot chat** (`ssi-chat-j`). Historical A/B plan: [`ssi-chat-j-plan.md`](ssi-chat-j-plan.md).
 
-**Success bar:** golden eval green against `http://localhost:8096` (**98** cases in `ssi-chat-j/eval/`). Python `ssi-chat` and `cypher-builder-svc` are **retired**.
+**Success bar:** golden eval green against `http://localhost:8096` (**99** cases in `ssi-chat-j/eval/`). Python `ssi-chat` and `cypher-builder-svc` are **retired**.
 
 Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `blocked` · `deferred`.
 
@@ -41,7 +41,7 @@ Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `
 | **Python chat + cypher HTTP bridge retired** | `done` | Compose/CI use `ssi-chat-j` only; UI vendored under `ssi-chat-j/.../static/` |
 | **Next** | `todo` | Facet-family goldens / prove flakes (seed context, LOB-scope denials) |
 
-**Bank snapshot:** prove bank **98** (policies 11 · me 18 · skills 17 · graph/entity/SoD/vector remainder).
+**Bank snapshot:** prove bank **99** (policies 11 · me 18 · skills 17 · graph/entity/SoD/vector remainder).
 
 ### neo4j_direct / entity facets (historical Python YAML parity)
 

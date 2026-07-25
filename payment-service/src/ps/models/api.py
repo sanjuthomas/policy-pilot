@@ -107,6 +107,18 @@ class EligibleApproverResponse(BaseModel):
     allow_basis: list[str] = Field(default_factory=list)
 
 
+class PaymentBucketCount(BaseModel):
+    key: str
+    count: int
+
+
+class PaymentSummaryResponse(BaseModel):
+    """Current-version inventory totals (``out`` = infinity sentinel only)."""
+
+    total: int
+    by_status: list[PaymentBucketCount]
+
+
 class PaymentEligibleApproversResponse(BaseModel):
     payment_id: str
     instruction_id: str
