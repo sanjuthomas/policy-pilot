@@ -31,8 +31,8 @@ flowchart TB
     PG[(Postgres :5433)]
   end
 
+  CHAT -->|"OTLP metrics+logs+traces"| OTEL
   Apps -->|"OTLP logs+metrics+traces"| OTEL
-  CHAT -->|"OTLP metrics+traces (Micrometer)"| OTEL
   OTEL -->|metrics| PROM
   OTEL -->|logs| LOKI
   OTEL -->|traces| TEMPO
@@ -54,7 +54,7 @@ flowchart TB
 
 The `prometheus` exporter runs with `add_metric_suffixes: false` and `resource_to_telemetry_conversion: true`, so OTLP metrics keep predictable names (`http_server_request_duration_bucket`, `chat_answer_count`) and carry a `service_name` label lifted from the OTel resource.
 
-**ssi-chat-j** emits chat SLI instrument names via **Micrometer** (`micrometer-registry-otlp`, Micrometer Tracing → OTel). It does **not** expose a Prometheus scrape endpoint; series land under `service.name=ssi-chat-j`. OpenSLO seed docs may still label the service `ssi-chat` in PromQL — treat that as the chat product surface (`ssi-chat-j` metrics) until the catalog is renamed.
+**ssi-chat-j** emits chat SLI instruments via **Micrometer** (`micrometer-registry-otlp`) and console logs via Logback’s OpenTelemetry appender → Spring Boot OTLP logging auto-config. Micrometer metrics are **HTTP-only**, so Compose’s `:4317` gRPC endpoint is remapped to collector **`:4318/v1/metrics`** (and logs to **`:4318/v1/logs`**); traces stay on gRPC `:4317`. Series land under `service.name=ssi-chat-j`. OpenSLO seed docs may still label the service `ssi-chat` in PromQL — treat that as the chat product surface until the catalog is renamed.
 
 ## Services & ports
 

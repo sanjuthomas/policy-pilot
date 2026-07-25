@@ -59,7 +59,7 @@ management:
   endpoints:
     web:
       exposure:
-        # Health only — no Prometheus scrape endpoint (metrics leave via OTLP).
+        # Health only — no Prometheus scrape endpoint (metrics leave via OTLP → collector).
         include: health
   endpoint:
     prometheus:
@@ -73,11 +73,19 @@ management:
   otlp:
     metrics:
       export:
-        # OtelEnvironmentPostProcessor remaps OTEL_EXPORTER_OTLP_* / OTEL_SDK_DISABLED.
+        # Micrometer OTLP is HTTP-only. OtelEnvironmentPostProcessor remaps Compose's
+        # :4317 gRPC endpoint to :4318/v1/metrics and honors OTEL_SDK_DISABLED.
         enabled: true
-        url: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
-        protocol: ${OTEL_EXPORTER_OTLP_PROTOCOL:grpc}
+        url: http://localhost:4318/v1/metrics
+        protocol: http/protobuf
         step: 15s
+    logging:
+      # Presence of endpoint enables OtlpLoggingAutoConfiguration (HTTP default).
+      # InstallOpenTelemetryAppender wires Logback → OpenTelemetry SDK.
+      endpoint: http://localhost:4318/v1/logs
+      transport: http
+      export:
+        enabled: true
     tracing:
       endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
       transport: grpc
@@ -87,10 +95,11 @@ management:
   observations:
     key-values:
       application: ssi-chat-j
+  opentelemetry:
+    resource-attributes:
+      service.name: ${OTEL_SERVICE_NAME:ssi-chat-j}
 
 logging:
   level:
     com.sanjuthomas.policypilot: INFO
     org.springframework.ai: INFO
-  pattern:
-    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] [traceId=%X{traceId:-} spanId=%X{spanId:-}] %logger{36} - %msg%n"

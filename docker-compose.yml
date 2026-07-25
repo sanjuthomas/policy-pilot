@@ -5,6 +5,16 @@ x-otel-environment: &otel-environment
   OTEL_DEPLOYMENT_ENVIRONMENT: development
   OTEL_METRIC_EXPORT_INTERVAL: "15000"
 
+# Instruction / payment / sequence / authz / indexer / chat — 1 CPU + 1 GiB each.
+x-txn-deploy: &txn-deploy
+  resources:
+    limits:
+      cpus: "1.0"
+      memory: 1G
+    reservations:
+      cpus: "1.0"
+      memory: 1G
+
 name: policy-pilot
 
 services:
@@ -425,6 +435,8 @@ services:
         condition: service_healthy
       zitadel-login:
         condition: service_healthy
+    deploy:
+      <<: *txn-deploy
     restart: unless-stopped
     networks:
       - security-event-net
@@ -495,6 +507,8 @@ services:
         condition: service_started
       zitadel-api:
         condition: service_healthy
+    deploy:
+      <<: *txn-deploy
     restart: unless-stopped
     networks:
       - security-event-net
@@ -545,6 +559,8 @@ services:
         condition: service_healthy
       sequence-service:
         condition: service_started
+    deploy:
+      <<: *txn-deploy
     restart: unless-stopped
     networks:
       - security-event-net
@@ -612,6 +628,8 @@ services:
         condition: service_completed_successfully
       zitadel-api:
         condition: service_healthy
+    deploy:
+      <<: *txn-deploy
     restart: unless-stopped
     networks:
       - security-event-net
@@ -634,6 +652,8 @@ services:
         condition: service_healthy
       mongo-init:
         condition: service_completed_successfully
+    deploy:
+      <<: *txn-deploy
     restart: unless-stopped
     networks:
       - security-event-net
@@ -648,6 +668,17 @@ services:
     environment:
       <<: *otel-environment
       OTEL_SERVICE_NAME: ssi-chat-j
+      # Micrometer OTLP is HTTP-only; shared mesh OTEL_* points at gRPC :4317.
+      # OtelEnvironmentPostProcessor remaps these, but set HTTP targets explicitly too.
+      MANAGEMENT_OTLP_METRICS_EXPORT_URL: http://otel-collector:4318/v1/metrics
+      MANAGEMENT_OTLP_METRICS_EXPORT_PROTOCOL: http/protobuf
+      MANAGEMENT_OTLP_LOGGING_EXPORT_ENABLED: "true"
+      MANAGEMENT_OTLP_LOGGING_ENDPOINT: http://otel-collector:4318/v1/logs
+      MANAGEMENT_OTLP_LOGGING_TRANSPORT: http
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4317
+      MANAGEMENT_OTLP_TRACING_TRANSPORT: grpc
+      # Keep JVM heap inside the 1G container limit.
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75.0
       SERVER_PORT: 8096
       GCP_PROJECT_ID: ${GCP_PROJECT_ID:-rag-demos-501323}
       GCP_REGION: ${GCP_REGION:-us-central1}
@@ -691,6 +722,8 @@ services:
         condition: service_started
       zitadel-api:
         condition: service_healthy
+    deploy:
+      <<: *txn-deploy
     restart: unless-stopped
     networks:
       - security-event-net

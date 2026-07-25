@@ -24,17 +24,31 @@ class OtelEnvironmentPostProcessorTest {
     env.setProperty("OTEL_SDK_DISABLED", "true");
     new OtelEnvironmentPostProcessor().postProcessEnvironment(env, new SpringApplication());
     assertEquals("false", env.getProperty("management.otlp.metrics.export.enabled"));
+    assertEquals("false", env.getProperty("management.otlp.logging.export.enabled"));
     assertEquals("false", env.getProperty("management.tracing.enabled"));
   }
 
   @Test
-  void mapsGrpcEndpoint() {
+  void remapsGrpcComposeEndpointToHttpMetricsAndLogs() {
     MockEnvironment env = new MockEnvironment();
     env.setProperty("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4317");
     env.setProperty("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc");
+    env.setProperty("OTEL_SERVICE_NAME", "ssi-chat-j");
     new OtelEnvironmentPostProcessor().postProcessEnvironment(env, new SpringApplication());
-    assertEquals("http://otel-collector:4317", env.getProperty("management.otlp.metrics.export.url"));
-    assertEquals("grpc", env.getProperty("management.otlp.metrics.export.protocol"));
+    assertEquals(
+        "http://otel-collector:4318/v1/metrics",
+        env.getProperty("management.otlp.metrics.export.url"));
+    assertEquals("http/protobuf", env.getProperty("management.otlp.metrics.export.protocol"));
+    assertEquals("true", env.getProperty("management.otlp.logging.export.enabled"));
+    assertEquals(
+        "http://otel-collector:4318/v1/logs", env.getProperty("management.otlp.logging.endpoint"));
+    assertEquals("http", env.getProperty("management.otlp.logging.transport"));
+    assertEquals("http://otel-collector:4317", env.getProperty("management.otlp.tracing.endpoint"));
+    assertEquals("grpc", env.getProperty("management.otlp.tracing.transport"));
+    assertEquals("ssi-chat-j", env.getProperty("management.metrics.tags.service"));
+    assertEquals(
+        "ssi-chat-j",
+        env.getProperty("management.opentelemetry.resource-attributes.service.name"));
   }
 
   @Test
@@ -49,6 +63,18 @@ class OtelEnvironmentPostProcessorTest {
     assertEquals(
         "http://otel-collector:4318/v1/traces",
         env.getProperty("management.otlp.tracing.endpoint"));
+    assertEquals(
+        "http://otel-collector:4318/v1/logs", env.getProperty("management.otlp.logging.endpoint"));
+  }
+
+  @Test
+  void toHttpCollectorBaseRewritesGrpcPort() {
+    assertEquals(
+        "http://otel-collector:4318",
+        OtelEnvironmentPostProcessor.toHttpCollectorBase("http://otel-collector:4317"));
+    assertEquals(
+        "http://otel-collector:4318",
+        OtelEnvironmentPostProcessor.toHttpCollectorBase("http://otel-collector:4318/v1/metrics"));
   }
 
   @Test
@@ -57,7 +83,7 @@ class OtelEnvironmentPostProcessorTest {
     env.setProperty("OTEL_METRIC_EXPORT_INTERVAL", "15000");
     env.setProperty("OTEL_DEPLOYMENT_ENVIRONMENT", "development");
     new OtelEnvironmentPostProcessor().postProcessEnvironment(env, new SpringApplication());
-    assertEquals("15.0s", env.getProperty("management.otlp.metrics.export.step"));
+    assertEquals("15s", env.getProperty("management.otlp.metrics.export.step"));
     assertEquals(
         "development", env.getProperty("management.metrics.tags.deployment.environment"));
   }
