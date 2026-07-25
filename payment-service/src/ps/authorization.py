@@ -75,6 +75,8 @@ def build_authorization_block(
     action: PaymentAction,
     *,
     resource_context: dict[str, Any] | None = None,
+    evaluate_request: dict[str, Any] | None = None,
+    evaluate_response: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     actor = _display_name(subject)
     action_value = action.value
@@ -87,7 +89,7 @@ def build_authorization_block(
             if basis
             else f"{actor} was allowed to {action_value}"
         )
-        return {
+        block: dict[str, Any] = {
             "engine": "opa",
             "package": "payment.lifecycle",
             "action": action_value,
@@ -99,30 +101,36 @@ def build_authorization_block(
             "is_alert": False,
             "summary": summary,
         }
+    else:
+        violations = list(decision.violations)
+        primary = _primary_violation(violations)
+        primary_label = VIOLATION_LABELS.get(primary, primary.replace("_", " ").lower())
+        summary = f"{actor} was denied {action_value}: {primary_label}"
+        if len(violations) > 1:
+            extras = [
+                VIOLATION_LABELS.get(code, code) for code in violations if code != primary
+            ]
+            if extras:
+                summary += f" (also: {'; '.join(extras)})"
 
-    violations = list(decision.violations)
-    primary = _primary_violation(violations)
-    primary_label = VIOLATION_LABELS.get(primary, primary.replace("_", " ").lower())
-    summary = f"{actor} was denied {action_value}: {primary_label}"
-    if len(violations) > 1:
-        extras = [
-            VIOLATION_LABELS.get(code, code) for code in violations if code != primary
-        ]
-        if extras:
-            summary += f" (also: {'; '.join(extras)})"
+        block = {
+            "engine": "opa",
+            "package": "payment.lifecycle",
+            "action": action_value,
+            "decision": "deny",
+            "subject_at_decision": subject_at_decision(subject),
+            "resource_context": resource_context or {},
+            "allow_basis": [],
+            "violations": violations,
+            "is_alert": decision.is_alert,
+            "summary": summary,
+        }
 
-    return {
-        "engine": "opa",
-        "package": "payment.lifecycle",
-        "action": action_value,
-        "decision": "deny",
-        "subject_at_decision": subject_at_decision(subject),
-        "resource_context": resource_context or {},
-        "allow_basis": [],
-        "violations": violations,
-        "is_alert": decision.is_alert,
-        "summary": summary,
-    }
+    if evaluate_request is not None:
+        block["evaluate_request"] = evaluate_request
+    if evaluate_response is not None:
+        block["evaluate_response"] = evaluate_response
+    return block
 
 
 def details_with_authorization(

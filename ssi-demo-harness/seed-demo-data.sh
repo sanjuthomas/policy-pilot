@@ -287,8 +287,7 @@ run_seed() {
   print_harness_status
 
   log "Done — open http://localhost:8091 for harness status"
-  log "Instruction security events: http://localhost:8000/ui/security-events/"
-  log "Payment security events: http://localhost:8093/ui/security-events/"
+  log "Technology auditor console: http://localhost:8097/"
 }
 
 main() {

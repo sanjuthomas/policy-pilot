@@ -100,6 +100,19 @@ async def test_evaluate_payment_success_and_errors() -> None:
     assert decision.is_alert is True
 
     with patch("authz_client.client.httpx.AsyncClient") as mock_cls:
+        mock_cls.return_value = _mock_async_client(ok)
+        exchange = await client.evaluate_payment_exchange(
+            action="CREATE",
+            payment={"payment_id": "P-1"},
+            service_token="svc",
+            user_token="user",
+            subject={"user_id": "pay-101"},
+        )
+    assert exchange.decision.allowed is False
+    assert exchange.request["action"] == "CREATE"
+    assert exchange.response["violations"] == ["deny"]
+
+    with patch("authz_client.client.httpx.AsyncClient") as mock_cls:
         mock_cls.return_value = _mock_async_client(httpx.ConnectError("refused"))
         with pytest.raises(AuthzServiceUnavailable):
             await client.evaluate_payment(

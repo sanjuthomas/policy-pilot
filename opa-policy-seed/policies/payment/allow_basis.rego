@@ -39,7 +39,7 @@ allow_basis contains "instruction not expired" if {
 allow_basis contains msg if {
     input.action == "CREATE"
     within_amount_limit
-    msg := sprintf("amount %v within subject and absolute limits", [input.payment.amount])
+    msg := sprintf("amount %v within subject and absolute limits", [amount_label])
 }
 
 # ── UPDATE ────────────────────────────────────────────────────────────
@@ -79,7 +79,7 @@ allow_basis contains "payment status DRAFT" if {
 allow_basis contains msg if {
     input.action == "UPDATE"
     within_amount_limit
-    msg := sprintf("amount %v within subject and absolute limits", [input.payment.amount])
+    msg := sprintf("amount %v within subject and absolute limits", [amount_label])
 }
 
 # ── SUBMIT ────────────────────────────────────────────────────────────
@@ -141,7 +141,7 @@ allow_basis contains "instruction not expired" if {
 allow_basis contains msg if {
     input.action == "APPROVE"
     within_amount_limit
-    msg := sprintf("amount %v within subject and absolute limits", [input.payment.amount])
+    msg := sprintf("amount %v within subject and absolute limits", [amount_label])
 }
 
 allow_basis contains "not self-approval (creator is not approver)" if {

@@ -67,36 +67,54 @@ public class PaymentMutationClient {
       String valueDate,
       String userBearerToken,
       String userSessionId) {
+    return createPayment(instructionId, amount, valueDate, userBearerToken, userSessionId, null);
+  }
+
+  public Map<String, Object> createPayment(
+      String instructionId,
+      double amount,
+      String valueDate,
+      String userBearerToken,
+      String userSessionId,
+      String auditExecutionId) {
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("instruction_id", instructionId);
     body.put("amount", amount);
     body.put("value_date", valueDate);
     String url = trimSlash(properties.paymentServiceUrl()) + "/api/v1/payments";
-    return post(url, body, userBearerToken, userSessionId, "CREATE");
+    return post(url, body, userBearerToken, userSessionId, "CREATE", auditExecutionId);
   }
 
   public Map<String, Object> submitPayment(
       String paymentId, String userBearerToken, String userSessionId) {
     String url = trimSlash(properties.paymentServiceUrl()) + "/api/v1/payments/" + paymentId + "/submit";
-    return post(url, null, userBearerToken, userSessionId, "SUBMIT");
+    return post(url, null, userBearerToken, userSessionId, "SUBMIT", null);
   }
 
   public Map<String, Object> approvePayment(
       String paymentId, String userBearerToken, String userSessionId) {
     String url = trimSlash(properties.paymentServiceUrl()) + "/api/v1/payments/" + paymentId + "/approve";
-    return post(url, null, userBearerToken, userSessionId, "APPROVE");
+    return post(url, null, userBearerToken, userSessionId, "APPROVE", null);
   }
 
   public Map<String, Object> cancelPayment(
       String paymentId, String userBearerToken, String userSessionId) {
     String url = trimSlash(properties.paymentServiceUrl()) + "/api/v1/payments/" + paymentId + "/cancel";
-    return post(url, Map.of(), userBearerToken, userSessionId, "CANCEL");
+    return post(url, Map.of(), userBearerToken, userSessionId, "CANCEL", null);
   }
 
   private Map<String, Object> post(
-      String url, Object body, String userBearerToken, String userSessionId, String action) {
+      String url,
+      Object body,
+      String userBearerToken,
+      String userSessionId,
+      String action,
+      String auditExecutionId) {
     HttpHeaders headers = new HttpHeaders();
     serviceIdentity.oboHeaders(userBearerToken, userSessionId).forEach(headers::set);
+    if (auditExecutionId != null && !auditExecutionId.isBlank()) {
+      headers.set("X-Audit-Execution-Id", auditExecutionId);
+    }
     try {
       ResponseEntity<Map<String, Object>> response =
           restTemplate.exchange(

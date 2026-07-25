@@ -131,7 +131,7 @@ class ChatServiceTest {
   private static PaymentSkillService paymentSkillService(FakeEligibilityClient eligibilityClient) {
     PendingSkillStore store = new PendingSkillStore();
     return new PaymentSkillService(
-        new CreatePaymentSkill(eligibilityClient, null, null, store),
+        new CreatePaymentSkill(eligibilityClient, null, null, null, store),
         new SubmitPaymentSkill(eligibilityClient, null, null, store),
         new ApprovePaymentSkill(eligibilityClient, null, null, store),
         new CancelPaymentSkill(eligibilityClient, null, null, store));

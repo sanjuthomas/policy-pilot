@@ -45,7 +45,9 @@ def _fmt_datetime(value) -> str | None:
     return value.isoformat() + "Z"
 
 
-def _to_response(record: VersionedPayment) -> PaymentResponse:
+def _to_response(
+    record: VersionedPayment, *, security_event_id: str | None = None
+) -> PaymentResponse:
     from ps.constants import PAYMENT_CURRENT_OUT
 
     payment = record.payment
@@ -80,6 +82,7 @@ def _to_response(record: VersionedPayment) -> PaymentResponse:
         rejected_at=_fmt_datetime(payment.rejected_at),
         cancelled_at=_fmt_datetime(payment.cancelled_at),
         lifecycle_events=payment.lifecycle_events,
+        security_event_id=security_event_id,
     )
 
 
@@ -94,20 +97,22 @@ async def create_payment(
     x_on_behalf_of_session_id: str | None = Header(
         default=None, alias="X-On-Behalf-Of-Session-Id"
     ),
+    x_audit_execution_id: str | None = Header(default=None, alias="X-Audit-Execution-Id"),
 ) -> PaymentResponse:
     user_token, user_session_id = _user_tokens(
         authorization, x_session_id, x_on_behalf_of, x_on_behalf_of_session_id
     )
     try:
-        record = await service.create(
+        record, security_event_id = await service.create(
             instruction_id=request.instruction_id,
             value_date=request.value_date,
             amount=request.amount,
             subject=subject,
             bearer_token=user_token,
             session_id=user_session_id,
+            audit_execution_id=x_audit_execution_id,
         )
-        return _to_response(record)
+        return _to_response(record, security_event_id=security_event_id)
     except InstructionNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except PermissionError as exc:

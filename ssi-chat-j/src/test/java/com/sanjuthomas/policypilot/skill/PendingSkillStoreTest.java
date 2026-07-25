@@ -44,7 +44,8 @@ class PendingSkillStoreTest {
         null,
         null,
         card,
-        expiresAt);
+        expiresAt,
+        null);
   }
 
   @Test

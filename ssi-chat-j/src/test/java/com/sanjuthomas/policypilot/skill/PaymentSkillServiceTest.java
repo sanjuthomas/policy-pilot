@@ -17,7 +17,7 @@ class PaymentSkillServiceTest {
     store = new PendingSkillStore();
     FakeEligibilityClient client = new FakeEligibilityClient();
     return new PaymentSkillService(
-        new CreatePaymentSkill(client, null, null, store),
+        new CreatePaymentSkill(client, null, null, null, store),
         new SubmitPaymentSkill(client, null, null, store),
         new ApprovePaymentSkill(client, null, null, store),
         new CancelPaymentSkill(client, null, null, store));
@@ -221,7 +221,8 @@ class PaymentSkillServiceTest {
             null,
             null,
             card(null, null),
-            store.defaultExpiresAt()));
+            store.defaultExpiresAt(),
+            null));
     return id;
   }
 
@@ -246,7 +247,8 @@ class PaymentSkillServiceTest {
             "pay-101",
             "sup-1",
             card("20260720-FICC-P-9", "DRAFT"),
-            store.defaultExpiresAt()));
+            store.defaultExpiresAt(),
+            null));
     return id;
   }
 

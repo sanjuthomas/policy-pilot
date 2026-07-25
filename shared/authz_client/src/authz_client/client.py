@@ -16,6 +16,15 @@ class PolicyDecision:
     is_alert: bool
 
 
+@dataclass(frozen=True)
+class EvaluateExchange:
+    """OPA evaluate call with the request body and raw response body."""
+
+    decision: PolicyDecision
+    request: dict[str, Any]
+    response: dict[str, Any]
+
+
 class AuthzClient:
     def __init__(self, base_url: str, *, timeout: float = 10.0) -> None:
         self._base = base_url.rstrip("/")
@@ -40,13 +49,13 @@ class AuthzClient:
             headers["X-On-Behalf-Of-Session-Id"] = user_session_id
         return headers
 
-    async def _post(
+    async def _post_exchange(
         self,
         path: str,
         payload: dict[str, Any],
         *,
         headers: dict[str, str],
-    ) -> PolicyDecision:
+    ) -> EvaluateExchange:
         url = f"{self._base}{path}"
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
@@ -66,12 +75,22 @@ class AuthzClient:
             )
 
         body = response.json()
-        return PolicyDecision(
+        decision = PolicyDecision(
             allowed=bool(body.get("allowed")),
             allow_basis=list(body.get("allow_basis") or []),
             violations=list(body.get("violations") or []),
             is_alert=bool(body.get("is_alert")),
         )
+        return EvaluateExchange(decision=decision, request=payload, response=body)
+
+    async def _post(
+        self,
+        path: str,
+        payload: dict[str, Any],
+        *,
+        headers: dict[str, str],
+    ) -> PolicyDecision:
+        return (await self._post_exchange(path, payload, headers=headers)).decision
 
     async def evaluate_instruction(
         self,
@@ -147,6 +166,45 @@ class AuthzClient:
         )
 
         return await self._post(
+            "/api/v1/authorization/payments/evaluate",
+            payload,
+            headers=headers,
+        )
+
+    async def evaluate_payment_exchange(
+        self,
+        *,
+        action: str,
+        payment: dict[str, Any],
+        instruction_end_date: str = "",
+        instruction_status: str = "",
+        service_token: str | None = None,
+        service_session_id: str | None = None,
+        user_token: str | None = None,
+        user_session_id: str | None = None,
+        subject: dict[str, Any] | None = None,
+    ) -> EvaluateExchange:
+        if not service_token:
+            raise AuthzClientError("service_token is required for lifecycle evaluate")
+        if not user_token:
+            raise AuthzClientError(
+                "user_token (X-On-Behalf-Of) is required for lifecycle evaluate"
+            )
+        payload: dict[str, Any] = {
+            "action": action,
+            "payment": payment,
+            "instruction_end_date": instruction_end_date,
+            "instruction_status": instruction_status,
+        }
+        if subject is not None:
+            payload["subject"] = subject
+        headers = self._obo_headers(
+            service_token=service_token,
+            service_session_id=service_session_id,
+            user_token=user_token,
+            user_session_id=user_session_id,
+        )
+        return await self._post_exchange(
             "/api/v1/authorization/payments/evaluate",
             payload,
             headers=headers,

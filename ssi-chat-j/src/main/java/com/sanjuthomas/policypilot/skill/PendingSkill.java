@@ -23,4 +23,5 @@ public record PendingSkill(
     String createdByUserId,
     String createdBySupervisorId,
     ConfirmationCard card,
-    long expiresAtEpochMs) {}
+    long expiresAtEpochMs,
+    String auditExecutionId) {}

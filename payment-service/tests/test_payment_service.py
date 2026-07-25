@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from ps.authorization import PolicyDecision
+from authz_client import EvaluateExchange, PolicyDecision
 from ps.config import settings
 from ps.instruction_client import InstructionNotFoundError, InstructionStateError
 from ps.models.api import RejectPaymentRequest, Subject
@@ -42,6 +42,19 @@ def _deny_decision(violation: str = "SELF_APPROVAL") -> PolicyDecision:
     )
 
 
+def _exchange(decision: PolicyDecision) -> EvaluateExchange:
+    return EvaluateExchange(
+        decision=decision,
+        request={"action": "TEST"},
+        response={
+            "allowed": decision.allowed,
+            "allow_basis": list(decision.allow_basis),
+            "violations": list(decision.violations),
+            "is_alert": decision.is_alert,
+        },
+    )
+
+
 @pytest.fixture
 def service() -> PaymentService:
     svc = PaymentService(sequence_client=AsyncMock())
@@ -51,6 +64,7 @@ def service() -> PaymentService:
     svc.event_repo.allocate_event_id = AsyncMock(return_value="20260701-CORP-P-1-SE-1")
     svc.event_repo.insert_document = AsyncMock(return_value={})
     svc.authz = AsyncMock()
+    svc.audit_repo = AsyncMock()
     svc.instruction_service = AsyncMock()
 
     async def _insert_initial(payment: Payment, session=None) -> VersionedPayment:
@@ -79,17 +93,18 @@ async def test_create_standing_payment_success(
     standing_instruction: dict,
 ) -> None:
     service.instruction_service.get_instruction.return_value = standing_instruction
-    service.authz.evaluate_payment.return_value = _allow_decision()
+    service.authz.evaluate_payment_exchange.return_value = _exchange(_allow_decision())
     service.event_repo.record_authorized_action = AsyncMock()
 
     with _patched_txn():
-        record = await service.create(
+        record, security_event_id = await service.create(
             instruction_id="instr-001",
             value_date="2026-07-01",
             amount=500_000.0,
             subject=subject,
         )
 
+    assert security_event_id == "20260701-CORP-P-1-SE-1"
     assert record.payment.status == PaymentStatus.DRAFT
     assert record.payment.amount == 500_000.0
     service.repo.insert_initial.assert_awaited_once()
@@ -107,7 +122,7 @@ async def test_update_draft_payment_success(
 ) -> None:
     service.repo.get_current.return_value = _versioned(payment)
     service.instruction_service.get_instruction.return_value = standing_instruction
-    service.authz.evaluate_payment.return_value = _allow_decision()
+    service.authz.evaluate_payment_exchange.return_value = _exchange(_allow_decision())
 
     with _patched_txn():
         result = await service.update(
@@ -187,7 +202,7 @@ async def test_update_policy_denied(
 ) -> None:
     service.repo.get_current.return_value = _versioned(payment)
     service.instruction_service.get_instruction.return_value = standing_instruction
-    service.authz.evaluate_payment.return_value = _deny_decision("ALERT_AMOUNT_EXCEEDS_SUBJECT_LIMIT")
+    service.authz.evaluate_payment_exchange.return_value = _exchange(_deny_decision("ALERT_AMOUNT_EXCEEDS_SUBJECT_LIMIT"))
 
     with pytest.raises(PermissionError):
         await service.update(
@@ -210,7 +225,7 @@ async def test_cancel_draft_payment_success(
 
     service.repo.get_current.return_value = _versioned(payment)
     service.instruction_service.get_instruction.return_value = standing_instruction
-    service.authz.evaluate_payment.return_value = _allow_decision()
+    service.authz.evaluate_payment_exchange.return_value = _exchange(_allow_decision())
 
     with _patched_txn():
         result = await service.cancel(
@@ -243,10 +258,10 @@ async def test_create_single_use_does_not_mark_used_at_create(
 ) -> None:
     standing_instruction["instruction_type"] = "SINGLE_USE"
     service.instruction_service.get_instruction.return_value = standing_instruction
-    service.authz.evaluate_payment.return_value = _allow_decision()
+    service.authz.evaluate_payment_exchange.return_value = _exchange(_allow_decision())
 
     with _patched_txn():
-        record = await service.create(
+        record, _ = await service.create(
             instruction_id="instr-001",
             value_date="2026-07-01",
             amount=100.0,
@@ -269,7 +284,7 @@ async def test_submit_single_use_runs_saga(
     service.repo.get_current.return_value = _versioned(single_use)
     service.repo.list_current = AsyncMock(return_value=[_versioned(single_use)])
     service.instruction_service.get_instruction.return_value = standing_instruction
-    service.authz.evaluate_payment.return_value = _allow_decision()
+    service.authz.evaluate_payment_exchange.return_value = _exchange(_allow_decision())
     service.instruction_service.mark_used.return_value = {"status": "USED"}
 
     with _patched_txn():
@@ -319,7 +334,7 @@ async def test_create_policy_denied(
     payment: Payment,
 ) -> None:
     service.instruction_service.get_instruction.return_value = standing_instruction
-    service.authz.evaluate_payment.return_value = _deny_decision()
+    service.authz.evaluate_payment_exchange.return_value = _exchange(_deny_decision())
 
     with pytest.raises(PermissionError):
         await service.create(
@@ -344,7 +359,7 @@ async def test_submit_single_use_mark_used_state_error(
     service.repo.get_current.return_value = _versioned(single_use)
     service.repo.list_current = AsyncMock(return_value=[_versioned(single_use)])
     service.instruction_service.get_instruction.return_value = standing_instruction
-    service.authz.evaluate_payment.return_value = _allow_decision()
+    service.authz.evaluate_payment_exchange.return_value = _exchange(_allow_decision())
     service.instruction_service.mark_used.side_effect = InstructionStateError("already used")
 
     with pytest.raises(ValueError, match="already used"):
@@ -364,7 +379,7 @@ async def test_submit_single_use_mark_used_runtime_error(
     service.repo.get_current.return_value = _versioned(single_use)
     service.repo.list_current = AsyncMock(return_value=[_versioned(single_use)])
     service.instruction_service.get_instruction.return_value = standing_instruction
-    service.authz.evaluate_payment.return_value = _allow_decision()
+    service.authz.evaluate_payment_exchange.return_value = _exchange(_allow_decision())
     service.instruction_service.mark_used.side_effect = RuntimeError("network down")
 
     with pytest.raises(RuntimeError, match="Could not mark instruction"):
@@ -382,7 +397,7 @@ async def test_submit_success(
 ) -> None:
     service.repo.get_current.return_value = _versioned(payment)
     service.instruction_service.get_instruction.return_value = standing_instruction
-    service.authz.evaluate_payment.return_value = _allow_decision()
+    service.authz.evaluate_payment_exchange.return_value = _exchange(_allow_decision())
 
     with _patched_txn():
         result = await service.submit(payment.payment_id, subject)
@@ -426,7 +441,7 @@ async def test_submit_policy_denied(
 ) -> None:
     service.repo.get_current.return_value = _versioned(payment)
     service.instruction_service.get_instruction.return_value = standing_instruction
-    service.authz.evaluate_payment.return_value = _deny_decision("NO_LIMIT_GROUP_ASSIGNED")
+    service.authz.evaluate_payment_exchange.return_value = _exchange(_deny_decision("NO_LIMIT_GROUP_ASSIGNED"))
 
     with pytest.raises(PermissionError):
         await service.submit(payment.payment_id, subject)
@@ -441,7 +456,7 @@ async def test_approve_success(
 ) -> None:
     service.repo.get_current.return_value = _versioned(submitted_payment)
     service.instruction_service.get_instruction.return_value = standing_instruction
-    service.authz.evaluate_payment.return_value = _allow_decision(basis=["approver authorized"])
+    service.authz.evaluate_payment_exchange.return_value = _exchange(_allow_decision(basis=["approver authorized"]))
 
     with _patched_txn():
         result = await service.approve(submitted_payment.payment_id, approver_subject)
@@ -508,7 +523,7 @@ async def test_approve_policy_denied(
 ) -> None:
     service.repo.get_current.return_value = _versioned(submitted_payment)
     service.instruction_service.get_instruction.return_value = standing_instruction
-    service.authz.evaluate_payment.return_value = _deny_decision("ALERT_SUBORDINATE_APPROVING_CREATOR")
+    service.authz.evaluate_payment_exchange.return_value = _exchange(_deny_decision("ALERT_SUBORDINATE_APPROVING_CREATOR"))
 
     with pytest.raises(PermissionError):
         await service.approve(submitted_payment.payment_id, approver_subject)
@@ -523,7 +538,7 @@ async def test_reject_success(
 ) -> None:
     service.repo.get_current.return_value = _versioned(submitted_payment)
     service.instruction_service.get_instruction.return_value = standing_instruction
-    service.authz.evaluate_payment.return_value = _allow_decision()
+    service.authz.evaluate_payment_exchange.return_value = _exchange(_allow_decision())
     request = RejectPaymentRequest(reason="Insufficient documentation")
 
     with _patched_txn():
@@ -546,7 +561,7 @@ async def test_reject_single_use_releases_instruction(
     single_use.submitted_at = single_use.created_at
     service.repo.get_current.return_value = _versioned(single_use)
     service.instruction_service.get_instruction.return_value = standing_instruction
-    service.authz.evaluate_payment.return_value = _allow_decision()
+    service.authz.evaluate_payment_exchange.return_value = _exchange(_allow_decision())
     request = RejectPaymentRequest(reason="Insufficient documentation")
 
     with _patched_txn():
@@ -580,7 +595,7 @@ async def test_submit_single_use_rejects_multiple_drafts(
         return_value=[_versioned(single_use), _versioned(other)]
     )
     service.instruction_service.get_instruction.return_value = standing_instruction
-    service.authz.evaluate_payment.return_value = _allow_decision()
+    service.authz.evaluate_payment_exchange.return_value = _exchange(_allow_decision())
 
     with _patched_txn(), pytest.raises(ValueError, match="SINGLE_USE"):
         await service.submit(single_use.payment_id, subject)
@@ -601,7 +616,7 @@ async def test_cancel_submitted_single_use_releases_instruction(
     single_use.submitted_at = single_use.created_at
     service.repo.get_current.return_value = _versioned(single_use)
     service.instruction_service.get_instruction.return_value = standing_instruction
-    service.authz.evaluate_payment.return_value = _allow_decision()
+    service.authz.evaluate_payment_exchange.return_value = _exchange(_allow_decision())
 
     with _patched_txn():
         result = await service.cancel(
@@ -631,7 +646,7 @@ async def test_cancel_draft_single_use_does_not_release_instruction(
     single_use = payment.model_copy(update={"instruction_type": "SINGLE_USE"})
     service.repo.get_current.return_value = _versioned(single_use)
     service.instruction_service.get_instruction.return_value = standing_instruction
-    service.authz.evaluate_payment.return_value = _allow_decision()
+    service.authz.evaluate_payment_exchange.return_value = _exchange(_allow_decision())
 
     with _patched_txn():
         await service.cancel(
@@ -683,7 +698,7 @@ async def test_reject_policy_denied(
 ) -> None:
     service.repo.get_current.return_value = _versioned(submitted_payment)
     service.instruction_service.get_instruction.return_value = standing_instruction
-    service.authz.evaluate_payment.return_value = _deny_decision()
+    service.authz.evaluate_payment_exchange.return_value = _exchange(_deny_decision())
 
     with pytest.raises(PermissionError):
         await service.reject(
@@ -762,13 +777,14 @@ async def test_save_payment_with_security_event_uses_transaction(
     payment: Payment,
 ) -> None:
     with _patched_txn() as mock_tx:
-        result = await service._save_payment_with_security_event(
+        result, event_id = await service._save_payment_with_security_event(
             payment,
             PaymentAction.CREATE,
             subject,
             initial=True,
         )
 
+    assert event_id == "20260701-CORP-P-1-SE-1"
     assert result.payment.payment_id == payment.payment_id
     mock_tx.assert_called_once()
     service.repo.insert_initial.assert_awaited_once()

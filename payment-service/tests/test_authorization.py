@@ -125,6 +125,24 @@ def test_build_authorization_block_display_name_user_id_only() -> None:
     assert block["summary"] == "svc-user was allowed to CREATE"
 
 
+def test_build_authorization_block_includes_evaluate_exchange(subject: Subject) -> None:
+    decision = PolicyDecision(
+        allowed=True,
+        allow_basis=["subject has PAYMENT_CREATOR role"],
+        violations=[],
+        is_alert=False,
+    )
+    block = build_authorization_block(
+        decision,
+        subject,
+        PaymentAction.CREATE,
+        evaluate_request={"action": "CREATE"},
+        evaluate_response={"allowed": True, "allow_basis": ["ok"], "violations": []},
+    )
+    assert block["evaluate_request"] == {"action": "CREATE"}
+    assert block["evaluate_response"]["allowed"] is True
+
+
 def test_details_with_authorization_merges_details() -> None:
     auth = {"decision": "allow", "summary": "ok"}
     merged = details_with_authorization({"reason": "test"}, auth)

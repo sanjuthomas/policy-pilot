@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Technology Auditor Console</title>
+    <link rel="stylesheet" href="/static/styles.css?v=6" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark"></span>
+        <div>
+          <h1>Technology Auditor Console</h1>
+          <p class="subtitle">Instruction + payment security events · governed activity</p>
+        </div>
+      </div>
+      <div class="auth">
+        <span id="auth-status" class="muted">Technology auditor sign-in required</span>
+        <input id="auth-user" value="audit-001" aria-label="User ID" />
+        <input id="auth-password" value="" type="password" placeholder="Password" aria-label="Password" />
+        <button id="auth-login">Sign in</button>
+        <button id="auth-logout" class="hidden">Sign out</button>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button id="events-tab" class="active">Security events</button>
+      <button id="audit-tab">Audit records</button>
+      <span id="status" class="muted"></span>
+    </nav>
+
+    <section id="events-toolbar" class="toolbar">
+      <label>Domain
+        <select id="source-filter">
+          <option value="">Instruction + payment</option>
+          <option value="instruction">Instruction</option>
+          <option value="payment">Payment</option>
+        </select>
+      </label>
+      <label>Severity
+        <select id="severity-filter">
+          <option value="">All</option>
+          <option value="INFO">INFO</option>
+          <option value="ALERT">ALERT</option>
+        </select>
+      </label>
+      <button id="refresh-events">Refresh</button>
+    </section>
+    <section id="audit-toolbar" class="toolbar hidden">
+      <button id="refresh-audit">Refresh</button>
+    </section>
+
+    <main class="content">
+      <section id="events-view">
+        <table>
+          <thead><tr><th>Event</th><th>Time</th><th>Domain</th><th>Severity</th><th>Action</th><th>Outcome</th><th>Actor</th><th>Resource</th><th>Message</th></tr></thead>
+          <tbody id="events-body"></tbody>
+        </table>
+        <p id="events-empty" class="empty">Sign in to load security events.</p>
+      </section>
+      <section id="audit-view" class="hidden">
+        <table class="audit-table">
+          <thead><tr><th class="col-execution">Execution</th><th>Time</th><th>Capability</th><th>Outcome</th><th>Status</th><th>Actor</th><th>Instruction</th><th>Payment</th><th>OPA evidence</th></tr></thead>
+          <tbody id="audit-body"></tbody>
+        </table>
+        <p id="audit-empty" class="empty">Sign in to load audit records.</p>
+      </section>
+    </main>
+    <script src="/static/auth.js?v=2"></script>
+    <script src="/static/app.js?v=2"></script>
+  </body>
+</html>

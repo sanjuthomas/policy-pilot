@@ -15,13 +15,6 @@ from inst.auth_routes import router as auth_router
 from inst.config import settings
 from inst.database import close, connect
 from inst.routes import router
-from inst.security_ui_routes import (
-    SECURITY_EVENTS_STATIC_DIR,
-    security_event_ui_store,
-)
-from inst.security_ui_routes import (
-    router as security_ui_router,
-)
 from inst.service_identity import service_identity
 from inst.ui_routes import STATIC_DIR
 from inst.ui_routes import router as ui_router
@@ -34,8 +27,7 @@ logger = get_logger(__name__)
 async def lifespan(app: FastAPI):
     await connect()
     await service_identity.login()
-    await security_event_ui_store.connect()
-    logger.info("instruction browser and security event monitor ready")
+    logger.info("instruction browser ready")
     yield
     await close()
     shutdown_telemetry()
@@ -54,13 +46,7 @@ instrument_app(app)
 app.include_router(auth_router)
 app.include_router(router, prefix=settings.api_prefix)
 app.include_router(ui_router)
-app.include_router(security_ui_router)
 app.mount("/ui/static", StaticFiles(directory=UI_STATIC_DIR), name="ui-static")
-app.mount(
-    "/ui/security-events/static",
-    StaticFiles(directory=SECURITY_EVENTS_STATIC_DIR),
-    name="security-events-static",
-)
 
 
 @app.get("/health")

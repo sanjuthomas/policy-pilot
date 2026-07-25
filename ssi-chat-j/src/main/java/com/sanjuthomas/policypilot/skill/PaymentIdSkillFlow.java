@@ -236,7 +236,8 @@ final class PaymentIdSkillFlow {
             SkillFormat.str(createdBy.get("user_id")),
             createdBy.get("supervisor_id") == null ? null : String.valueOf(createdBy.get("supervisor_id")),
             card,
-            store.defaultExpiresAt());
+            store.defaultExpiresAt(),
+            null);
     store.put(pending);
 
     return SkillRunResult.awaiting(

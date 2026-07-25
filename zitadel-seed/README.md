@@ -16,6 +16,7 @@ Includes:
 - **Payment creators / approvers** — middle office payment staff (`pay-101` … `pay-400`) with amount-limit clubs and `covering_lobs`
 - **Service accounts** — `svc-instruction` (instruction service → authz), `svc-payment` (payment service → authz and instruction-service)
 - **Platform admin** — `admin-001` (secured UIs and PolicyPilot; VIEW events suppressed on instruction REST list/get — see `SECURITY_EVENT_VIEW_EXCLUDED_USER_IDS`)
+- **Technology auditors** — `audit-001` … `audit-003` (`TECH_AUDITORS` group; auditor console at `:8097`)
 
 Default password: **`Password1!`** (see `defaults.password` in `users.yaml`).
 
