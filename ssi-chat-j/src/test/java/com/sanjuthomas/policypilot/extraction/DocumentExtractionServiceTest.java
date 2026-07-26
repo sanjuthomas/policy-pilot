@@ -483,6 +483,37 @@ class DocumentExtractionServiceTest {
   }
 
   @Test
+  void listsPaymentsByLobFromApi() {
+    client.returning(
+        Map.of(
+            "payments",
+            List.of(
+                Map.of(
+                    "payment_id",
+                    "20260720-DESK_RATES-P-1",
+                    "status",
+                    "APPROVED",
+                    "owning_lob",
+                    "DESK_RATES",
+                    "currency",
+                    "USD",
+                    "created_by",
+                    Map.of("user_id", "fo-rates-101")))));
+
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("document_extraction");
+    decision.setExtractionTarget("payment");
+    decision.setExtractionFacet("list_by_lob");
+
+    DocumentExtractionResult result =
+        service.answer("List all payments for desk LOB DESK_RATES.", subject(), decision);
+
+    assertEquals("payment.list_by_lob", result.intentId());
+    assertTrue(result.answer().contains("DESK_RATES"));
+    assertTrue(result.answer().contains("20260720-DESK_RATES-P-1"));
+  }
+
+  @Test
   void listsPaymentsCreatedByUserFromApi() {
     client.returning(
         Map.of(

@@ -807,6 +807,7 @@ async def test_get_and_list(service: PaymentService, payment: Payment, subject: 
         instruction_id="instr-001",
         status="DRAFT",
         created_by_user_id=None,
+        owning_lob=None,
         limit=10,
     )
 
@@ -827,7 +828,29 @@ async def test_list_passes_created_by_user_id(
         instruction_id=None,
         status=None,
         created_by_user_id="fo-ficc-101",
+        owning_lob=None,
         limit=25,
+    )
+
+
+@pytest.mark.asyncio
+async def test_list_passes_owning_lob(
+    service: PaymentService, payment: Payment, subject: Subject
+) -> None:
+    service.repo.list_current.return_value = [_versioned(payment)]
+
+    items = await service.list(
+        subject,
+        owning_lob="DESK_RATES",
+        limit=50,
+    )
+    assert len(items) == 1
+    service.repo.list_current.assert_awaited_once_with(
+        instruction_id=None,
+        status=None,
+        created_by_user_id=None,
+        owning_lob="DESK_RATES",
+        limit=50,
     )
 
 

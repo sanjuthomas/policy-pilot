@@ -120,6 +120,16 @@ class EntityApiQuestionTest {
   }
 
   @Test
+  void lobFilterRecognizesDeskCodes() {
+    assertEquals(
+        "DESK_RATES",
+        EntityApiQuestion.lobFilter("List all payments for desk LOB DESK_RATES."));
+    assertEquals("FICC", EntityApiQuestion.lobFilter("standing instructions for FICC"));
+    assertEquals(Facet.LIST_BY_LOB, EntityApiQuestion.facetFromSlot("list_by_lob"));
+    assertTrue(EntityApiQuestion.isInventoryFacet(Facet.LIST_BY_LOB));
+  }
+
+  @Test
   void preservesLlmFacetSlots() {
     RouterDecision approver = new RouterDecision();
     approver.setExtractionFacet("approver");

@@ -45,7 +45,7 @@ public final class EntityApiQuestion {
           "\\b(STANDING|SINGLE_USE|single[\\s_-]*use)\\b", Pattern.CASE_INSENSITIVE);
 
   private static final Pattern LOB_TOKEN =
-      Pattern.compile("\\b(FICC|FX|RATES)\\b", Pattern.CASE_INSENSITIVE);
+      Pattern.compile("\\b(FICC|FX|DESK_[A-Z][A-Z0-9_]*)\\b", Pattern.CASE_INSENSITIVE);
 
   private EntityApiQuestion() {}
 
@@ -69,7 +69,9 @@ public final class EntityApiQuestion {
     /**
      * Payment inventory: pick the visible row with the maximum amount and report who created it.
      */
-    LARGEST_AMOUNT
+    LARGEST_AMOUNT,
+    /** Inventory list filtered by owning LOB (no status required). */
+    LIST_BY_LOB
   }
 
   public static Optional<String> extractUserId(String question) {
@@ -91,7 +93,8 @@ public final class EntityApiQuestion {
         || facet == Facet.COUNT
         || facet == Facet.GROUP_BY_STATUS
         || facet == Facet.GROUP_BY_LOB
-        || facet == Facet.LARGEST_AMOUNT;
+        || facet == Facet.LARGEST_AMOUNT
+        || facet == Facet.LIST_BY_LOB;
   }
 
   /**
@@ -232,6 +235,7 @@ public final class EntityApiQuestion {
       case "group_by_lob", "groupby_lob", "per_lob" -> Facet.GROUP_BY_LOB;
       case "largest_amount", "largest", "max_amount", "maximum_amount", "max_dollar" ->
           Facet.LARGEST_AMOUNT;
+      case "list_by_lob", "list_lob", "by_lob" -> Facet.LIST_BY_LOB;
       default -> null;
     };
   }
@@ -333,6 +337,7 @@ public final class EntityApiQuestion {
       case GROUP_BY_STATUS -> "group_by_status";
       case GROUP_BY_LOB -> "group_by_lob";
       case LARGEST_AMOUNT -> "largest_amount";
+      case LIST_BY_LOB -> "list_by_lob";
     };
   }
 

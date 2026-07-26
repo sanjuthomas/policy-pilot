@@ -136,6 +136,8 @@ class MeIntentServiceTest {
                 Map.of(
                     "payment_id",
                     "20260705-FICC-P-1",
+                    "status",
+                    "SUBMITTED",
                     "amount",
                     1000,
                     "currency",

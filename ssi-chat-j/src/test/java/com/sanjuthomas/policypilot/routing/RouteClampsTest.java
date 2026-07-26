@@ -239,6 +239,20 @@ class RouteClampsTest {
   }
 
   @Test
+  void clampsListByLobPaymentsOntoPaymentTarget() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("neo4j_direct");
+    decision.setExtractionFacet("list_by_lob");
+
+    RouterDecision clamped =
+        RouteClamps.apply(decision, "List all payments for desk LOB DESK_RATES.");
+
+    assertEquals("document_extraction", clamped.getPath());
+    assertEquals("list_by_lob", clamped.getExtractionFacet());
+    assertEquals("payment", clamped.getExtractionTarget());
+  }
+
+  @Test
   void keepsPaymentTargetForInventoryCount() {
     RouterDecision decision = new RouterDecision();
     decision.setPath("document_extraction");

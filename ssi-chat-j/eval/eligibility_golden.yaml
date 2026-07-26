@@ -1282,6 +1282,20 @@ cases:
     min_answer_length: 10
     answer_contains_any: [fo-ficc-101, payment, Found, No matching]
 
+- id: golden_payments_list_by_lob_desk_rates
+  mode: payments
+  retrieval: deterministic
+  tags: [golden, list, lob, inventory, document_extraction, ssi-chat-j]
+  question: List all payments for desk LOB DESK_RATES.
+  expect:
+    require_routing: true
+    routing_path: document_extraction
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: payment.list_by_lob
+    min_answer_length: 10
+    answer_contains_any: [DESK_RATES, payment, Found, No matching]
+
 - id: golden_events_count_month
   mode: events
   retrieval: graph

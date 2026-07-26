@@ -128,7 +128,7 @@ public final class RouterPrompts {
         ALWAYS set extractionFacet when path=document_extraction:
           show | status | creator | creator_and_approver | approver | list_by_status |
           list_standing | list_single_use | created_by_user | versions |
-          count | group_by_status | group_by_lob | largest_amount
+          count | group_by_status | group_by_lob | largest_amount | list_by_lob
         When listing/filtering instructions, ALWAYS set domain enums (map paraphrases → enum;
         the client does NOT parse synonyms):
           entityStatus = SUBMITTED|APPROVED|REJECTED|SUSPENDED|EXPIRED|CANCELLED|DRAFT|USED
@@ -139,6 +139,8 @@ public final class RouterPrompts {
         For "how many … instructions/payments" use extractionFacet=count (not list_*).
         For "group … by status" use extractionFacet=group_by_status.
         For "how many … per LOB" / "group … by LOB" use extractionFacet=group_by_lob.
+        For "list … payments/instructions for LOB <code>" (FICC|FX|DESK_RATES|…) use
+          extractionFacet=list_by_lob (not group_by_lob); set extractionTarget from the noun.
         For "who created the payment with the maximum / largest dollar value / amount"
           use extractionFacet=largest_amount and extractionTarget=payment.
         For "payments/instructions created by <user-id>" or "payments submitted by <user-id>"
@@ -147,7 +149,7 @@ public final class RouterPrompts {
           Set extractionTarget=payment or instruction from the noun.
         When the count/group question includes a time window, ALSO set graphTimeWindow=
           day|week|month|quarter|year (same slot as neo4j_direct alerts; today→day).
-        For payment inventory counts/lists/largest/created-by set extractionTarget=payment; otherwise instruction.
+        For payment inventory counts/lists/largest/created-by/list-by-lob set extractionTarget=payment; otherwise instruction.
         Prefer document_extraction over eligibility when the user asks to show / get / display /
         look up / open a payment or instruction (or a bare sequence id with show/get language),
         not who can approve it. Sequence ids encode type: -P- → payment, -I- → instruction.
@@ -156,6 +158,7 @@ public final class RouterPrompts {
           past-tense who approved <id> / who approved payment <id> and why?,
           list approved|standing|single-use|paused instructions, instructions created by <user-id>,
           payments created/submitted by <user-id>,
+          list payments/instructions for a named LOB (FICC|FX|DESK_RATES|…),
           list/show version history for <id>,
           how many instructions/payments (by status/type/LOB/day/week/month/quarter/year),
           group instructions/payments by status,
@@ -226,6 +229,8 @@ public final class RouterPrompts {
               graphTimeWindow=year
           "Who created the payment with the maximum dollar value?"
             → document_extraction, extractionTarget=payment, extractionFacet=largest_amount
+          "List all payments for desk LOB DESK_RATES."
+            → document_extraction, extractionTarget=payment, extractionFacet=list_by_lob
       Prefer eligibility over neo4j_direct for live OPA approver/submitter questions.
       Prefer eligibility+SUBMIT over skill for "who can submit" (not "please submit").
       Neo4j direct (SecurityEvent aggregates / graph SoD — no mutation):

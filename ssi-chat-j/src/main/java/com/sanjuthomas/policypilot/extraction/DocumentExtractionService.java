@@ -92,11 +92,19 @@ public class DocumentExtractionService {
           case COUNT -> "instruction.count";
           case GROUP_BY_STATUS -> "instruction.group_by_status";
           case GROUP_BY_LOB -> "instruction.group_by_lob";
+          case LIST_BY_LOB -> "instruction.list_by_lob";
           default -> "instruction.list_by_status";
         };
     if (resolved == Facet.CREATED_BY_USER && createdBy == null) {
       return new DocumentExtractionResult(
           "Please include a user id (for example mo-050) when asking which instructions a user created.",
+          intentId);
+    }
+    String listLob =
+        resolved == Facet.GROUP_BY_LOB ? null : EntityApiQuestion.lobFilter(question);
+    if (resolved == Facet.LIST_BY_LOB && !StringUtils.hasText(listLob)) {
+      return new DocumentExtractionResult(
+          "Please name a LOB when listing instructions (for example FICC, FX, or DESK_RATES).",
           intentId);
     }
     if (resolved == Facet.LIST_BY_STATUS
@@ -107,10 +115,9 @@ public class DocumentExtractionService {
               + "(or ask again so status can be resolved).",
           intentId);
     }
-    // Group-by wants the full visible set; do not push a status/LOB filter.
+    // Group-by wants the full visible set; list-by-lob is LOB-only (no status required).
     boolean groupBy = resolved == Facet.GROUP_BY_STATUS || resolved == Facet.GROUP_BY_LOB;
-    String listStatus = groupBy ? null : status;
-    String listLob = groupBy ? null : EntityApiQuestion.lobFilter(question);
+    String listStatus = groupBy || resolved == Facet.LIST_BY_LOB ? null : status;
     String timeWindow =
         resolved == Facet.COUNT || groupBy ? GraphAnswerHints.from(decision).timeWindow() : null;
     boolean unfilteredCount =
@@ -176,6 +183,7 @@ public class DocumentExtractionService {
           case GROUP_BY_STATUS -> "payment.group_by_status";
           case GROUP_BY_LOB -> "payment.group_by_lob";
           case LARGEST_AMOUNT -> "payment.largest_amount";
+          case LIST_BY_LOB -> "payment.list_by_lob";
           case CREATED_BY_USER -> {
             createdBy = EntityApiQuestion.extractUserId(question).orElse(null);
             yield "payment.created_by_user";
@@ -187,17 +195,23 @@ public class DocumentExtractionService {
           "Please include a user id (for example fo-ficc-101) when asking which payments a user created or submitted.",
           intentId);
     }
+    String listLob =
+        resolved == Facet.GROUP_BY_LOB ? null : EntityApiQuestion.lobFilter(question);
+    if (resolved == Facet.LIST_BY_LOB && !StringUtils.hasText(listLob)) {
+      return new DocumentExtractionResult(
+          "Please name a LOB when listing payments (for example FICC, FX, or DESK_RATES).",
+          intentId);
+    }
     if (resolved == Facet.LIST_BY_STATUS && !StringUtils.hasText(status)) {
       return new DocumentExtractionResult(
           "Please name a status when listing payments (or ask again so status can be resolved).",
           intentId);
     }
     boolean groupBy = resolved == Facet.GROUP_BY_STATUS || resolved == Facet.GROUP_BY_LOB;
-    // Group-by wants the full visible set; largest/created-by may still honor an explicit status slot.
-    String listStatus = groupBy ? null : status;
+    // Group-by wants the full visible set; list-by-lob is LOB-only (no status required).
+    String listStatus = groupBy || resolved == Facet.LIST_BY_LOB ? null : status;
     String timeWindow =
         resolved == Facet.COUNT || groupBy ? GraphAnswerHints.from(decision).timeWindow() : null;
-    String listLob = groupBy ? null : EntityApiQuestion.lobFilter(question);
     boolean unfilteredCount =
         resolved == Facet.COUNT
             && !StringUtils.hasText(listStatus)
@@ -212,11 +226,13 @@ public class DocumentExtractionService {
       }
       List<Map<String, Object>> rows =
           eligibilityClient.listPayments(
-              listStatus, createdBy, 500, subject.bearerToken(), subject.sessionId());
+              listStatus,
+              createdBy,
+              listLob,
+              500,
+              subject.bearerToken(),
+              subject.sessionId());
       rows = InventoryCreatedAtFilter.apply(rows, timeWindow);
-      if (StringUtils.hasText(listLob)) {
-        rows = filterByLob(rows, listLob);
-      }
       if (resolved == Facet.COUNT) {
         return new DocumentExtractionResult(
             entityApiAnswerFormatter.formatInventoryCount(rows.size(), "payments"), intentId);
@@ -314,24 +330,6 @@ public class DocumentExtractionService {
       counts.merge(key, 1L, Long::sum);
     }
     return counts;
-  }
-
-  static List<Map<String, Object>> filterByLob(List<Map<String, Object>> rows, String lob) {
-    if (rows == null || rows.isEmpty() || !StringUtils.hasText(lob)) {
-      return rows == null ? List.of() : rows;
-    }
-    String want = lob.strip().toUpperCase(Locale.ROOT);
-    List<Map<String, Object>> out = new ArrayList<>();
-    for (Map<String, Object> row : rows) {
-      if (row == null) {
-        continue;
-      }
-      Object owning = row.get("owning_lob");
-      if (owning != null && want.equalsIgnoreCase(owning.toString().strip())) {
-        out.add(row);
-      }
-    }
-    return out;
   }
 
   private DocumentExtractionResult answerInstruction(
@@ -472,9 +470,10 @@ public class DocumentExtractionService {
   }
 
   static String resolveTarget(String question, RouterDecision decision) {
-    if (EntityApiQuestion.facetFromSlot(
-            decision == null ? null : decision.getExtractionFacet())
-        == Facet.LARGEST_AMOUNT) {
+    Facet facet =
+        EntityApiQuestion.facetFromSlot(
+            decision == null ? null : decision.getExtractionFacet());
+    if (facet == Facet.LARGEST_AMOUNT) {
       return "payment";
     }
     String fromRouter =
@@ -482,10 +481,8 @@ public class DocumentExtractionService {
     if ("payment".equals(fromRouter) || "instruction".equals(fromRouter)) {
       return fromRouter;
     }
-    if (EntityApiQuestion.facetFromSlot(
-            decision == null ? null : decision.getExtractionFacet())
-        == Facet.CREATED_BY_USER) {
-      String q = question == null ? "" : question.toLowerCase(Locale.ROOT);
+    String q = question == null ? "" : question.toLowerCase(Locale.ROOT);
+    if (facet == Facet.LIST_BY_LOB || facet == Facet.CREATED_BY_USER) {
       if (q.contains("payment")) {
         return "payment";
       }

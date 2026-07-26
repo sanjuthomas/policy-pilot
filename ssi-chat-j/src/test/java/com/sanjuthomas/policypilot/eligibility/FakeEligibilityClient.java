@@ -136,6 +136,7 @@ public class FakeEligibilityClient extends EligibilityClient {
   public java.util.List<Map<String, Object>> listPayments(
       String status,
       String createdByUserId,
+      String owningLob,
       int limit,
       String userBearerToken,
       String userSessionId) {
@@ -143,18 +144,39 @@ public class FakeEligibilityClient extends EligibilityClient {
       throw error;
     }
     Object list = response.get("payments");
-    if (list instanceof java.util.List<?> rows) {
-      java.util.List<Map<String, Object>> out = new java.util.ArrayList<>();
-      for (Object row : rows) {
-        if (row instanceof Map<?, ?> map) {
-          @SuppressWarnings("unchecked")
-          Map<String, Object> cast = (Map<String, Object>) map;
-          out.add(cast);
+    if (!(list instanceof java.util.List<?> rows)) {
+      return java.util.List.of();
+    }
+    java.util.List<Map<String, Object>> out = new java.util.ArrayList<>();
+    for (Object row : rows) {
+      if (!(row instanceof Map<?, ?> map)) {
+        continue;
+      }
+      @SuppressWarnings("unchecked")
+      Map<String, Object> cast = (Map<String, Object>) map;
+      if (status != null
+          && !status.isBlank()
+          && !status.equalsIgnoreCase(String.valueOf(cast.get("status")))) {
+        continue;
+      }
+      if (owningLob != null
+          && !owningLob.isBlank()
+          && !owningLob.equalsIgnoreCase(String.valueOf(cast.get("owning_lob")))) {
+        continue;
+      }
+      if (createdByUserId != null && !createdByUserId.isBlank()) {
+        Object createdBy = cast.get("created_by");
+        String userId = "";
+        if (createdBy instanceof Map<?, ?> createdMap) {
+          userId = String.valueOf(createdMap.get("user_id"));
+        }
+        if (!createdByUserId.equalsIgnoreCase(userId)) {
+          continue;
         }
       }
-      return out;
+      out.add(cast);
     }
-    return java.util.List.of();
+    return out;
   }
 
   @Override

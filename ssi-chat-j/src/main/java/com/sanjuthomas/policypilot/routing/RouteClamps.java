@@ -96,8 +96,9 @@ public final class RouteClamps {
     if ("payment".equals(target) || "instruction".equals(target)) {
       return;
     }
-    // created_by_user: prefer the noun already in the question (payment vs instruction).
-    if (facet == EntityApiQuestion.Facet.CREATED_BY_USER) {
+    // created_by_user / list_by_lob: prefer the noun already in the question.
+    if (facet == EntityApiQuestion.Facet.CREATED_BY_USER
+        || facet == EntityApiQuestion.Facet.LIST_BY_LOB) {
       String q = question == null ? "" : question.toLowerCase(Locale.ROOT);
       if (q.contains("payment")) {
         decision.setExtractionTarget("payment");

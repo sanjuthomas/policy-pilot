@@ -129,6 +129,7 @@ async def list_payments(
     instruction_id: str | None = Query(default=None),
     status: str | None = Query(default=None),
     created_by_user_id: str | None = Query(default=None),
+    owning_lob: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     subject: Subject = Depends(get_subject),
     service: PaymentService = Depends(get_service),
@@ -138,6 +139,7 @@ async def list_payments(
         instruction_id=instruction_id,
         status=status,
         created_by_user_id=created_by_user_id,
+        owning_lob=owning_lob,
         limit=limit,
     )
     return [_to_response(record) for record in records]

@@ -194,7 +194,7 @@ Each answer records routing metadata (path, retrieval strategy, cypher provenanc
 
 ## Golden eval
 
-HTTP black-box bank: [`ssi-chat-j/eval/eligibility_golden.yaml`](../ssi-chat-j/eval/eligibility_golden.yaml) (**102** cases). Prove: `./ssi-chat-j/scripts/prove-eligibility.sh`.
+HTTP black-box bank: [`ssi-chat-j/eval/eligibility_golden.yaml`](../ssi-chat-j/eval/eligibility_golden.yaml) (**103** cases). Prove: `./ssi-chat-j/scripts/prove-eligibility.sh`.
 
 ## Reviewer talking points
 

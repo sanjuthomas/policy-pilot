@@ -2,7 +2,7 @@
 
 Status tracker for **Policy Pilot chat** (`ssi-chat-j`). Historical A/B plan: [`ssi-chat-j-plan.md`](ssi-chat-j-plan.md).
 
-**Success bar:** golden eval green against `http://localhost:8096` (**102** cases in `ssi-chat-j/eval/`). Python `ssi-chat` and `cypher-builder-svc` are **retired**.
+**Success bar:** golden eval green against `http://localhost:8096` (**103** cases in `ssi-chat-j/eval/`). Python `ssi-chat` and `cypher-builder-svc` are **retired**.
 
 Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `blocked` · `deferred`.
 
@@ -41,7 +41,7 @@ Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `
 | **Python chat + cypher HTTP bridge retired** | `done` | Compose/CI use `ssi-chat-j` only; UI vendored under `ssi-chat-j/.../static/` |
 | **Next** | `todo` | D.1 — harvest strong uncovered cases from local `ssi-chat/regression/questions.yaml` into `eligibility_golden.yaml` (no Java `questions.yaml`) |
 
-**Bank snapshot:** prove bank **102** (policies 11 · me 18 · skills 17 · graph/entity/SoD/vector remainder).
+**Bank snapshot:** prove bank **103** (policies 11 · me 18 · skills 17 · graph/entity/SoD/vector remainder).
 
 ### neo4j_direct / entity facets (historical Python YAML parity)
 
@@ -137,7 +137,7 @@ Implement only what golden cases require; mark each golden id when green.
 ### Golden case checklist — migration baseline green (54)
 
 This historical checklist records the 54-case Java migration baseline. The current
-prove bank contains **102** cases, including the later `me`, skill, facet, and SoD
+prove bank contains **103** cases, including the later `me`, skill, facet, and SoD
 coverage summarized above.
 
 | Golden case id | Status | Notes |
@@ -183,7 +183,7 @@ No Python-only golden cases remain open for the Java success bar.
 | P4.1 | Run seeded prove bank against `:8096` | `done` | `prove-eligibility.sh` / warm `--no-seed` |
 | P4.2 | Triage failures into Phase 3 backlog | `done` | Last Python-only case closed |
 | P4.3 | Document migration evaluation how-to | `done` | Historical A/B instructions were superseded when Python chat was retired |
-| P4.4 | **Success bar met** | `done` | Current Java prove bank **102**; Python-only **0** |
+| P4.4 | **Success bar met** | `done` | Current Java prove bank **103**; Python-only **0** |
 
 ---
 
@@ -191,7 +191,7 @@ No Python-only golden cases remain open for the Java success bar.
 
 | ID | Item | Status | Notes |
 |----|------|--------|-------|
-| D.1 | Harvest `ssi-chat/regression/questions.yaml` into Java goldens | `todo` | Local-only Python bank (gitignored). Do **not** add a Java `questions.yaml`. Promote uncovered cases into `eligibility_golden.yaml`. Done: `golden_instructions_conflicts_ficc`, `golden_payments_largest_who_created`, `golden_payments_created_by_fo_ficc101`. |
+| D.1 | Harvest `ssi-chat/regression/questions.yaml` into Java goldens | `todo` | Local-only Python bank (gitignored). Do **not** add a Java `questions.yaml`. Promote uncovered cases into `eligibility_golden.yaml`. Done: `golden_instructions_conflicts_ficc`, `golden_payments_largest_who_created`, `golden_payments_created_by_fo_ficc101`, `golden_payments_list_by_lob_desk_rates`. |
 | D.2 | Payment skills parity | `done` | 17 `golden_skill_*` cases; Go mutations implemented for create / submit / approve / cancel |
 | D.3 | Replace Python chat | `done` | Python `ssi-chat` + `cypher-builder-svc` retired; Java is the chat surface |
 | D.4 | Native Java `cypher_builder` port | `done` | In-process `com.sanjuthomas.policypilot.cypher` (alerts + SoD + timeline); no HTTP bridge |
@@ -224,3 +224,4 @@ No Python-only golden cases remain open for the Java success bar.
 | 2026-07-26 | Promoted LOB-scoped CONFLICTS_WITH (`golden_instructions_conflicts_ficc`); prove bank **100** |
 | 2026-07-26 | Promoted largest-payment creator (`golden_payments_largest_who_created` via `document_extraction`/`largest_amount`); prove bank **101** |
 | 2026-07-26 | Promoted payments-by-FO-user (`golden_payments_created_by_fo_ficc101` via payment `created_by_user_id` list filter); prove bank **102** |
+| 2026-07-26 | Promoted payments-by-LOB (`golden_payments_list_by_lob_desk_rates` via `list_by_lob` + payment `owning_lob`); prove bank **103** |

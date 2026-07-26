@@ -227,6 +227,7 @@ public class EligibilityClient {
   public List<Map<String, Object>> listPayments(
       String status,
       String createdByUserId,
+      String owningLob,
       int limit,
       String userBearerToken,
       String userSessionId) {
@@ -240,6 +241,10 @@ public class EligibilityClient {
       params.add(
           "created_by_user_id="
               + UriUtils.encodeQueryParam(createdByUserId.strip(), StandardCharsets.UTF_8));
+    }
+    if (StringUtils.hasText(owningLob)) {
+      params.add(
+          "owning_lob=" + UriUtils.encodeQueryParam(owningLob.strip(), StandardCharsets.UTF_8));
     }
     params.add("limit=" + Math.max(1, Math.min(limit, 500)));
     url.append(String.join("&", params));
