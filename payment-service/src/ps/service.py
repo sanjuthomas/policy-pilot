@@ -914,11 +914,13 @@ class PaymentService:
         *,
         instruction_id: str | None = None,
         status: str | None = None,
+        created_by_user_id: str | None = None,
         limit: int = 100,
     ) -> list[VersionedPayment]:
         records = await self.repo.list_current(
             instruction_id=instruction_id,
             status=status,
+            created_by_user_id=created_by_user_id,
             limit=limit,
         )
         visible = []

@@ -224,6 +224,21 @@ class RouteClampsTest {
   }
 
   @Test
+  void clampsCreatedByUserPaymentsOntoPaymentTarget() {
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("neo4j_direct");
+    decision.setExtractionFacet("created_by_user");
+
+    RouterDecision clamped =
+        RouteClamps.apply(
+            decision, "Show payments submitted by front-office user fo-ficc-101.");
+
+    assertEquals("document_extraction", clamped.getPath());
+    assertEquals("created_by_user", clamped.getExtractionFacet());
+    assertEquals("payment", clamped.getExtractionTarget());
+  }
+
+  @Test
   void keepsPaymentTargetForInventoryCount() {
     RouterDecision decision = new RouterDecision();
     decision.setPath("document_extraction");

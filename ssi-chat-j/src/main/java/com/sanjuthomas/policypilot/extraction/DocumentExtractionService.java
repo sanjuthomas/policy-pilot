@@ -169,21 +169,31 @@ public class DocumentExtractionService {
       String question, Subject subject, RouterDecision decision, Facet facet) {
     Facet resolved = facet;
     String status = EntityApiQuestion.resolveEntityStatus(question, decision);
+    String createdBy = null;
     String intentId =
         switch (resolved) {
           case COUNT -> "payment.count";
           case GROUP_BY_STATUS -> "payment.group_by_status";
           case GROUP_BY_LOB -> "payment.group_by_lob";
           case LARGEST_AMOUNT -> "payment.largest_amount";
+          case CREATED_BY_USER -> {
+            createdBy = EntityApiQuestion.extractUserId(question).orElse(null);
+            yield "payment.created_by_user";
+          }
           default -> "payment.list_by_status";
         };
+    if (resolved == Facet.CREATED_BY_USER && createdBy == null) {
+      return new DocumentExtractionResult(
+          "Please include a user id (for example fo-ficc-101) when asking which payments a user created or submitted.",
+          intentId);
+    }
     if (resolved == Facet.LIST_BY_STATUS && !StringUtils.hasText(status)) {
       return new DocumentExtractionResult(
           "Please name a status when listing payments (or ask again so status can be resolved).",
           intentId);
     }
     boolean groupBy = resolved == Facet.GROUP_BY_STATUS || resolved == Facet.GROUP_BY_LOB;
-    // Group-by wants the full visible set; largest may still honor an explicit status slot.
+    // Group-by wants the full visible set; largest/created-by may still honor an explicit status slot.
     String listStatus = groupBy ? null : status;
     String timeWindow =
         resolved == Facet.COUNT || groupBy ? GraphAnswerHints.from(decision).timeWindow() : null;
@@ -202,7 +212,7 @@ public class DocumentExtractionService {
       }
       List<Map<String, Object>> rows =
           eligibilityClient.listPayments(
-              listStatus, 500, subject.bearerToken(), subject.sessionId());
+              listStatus, createdBy, 500, subject.bearerToken(), subject.sessionId());
       rows = InventoryCreatedAtFilter.apply(rows, timeWindow);
       if (StringUtils.hasText(listLob)) {
         rows = filterByLob(rows, listLob);
@@ -471,6 +481,17 @@ public class DocumentExtractionService {
         decision == null ? "" : nullToEmpty(decision.getExtractionTarget()).toLowerCase().strip();
     if ("payment".equals(fromRouter) || "instruction".equals(fromRouter)) {
       return fromRouter;
+    }
+    if (EntityApiQuestion.facetFromSlot(
+            decision == null ? null : decision.getExtractionFacet())
+        == Facet.CREATED_BY_USER) {
+      String q = question == null ? "" : question.toLowerCase(Locale.ROOT);
+      if (q.contains("payment")) {
+        return "payment";
+      }
+      if (q.contains("instruction")) {
+        return "instruction";
+      }
     }
     if (PaymentIdParser.extract(question).isPresent()) {
       return "payment";

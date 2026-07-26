@@ -49,7 +49,7 @@ public class WaitingForMeService {
 
     List<Map<String, Object>> submitted =
         eligibilityClient.listPayments(
-            "SUBMITTED", LIST_LIMIT, subject.bearerToken(), subject.sessionId());
+            "SUBMITTED", null, LIST_LIMIT, subject.bearerToken(), subject.sessionId());
 
     List<WorklistItem> items = new ArrayList<>();
     int checked = 0;

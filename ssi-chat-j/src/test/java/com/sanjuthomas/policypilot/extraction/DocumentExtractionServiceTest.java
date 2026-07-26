@@ -483,6 +483,44 @@ class DocumentExtractionServiceTest {
   }
 
   @Test
+  void listsPaymentsCreatedByUserFromApi() {
+    client.returning(
+        Map.of(
+            "payments",
+            List.of(
+                Map.of(
+                    "payment_id",
+                    "20260720-FICC-P-8",
+                    "status",
+                    "SUBMITTED",
+                    "owning_lob",
+                    "FICC",
+                    "currency",
+                    "USD",
+                    "created_by",
+                    Map.of(
+                        "user_id",
+                        "fo-ficc-101",
+                        "given_name",
+                        "Sam",
+                        "family_name",
+                        "Morrison")))));
+
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("document_extraction");
+    decision.setExtractionTarget("payment");
+    decision.setExtractionFacet("created_by_user");
+
+    DocumentExtractionResult result =
+        service.answer(
+            "Show payments submitted by front-office user fo-ficc-101.", subject(), decision);
+
+    assertEquals("payment.created_by_user", result.intentId());
+    assertTrue(result.answer().contains("fo-ficc-101"));
+    assertTrue(result.answer().contains("20260720-FICC-P-8"));
+  }
+
+  @Test
   void formatsLargestPaymentWhoCreatedFromApi() {
     client.returning(
         Map.of(

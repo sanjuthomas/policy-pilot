@@ -134,7 +134,11 @@ public class FakeEligibilityClient extends EligibilityClient {
 
   @Override
   public java.util.List<Map<String, Object>> listPayments(
-      String status, int limit, String userBearerToken, String userSessionId) {
+      String status,
+      String createdByUserId,
+      int limit,
+      String userBearerToken,
+      String userSessionId) {
     if (error != null) {
       throw error;
     }

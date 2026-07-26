@@ -77,7 +77,7 @@ Coverage: `mvn verify` (≥ 80% JaCoCo). See [`AGENTS.md`](AGENTS.md).
 
 ## Golden eval (HTTP black-box)
 
-**101** cases in [`eval/eligibility_golden.yaml`](eval/eligibility_golden.yaml). Prove against a warm stack:
+**102** cases in [`eval/eligibility_golden.yaml`](eval/eligibility_golden.yaml). Prove against a warm stack:
 
 ```bash
 ./ssi-chat-j/scripts/prove-eligibility.sh

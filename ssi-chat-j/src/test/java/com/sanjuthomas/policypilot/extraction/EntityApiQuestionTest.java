@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sanjuthomas.policypilot.extraction.EntityApiQuestion.Facet;
 import com.sanjuthomas.policypilot.pipeline.RouterDecision;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class EntityApiQuestionTest {
@@ -107,6 +108,15 @@ class EntityApiQuestionTest {
             "Who created the payment with the maximum dollar value?", largest));
     assertTrue(EntityApiQuestion.isInventoryFacet(Facet.LARGEST_AMOUNT));
     assertEquals(Facet.LARGEST_AMOUNT, EntityApiQuestion.facetFromSlot("max_amount"));
+  }
+
+  @Test
+  void extractsDeskScopedFrontOfficeUserIds() {
+    assertEquals(
+        Optional.of("fo-ficc-101"),
+        EntityApiQuestion.extractUserId(
+            "Show payments submitted by front-office user fo-ficc-101."));
+    assertEquals(Optional.of("mo-050"), EntityApiQuestion.extractUserId("created by mo-050"));
   }
 
   @Test

@@ -134,6 +134,7 @@ class PaymentRepository:
         instruction_id: str | None = None,
         status: str | None = None,
         owning_lob: str | None = None,
+        created_by_user_id: str | None = None,
         limit: int = 100,
         include_cancelled: bool = False,
     ) -> list[VersionedPayment]:
@@ -144,6 +145,9 @@ class PaymentRepository:
             query["status"] = status
         if owning_lob:
             query["owning_lob"] = owning_lob
+        # Creator lives in the versioned payload document (not top-level).
+        if created_by_user_id:
+            query["payload.created_by.user_id"] = created_by_user_id
 
         cursor = self._col.find(query).sort("in", -1).limit(limit)
         records = [document_to_versioned_payment(doc) async for doc in cursor]

@@ -141,9 +141,13 @@ public final class RouterPrompts {
         For "how many … per LOB" / "group … by LOB" use extractionFacet=group_by_lob.
         For "who created the payment with the maximum / largest dollar value / amount"
           use extractionFacet=largest_amount and extractionTarget=payment.
+        For "payments/instructions created by <user-id>" or "payments submitted by <user-id>"
+          use extractionFacet=created_by_user (actor filter — do NOT set entityStatus from the
+          verb "submitted"; leave entityStatus null unless a lifecycle status is also asked).
+          Set extractionTarget=payment or instruction from the noun.
         When the count/group question includes a time window, ALSO set graphTimeWindow=
           day|week|month|quarter|year (same slot as neo4j_direct alerts; today→day).
-        For payment inventory counts/lists/largest set extractionTarget=payment; otherwise instruction.
+        For payment inventory counts/lists/largest/created-by set extractionTarget=payment; otherwise instruction.
         Prefer document_extraction over eligibility when the user asks to show / get / display /
         look up / open a payment or instruction (or a bare sequence id with show/get language),
         not who can approve it. Sequence ids encode type: -P- → payment, -I- → instruction.
@@ -151,6 +155,7 @@ public final class RouterPrompts {
           status of payment/instruction <id>, who created <id>, who created + who approved <id>,
           past-tense who approved <id> / who approved payment <id> and why?,
           list approved|standing|single-use|paused instructions, instructions created by <user-id>,
+          payments created/submitted by <user-id>,
           list/show version history for <id>,
           how many instructions/payments (by status/type/LOB/day/week/month/quarter/year),
           group instructions/payments by status,
@@ -185,6 +190,8 @@ public final class RouterPrompts {
               instructionType=STANDING
           "Which instructions were created by mo-050?"
             → document_extraction, extractionTarget=instruction, extractionFacet=created_by_user
+          "Show payments submitted by front-office user fo-ficc-101."
+            → document_extraction, extractionTarget=payment, extractionFacet=created_by_user
           "List versions of instruction 20260720-FICC-I-1"
             → document_extraction, extractionTarget=instruction, extractionFacet=versions
           "Show version history for payment 20260720-FICC-P-1"

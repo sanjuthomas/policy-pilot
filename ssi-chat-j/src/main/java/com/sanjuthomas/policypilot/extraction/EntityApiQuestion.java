@@ -17,9 +17,11 @@ import org.springframework.util.StringUtils;
  */
 public final class EntityApiQuestion {
 
-  /** Stable subject user ids (e.g. {@code mo-050}). */
+  /** Stable subject user ids (e.g. {@code mo-050}, {@code fo-ficc-101}). */
   private static final Pattern USER_ID =
-      Pattern.compile("\\b(mo|ficc|fx|rates|pay|fo|comp|admin|svc)-\\d+\\b", Pattern.CASE_INSENSITIVE);
+      Pattern.compile(
+          "\\b(mo|ficc|fx|rates|pay|fo|comp|admin|svc)(?:-[a-z]+)?-\\d+\\b",
+          Pattern.CASE_INSENSITIVE);
 
   /** Literal domain enum already present in the question (stable token fallback only). */
   private static final Pattern STATUS_ENUM_TOKEN =

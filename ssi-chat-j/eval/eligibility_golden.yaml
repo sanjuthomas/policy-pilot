@@ -1268,6 +1268,20 @@ cases:
     min_answer_length: 15
     answer_contains_any: [created by, largest, payment]
 
+- id: golden_payments_created_by_fo_ficc101
+  mode: payments
+  retrieval: deterministic
+  tags: [golden, list, inventory, document_extraction, ssi-chat-j]
+  question: Show payments submitted by front-office user fo-ficc-101.
+  expect:
+    require_routing: true
+    routing_path: document_extraction
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: payment.created_by_user
+    min_answer_length: 10
+    answer_contains_any: [fo-ficc-101, payment, Found, No matching]
+
 - id: golden_events_count_month
   mode: events
   retrieval: graph

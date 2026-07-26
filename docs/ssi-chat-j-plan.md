@@ -57,4 +57,4 @@ flowchart TB
 ./ssi-chat-j/scripts/prove-eligibility.sh
 ```
 
-Cases: [`ssi-chat-j/eval/eligibility_golden.yaml`](../ssi-chat-j/eval/eligibility_golden.yaml) (**101**). See [`ssi-chat-j/eval/README.md`](../ssi-chat-j/eval/README.md).
+Cases: [`ssi-chat-j/eval/eligibility_golden.yaml`](../ssi-chat-j/eval/eligibility_golden.yaml) (**102**). See [`ssi-chat-j/eval/README.md`](../ssi-chat-j/eval/README.md).

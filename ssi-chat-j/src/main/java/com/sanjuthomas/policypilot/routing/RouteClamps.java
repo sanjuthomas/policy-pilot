@@ -65,7 +65,7 @@ public final class RouteClamps {
     }
     String path = decision.getPath() == null ? "" : decision.getPath().toLowerCase(Locale.ROOT);
     if ("document_extraction".equals(path)) {
-      ensureInventoryTarget(decision);
+      ensureInventoryTarget(decision, question);
       return decision;
     }
     if (!ENTITY_API_STEAL_PATHS.contains(path)) {
@@ -73,12 +73,12 @@ public final class RouteClamps {
     }
     String prior = decision.getPath();
     decision.setPath("document_extraction");
-    ensureInventoryTarget(decision);
+    ensureInventoryTarget(decision, question);
     appendReasoning(decision, "clamped document_extraction (entity API; was " + prior + ")");
     return decision;
   }
 
-  private static void ensureInventoryTarget(RouterDecision decision) {
+  private static void ensureInventoryTarget(RouterDecision decision, String question) {
     EntityApiQuestion.Facet facet =
         EntityApiQuestion.facetFromSlot(decision.getExtractionFacet());
     if (!EntityApiQuestion.isInventoryFacet(facet)) {
@@ -93,10 +93,19 @@ public final class RouteClamps {
         decision.getExtractionTarget() == null
             ? ""
             : decision.getExtractionTarget().strip().toLowerCase(Locale.ROOT);
-    // Keep an explicit payment inventory target (counts / group-by); default to instruction.
-    if (!"payment".equals(target)) {
-      decision.setExtractionTarget("instruction");
+    if ("payment".equals(target) || "instruction".equals(target)) {
+      return;
     }
+    // created_by_user: prefer the noun already in the question (payment vs instruction).
+    if (facet == EntityApiQuestion.Facet.CREATED_BY_USER) {
+      String q = question == null ? "" : question.toLowerCase(Locale.ROOT);
+      if (q.contains("payment")) {
+        decision.setExtractionTarget("payment");
+        return;
+      }
+    }
+    // Keep an explicit payment inventory target (counts / group-by); default to instruction.
+    decision.setExtractionTarget("instruction");
   }
 
   private static void appendReasoning(RouterDecision decision, String note) {

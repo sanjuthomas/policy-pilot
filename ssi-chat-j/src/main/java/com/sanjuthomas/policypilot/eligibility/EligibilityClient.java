@@ -225,12 +225,21 @@ public class EligibilityClient {
    * List payments visible to the OBO subject (e.g. {@code status=SUBMITTED} for approver worklist).
    */
   public List<Map<String, Object>> listPayments(
-      String status, int limit, String userBearerToken, String userSessionId) {
+      String status,
+      String createdByUserId,
+      int limit,
+      String userBearerToken,
+      String userSessionId) {
     StringBuilder url =
         new StringBuilder(trimSlash(properties.paymentServiceUrl()) + "/api/v1/payments?");
     List<String> params = new ArrayList<>();
     if (StringUtils.hasText(status)) {
       params.add("status=" + UriUtils.encodeQueryParam(status.strip(), StandardCharsets.UTF_8));
+    }
+    if (StringUtils.hasText(createdByUserId)) {
+      params.add(
+          "created_by_user_id="
+              + UriUtils.encodeQueryParam(createdByUserId.strip(), StandardCharsets.UTF_8));
     }
     params.add("limit=" + Math.max(1, Math.min(limit, 500)));
     url.append(String.join("&", params));

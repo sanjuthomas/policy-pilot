@@ -192,6 +192,44 @@ async def test_list_current_excludes_cancelled(
 
 
 @pytest.mark.asyncio
+async def test_list_current_filters_by_created_by_user_id(
+    patched_db: MagicMock,
+    payment: Payment,
+) -> None:
+    active_doc = versioned_payment_to_document(
+        payment,
+        version_number=1,
+        valid_in=datetime.utcnow(),
+    )
+
+    class AsyncCursor:
+        def __init__(self, docs):
+            self._docs = docs
+
+        def sort(self, *_args, **_kwargs):
+            return self
+
+        def limit(self, *_args, **_kwargs):
+            return self
+
+        def __aiter__(self):
+            async def generator():
+                for doc in self._docs:
+                    yield doc
+
+            return generator()
+
+    patched_db.find = MagicMock(return_value=AsyncCursor([active_doc]))
+    repo = PaymentRepository()
+    records = await repo.list_current(created_by_user_id=payment.created_by.user_id)
+    assert len(records) == 1
+    patched_db.find.assert_called_once()
+    query = patched_db.find.call_args.args[0]
+    assert query["payload.created_by.user_id"] == payment.created_by.user_id
+    assert query["out"] == PAYMENT_CURRENT_OUT
+
+
+@pytest.mark.asyncio
 async def test_summarize_current_aggregates_by_status(
     patched_db: MagicMock,
 ) -> None:
