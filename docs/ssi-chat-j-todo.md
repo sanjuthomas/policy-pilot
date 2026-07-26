@@ -31,15 +31,15 @@ Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `
 | Phase 2 cypher bridge | `done` | Historical [#99](https://github.com/sanjuthomas/policy-pilot/pull/99); **superseded** by in-process Java planner |
 | In-process Java Cypher planner | `done` | `com.sanjuthomas.policypilot.cypher` — no HTTP bridge for `ssi-chat-j` |
 | **P3.4** — neo4j_direct security-event / denial formatters | `done` | Thymeleaf templates + LOB scope; 8 denial/alert goldens |
-| Entity status / creator goldens | `done` | status + payment creator via bridge YAML-parity |
+| Entity status / creator goldens | `done` | Domain API extraction for status and creator |
 | Who-approved payment golden | `done` | approval-lookup Thymeleaf; heuristic + entity_plan fallback |
 | FO/MO instruction VIEW goldens | `done` | `golden_instruction_view_fo_ficc` / `_mo_covering_ficc` |
 | **P3.5** — vector security summary | `done` | `golden_vector_security_summary` green on `:8096` |
 | **person_permissions** | `done` | Authz directory summary; `golden_person_permissions_kowalski` in prove bank |
-| **neo4j_direct remaining port** | `done` | SoD goldens in prove bank; facet families still backlog |
+| **neo4j_direct remaining port** | `done` | SoD goldens in prove bank; facet counts/group-by handled by domain APIs |
 | **Payment mutation skills** | `done` | `path=skill` + LLM `SkillSlots` (amount/date from router; id stable-token fallback); **17** `golden_skill_*` |
 | **Python chat + cypher HTTP bridge retired** | `done` | Compose/CI use `ssi-chat-j` only; UI vendored under `ssi-chat-j/.../static/` |
-| **Next** | `todo` | Facet-family goldens / prove flakes (seed context, LOB-scope denials) |
+| **Next** | `todo` | Decide the scope of D.1 (post-migration evaluation expansion) and continue prove-flake hardening |
 
 **Bank snapshot:** prove bank **99** (policies 11 · me 18 · skills 17 · graph/entity/SoD/vector remainder).
 
@@ -87,7 +87,7 @@ Skip: `*.show_by_id` (intentional Java `document_extraction`).
 | ID | Item | Status | Notes |
 |----|------|--------|-------|
 | P0.1 | Create `ssi-chat-j/` Maven Spring Boot 3 / Java 21 module | `done` | |
-| P0.2 | Dockerfile (CI image) for `ssi-chat-j` | `done` | Root Compose wiring deferred — run via Maven |
+| P0.2 | Dockerfile (CI image) for `ssi-chat-j` | `done` | Root Compose service and CI image build are active |
 | P0.3 | `GET /health` | `done` | |
 | P0.4 | Thymeleaf hello page | `done` | Minimal landing |
 | P0.5 | Maven copy of static assets from `ssi-chat/.../static` | `done` | Build-time assembly |
@@ -129,12 +129,16 @@ Implement only what golden cases require; mark each golden id when green.
 |----|------|--------|-------|
 | P3.1 | Pipeline: route → handler lanes (path is law) | `done` | Eligibility + directory + summary + me + document_extraction + neo4j_direct + vector/full_rag |
 | P3.2 | Eligibility / policy tools as needed by golden | `done` | Eligibility + directory + `policy_summary` |
-| P3.3 | Me / who-am-i if in golden | `done` | All Python meKinds live |
+| P3.3 | Me / who-am-i if in golden | `done` | All legacy `meKinds` implemented in Java |
 | P3.4 | neo4j_direct + formatters for golden graph cases | `done` | Counts / lists / ranking / status / creator; LOB scope |
 | P3.5 | Vector / hybrid only if a golden case needs it | `done` | `golden_vector_security_summary` green on `:8096` |
-| P3.6 | Skills only if a golden case needs them | `deferred` | Likely after golden |
+| P3.6 | Payment mutation skills | `done` | Create / submit / approve / cancel implemented; 17 `golden_skill_*` cases |
 
-### Golden case checklist — Java bank green (54)
+### Golden case checklist — migration baseline green (54)
+
+This historical checklist records the 54-case Java migration baseline. The current
+prove bank contains **99** cases, including the later `me`, skill, facet, and SoD
+coverage summarized above.
 
 | Golden case id | Status | Notes |
 |----------------|--------|-------|
@@ -151,7 +155,7 @@ Implement only what golden cases require; mark each golden id when green.
 | `golden_policies_amount_and_covering_combo` | `done` | |
 | `golden_me_*` (18 cases) | `done` | who_am_i through can_approve_payment_no_fo |
 | `golden_instruction_show_by_id_*` / `golden_payment_show_by_id_*` (8) | `done` | `document_extraction` |
-| `golden_events_count_today` | `done` | neo4j_direct via cypher bridge |
+| `golden_events_count_today` | `done` | `neo4j_direct` via the in-process Java planner |
 | `golden_instruction_denials_count_week` | `done` | Thymeleaf count template |
 | `golden_instruction_denials_list_week` | `done` | Thymeleaf list template |
 | `golden_payment_denials_count_today` | `done` | Thymeleaf count template |
@@ -160,9 +164,9 @@ Implement only what golden cases require; mark each golden id when green.
 | `golden_fo_fx_instruction_denials_scoped` | `done` | subject LOB scope (FX negative; densify-to-instruction-lob) |
 | `golden_fo_fx_payment_denials_scoped` | `done` | subject LOB scope |
 | `golden_fo_ficc_instruction_denials_positive` | `done` | subject LOB scope |
-| `golden_payment_status` | `done` | entity detail via cypher bridge |
-| `golden_instruction_status` | `done` | entity detail via cypher bridge |
-| `golden_payment_creator` | `done` | entity detail via cypher bridge |
+| `golden_payment_status` | `done` | Entity detail via payment API |
+| `golden_instruction_status` | `done` | Entity detail via instruction API |
+| `golden_payment_creator` | `done` | Entity detail via payment API |
 | `golden_events_who_approved_payment` | `done` | payment_approval_lookup + Thymeleaf WHO/WHEN/WHY |
 | `golden_instruction_view_fo_ficc` | `done` | FO FICC desk LOB VIEW via neo4j_direct status |
 | `golden_instruction_view_mo_covering_ficc` | `done` | MO covering-FICC VIEW via neo4j_direct status |
@@ -172,22 +176,14 @@ Implement only what golden cases require; mark each golden id when green.
 
 No Python-only golden cases remain open for the Java success bar.
 
-### Hygiene (deferred for success bar)
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Promote 27 Java-only goldens into Python bank | `deferred` | A/B hygiene; not blocking Java success bar |
-
----
-
 ## Phase 4 — Golden eval green
 
 | ID | Item | Status | Notes |
 |----|------|--------|-------|
-| P4.1 | Run seed + eligibility golden against `:8096` | `done` | `prove-eligibility.sh` / warm `--no-seed` |
+| P4.1 | Run seeded prove bank against `:8096` | `done` | `prove-eligibility.sh` / warm `--no-seed` |
 | P4.2 | Triage failures into Phase 3 backlog | `done` | Last Python-only case closed |
-| P4.3 | Document A/B how-to (switch `CHAT_BASE_URL`) | `done` | `ssi-chat-j/README.md` + `eval/README.md` |
-| P4.4 | **Success bar met** | `done` | Java bank **54**; Python-only **0** |
+| P4.3 | Document migration evaluation how-to | `done` | Historical A/B instructions were superseded when Python chat was retired |
+| P4.4 | **Success bar met** | `done` | Current Java prove bank **99**; Python-only **0** |
 
 ---
 
@@ -195,8 +191,8 @@ No Python-only golden cases remain open for the Java success bar.
 
 | ID | Item | Status | Notes |
 |----|------|--------|-------|
-| D.1 | Full `questions.yaml` bank | `deferred` | |
-| D.2 | Payment skills parity | `done` | Soft bank green on `:8096` (4 forbidden + 4 phase1 No Go); Go mutate implemented for API parity (not in golden bank yet) |
+| D.1 | Expand beyond the 99-case prove bank | `deferred` | No `questions.yaml` exists; decide desired coverage and format before creating a second evaluation bank |
+| D.2 | Payment skills parity | `done` | 17 `golden_skill_*` cases; Go mutations implemented for create / submit / approve / cancel |
 | D.3 | Replace Python chat | `done` | Python `ssi-chat` + `cypher-builder-svc` retired; Java is the chat surface |
 | D.4 | Native Java `cypher_builder` port | `done` | In-process `com.sanjuthomas.policypilot.cypher` (alerts + SoD + timeline); no HTTP bridge |
 
@@ -222,3 +218,5 @@ No Python-only golden cases remain open for the Java success bar.
 | 2026-07-23 | Dropped cypher-builder HTTP bridge for Java; in-process `GraphCypherPlanner` covers alerts + SoD + timeline |
 | 2026-07-23 | Six Neo4j SoD goldens added to prove bank (self/subordinate/duplicate/mutual/cross/timeline); mutual+cross demo-seeded in prove |
 | 2026-07-24 | Skill slots via `RouterDecision` (no free-text amount/date regex); UI parity (integrity + login roles); retire Python chat + cypher HTTP bridge from git/Compose; prove bank **98** |
+| 2026-07-25 | Governed audit evidence extended across create / submit / approve / cancel payment skills; prove bank **99** |
+| 2026-07-26 | Removed obsolete Python-bank promotion work and reconciled deferred/status notes with the shipped Java implementation |
