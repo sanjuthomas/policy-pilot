@@ -5,7 +5,7 @@ YAML golden cases owned by **ssi-chat-j**. They are HTTP black-box checks agains
 
 | File | Cases |
 |------|------:|
-| [`eligibility_golden.yaml`](eligibility_golden.yaml) | **99** |
+| [`eligibility_golden.yaml`](eligibility_golden.yaml) | **100** |
 
 ## Bank by family
 
@@ -16,7 +16,7 @@ YAML golden cases owned by **ssi-chat-j**. They are HTTP black-box checks agains
 | Document extraction / show-by-id | 8 | instruction/payment show (ok / not-found / forbidden) |
 | Neo4j events / denials / alerts | 12 | counts, lists, rankings, FO LOB scope |
 | Entity / inventory / audit | ~25 | status, creator, list-by-status, who-approved, versions, timelines |
-| SoD / vector / person | 7 | mutual/subordinate/duplicate, vector summary, person permissions |
+| SoD / vector / person | 8 | mutual/subordinate/duplicate, vector summary, person permissions |
 | Payment skills | 17 | phase-1 No Go, forbidden, incomplete, wrong-status, amount/LOB gates |
 
 Exact ids: see `eligibility_golden.yaml` (`- id:`).

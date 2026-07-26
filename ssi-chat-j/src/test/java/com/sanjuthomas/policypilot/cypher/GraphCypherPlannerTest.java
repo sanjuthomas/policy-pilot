@@ -125,6 +125,23 @@ class GraphCypherPlannerTest {
                 null,
                 decision("duplicate_routes"))
             .intentId());
+  }
+
+  @Test
+  void duplicateRoutesFiltersNamedLobFromQuestion() {
+    PlanResponse plan =
+        planner.plan(
+            "Show all CONFLICTS_WITH duplicate settlement routes for FICC.",
+            "instructions",
+            null,
+            decision("duplicate_routes"));
+    assertTrue(plan.matched());
+    assertEquals("instruction.duplicate_routes", plan.intentId());
+    assertTrue(plan.planned().get(0).cypher().contains("v1.owning_lob = 'FICC'"));
+  }
+
+  @Test
+  void plansCrossEntityReciprocalApproval() {
     assertEquals(
         "instruction.cross_entity_reciprocal_approval",
         planner

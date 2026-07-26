@@ -109,7 +109,7 @@ There is no application log file on disk; optional console mirroring uses `OTEL_
 
 ## Retrieval quality evaluation
 
-Golden evals for chat live under [`ssi-chat-j/eval/`](../ssi-chat-j/eval/) (**99** HTTP black-box cases). Prove against a warm stack:
+Golden evals for chat live under [`ssi-chat-j/eval/`](../ssi-chat-j/eval/) (**100** HTTP black-box cases). Prove against a warm stack:
 
 ```bash
 ./ssi-chat-j/scripts/prove-eligibility.sh

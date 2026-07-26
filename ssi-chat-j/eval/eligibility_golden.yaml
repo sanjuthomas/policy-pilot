@@ -1467,6 +1467,25 @@ cases:
     - conflicting instruction
     - Creditor Account
 
+- id: golden_instructions_conflicts_ficc
+  mode: instructions
+  retrieval: deterministic
+  tags: [golden, sod, conflicts, ficc, compliance, neo4j_direct, ssi-chat-j]
+  question: Show all CONFLICTS_WITH duplicate settlement routes for FICC.
+  expect:
+    require_routing: true
+    routing_path: neo4j_direct
+    cypher_class: deterministic
+    answer_synthesis: formatter
+    intent_id: instruction.duplicate_routes
+    min_answer_length: 20
+    answer_contains_any:
+    - No duplicate settlement routes
+    - CONFLICTS_WITH
+    - Found
+    - conflicting instruction
+    - Creditor Account
+
 - id: golden_instructions_mutual_approval
   mode: instructions
   retrieval: deterministic

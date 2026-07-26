@@ -2,7 +2,7 @@
 
 Status tracker for **Policy Pilot chat** (`ssi-chat-j`). Historical A/B plan: [`ssi-chat-j-plan.md`](ssi-chat-j-plan.md).
 
-**Success bar:** golden eval green against `http://localhost:8096` (**99** cases in `ssi-chat-j/eval/`). Python `ssi-chat` and `cypher-builder-svc` are **retired**.
+**Success bar:** golden eval green against `http://localhost:8096` (**100** cases in `ssi-chat-j/eval/`). Python `ssi-chat` and `cypher-builder-svc` are **retired**.
 
 Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `blocked` · `deferred`.
 
@@ -39,9 +39,9 @@ Update this file as work moves. Use only: `todo` · `in_progress` · `done` · `
 | **neo4j_direct remaining port** | `done` | SoD goldens in prove bank; facet counts/group-by handled by domain APIs |
 | **Payment mutation skills** | `done` | `path=skill` + LLM `SkillSlots` (amount/date from router; id stable-token fallback); **17** `golden_skill_*` |
 | **Python chat + cypher HTTP bridge retired** | `done` | Compose/CI use `ssi-chat-j` only; UI vendored under `ssi-chat-j/.../static/` |
-| **Next** | `todo` | Decide the scope of D.1 (post-migration evaluation expansion) and continue prove-flake hardening |
+| **Next** | `todo` | D.1 — harvest strong uncovered cases from local `ssi-chat/regression/questions.yaml` into `eligibility_golden.yaml` (no Java `questions.yaml`) |
 
-**Bank snapshot:** prove bank **99** (policies 11 · me 18 · skills 17 · graph/entity/SoD/vector remainder).
+**Bank snapshot:** prove bank **100** (policies 11 · me 18 · skills 17 · graph/entity/SoD/vector remainder).
 
 ### neo4j_direct / entity facets (historical Python YAML parity)
 
@@ -137,7 +137,7 @@ Implement only what golden cases require; mark each golden id when green.
 ### Golden case checklist — migration baseline green (54)
 
 This historical checklist records the 54-case Java migration baseline. The current
-prove bank contains **99** cases, including the later `me`, skill, facet, and SoD
+prove bank contains **100** cases, including the later `me`, skill, facet, and SoD
 coverage summarized above.
 
 | Golden case id | Status | Notes |
@@ -183,7 +183,7 @@ No Python-only golden cases remain open for the Java success bar.
 | P4.1 | Run seeded prove bank against `:8096` | `done` | `prove-eligibility.sh` / warm `--no-seed` |
 | P4.2 | Triage failures into Phase 3 backlog | `done` | Last Python-only case closed |
 | P4.3 | Document migration evaluation how-to | `done` | Historical A/B instructions were superseded when Python chat was retired |
-| P4.4 | **Success bar met** | `done` | Current Java prove bank **99**; Python-only **0** |
+| P4.4 | **Success bar met** | `done` | Current Java prove bank **100**; Python-only **0** |
 
 ---
 
@@ -191,7 +191,7 @@ No Python-only golden cases remain open for the Java success bar.
 
 | ID | Item | Status | Notes |
 |----|------|--------|-------|
-| D.1 | Expand beyond the 99-case prove bank | `deferred` | No `questions.yaml` exists; decide desired coverage and format before creating a second evaluation bank |
+| D.1 | Harvest `ssi-chat/regression/questions.yaml` into Java goldens | `todo` | Local-only Python bank (gitignored). Do **not** add a Java `questions.yaml`. Promote uncovered cases into `eligibility_golden.yaml`. Done: `golden_instructions_conflicts_ficc`. |
 | D.2 | Payment skills parity | `done` | 17 `golden_skill_*` cases; Go mutations implemented for create / submit / approve / cancel |
 | D.3 | Replace Python chat | `done` | Python `ssi-chat` + `cypher-builder-svc` retired; Java is the chat surface |
 | D.4 | Native Java `cypher_builder` port | `done` | In-process `com.sanjuthomas.policypilot.cypher` (alerts + SoD + timeline); no HTTP bridge |
@@ -218,5 +218,7 @@ No Python-only golden cases remain open for the Java success bar.
 | 2026-07-23 | Dropped cypher-builder HTTP bridge for Java; in-process `GraphCypherPlanner` covers alerts + SoD + timeline |
 | 2026-07-23 | Six Neo4j SoD goldens added to prove bank (self/subordinate/duplicate/mutual/cross/timeline); mutual+cross demo-seeded in prove |
 | 2026-07-24 | Skill slots via `RouterDecision` (no free-text amount/date regex); UI parity (integrity + login roles); retire Python chat + cypher HTTP bridge from git/Compose; prove bank **98** |
-| 2026-07-25 | Governed audit evidence extended across create / submit / approve / cancel payment skills; prove bank **99** |
+| 2026-07-25 | Governed audit evidence extended across create / submit / approve / cancel payment skills; prove bank **100** |
 | 2026-07-26 | Removed obsolete Python-bank promotion work and reconciled deferred/status notes with the shipped Java implementation |
+| 2026-07-26 | D.1 reframed: harvest strong uncovered cases from local `ssi-chat/regression/questions.yaml` into `eligibility_golden.yaml`; do not add a Java `questions.yaml` |
+| 2026-07-26 | Promoted LOB-scoped CONFLICTS_WITH (`golden_instructions_conflicts_ficc`); prove bank **100** |

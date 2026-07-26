@@ -264,6 +264,9 @@ public final class RouterPrompts {
             → neo4j_direct, graphIntent=subordinate_approver
           "Are there active instructions sharing the same creditor account and currency?"
             → neo4j_direct, graphIntent=duplicate_routes
+          "Show all CONFLICTS_WITH duplicate settlement routes for FICC."
+            → neo4j_direct, graphIntent=duplicate_routes
+            (LOB codes in the question are applied by the deterministic planner)
           "Are there any mutual approval cases (A approved B's instruction and B approved A's)?"
             → neo4j_direct, graphIntent=mutual_approval
           "Find cross-entity reciprocal approval between instruction and payment"

@@ -15,7 +15,7 @@ Curated natural-language questions for demoing Policy Pilot. Prefer these over i
 
 **Chat modes:** **Policies** for `tools` questions (sign in as `comp-001` / `Password1!`). **Payments** for create-payment **`skill`** (`pay-101` / `pay-205`), submit-payment **`skill`** (`fo-ficc-101` / `fo-fx-101` / `fo-rates-101`), approve-payment **`skill`** (`pay-201` / `pay-400`), and cancel-payment **`skill`** (`pay-101` / `pay-205`). **Events** for vector audit questions. **Instructions** / **Payments** for domain graph questions.
 
-Demo personas and seed users: **[Domain models and demo users](domain-models.md)**. Automated golden bank: **[ssi-chat-j/eval/eligibility_golden.yaml](../ssi-chat-j/eval/eligibility_golden.yaml)** (**99** cases).
+Demo personas and seed users: **[Domain models and demo users](domain-models.md)**. Automated golden bank: **[ssi-chat-j/eval/eligibility_golden.yaml](../ssi-chat-j/eval/eligibility_golden.yaml)** (**100** cases).
 
 ---
 
@@ -26,6 +26,7 @@ Demo personas and seed users: **[Domain models and demo users](domain-models.md)
 - _Can you list all instructions without any payments?_ **`graph`**
 - _Are there instructions approved by someone who reports directly to the creator?_ **`graph`**
 - _Are there active instructions sharing the same creditor account and currency?_ **`graph`**
+- _Show all CONFLICTS_WITH duplicate settlement routes for FICC._ **`graph`**
 - _Who approved instruction X, and why was it allowed?_ **`graph`** **`vector`**
 - _Can you show me the payment 20260712-FICC-P-2?_ **`graph`**
 
