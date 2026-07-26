@@ -5,7 +5,7 @@ YAML golden cases owned by **ssi-chat-j**. They are HTTP black-box checks agains
 
 | File | Cases |
 |------|------:|
-| [`eligibility_golden.yaml`](eligibility_golden.yaml) | **100** |
+| [`eligibility_golden.yaml`](eligibility_golden.yaml) | **101** |
 
 ## Bank by family
 

@@ -91,7 +91,7 @@ public class RouterDecision {
   @JsonPropertyDescription(
       "document_extraction only: show|status|creator|creator_and_approver|approver|"
           + "list_by_status|list_standing|list_single_use|created_by_user|versions|"
-          + "count|group_by_status|group_by_lob")
+          + "count|group_by_status|group_by_lob|largest_amount")
   private String extractionFacet;
 
   /**

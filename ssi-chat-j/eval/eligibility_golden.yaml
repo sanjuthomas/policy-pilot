@@ -1254,6 +1254,20 @@ cases:
     answer_has_number: true
     answer_contains_any: [by LOB, FICC, FX, RATES, No matching]
 
+- id: golden_payments_largest_who_created
+  mode: payments
+  retrieval: deterministic
+  tags: [golden, largest, inventory, document_extraction, ssi-chat-j]
+  question: Who created the payment with the maximum dollar value?
+  expect:
+    require_routing: true
+    routing_path: document_extraction
+    cypher_class: none
+    answer_synthesis: formatter
+    intent_id: payment.largest_amount
+    min_answer_length: 15
+    answer_contains_any: [created by, largest, payment]
+
 - id: golden_events_count_month
   mode: events
   retrieval: graph

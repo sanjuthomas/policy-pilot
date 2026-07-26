@@ -24,7 +24,7 @@ class EntityApiAnswerFormatterInventoryTest {
             new AnswerTemplateConfig().answerTemplateEngine(),
             new MoneyFormat(),
             new PolicyBasisFormat());
-    formatter = new EntityApiAnswerFormatter(renderer, new PolicyBasisFormat());
+    formatter = new EntityApiAnswerFormatter(renderer, new PolicyBasisFormat(), new MoneyFormat());
   }
 
   @Test

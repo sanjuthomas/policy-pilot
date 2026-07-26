@@ -63,7 +63,11 @@ public final class EntityApiQuestion {
     /** Group inventory rows by lifecycle status with per-bucket counts. */
     GROUP_BY_STATUS,
     /** Group inventory rows by owning LOB with per-bucket counts. */
-    GROUP_BY_LOB
+    GROUP_BY_LOB,
+    /**
+     * Payment inventory: pick the visible row with the maximum amount and report who created it.
+     */
+    LARGEST_AMOUNT
   }
 
   public static Optional<String> extractUserId(String question) {
@@ -84,7 +88,8 @@ public final class EntityApiQuestion {
         || facet == Facet.CREATED_BY_USER
         || facet == Facet.COUNT
         || facet == Facet.GROUP_BY_STATUS
-        || facet == Facet.GROUP_BY_LOB;
+        || facet == Facet.GROUP_BY_LOB
+        || facet == Facet.LARGEST_AMOUNT;
   }
 
   /**
@@ -223,6 +228,8 @@ public final class EntityApiQuestion {
       case "count" -> Facet.COUNT;
       case "group_by_status", "groupby_status" -> Facet.GROUP_BY_STATUS;
       case "group_by_lob", "groupby_lob", "per_lob" -> Facet.GROUP_BY_LOB;
+      case "largest_amount", "largest", "max_amount", "maximum_amount", "max_dollar" ->
+          Facet.LARGEST_AMOUNT;
       default -> null;
     };
   }
@@ -323,6 +330,7 @@ public final class EntityApiQuestion {
       case COUNT -> "count";
       case GROUP_BY_STATUS -> "group_by_status";
       case GROUP_BY_LOB -> "group_by_lob";
+      case LARGEST_AMOUNT -> "largest_amount";
     };
   }
 

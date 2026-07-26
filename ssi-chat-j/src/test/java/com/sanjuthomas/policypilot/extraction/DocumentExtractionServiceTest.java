@@ -35,7 +35,7 @@ class DocumentExtractionServiceTest {
             client,
             new InstructionDetailAnswerFormatter(renderer, new TimestampFormat()),
             new PaymentDetailAnswerFormatter(renderer, new MoneyFormat(), new TimestampFormat()),
-            new EntityApiAnswerFormatter(renderer, new PolicyBasisFormat()));
+            new EntityApiAnswerFormatter(renderer, new PolicyBasisFormat(), new MoneyFormat()));
   }
 
   @Test
@@ -480,6 +480,75 @@ class DocumentExtractionServiceTest {
 
     assertEquals("instruction.count", result.intentId());
     assertTrue(result.answer().contains("Found 0 matching instructions"));
+  }
+
+  @Test
+  void formatsLargestPaymentWhoCreatedFromApi() {
+    client.returning(
+        Map.of(
+            "payments",
+            List.of(
+                Map.of(
+                    "payment_id",
+                    "20260720-FICC-P-1",
+                    "amount",
+                    1_000_000d,
+                    "currency",
+                    "USD",
+                    "created_by",
+                    Map.of("user_id", "fo-001", "given_name", "Ada", "family_name", "Small")),
+                Map.of(
+                    "payment_id",
+                    "20260720-FICC-P-9",
+                    "amount",
+                    50_000_000d,
+                    "currency",
+                    "USD",
+                    "created_by",
+                    Map.of(
+                        "user_id",
+                        "mo-050",
+                        "given_name",
+                        "David",
+                        "family_name",
+                        "Okonkwo")),
+                Map.of(
+                    "payment_id",
+                    "20260720-FICC-P-2",
+                    "amount",
+                    50_000_000d,
+                    "currency",
+                    "USD",
+                    "created_by",
+                    Map.of("user_id", "fo-002", "given_name", "Bea", "family_name", "Tie")))));
+
+    RouterDecision decision = new RouterDecision();
+    decision.setPath("document_extraction");
+    decision.setExtractionTarget("payment");
+    decision.setExtractionFacet("largest_amount");
+
+    DocumentExtractionResult result =
+        service.answer(
+            "Who created the payment with the maximum dollar value?", subject(), decision);
+
+    assertEquals("payment.largest_amount", result.intentId());
+    assertTrue(result.answer().toLowerCase().contains("largest"));
+    assertTrue(result.answer().toLowerCase().contains("created by"));
+    assertTrue(result.answer().contains("20260720-FICC-P-2"));
+    assertTrue(result.answer().contains("fo-002"));
+    assertTrue(!result.answer().contains("20260720-FICC-P-9"));
+  }
+
+  @Test
+  void largestAmountForcesPaymentTarget() {
+    client.returning(Map.of("payments", List.of()));
+    RouterDecision decision = new RouterDecision();
+    decision.setExtractionFacet("largest_amount");
+    DocumentExtractionResult result =
+        service.answer(
+            "Who created the payment with the maximum dollar value?", subject(), decision);
+    assertEquals("payment.largest_amount", result.intentId());
+    assertTrue(result.answer().contains("No payments were found"));
   }
 
   private static Subject subject() {

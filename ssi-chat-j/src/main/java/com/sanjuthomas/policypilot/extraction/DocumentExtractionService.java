@@ -174,6 +174,7 @@ public class DocumentExtractionService {
           case COUNT -> "payment.count";
           case GROUP_BY_STATUS -> "payment.group_by_status";
           case GROUP_BY_LOB -> "payment.group_by_lob";
+          case LARGEST_AMOUNT -> "payment.largest_amount";
           default -> "payment.list_by_status";
         };
     if (resolved == Facet.LIST_BY_STATUS && !StringUtils.hasText(status)) {
@@ -182,6 +183,7 @@ public class DocumentExtractionService {
           intentId);
     }
     boolean groupBy = resolved == Facet.GROUP_BY_STATUS || resolved == Facet.GROUP_BY_LOB;
+    // Group-by wants the full visible set; largest may still honor an explicit status slot.
     String listStatus = groupBy ? null : status;
     String timeWindow =
         resolved == Facet.COUNT || groupBy ? GraphAnswerHints.from(decision).timeWindow() : null;
@@ -219,6 +221,15 @@ public class DocumentExtractionService {
             entityApiAnswerFormatter.formatGroupByLob(groupByField(rows, "owning_lob"), "Payments"),
             intentId);
       }
+      if (resolved == Facet.LARGEST_AMOUNT) {
+        Optional<Map<String, Object>> largestRow = pickLargestAmount(rows);
+        if (largestRow.isEmpty()) {
+          return new DocumentExtractionResult(
+              "No payments were found to determine the largest amount.", intentId);
+        }
+        return new DocumentExtractionResult(
+            entityApiAnswerFormatter.formatLargestPaymentWhoCreated(largestRow.get()), intentId);
+      }
       return new DocumentExtractionResult(
           entityApiAnswerFormatter.formatPaymentInventory(rows), intentId);
     } catch (ResponseStatusException ex) {
@@ -227,6 +238,52 @@ public class DocumentExtractionService {
           "No matching payments were found.",
           "You are not authorized to list these payments.",
           intentId);
+    }
+  }
+
+  /**
+   * Pick the row with the highest {@code amount}; ties break on lexicographically smallest {@code
+   * payment_id} (matches Neo4j {@code ORDER BY amount DESC, payment_id ASC}).
+   */
+  static Optional<Map<String, Object>> pickLargestAmount(List<Map<String, Object>> rows) {
+    if (rows == null || rows.isEmpty()) {
+      return Optional.empty();
+    }
+    Map<String, Object> best = null;
+    double bestAmount = Double.NEGATIVE_INFINITY;
+    String bestId = null;
+    for (Map<String, Object> row : rows) {
+      if (row == null) {
+        continue;
+      }
+      Double amount = parseAmount(row.get("amount"));
+      if (amount == null) {
+        continue;
+      }
+      String id =
+          row.get("payment_id") == null ? "" : String.valueOf(row.get("payment_id")).strip();
+      if (best == null
+          || amount > bestAmount
+          || (amount == bestAmount && id.compareTo(bestId) < 0)) {
+        best = row;
+        bestAmount = amount;
+        bestId = id;
+      }
+    }
+    return Optional.ofNullable(best);
+  }
+
+  static Double parseAmount(Object raw) {
+    if (raw == null) {
+      return null;
+    }
+    if (raw instanceof Number number) {
+      return number.doubleValue();
+    }
+    try {
+      return Double.parseDouble(String.valueOf(raw).strip());
+    } catch (NumberFormatException ex) {
+      return null;
     }
   }
 
@@ -405,6 +462,11 @@ public class DocumentExtractionService {
   }
 
   static String resolveTarget(String question, RouterDecision decision) {
+    if (EntityApiQuestion.facetFromSlot(
+            decision == null ? null : decision.getExtractionFacet())
+        == Facet.LARGEST_AMOUNT) {
+      return "payment";
+    }
     String fromRouter =
         decision == null ? "" : nullToEmpty(decision.getExtractionTarget()).toLowerCase().strip();
     if ("payment".equals(fromRouter) || "instruction".equals(fromRouter)) {

@@ -79,8 +79,14 @@ public final class RouteClamps {
   }
 
   private static void ensureInventoryTarget(RouterDecision decision) {
-    if (!EntityApiQuestion.isInventoryFacet(
-        EntityApiQuestion.facetFromSlot(decision.getExtractionFacet()))) {
+    EntityApiQuestion.Facet facet =
+        EntityApiQuestion.facetFromSlot(decision.getExtractionFacet());
+    if (!EntityApiQuestion.isInventoryFacet(facet)) {
+      return;
+    }
+    // Largest-amount is payment-only (max dollar value across visible payments).
+    if (facet == EntityApiQuestion.Facet.LARGEST_AMOUNT) {
+      decision.setExtractionTarget("payment");
       return;
     }
     String target =

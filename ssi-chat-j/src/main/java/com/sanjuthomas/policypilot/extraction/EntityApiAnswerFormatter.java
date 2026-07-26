@@ -1,6 +1,7 @@
 package com.sanjuthomas.policypilot.extraction;
 
 import com.sanjuthomas.policypilot.formatting.AnswerRenderer;
+import com.sanjuthomas.policypilot.formatting.MoneyFormat;
 import com.sanjuthomas.policypilot.formatting.PolicyBasisFormat;
 import com.sanjuthomas.policypilot.neo4j.ApprovalLookupView;
 import com.sanjuthomas.policypilot.neo4j.EntityCreatorAndApproverView;
@@ -35,11 +36,13 @@ public class EntityApiAnswerFormatter {
 
   private final AnswerRenderer answerRenderer;
   private final PolicyBasisFormat policyBasisFormat;
+  private final MoneyFormat moneyFormat;
 
   public EntityApiAnswerFormatter(
-      AnswerRenderer answerRenderer, PolicyBasisFormat policyBasisFormat) {
+      AnswerRenderer answerRenderer, PolicyBasisFormat policyBasisFormat, MoneyFormat moneyFormat) {
     this.answerRenderer = answerRenderer;
     this.policyBasisFormat = policyBasisFormat;
+    this.moneyFormat = moneyFormat;
   }
 
   public String formatPaymentStatus(Map<String, Object> data) {
@@ -85,6 +88,29 @@ public class EntityApiAnswerFormatter {
     String label = StringUtils.hasText(noun) ? noun.strip() : "rows";
     int n = Math.max(0, count);
     return "Found " + n + " matching " + label + ".";
+  }
+
+  /**
+   * Who created the payment with the maximum dollar value among the visible inventory rows.
+   *
+   * <p>Example: {@code The largest payment is 20260720-FICC-P-8 (USD 50,000,000.00); it was created
+   * by Okonkwo, David (mo-050).}
+   */
+  public String formatLargestPaymentWhoCreated(Map<String, Object> row) {
+    if (row == null || row.isEmpty()) {
+      return "No payments were found to determine the largest amount.";
+    }
+    String paymentId = display(row.get("payment_id"));
+    String currency = row.get("currency") == null ? "" : String.valueOf(row.get("currency")).strip();
+    String money = moneyFormat.format(row.get("amount"), currency);
+    String creator = display(EntityUserDisplay.creator(row.get("created_by")));
+    return "The largest payment is "
+        + paymentId
+        + " ("
+        + money
+        + "); it was created by "
+        + creator
+        + ".";
   }
 
   /**

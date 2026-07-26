@@ -98,6 +98,15 @@ class EntityApiQuestionTest {
         Facet.GROUP_BY_LOB, EntityApiQuestion.resolveFacet("How many per LOB?", perLob));
     assertTrue(EntityApiQuestion.isInventoryFacet(Facet.GROUP_BY_LOB));
     assertEquals(Facet.GROUP_BY_LOB, EntityApiQuestion.facetFromSlot("per_lob"));
+
+    RouterDecision largest = new RouterDecision();
+    largest.setExtractionFacet("largest_amount");
+    assertEquals(
+        Facet.LARGEST_AMOUNT,
+        EntityApiQuestion.resolveFacet(
+            "Who created the payment with the maximum dollar value?", largest));
+    assertTrue(EntityApiQuestion.isInventoryFacet(Facet.LARGEST_AMOUNT));
+    assertEquals(Facet.LARGEST_AMOUNT, EntityApiQuestion.facetFromSlot("max_amount"));
   }
 
   @Test

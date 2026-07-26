@@ -108,7 +108,8 @@ class ChatServiceTest {
         new InstructionDetailAnswerFormatter(renderer, new TimestampFormat());
     paymentDetailAnswerFormatter =
         new PaymentDetailAnswerFormatter(renderer, new MoneyFormat(), new TimestampFormat());
-    entityApiAnswerFormatter = new EntityApiAnswerFormatter(renderer, new PolicyBasisFormat());
+    entityApiAnswerFormatter =
+        new EntityApiAnswerFormatter(renderer, new PolicyBasisFormat(), new MoneyFormat());
     policyDirectoryAnswerFormatter = new PolicyDirectoryAnswerFormatter(renderer);
     policySummaryAnswerFormatter =
         new PolicySummaryAnswerFormatter(renderer, identityTokenFormat);
