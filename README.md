@@ -92,6 +92,12 @@ Business rule vocabulary in this reference: **[OPA policy controls](docs/opa-con
 
 Architecture review (adversarial): **[docs/architecture-review-2026-07-18.md](docs/architecture-review-2026-07-18.md)**.
 
+## Demo
+
+<video src="docs/policy-pilot.mp4" controls playsinline width="720" title="Policy Pilot demo">
+  <a href="docs/policy-pilot.mp4">Watch the Policy Pilot demo (MP4)</a>
+</video>
+
 ---
 
 ## Try it
