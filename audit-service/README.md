@@ -8,6 +8,25 @@ The console centralizes the read surfaces that used to live on instruction-servi
 payment-service, and chat. Those services still create the source records; this
 application only reads and presents them.
 
+## Inspect governed evidence
+
+Open **http://localhost:8097** and sign in with a technology-auditor demo user
+(`audit-001`…`audit-003` — see [Access control and demo users](#access-control-and-demo-users)).
+All demo users use `Password1!`. The `TECH_AUDITORS` group grants read-only access
+to this console; it grants no instruction or payment mutation permission.
+
+The console combines:
+
+- instruction and payment security events from their source Mongo collections;
+- governed Create Payment audit executions (request, interpretation, route/skill,
+  timeline, timings, outcome, and result);
+- a link from each completed execution to the original payment security event;
+- on-demand display of the authoritative OPA evaluate request and response.
+
+OPA evidence is linked, not duplicated: the security event remains the policy
+audit record, while the execution record supplies the surrounding AI/capability
+context.
+
 ## What auditors can inspect
 
 | UI | Contents |
