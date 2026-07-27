@@ -25,14 +25,26 @@ public final class RouterPrompts {
             (prefer YYYY-MM-DD using Today's date from this prompt; today|tomorrow also OK)
           submit_payment | approve_payment | cancel_payment → skillPaymentId
         Use skill only when the user asks the assistant to DO the action.
-        Prefer me over skill for capability questions ("can I create/submit/approve/cancel a
-        payment?" → me, can_act_on_entity). Prefer eligibility+SUBMIT over skill for
+        Distinguish "can you" (ask the assistant to act) from "can I" (capability about the
+        signed-in user). When the user names an instruction sequence id to draft against
+        ("create a payment for instruction ID …" / "Can you create a payment for
+        instruction ID …"), ALWAYS choose path=skill with skill=create_payment and set
+        skillInstructionId — even if amount and/or value date are missing (incomplete
+        slots are OK; the skill asks for them). Do NOT route those to me/can_act_on_entity.
+        Prefer me over skill only for pure capability questions with no instruction id to
+        draft against ("can I create/submit/approve/cancel a payment?" → me,
+        can_act_on_entity). Prefer eligibility+SUBMIT over skill for
         "who can submit … for approval?" (not "please submit").
         Examples:
           "Can you create a payment for instruction ID 20260720-FICC-I-1? Value date tomorrow;
            amount: 1 million USD."
             → skill, skill=create_payment, skillInstructionId=20260720-FICC-I-1,
               skillAmount=1000000, skillValueDate=<tomorrow as YYYY-MM-DD>
+          "Can you create a payment for instruction ID 20260720-FICC-I-1?"
+            → skill, skill=create_payment, skillInstructionId=20260720-FICC-I-1
+              (skillAmount / skillValueDate null — incomplete create)
+          "Please create a payment for instruction ID 20260720-FICC-I-1."
+            → skill, skill=create_payment, skillInstructionId=20260720-FICC-I-1
           "Please submit payment 20260720-FICC-P-9 for approval."
             → skill, skill=submit_payment, skillPaymentId=20260720-FICC-P-9
           "Please approve payment 20260720-FICC-P-9." / "Approve payment 20260720-FICC-P-9."
@@ -40,6 +52,8 @@ public final class RouterPrompts {
           "Please cancel payment 20260720-FICC-P-9." / "Cancel payment 20260720-FICC-P-9."
             → skill, skill=cancel_payment, skillPaymentId=20260720-FICC-P-9
           "Can I create a payment?" → me, can_act_on_entity, meAction=CREATE, meEntityType=payment
+          "Am I allowed to create payments?" → me, can_act_on_entity, meAction=CREATE,
+            meEntityType=payment
       Eligibility (live OPA for a specific payment or instruction id):
         path=eligibility, eligibilityTarget=payment|instruction,
         eligibilityAction=APPROVE (default approvers) or SUBMIT (desk submitters:
@@ -104,7 +118,9 @@ public final class RouterPrompts {
           users_like_me — "Who is like me?" / "users similar to me"
           waiting_for_me — "What payments are waiting for my approval?"
           who_else_can_act — "Who else can approve payment <id>?"
-        Prefer me over skill for "can I …?" questions.
+        Prefer me over skill for "can I …?" questions that do not name an instruction id to
+        draft against. "Can you create … for instruction ID …" is skill (see Skill section),
+        not me.
         Prefer who_covers_lob over policy_directory for covering-LOB people lists
         (policy_directory is funding-approver clubs).
         For can_act_on_entity ALWAYS set meEntityType when payment vs instruction is clear.
