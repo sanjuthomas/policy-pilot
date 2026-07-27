@@ -57,20 +57,24 @@ public class GraphCypherPlanner {
           modeAllows(resolvedMode, "instructions", "payments", "events", "all")
               ? matched(
                   "instruction.cross_entity_reciprocal_approval",
-                  GraphCypherQueries.crossEntityReciprocalApproval())
+                  GraphCypherQueries.crossEntityReciprocalApproval(q, allowedLobs))
               : PlanResponse.unmatched();
       case "mutual_approval" ->
           modeAllows(resolvedMode, "instructions", "all")
-              ? matched("instruction.mutual_approval", GraphCypherQueries.mutualApproval())
+              ? matched(
+                  "instruction.mutual_approval",
+                  GraphCypherQueries.mutualApproval(q, allowedLobs))
               : PlanResponse.unmatched();
       case "self_approval" ->
           modeAllows(resolvedMode, "instructions", "all")
-              ? matched("instruction.self_approval", GraphCypherQueries.selfApproval())
+              ? matched(
+                  "instruction.self_approval", GraphCypherQueries.selfApproval(q, allowedLobs))
               : PlanResponse.unmatched();
       case "subordinate_approver" ->
           modeAllows(resolvedMode, "instructions", "all")
               ? matched(
-                  "instruction.subordinate_approver", GraphCypherQueries.subordinateApprover())
+                  "instruction.subordinate_approver",
+                  GraphCypherQueries.subordinateApprover(q, allowedLobs))
               : PlanResponse.unmatched();
       case "duplicate_routes" ->
           modeAllows(resolvedMode, "instructions", "all")
@@ -85,7 +89,7 @@ public class GraphCypherPlanner {
                       id ->
                           matched(
                               "events.instruction_timeline_by_id",
-                              GraphCypherQueries.instructionTimeline(id)))
+                              GraphCypherQueries.instructionTimeline(id, q, allowedLobs)))
                   .orElse(PlanResponse.unmatched())
               : PlanResponse.unmatched();
       case "alert_ranking" ->

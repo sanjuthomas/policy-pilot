@@ -21,6 +21,7 @@ import com.sanjuthomas.policypilot.neo4j.Neo4jDirectService.Neo4jDirectResult;
 import com.sanjuthomas.policypilot.pipeline.RouterDecision;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -138,6 +139,57 @@ class Neo4jDirectServiceTest {
     assertEquals("Payment 20260720-FICC-P-1 has status APPROVED (LOB FICC).", result.answer());
     assertEquals("payment.status_by_id", result.intentId());
     assertEquals("predefined_yaml", result.cypherProvenance());
+  }
+
+  @Test
+  void filterRowsByRetrievalLobsFailsClosedWithoutRecognizableLob() {
+    List<Map<String, Object>> rows =
+        List.of(
+            Map.of("instruction_id", "FX-1", "v.owning_lob", "FX"),
+            Map.of("instruction_id", "FICC-1", "owning_lob", "FICC"),
+            Map.of("instruction_id", "NOLOB", "status", "APPROVED"));
+
+    List<Map<String, Object>> kept =
+        Neo4jDirectService.filterRowsByRetrievalLobs(rows, Set.of("FICC"));
+
+    assertEquals(1, kept.size());
+    assertEquals("FICC-1", kept.get(0).get("instruction_id"));
+  }
+
+  @Test
+  void filterRowsByRetrievalLobsRequiresAllLobsInScopeForMutualShape() {
+    List<Map<String, Object>> rows =
+        List.of(
+            Map.of("lob_a", "FICC", "lob_b", "FICC", "user_a_id", "a"),
+            Map.of("lob_a", "FICC", "lob_b", "FX", "user_a_id", "b"));
+
+    List<Map<String, Object>> kept =
+        Neo4jDirectService.filterRowsByRetrievalLobs(rows, Set.of("FICC"));
+
+    assertEquals(1, kept.size());
+    assertEquals("a", kept.get(0).get("user_a_id"));
+  }
+
+  @Test
+  void filterRowsByRetrievalLobsUnscopedKeepsAll() {
+    List<Map<String, Object>> rows =
+        List.of(Map.of("instruction_id", "X"), Map.of("owning_lob", "FX"));
+    assertEquals(2, Neo4jDirectService.filterRowsByRetrievalLobs(rows, null).size());
+  }
+
+  @Test
+  void filterRowsByRetrievalLobsEmptyScopeDropsAll() {
+    List<Map<String, Object>> rows = List.of(Map.of("owning_lob", "FICC"));
+    assertEquals(0, Neo4jDirectService.filterRowsByRetrievalLobs(rows, Set.of()).size());
+  }
+
+  @Test
+  void rowOwningLobsReadsAlternateKeysAndNullSafe() {
+    assertEquals(Set.of(), Neo4jDirectService.rowOwningLobs(null));
+    assertEquals(
+        Set.of("FX"),
+        Neo4jDirectService.rowOwningLobs(Map.of("instruction_owning_lob", "fx", "status", "X")));
+    assertEquals(Set.of("FICC"), Neo4jDirectService.rowOwningLobs(Map.of("lob", "FICC")));
   }
 
   private static Subject complianceSubject() {

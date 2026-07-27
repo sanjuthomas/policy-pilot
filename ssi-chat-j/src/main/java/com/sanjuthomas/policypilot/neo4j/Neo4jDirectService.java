@@ -169,33 +169,56 @@ public class Neo4jDirectService {
     return null;
   }
 
-  /** Defense-in-depth row filter (parity with Python {@code filter_rows_by_retrieval_lobs}). */
+  /**
+   * Defense-in-depth row filter for LOB-scoped subjects.
+   *
+   * <p>{@code allowedLobs == null} (compliance / unscoped) keeps all rows. When scoped, a row is
+   * kept only if it exposes at least one recognizable LOB column and every such LOB is in the
+   * allowed set — missing LOB keys fail closed (no cross-LOB leak via unaliased Cypher columns).
+   */
   static List<Map<String, Object>> filterRowsByRetrievalLobs(
       List<Map<String, Object>> rows, Set<String> allowedLobs) {
     if (allowedLobs == null || rows == null) {
       return rows == null ? List.of() : rows;
     }
+    if (allowedLobs.isEmpty()) {
+      return List.of();
+    }
     List<Map<String, Object>> kept = new ArrayList<>();
     for (Map<String, Object> row : rows) {
-      String lob = rowOwningLob(row);
-      if (lob == null || allowedLobs.contains(lob)) {
+      Set<String> lobs = rowOwningLobs(row);
+      if (lobs.isEmpty()) {
+        continue;
+      }
+      if (allowedLobs.containsAll(lobs)) {
         kept.add(row);
       }
     }
     return kept;
   }
 
-  private static String rowOwningLob(Map<String, Object> row) {
+  private static final List<String> LOB_COLUMN_KEYS =
+      List.of(
+          "owning_lob",
+          "lob",
+          "instruction_owning_lob",
+          "lob_a",
+          "lob_b",
+          "v.owning_lob");
+
+  /** All non-blank LOB values on a result row (single- or multi-LOB SoD shapes). */
+  static Set<String> rowOwningLobs(Map<String, Object> row) {
     if (row == null) {
-      return null;
+      return Set.of();
     }
-    for (String key : List.of("owning_lob", "lob", "instruction_owning_lob")) {
+    LinkedHashSet<String> found = new LinkedHashSet<>();
+    for (String key : LOB_COLUMN_KEYS) {
       Object value = row.get(key);
       if (value instanceof String text && !text.isBlank()) {
-        return text.strip().toUpperCase(Locale.ROOT);
+        found.add(text.strip().toUpperCase(Locale.ROOT));
       }
     }
-    return null;
+    return found;
   }
 
   public record Neo4jDirectResult(

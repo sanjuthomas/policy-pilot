@@ -183,7 +183,8 @@ public final class GraphCypherQueries {
                 .formatted(countMatch, countWhere, detailOptional, detailReturn)));
   }
 
-  public static List<PlannedQuery> selfApproval() {
+  public static List<PlannedQuery> selfApproval(String question, Set<String> allowedLobs) {
+    String lob = LobScope.owningLobAndClause("v", question, allowedLobs);
     return List.of(
         new PlannedQuery(
             "self_approval",
@@ -192,6 +193,7 @@ public final class GraphCypherQueries {
             WHERE v.creator_user_id IS NOT NULL
               AND v.approver_user_id IS NOT NULL
               AND v.creator_user_id = v.approver_user_id
+              %s
             OPTIONAL MATCH (creator:User {user_id: v.creator_user_id})
             RETURN v.instruction_id AS instruction_id,
                    v.status AS status,
@@ -199,32 +201,45 @@ public final class GraphCypherQueries {
                    coalesce(creator.display_name, v.creator_user_id, '') AS creator_display,
                    v.approved_at AS approved_at
             ORDER BY v.instruction_id
-            LIMIT 50"""));
+            LIMIT 50"""
+                .formatted(lob)));
   }
 
-  public static List<PlannedQuery> subordinateApprover() {
+  public static List<PlannedQuery> subordinateApprover(String question, Set<String> allowedLobs) {
+    String lob = LobScope.owningLobAndClause("v", question, allowedLobs);
     return List.of(
         new PlannedQuery(
             "hierarchy_violations",
             """
             MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion)
             WHERE v.approver_user_id IS NOT NULL AND v.creator_user_id IS NOT NULL
+              %s
             MATCH (creator:User {user_id: v.creator_user_id})
             MATCH (approver:User {user_id: v.approver_user_id})-[:REPORTS_TO]->(creator)
-            RETURN v.instruction_id, v.owning_lob, v.status, v.instruction_type,
-                   v.currency, v.wire_scope,
-                   v.creditor_name, v.creditor_account,
-                   v.effective_date, v.end_date, v.is_expired,
+            RETURN v.instruction_id AS instruction_id,
+                   v.owning_lob AS owning_lob,
+                   v.status AS status,
+                   v.instruction_type AS instruction_type,
+                   v.currency AS currency,
+                   v.wire_scope AS wire_scope,
+                   v.creditor_name AS creditor_name,
+                   v.creditor_account AS creditor_account,
+                   v.effective_date AS effective_date,
+                   v.end_date AS end_date,
+                   v.is_expired AS is_expired,
                    creator.user_id AS creator_user_id,
                    coalesce(creator.display_name, creator.user_id, '') AS creator_display,
                    approver.user_id AS approver_user_id,
                    coalesce(approver.display_name, approver.user_id, '') AS approver_display,
                    approver.supervisor_id AS approver_supervisor_id
             ORDER BY v.instruction_id
-            LIMIT 50"""));
+            LIMIT 50"""
+                .formatted(lob)));
   }
 
-  public static List<PlannedQuery> mutualApproval() {
+  public static List<PlannedQuery> mutualApproval(String question, Set<String> allowedLobs) {
+    String lobA = LobScope.owningLobAndClause("va", question, allowedLobs);
+    String lobB = LobScope.owningLobAndClause("vb", question, allowedLobs);
     return List.of(
         new PlannedQuery(
             "mutual_approval",
@@ -232,6 +247,8 @@ public final class GraphCypherQueries {
             MATCH (a:User)-[:APPROVED_IV]->(va:InstructionVersion)<-[:CREATED_IV]-(b:User)
             MATCH (b)-[:APPROVED_IV]->(vb:InstructionVersion)<-[:CREATED_IV]-(a)
             WHERE a.user_id < b.user_id
+              %s
+              %s
             RETURN coalesce(a.display_name, a.user_id, '') AS user_a_display,
                    a.user_id AS user_a_id,
                    coalesce(b.display_name, b.user_id, '') AS user_b_display,
@@ -241,10 +258,13 @@ public final class GraphCypherQueries {
                    va.owning_lob AS lob_a,
                    vb.owning_lob AS lob_b
             ORDER BY user_a_id, user_b_id
-            LIMIT 50"""));
+            LIMIT 50"""
+                .formatted(lobA, lobB)));
   }
 
-  public static List<PlannedQuery> crossEntityReciprocalApproval() {
+  public static List<PlannedQuery> crossEntityReciprocalApproval(
+      String question, Set<String> allowedLobs) {
+    String lob = LobScope.owningLobAndClause("iv", question, allowedLobs);
     return List.of(
         new PlannedQuery(
             "cross_entity_reciprocal_approval",
@@ -258,6 +278,7 @@ public final class GraphCypherQueries {
               AND iv.creator_user_id = pv.approver_user_id
               AND iv.approver_user_id = pv.creator_user_id
               AND iv.creator_user_id <> iv.approver_user_id
+              %s
             OPTIONAL MATCH (instr_creator:User {user_id: iv.creator_user_id})
             OPTIONAL MATCH (instr_approver:User {user_id: iv.approver_user_id})
             OPTIONAL MATCH (pay_creator:User {user_id: pv.creator_user_id})
@@ -272,11 +293,12 @@ public final class GraphCypherQueries {
                    pv.creator_user_id AS payment_creator_id,
                    i.instruction_id AS instruction_id,
                    pay.payment_id AS payment_id,
-                   coalesce(iv.owning_lob, '') AS owning_lob,
+                   iv.owning_lob AS owning_lob,
                    iv.status AS instruction_status,
                    pv.status AS payment_status
             ORDER BY instruction_id, payment_id
-            LIMIT 50"""));
+            LIMIT 50"""
+                .formatted(lob)));
   }
 
   public static List<PlannedQuery> duplicateRoutes(String question, Set<String> allowedLobs) {
@@ -303,13 +325,17 @@ public final class GraphCypherQueries {
                 .formatted(lob)));
   }
 
-  public static List<PlannedQuery> instructionTimeline(String instructionId) {
+  public static List<PlannedQuery> instructionTimeline(
+      String instructionId, String question, Set<String> allowedLobs) {
     String safeId = LobScope.escape(instructionId);
+    String lob = LobScope.owningLobAndClause("v", question, allowedLobs);
     return List.of(
         new PlannedQuery(
             "instruction_timeline_targets",
             """
             MATCH (i:Instruction {instruction_id: '%s'})-[:HAS_VERSION]->(v:InstructionVersion)
+            WHERE true
+              %s
             MATCH (event:SecurityEvent)-[:FOR]->(v)
             OPTIONAL MATCH (actor:User)-[:ACTED_AS]->(event)
             RETURN event.event_id AS event_id,
@@ -318,10 +344,11 @@ public final class GraphCypherQueries {
                    event.severity AS severity,
                    event.outcome AS outcome,
                    event.message AS message,
-                   coalesce(actor.display_name, actor.user_id, '') AS actor_display
+                   coalesce(actor.display_name, actor.user_id, '') AS actor_display,
+                   v.owning_lob AS owning_lob
             ORDER BY timestamp ASC
             LIMIT 200"""
-                .formatted(safeId)));
+                .formatted(safeId, lob)));
   }
 
   private static String domainFilter(String domain) {

@@ -154,6 +154,90 @@ class GraphCypherPlannerTest {
   }
 
   @Test
+  void sodAndTimelineInjectLobScopeForScopedSubject() {
+    PlanResponse self =
+        planner.plan(
+            "Show self-approved instructions",
+            "instructions",
+            Set.of("FICC"),
+            decision("self_approval"));
+    assertTrue(self.planned().get(0).cypher().contains("v.owning_lob = 'FICC'"));
+
+    PlanResponse subordinate =
+        planner.plan(
+            "Which instructions were approved by someone who reports to the creator?",
+            "instructions",
+            Set.of("FICC"),
+            decision("subordinate_approver"));
+    String subordinateCypher = subordinate.planned().get(0).cypher();
+    assertTrue(subordinateCypher.contains("v.owning_lob = 'FICC'"));
+    assertTrue(subordinateCypher.contains("v.owning_lob AS owning_lob"));
+    assertFalse(subordinateCypher.contains("RETURN v.instruction_id, v.owning_lob,"));
+
+    PlanResponse mutual =
+        planner.plan(
+            "Which users mutually approved each other?",
+            "instructions",
+            Set.of("FICC"),
+            decision("mutual_approval"));
+    String mutualCypher = mutual.planned().get(0).cypher();
+    assertTrue(mutualCypher.contains("va.owning_lob = 'FICC'"));
+    assertTrue(mutualCypher.contains("vb.owning_lob = 'FICC'"));
+
+    PlanResponse timeline =
+        planner.plan(
+            "Show the security event timeline for instruction 20260720-FICC-I-1",
+            "events",
+            Set.of("FICC"),
+            decision("instruction_timeline"));
+    String timelineCypher = timeline.planned().get(0).cypher();
+    assertTrue(timelineCypher.contains("v.owning_lob = 'FICC'"));
+    assertTrue(timelineCypher.contains("v.owning_lob AS owning_lob"));
+
+    PlanResponse cross =
+        planner.plan(
+            "Find cross-entity reciprocal approval between instruction and payment",
+            "all",
+            Set.of("FICC"),
+            decision("cross_entity_reciprocal_approval"));
+    assertTrue(cross.planned().get(0).cypher().contains("iv.owning_lob = 'FICC'"));
+  }
+
+  @Test
+  void plansAlertListForPaymentDomain() {
+    PlanResponse plan =
+        planner.plan(
+            "List payment ALERT events today",
+            "events",
+            null,
+            decision("alert_list", "today", "payment", "alert"));
+    assertTrue(plan.matched());
+    assertTrue(plan.planned().get(0).cypher().contains("e.payment_id IS NOT NULL"));
+  }
+
+  @Test
+  void plansAlertRankingWithInstructionDomain() {
+    PlanResponse plan =
+        planner.plan(
+            "Which user triggered the most instruction policy denial alerts this week?",
+            "events",
+            Set.of("FX"),
+            decision("alert_ranking", "week", "instruction", "denial"));
+    assertTrue(plan.matched());
+    String cypher = plan.planned().get(0).cypher();
+    assertTrue(cypher.contains("e.payment_id IS NULL"));
+    assertTrue(cypher.contains("owning_lob = 'FX'"));
+  }
+
+  @Test
+  void unmatchedSodWhenModeDisallows() {
+    assertFalse(
+        planner
+            .plan("Show self-approved instructions", "events", null, decision("self_approval"))
+            .matched());
+  }
+
+  @Test
   void plansTimelineWhenInstructionIdPresent() {
     PlanResponse plan =
         planner.plan(
