@@ -279,3 +279,13 @@ async def test_upsert_sets_instruction_id_even_without_version(
     assert "e.instruction_id" in query
     assert params.get("instruction_id") == "20260714-FICC-I-1"
     assert not any("MERGE (e)-[:FOR]->(v)" in q for q, _ in captured)
+
+def test_profit_center_merge_key_is_lob_not_name():
+    """N-3: instruction pipeline must MERGE ProfitCenter on lob (schema unique)."""
+    from pathlib import Path
+
+    src = Path(__file__).resolve().parents[1] / "src" / "etl" / "neo4j_client.py"
+    text = src.read_text(encoding="utf-8")
+    assert "MERGE (lob:ProfitCenter {lob: $owning_lob})" in text
+    assert "MERGE (lob:ProfitCenter {name: $owning_lob})" not in text
+    assert "ProfitCenter {name:" not in text

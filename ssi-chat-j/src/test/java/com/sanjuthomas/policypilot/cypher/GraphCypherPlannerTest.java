@@ -137,7 +137,25 @@ class GraphCypherPlannerTest {
             decision("duplicate_routes"));
     assertTrue(plan.matched());
     assertEquals("instruction.duplicate_routes", plan.intentId());
-    assertTrue(plan.planned().get(0).cypher().contains("v1.owning_lob = 'FICC'"));
+    String cypher = plan.planned().get(0).cypher();
+    assertTrue(cypher.contains("v1.owning_lob = 'FICC'"));
+    assertTrue(cypher.contains("v2.owning_lob = 'FICC'"));
+  }
+
+  @Test
+  void duplicateRoutesScopesBothSidesAndReturnsLobB() {
+    PlanResponse plan =
+        planner.plan(
+            "List duplicate settlement routes",
+            "instructions",
+            Set.of("FICC"),
+            decision("duplicate_routes"));
+    assertTrue(plan.matched());
+    String cypher = plan.planned().get(0).cypher();
+    assertTrue(cypher.contains("v1.owning_lob = 'FICC'"));
+    assertTrue(cypher.contains("v2.owning_lob = 'FICC'"));
+    assertTrue(cypher.contains("v1.owning_lob AS owning_lob"));
+    assertTrue(cypher.contains("v2.owning_lob AS lob_b"));
   }
 
   @Test
@@ -213,6 +231,39 @@ class GraphCypherPlannerTest {
             decision("alert_list", "today", "payment", "alert"));
     assertTrue(plan.matched());
     assertTrue(plan.planned().get(0).cypher().contains("e.payment_id IS NOT NULL"));
+  }
+
+  @Test
+  void alertListReturnsOwningLobForPostFilter() {
+    PlanResponse plan =
+        planner.plan(
+            "Can you list all instruction denial events for this week?",
+            "events",
+            Set.of("FICC"),
+            decision("alert_list", "week", "instruction", "denial"));
+    assertTrue(plan.matched());
+    String cypher = plan.planned().get(0).cypher();
+    assertTrue(cypher.contains("AS owning_lob"));
+    assertTrue(cypher.contains("e.owning_lob = 'FICC'") || cypher.contains("owning_lob = 'FICC'"));
+  }
+
+  @Test
+  void alertCountDetailsReturnOwningLobForPostFilter() {
+    PlanResponse plan =
+        planner.plan(
+            "How many instruction policy denial alerts this week?",
+            "events",
+            Set.of("FICC", "FX"),
+            decision("alert_count", "week", "instruction", "denial"));
+    assertTrue(plan.matched());
+    assertEquals(2, plan.planned().size());
+    String countCypher = plan.planned().get(0).cypher();
+    String detailsCypher = plan.planned().get(1).cypher();
+    assertTrue(
+        countCypher.contains("owning_lob IN ['FICC', 'FX']")
+            || countCypher.contains("owning_lob IN ['FX', 'FICC']"));
+    assertTrue(detailsCypher.contains("AS owning_lob"));
+    assertFalse(detailsCypher.contains("AS lob,") || detailsCypher.contains("AS lob\n"));
   }
 
   @Test

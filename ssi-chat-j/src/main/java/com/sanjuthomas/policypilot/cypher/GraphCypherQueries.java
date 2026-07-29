@@ -100,6 +100,7 @@ public final class GraphCypherQueries {
                    e.action AS action,
                    CASE WHEN e.payment_id IS NOT NULL THEN 'payment' ELSE 'instruction' END AS entity_type,
                    %s AS entity_id,
+                   coalesce(pv.owning_lob, e.owning_lob, v.owning_lob, '') AS owning_lob,
                    coalesce(actor.display_name, actor.user_id, '') AS actor_display
             ORDER BY e.timestamp DESC
             LIMIT 200"""
@@ -149,7 +150,7 @@ public final class GraphCypherQueries {
           """
           RETURN e.event_id, e.timestamp, e.action, e.message, e.severity,
                  coalesce(v.instruction_id, i.instruction_id, '') AS instruction_id,
-                 coalesce(e.owning_lob, v.owning_lob, '') AS lob,
+                 coalesce(e.owning_lob, v.owning_lob, '') AS owning_lob,
                  coalesce(actor.display_name, actor.user_id, '') AS actor_display""";
     } else {
       countWhere = "true " + timeFilter + lob;
@@ -161,6 +162,7 @@ public final class GraphCypherQueries {
                  CASE WHEN e.payment_id IS NOT NULL THEN 'payment' ELSE 'instruction' END AS domain,
                  coalesce(e.payment_id, '') AS payment_id,
                  %s AS instruction_id,
+                 coalesce(pv.owning_lob, e.owning_lob, v.owning_lob, '') AS owning_lob,
                  coalesce(actor.display_name, actor.user_id, '') AS actor_display"""
               .formatted(INSTRUCTION_ID_COALESCE);
     }
@@ -302,7 +304,8 @@ public final class GraphCypherQueries {
   }
 
   public static List<PlannedQuery> duplicateRoutes(String question, Set<String> allowedLobs) {
-    String lob = LobScope.owningLobAndClause("v1", question, allowedLobs);
+    String lobA = LobScope.owningLobAndClause("v1", question, allowedLobs);
+    String lobB = LobScope.owningLobAndClause("v2", question, allowedLobs);
     return List.of(
         new PlannedQuery(
             "duplicate_routes",
@@ -314,15 +317,17 @@ public final class GraphCypherQueries {
             WHERE v1.status IN ['APPROVED', 'SUBMITTED']
               AND v2.status IN ['APPROVED', 'SUBMITTED']
               %s
+              %s
             RETURN i1.instruction_id AS instruction_id_a,
                    i2.instruction_id AS instruction_id_b,
                    v1.owning_lob AS owning_lob,
+                   v2.owning_lob AS lob_b,
                    v1.currency AS currency,
                    v1.creditor_account AS creditor_account,
                    v1.creditor_name AS creditor_name
             ORDER BY v1.creditor_account, v1.currency
             LIMIT 50"""
-                .formatted(lob)));
+                .formatted(lobA, lobB)));
   }
 
   public static List<PlannedQuery> instructionTimeline(
