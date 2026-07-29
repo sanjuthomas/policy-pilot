@@ -171,6 +171,36 @@ class Neo4jDirectServiceTest {
   }
 
   @Test
+  void filterRowsByRetrievalLobsDropsCrossLobDuplicateRoutes() {
+    List<Map<String, Object>> rows =
+        List.of(
+            Map.of(
+                "instruction_id_a",
+                "FICC-1",
+                "instruction_id_b",
+                "FICC-2",
+                "owning_lob",
+                "FICC",
+                "lob_b",
+                "FICC"),
+            Map.of(
+                "instruction_id_a",
+                "FICC-3",
+                "instruction_id_b",
+                "FX-9",
+                "owning_lob",
+                "FICC",
+                "lob_b",
+                "FX"));
+
+    List<Map<String, Object>> kept =
+        Neo4jDirectService.filterRowsByRetrievalLobs(rows, Set.of("FICC"));
+
+    assertEquals(1, kept.size());
+    assertEquals("FICC-1", kept.get(0).get("instruction_id_a"));
+  }
+
+  @Test
   void filterRowsByRetrievalLobsUnscopedKeepsAll() {
     List<Map<String, Object>> rows =
         List.of(Map.of("instruction_id", "X"), Map.of("owning_lob", "FX"));
@@ -181,6 +211,41 @@ class Neo4jDirectServiceTest {
   void filterRowsByRetrievalLobsEmptyScopeDropsAll() {
     List<Map<String, Object>> rows = List.of(Map.of("owning_lob", "FICC"));
     assertEquals(0, Neo4jDirectService.filterRowsByRetrievalLobs(rows, Set.of()).size());
+  }
+
+  @Test
+  void filterKeepsCypherScopedAggregatesWithoutLobColumn() {
+    List<Map<String, Object>> countRows = List.of(Map.of("total", 6L));
+    assertEquals(
+        1,
+        Neo4jDirectService.filterRowsByRetrievalLobs(countRows, Set.of("FICC"), "count").size());
+    assertEquals(
+        0, Neo4jDirectService.filterRowsByRetrievalLobs(countRows, Set.of("FICC"), null).size());
+
+    List<Map<String, Object>> rankingRows =
+        List.of(Map.of("user_id", "u1", "alert_count", 3L));
+    assertEquals(
+        1,
+        Neo4jDirectService.filterRowsByRetrievalLobs(rankingRows, Set.of("FICC"), "ranking")
+            .size());
+  }
+
+  @Test
+  void filterStillFailsClosedForAlertListWithoutLob() {
+    List<Map<String, Object>> listRows =
+        List.of(Map.of("event_id", "e1", "action", "APPROVE"));
+    assertEquals(
+        0,
+        Neo4jDirectService.filterRowsByRetrievalLobs(
+                listRows, Set.of("FICC"), "security_event_alert_list")
+            .size());
+    assertEquals(
+        1,
+        Neo4jDirectService.filterRowsByRetrievalLobs(
+                List.of(Map.of("event_id", "e1", "owning_lob", "FICC")),
+                Set.of("FICC"),
+                "security_event_alert_list")
+            .size());
   }
 
   @Test

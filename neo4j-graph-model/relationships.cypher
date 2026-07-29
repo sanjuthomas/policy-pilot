@@ -74,7 +74,8 @@
 //   supervisor_id
 //
 // (:ProfitCenter)
-//   name                    unique: FICC | FX | DESK_*
+//   lob                     unique: FICC | FX | DESK_*  (merge / lookup key)
+//   name                    display property (same value as lob today)
 //
 // ---------------------------------------------------------------------------
 // RELATIONSHIP TYPES

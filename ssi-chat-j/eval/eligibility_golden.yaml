@@ -879,10 +879,11 @@ cases:
 - id: golden_fo_fx_instruction_denials_scoped
   mode: events
   retrieval: deterministic
-  tags: [golden, lob_scope, fo, negative, neo4j_direct, ssi-chat-j]
-  # FX desk. Seeded instruction ALERTs densify to the *instruction* owning_lob
-  # (FICC / DESK_RATES), so FX scope is empty. DESK_RATES is NOT empty — do not
-  # use fo-rates-101 here.
+  tags: [golden, lob_scope, fo, neo4j_direct, ssi-chat-j]
+  # FX desk is LOB-scoped (not unscoped). Seed may include a small number of
+  # FX-owned instruction ALERTs; assert the count path returns a real scoped
+  # answer (N-4: fail-closed aggregate filter must not force "There were no").
+  # DESK_RATES is denser — do not use fo-rates-101 as an empty-scope stand-in.
   persona: fo-fx-101
   question: How many instruction policy denials happened this week?
   expect:
@@ -892,7 +893,14 @@ cases:
     answer_synthesis: formatter
     intent_id: planned_graph
     answer_contains_all:
-    - There were no instruction policy denial events this week.
+    - instruction policy denial
+    - this week
+    answer_contains_any:
+    - There were
+    - There was
+    answer_not_contains:
+    - There were no
+    - There was no
 
 - id: golden_fo_fx_payment_denials_scoped
   mode: events
@@ -927,6 +935,10 @@ cases:
     answer_contains_any:
     - There were
     - There was
+    # Empty/zero answers also match "There were" — reject the N-4 over-filter regression.
+    answer_not_contains:
+    - There were no
+    - There was no
 
 - id: golden_payment_status
   mode: payments

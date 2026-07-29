@@ -65,7 +65,8 @@ public class Neo4jDirectService {
     }
 
     List<Map<String, Object>> rows =
-        filterRowsByRetrievalLobs(neo4jQueryExecutor.runRead(validated.cypher()), allowedLobs);
+        filterRowsByRetrievalLobs(
+            neo4jQueryExecutor.runRead(validated.cypher()), allowedLobs, selected.label());
     String intentId = plan.intentId() == null ? "planned_graph" : plan.intentId();
     String answer =
         answerFormatter.format(
@@ -175,14 +176,26 @@ public class Neo4jDirectService {
    * <p>{@code allowedLobs == null} (compliance / unscoped) keeps all rows. When scoped, a row is
    * kept only if it exposes at least one recognizable LOB column and every such LOB is in the
    * allowed set — missing LOB keys fail closed (no cross-LOB leak via unaliased Cypher columns).
+   *
+   * <p>Exception: alert {@code count} / {@code ranking} aggregates already apply {@code LobScope}
+   * in Cypher and return no LOB column; filtering those shapes would zero correct in-scope
+   * answers for FO/MO. List/detail/SoD rows still fail closed.
    */
   static List<Map<String, Object>> filterRowsByRetrievalLobs(
       List<Map<String, Object>> rows, Set<String> allowedLobs) {
+    return filterRowsByRetrievalLobs(rows, allowedLobs, null);
+  }
+
+  static List<Map<String, Object>> filterRowsByRetrievalLobs(
+      List<Map<String, Object>> rows, Set<String> allowedLobs, String queryLabel) {
     if (allowedLobs == null || rows == null) {
       return rows == null ? List.of() : rows;
     }
     if (allowedLobs.isEmpty()) {
       return List.of();
+    }
+    if (isCypherScopedAggregate(queryLabel)) {
+      return rows;
     }
     List<Map<String, Object>> kept = new ArrayList<>();
     for (Map<String, Object> row : rows) {
@@ -195,6 +208,13 @@ public class Neo4jDirectService {
       }
     }
     return kept;
+  }
+
+  /** Labels whose Cypher already injects LOB scope and whose result shape has no LOB column. */
+  static boolean isCypherScopedAggregate(String queryLabel) {
+    return "count".equals(queryLabel)
+        || "alert_count_today".equals(queryLabel)
+        || "ranking".equals(queryLabel);
   }
 
   private static final List<String> LOB_COLUMN_KEYS =

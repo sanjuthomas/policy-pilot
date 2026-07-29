@@ -224,6 +224,7 @@ class Neo4jGraphWriter:
                         WITH u
                         WHERE u.lob IS NOT NULL
                         MERGE (p:ProfitCenter {lob: u.lob})
+                        SET p.name = u.lob
                         MERGE (u)-[:BELONGS_TO]->(p)
                         """,
                         user_id=actor["user_id"],
@@ -335,6 +336,7 @@ class Neo4jGraphWriter:
                         """
                         MATCH (e:SecurityEvent {event_id: $event_id})
                         MERGE (p:ProfitCenter {lob: $owning_lob})
+                        SET p.name = $owning_lob
                         MERGE (e)-[:INVOLVES_LOB]->(p)
                         """,
                         event_id=document.event_id,
@@ -739,9 +741,10 @@ class Neo4jGraphWriter:
                i.current_version_number = $version_number,
                i.current_used_by = CASE WHEN $status = 'USED' THEN $used_by ELSE null END
 
-        // ── LOB / ProfitCenter ──────────────────────────────────────────────────
+        // ── LOB / ProfitCenter (merge key = lob; name is a display property) ──
         WITH i, v
-        MERGE (lob:ProfitCenter {name: $owning_lob})
+        MERGE (lob:ProfitCenter {lob: $owning_lob})
+        SET lob.name = $owning_lob
         MERGE (i)-[:OWNED_BY]->(lob)
         MERGE (v)-[:BELONGS_TO]->(lob)
         """
@@ -1003,6 +1006,7 @@ class Neo4jGraphWriter:
                         """
                         MATCH (e:SecurityEvent {event_id: $event_id})
                         MERGE (pc:ProfitCenter {lob: $owning_lob})
+                        SET pc.name = $owning_lob
                         MERGE (e)-[:INVOLVES_LOB]->(pc)
                         """,
                         event_id=event_id,
