@@ -124,7 +124,7 @@ public class ChatApiController {
           audiences = AudienceLabels.forRoles(roles);
         }
       } catch (Exception ex) {
-        log.warn("could not resolve audiences for {}", session.userId(), ex);
+        log.warn("could not resolve audiences for user_id={}", session.userId(), ex);
       }
       return new LoginResponse(
           session.userId(), session.sessionId(), session.sessionToken(), roles, audiences);

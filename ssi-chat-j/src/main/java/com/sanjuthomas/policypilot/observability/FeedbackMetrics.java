@@ -35,14 +35,6 @@ public class FeedbackMetrics {
                 "chat.answer_synthesis", feedback.answerSynthesis()))
         .increment();
     distributionTracker.record(feedback);
-    log.info(
-        "chat.feedback.received rating={} strategy={} path={} cypher={} synthesis={} mode={} user={}",
-        feedback.rating(),
-        feedback.retrievalStrategy(),
-        feedback.path(),
-        feedback.cypherProvenance(),
-        feedback.answerSynthesis(),
-        feedback.mode(),
-        feedback.userId() == null ? "-" : feedback.userId());
+    StructuredLog.info(log, "chat.feedback.received", feedback.logFields());
   }
 }

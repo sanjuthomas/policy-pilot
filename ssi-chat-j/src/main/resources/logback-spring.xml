@@ -1,14 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
   <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
-  <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+  <!-- JSON console via logging.structured.format.console (logstash) in application.yml -->
+  <include resource="org/springframework/boot/logging/logback/structured-console-appender.xml"/>
 
   <!-- Forwards Logback events to the OpenTelemetry Logs SDK (OTLP → collector → Loki).
-       OpenTelemetryAppender.install(...) is called from InstallOpenTelemetryAppender. -->
+       OpenTelemetryAppender.install(...) is called from InstallOpenTelemetryAppender.
+       captureKeyValuePairAttributes picks up SLF4J fluent addKeyValue fields. -->
   <appender name="OTEL" class="io.opentelemetry.instrumentation.logback.appender.v1_0.OpenTelemetryAppender">
     <captureExperimentalAttributes>true</captureExperimentalAttributes>
     <captureKeyValuePairAttributes>true</captureKeyValuePairAttributes>
     <captureMarkerAttribute>true</captureMarkerAttribute>
+    <captureMdcAttributes>*</captureMdcAttributes>
     <captureCodeAttributes>false</captureCodeAttributes>
   </appender>
 

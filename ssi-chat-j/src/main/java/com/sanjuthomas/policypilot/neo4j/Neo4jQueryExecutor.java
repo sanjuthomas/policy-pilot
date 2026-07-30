@@ -1,5 +1,6 @@
 package com.sanjuthomas.policypilot.neo4j;
 
+import com.sanjuthomas.policypilot.observability.StructuredLog;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -12,11 +13,15 @@ import org.neo4j.driver.Session;
 import org.neo4j.driver.SessionConfig;
 import org.neo4j.driver.Value;
 import org.neo4j.driver.types.Node;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /** Read-only Neo4j execution as svc_chat. */
 @Component
 public class Neo4jQueryExecutor {
+
+  private static final Logger log = LoggerFactory.getLogger(Neo4jQueryExecutor.class);
 
   private final Driver driver;
 
@@ -32,16 +37,29 @@ public class Neo4jQueryExecutor {
     SessionConfig config =
         SessionConfig.builder().withDefaultAccessMode(AccessMode.READ).build();
     Map<String, Object> effective = params == null ? Map.of() : params;
+    long startNs = System.nanoTime();
     try (Session session = driver.session(config)) {
-      return session.executeRead(
-          tx -> {
-            Result result = tx.run(cypher, effective);
-            List<Map<String, Object>> rows = new ArrayList<>();
-            while (result.hasNext()) {
-              rows.add(toMap(result.next()));
-            }
-            return rows;
-          });
+      List<Map<String, Object>> rows =
+          session.executeRead(
+              tx -> {
+                Result result = tx.run(cypher, effective);
+                List<Map<String, Object>> collected = new ArrayList<>();
+                while (result.hasNext()) {
+                  collected.add(toMap(result.next()));
+                }
+                return collected;
+              });
+      StructuredLog.debug(
+          log,
+          "neo4j.read.completed",
+          Map.of(
+              "neo4j.row_count",
+              rows.size(),
+              "neo4j.duration_ms",
+              (System.nanoTime() - startNs) / 1_000_000.0,
+              "neo4j.cypher_chars",
+              cypher == null ? 0 : cypher.length()));
+      return rows;
     }
   }
 

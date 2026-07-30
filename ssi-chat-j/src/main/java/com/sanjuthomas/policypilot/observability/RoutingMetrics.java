@@ -101,30 +101,7 @@ public class RoutingMetrics {
 
     distributionTracker.record(routing);
 
-    String channelSummary =
-        routing.sourceChannels().entrySet().stream()
-            .filter(e -> e.getValue() != null && e.getValue() > 0)
-            .map(e -> e.getKey() + "=" + e.getValue())
-            .reduce((a, b) -> a + "," + b)
-            .orElse("-");
-
-    log.info(
-        "chat.answer.completed strategy={} path={} requested={} override={} cypher={} "
-            + "synthesis={} mode={} intent={} sources={} graph_rows={} channels={} "
-            + "retrieval_ms={} generation_ms={}",
-        routing.retrievalStrategy(),
-        routing.path(),
-        decision.get("chat.requested_path"),
-        decision.get("chat.route_override"),
-        routing.cypherProvenance(),
-        routing.answerSynthesis(),
-        routing.mode(),
-        routing.intentId() == null ? "-" : routing.intentId(),
-        routing.sourceCount(),
-        routing.graphRowCount(),
-        channelSummary,
-        routing.retrievalMs(),
-        routing.generationMs());
+    StructuredLog.info(log, "chat.answer.completed", routing.logFields());
   }
 
   private static String nullToDash(String value) {

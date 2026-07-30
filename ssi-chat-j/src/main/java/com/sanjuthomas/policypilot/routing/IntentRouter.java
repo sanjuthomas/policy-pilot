@@ -39,12 +39,17 @@ public class IntentRouter {
       }
       decision = RouteClamps.apply(decision, question);
       genAiMetrics.recordSuccess("chat", (System.nanoTime() - startNs) / 1_000_000.0);
+      // Do not log reasoning at INFO — it can restate the user question (PII / secrets).
       log.info(
-          "RouterDecision via Spring AI: path={} target={} action={} reasoning={}",
+          "RouterDecision via Spring AI: path={} target={} action={} skill={} graphIntent={}",
           decision.getPath(),
           decision.getEligibilityTarget(),
           decision.getEligibilityAction(),
-          decision.getReasoning());
+          decision.getSkill(),
+          decision.getGraphIntent());
+      if (log.isDebugEnabled()) {
+        log.debug("RouterDecision reasoning={}", decision.getReasoning());
+      }
       return decision;
     } catch (RuntimeException ex) {
       genAiMetrics.recordError("chat", (System.nanoTime() - startNs) / 1_000_000.0);

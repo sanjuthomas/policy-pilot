@@ -109,6 +109,10 @@ management:
       service.name: ${OTEL_SERVICE_NAME:ssi-chat-j}
 
 logging:
+  structured:
+    format:
+      # JSON lines on stdout (jq-friendly); OTEL appender still ships fields to Loki.
+      console: logstash
   level:
     com.sanjuthomas.policypilot: INFO
     org.springframework.ai: INFO

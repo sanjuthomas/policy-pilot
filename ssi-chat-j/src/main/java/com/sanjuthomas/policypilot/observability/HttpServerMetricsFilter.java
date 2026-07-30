@@ -50,7 +50,6 @@ public class HttpServerMetricsFilter extends OncePerRequestFilter {
       filterChain.doFilter(request, response);
     } finally {
       double durationMs = (System.nanoTime() - startNs) / 1_000_000.0;
-      String path = request.getRequestURI();
       DistributionSummary.builder("http.server.request.duration")
           .baseUnit("ms")
           .serviceLevelObjectives(5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000)
@@ -58,7 +57,7 @@ public class HttpServerMetricsFilter extends OncePerRequestFilter {
               Tags.of(
                   "http.request.method", request.getMethod(),
                   "http.response.status_code", String.valueOf(response.getStatus()),
-                  "url.path", path == null ? "" : path))
+                  "url.path", HttpRouteTemplates.template(request.getRequestURI())))
           .register(meterRegistry)
           .record(durationMs);
     }
