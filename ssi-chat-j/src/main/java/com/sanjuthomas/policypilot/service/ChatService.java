@@ -6,6 +6,7 @@ import com.sanjuthomas.policypilot.api.ApiModels.SourceHit;
 import com.sanjuthomas.policypilot.auth.Subject;
 import com.sanjuthomas.policypilot.gemini.GeminiErrors;
 import com.sanjuthomas.policypilot.observability.ChatAnswerFinalizer;
+import com.sanjuthomas.policypilot.observability.ChatLogContext;
 import com.sanjuthomas.policypilot.observability.ChatPhaseMetrics;
 import com.sanjuthomas.policypilot.pipeline.LaneAnswer;
 import com.sanjuthomas.policypilot.pipeline.RouterDecision;
@@ -52,6 +53,7 @@ public class ChatService {
   public ChatResponse ask(ChatRequest request, Subject subject) {
     long askStartNs = System.nanoTime();
     String pathHint = "full_rag";
+    ChatLogContext.putSubject(subject, request == null ? null : request.mode());
     try {
       long routeStartNs = System.nanoTime();
       RouterDecision decision = intentRouter.route(request.message());
@@ -144,6 +146,8 @@ public class ChatService {
             request.message(), request.mode(), pathHint, elapsedMs);
       }
       throw ex;
+    } finally {
+      ChatLogContext.clearSubject();
     }
   }
 

@@ -54,7 +54,16 @@ flowchart TB
 
 The `prometheus` exporter runs with `add_metric_suffixes: false` and `resource_to_telemetry_conversion: true`, so OTLP metrics keep predictable names (`http_server_request_duration_bucket`, `chat_answer_count`) and carry a `service_name` label lifted from the OTel resource.
 
-**ssi-chat-j** emits chat SLI instruments via **Micrometer** (`micrometer-registry-otlp`) and console logs via Logback’s OpenTelemetry appender → Spring Boot OTLP logging auto-config. Micrometer metrics are **HTTP-only**, so Compose’s `:4317` gRPC endpoint is remapped to collector **`:4318/v1/metrics`** (and logs to **`:4318/v1/logs`**); traces stay on gRPC `:4317`. Series land under `service.name=ssi-chat-j`. OpenSLO seed docs may still label the service `ssi-chat` in PromQL — treat that as the chat product surface until the catalog is renamed.
+**ssi-chat-j** emits chat SLI instruments via **Micrometer** (`micrometer-registry-otlp`) and **structured** console/OTEL logs via Logback (`logging.structured.format.console=logstash` + OpenTelemetry appender with SLF4J key-value pairs and MDC). Micrometer metrics are **HTTP-only**, so Compose’s `:4317` gRPC endpoint is remapped to collector **`:4318/v1/metrics`** (and logs to **`:4318/v1/logs`**); traces stay on gRPC `:4317`. Series land under `service.name=ssi-chat-j`. OpenSLO seed docs may still label the service `ssi-chat` in PromQL — treat that as the chat product surface until the catalog is renamed.
+
+Chat log conventions (ssi-chat-j):
+
+| Signal | Convention |
+|--------|------------|
+| Answer / feedback lines | Event name + `AnswerRouting.logFields()` / `ChatFeedbackContext.logFields()` as SLF4J key-values |
+| Request correlation | MDC `request_id`, `user_id`, `chat.mode`, `http.route` (echo `X-Request-Id`) |
+| HTTP metrics `url.path` | Low-cardinality templates (`/api/chat`, `/api/chat/skills/*/confirm`, …) |
+| Router INFO | path / slots only — reasoning at DEBUG (avoids question paraphrase in Loki) |
 
 ## Services & ports
 
